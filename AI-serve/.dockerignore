@@ -1,0 +1,70 @@
+# Node.js 依赖
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 测试文件
+tests/
+coverage/
+*.test.js
+*.spec.js
+
+# 开发工具
+.nyc_output
+.eslintcache
+
+# Git
+.git
+.gitignore
+
+# 环境文件
+.env
+.env.*
+!.env.example
+
+# 日志文件
+logs/
+*.log
+
+# 临时文件
+tmp/
+temp/
+
+# 上传文件
+uploads/
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.txt
+
+# IDE 文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# 文档
+README.md
+*.md
+docs/
+
+# 脚本
+*.sh
+*.bat
+*.ps1
+
+# CI/CD 配置
+.github/
+.gitlab-ci.yml
+Jenkinsfile
+
+# 包管理器锁定文件 (根据实际使用的包管理器)
+yarn.lock
+pnpm-lock.yaml
