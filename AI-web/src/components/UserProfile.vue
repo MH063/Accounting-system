@@ -27,6 +27,14 @@
             <el-icon><User /></el-icon>
             <span>个人中心</span>
           </div>
+          <div class="menu-item" @click="navigateTo('/dashboard/help-center')">
+            <el-icon><QuestionFilled /></el-icon>
+            <span>帮助中心</span>
+          </div>
+          <div class="menu-item" @click="navigateTo('/dashboard/about-system')">
+            <el-icon><InfoFilled /></el-icon>
+            <span>关于系统</span>
+          </div>
           <div class="menu-item" @click="handleCheckUpdate">
             <el-icon><Refresh /></el-icon>
             <span>检查更新</span>
@@ -46,7 +54,7 @@
 import { ref, reactive, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { User, SwitchButton, ArrowDown, Refresh } from '@element-plus/icons-vue'
+import { User, SwitchButton, ArrowDown, Refresh, QuestionFilled, InfoFilled } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules, UploadProps } from 'element-plus'
 
 // 路由
@@ -188,6 +196,7 @@ onMounted(() => {
   position: relative;
   display: inline-block;
   z-index: 1001; /* 确保在其他元素之上 */
+  margin-left: 8px;
 }
 
 .user-info {

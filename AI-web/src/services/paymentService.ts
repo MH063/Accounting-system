@@ -653,7 +653,7 @@ function generateMockQRCodes(): QRCode[] {
       isDefault: true,
       tags: ['房租', '固定'],
       backgroundColor: '#667eea',
-      logoUrl: 'https://via.placeholder.com/40x40/667eea/ffffff?text=宿舍'
+      logoUrl: 'https://picsum.photos/40/40?random=7'
     },
     {
       id: 2,
@@ -673,7 +673,7 @@ function generateMockQRCodes(): QRCode[] {
       isDefault: false,
       tags: ['水电费', '灵活'],
       backgroundColor: '#10b981',
-      logoUrl: 'https://via.placeholder.com/40x40/10b981/ffffff?text=水电'
+      logoUrl: 'https://picsum.photos/40/40?random=8'
     },
     {
       id: 3,
@@ -694,7 +694,7 @@ function generateMockQRCodes(): QRCode[] {
       isDefault: false,
       tags: ['临时', '一次性'],
       backgroundColor: '#f59e0b',
-      logoUrl: 'https://via.placeholder.com/40x40/f59e0b/ffffff?text=临时'
+      logoUrl: 'https://picsum.photos/40/40?random=9'
     }
   ]
 }

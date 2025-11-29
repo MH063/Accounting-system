@@ -1,17 +1,1102 @@
 <template>
   <div class="bill-management">
-    <h1>账单管理</h1>
-    <p>管理宿舍账单信息</p>
-    <el-button @click="$router.back()">返回</el-button>
+    <!-- 页面头部 -->
+    <div class="page-header">
+      <div class="header-left">
+        <h1 class="page-title">
+          <el-icon class="title-icon"><Document /></el-icon>
+          账单管理
+        </h1>
+        <p class="page-subtitle">管理宿舍账单信息，查看所有账单状态</p>
+      </div>
+      <div class="header-actions">
+        <el-button 
+          type="primary" 
+          :icon="Plus" 
+          @click="$router.push('/dashboard/bill/create')"
+          class="create-btn"
+        >
+          生成账单
+        </el-button>
+        <el-button 
+          :icon="Download" 
+          @click="handleExportBills"
+          class="export-btn"
+        >
+          导出账单
+        </el-button>
+        <el-button 
+          :icon="Refresh" 
+          @click="handleRefresh"
+          class="refresh-btn"
+        >
+          刷新
+        </el-button>
+      </div>
+    </div>
+
+    <!-- 搜索和筛选区域 -->
+    <div class="search-section">
+      <el-card class="search-card">
+        <el-row :gutter="16" align="middle">
+          <el-col :span="6">
+            <el-input
+              v-model="searchForm.keyword"
+              placeholder="搜索账单标题或描述"
+              :prefix-icon="Search"
+              clearable
+              @input="handleSearch"
+            />
+          </el-col>
+          <el-col :span="4">
+            <el-select
+              v-model="searchForm.status"
+              placeholder="账单状态"
+              clearable
+              @change="handleFilterChange"
+            >
+              <el-option label="待付款" value="pending" />
+              <el-option label="已付款" value="paid" />
+              <el-option label="部分付款" value="partial" />
+              <el-option label="已逾期" value="overdue" />
+            </el-select>
+          </el-col>
+          <el-col :span="4">
+            <el-select
+              v-model="searchForm.month"
+              placeholder="选择月份"
+              clearable
+              @change="handleFilterChange"
+            >
+              <el-option
+                v-for="month in monthOptions"
+                :key="month.value"
+                :label="month.label"
+                :value="month.value"
+              />
+            </el-select>
+          </el-col>
+          <el-col :span="4">
+            <el-select
+              v-model="searchForm.type"
+              placeholder="账单类型"
+              clearable
+              @change="handleFilterChange"
+            >
+              <el-option label="月度账单" value="monthly" />
+              <el-option label="临时账单" value="temporary" />
+              <el-option label="费用账单" value="expense" />
+            </el-select>
+          </el-col>
+          <el-col :span="6">
+            <div class="search-actions">
+              <el-button type="primary" :icon="Search" @click="handleSearch">
+                搜索
+              </el-button>
+              <el-button :icon="Close" @click="handleReset">
+                重置
+              </el-button>
+            </div>
+          </el-col>
+        </el-row>
+      </el-card>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="stats-section">
+      <el-row :gutter="16">
+        <el-col :span="6">
+          <el-card class="stat-card pending">
+            <div class="stat-content">
+              <div class="stat-icon">
+                <el-icon><Clock /></el-icon>
+              </div>
+              <div class="stat-info">
+                <div class="stat-number">{{ billStats.pending }}</div>
+                <div class="stat-label">待付款账单</div>
+              </div>
+            </div>
+          </el-card>
+        </el-col>
+        <el-col :span="6">
+          <el-card class="stat-card paid">
+            <div class="stat-content">
+              <div class="stat-icon">
+                <el-icon><Check /></el-icon>
+              </div>
+              <div class="stat-info">
+                <div class="stat-number">{{ billStats.paid }}</div>
+                <div class="stat-label">已付款账单</div>
+              </div>
+            </div>
+          </el-card>
+        </el-col>
+        <el-col :span="6">
+          <el-card class="stat-card overdue">
+            <div class="stat-content">
+              <div class="stat-icon">
+                <el-icon><Warning /></el-icon>
+              </div>
+              <div class="stat-info">
+                <div class="stat-number">{{ billStats.overdue }}</div>
+                <div class="stat-label">逾期账单</div>
+              </div>
+            </div>
+          </el-card>
+        </el-col>
+        <el-col :span="6">
+          <el-card class="stat-card total">
+            <div class="stat-content">
+              <div class="stat-icon">
+                <el-icon><Money /></el-icon>
+              </div>
+              <div class="stat-info">
+                <div class="stat-number">{{ formatCurrency(billStats.totalAmount) }}</div>
+                <div class="stat-label">总金额</div>
+              </div>
+            </div>
+          </el-card>
+        </el-col>
+      </el-row>
+    </div>
+
+    <!-- 账单列表 -->
+    <div class="list-section">
+      <el-card class="list-card">
+        <template #header>
+          <div class="card-header">
+            <span class="card-title">
+              <el-icon><List /></el-icon>
+              账单列表
+            </span>
+            <div class="list-actions">
+              <el-checkbox 
+                v-model="selectAll" 
+                :indeterminate="isIndeterminate"
+                @change="handleSelectAll"
+              >
+                全选
+              </el-checkbox>
+              <el-button 
+                type="danger" 
+                :icon="Delete" 
+                :disabled="selectedBills.length === 0"
+                @click="handleBatchDelete"
+                size="small"
+              >
+                批量删除
+              </el-button>
+            </div>
+          </div>
+        </template>
+
+        <!-- 加载状态 -->
+        <div v-if="loading" class="loading-section">
+          <el-skeleton :rows="6" animated />
+        </div>
+
+        <!-- 账单列表内容 -->
+        <div v-else class="bill-list">
+          <div 
+            v-for="bill in billList" 
+            :key="bill.id"
+            class="bill-item"
+            :class="{ selected: selectedBills.includes(bill.id) }"
+          >
+            <div class="bill-checkbox">
+              <el-checkbox 
+                :model-value="selectedBills.includes(bill.id)"
+                @change="(checked: boolean) => handleSelectBill(bill.id, checked)"
+              />
+            </div>
+            
+            <div class="bill-content">
+              <div class="bill-header">
+                <div class="bill-title">
+                  <h3>{{ bill.title }}</h3>
+                  <el-tag 
+                    :type="getStatusType(bill.status)" 
+                    size="small"
+                    class="status-tag"
+                  >
+                    {{ getStatusText(bill.status) }}
+                  </el-tag>
+                </div>
+                <div class="bill-amount">
+                  {{ formatCurrency(bill.totalAmount) }}
+                </div>
+              </div>
+              
+              <div class="bill-info">
+                <div class="bill-meta">
+                  <span class="meta-item">
+                    <el-icon><Calendar /></el-icon>
+                    {{ formatDate(bill.billDate) }}
+                  </span>
+                  <span class="meta-item">
+                    <el-icon><User /></el-icon>
+                    {{ bill.payerName || '未指定' }}
+                  </span>
+                  <span class="meta-item">
+                    <el-icon><FolderOpened /></el-icon>
+                    {{ getTypeText(bill.type) }}
+                  </span>
+                </div>
+                <div class="bill-description" v-if="bill.description">
+                  {{ bill.description }}
+                </div>
+              </div>
+
+              <div class="bill-progress" v-if="bill.status !== 'paid'">
+                <div class="progress-label">
+                  付款进度: {{ formatCurrency(bill.paidAmount || 0) }} / {{ formatCurrency(bill.totalAmount) }}
+                </div>
+                <el-progress 
+                  :percentage="getPaymentProgress(bill)" 
+                  :color="getProgressColor(bill)"
+                  :show-text="false"
+                  :stroke-width="6"
+                />
+              </div>
+            </div>
+
+            <div class="bill-actions">
+              <el-button 
+                type="primary" 
+                :icon="View" 
+                circle 
+                size="small"
+                @click="handleViewDetail(bill.id)"
+                title="查看详情"
+              />
+              <el-button 
+                type="warning" 
+                :icon="Edit" 
+                circle 
+                size="small"
+                @click="handleEditBill(bill.id)"
+                title="编辑账单"
+              />
+              <el-button 
+                type="success" 
+                :icon="Money" 
+                circle 
+                size="small"
+                @click="handlePayBill(bill.id)"
+                title="处理付款"
+                v-if="bill.status !== 'paid'"
+              />
+              <el-dropdown @command="(command: string) => handleCommand(command, bill.id)">
+                <el-button :icon="MoreFilled" circle size="small" />
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="duplicate">
+                      <el-icon><CopyDocument /></el-icon>
+                      复制账单
+                    </el-dropdown-item>
+                    <el-dropdown-item command="export">
+                      <el-icon><Download /></el-icon>
+                      导出PDF
+                    </el-dropdown-item>
+                    <el-dropdown-item command="reminder">
+                      <el-icon><Bell /></el-icon>
+                      提醒设置
+                    </el-dropdown-item>
+                    <el-dropdown-item command="delete" divided>
+                      <el-icon><Delete /></el-icon>
+                      删除账单
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
+          </div>
+
+          <!-- 空状态 -->
+          <div v-if="billList.length === 0 && !loading" class="empty-state">
+            <el-empty description="暂无账单数据">
+              <el-button type="primary" @click="$router.push('/dashboard/bill/create')">
+                立即生成账单
+              </el-button>
+            </el-empty>
+          </div>
+        </div>
+
+        <!-- 分页 -->
+        <div v-if="billList.length > 0" class="pagination-section">
+          <el-pagination
+            v-model:current-page="pagination.page"
+            v-model:page-size="pagination.size"
+            :page-sizes="[10, 20, 50, 100]"
+            :total="pagination.total"
+            layout="total, sizes, prev, pager, next, jumper"
+            @size-change="handleSizeChange"
+            @current-change="handleCurrentChange"
+          />
+        </div>
+
+        <!-- 提醒设置对话框 -->
+        <el-dialog
+          v-model="reminderSettingsVisible"
+          title="账单提醒设置"
+          width="500px"
+          :close-on-click-modal="false"
+        >
+          <el-form :model="reminderSettings" label-width="120px">
+            <el-form-item label="提醒方式">
+              <el-checkbox-group v-model="reminderSettings.methods">
+                <el-checkbox value="email">邮件提醒</el-checkbox>
+                <el-checkbox value="sms">短信提醒</el-checkbox>
+                <el-checkbox value="push">推送通知</el-checkbox>
+              </el-checkbox-group>
+            </el-form-item>
+            
+            <el-form-item label="提醒时间">
+              <el-select v-model="reminderSettings.remindTime" placeholder="选择提醒时间">
+                <el-option label="费用创建时" value="create" />
+                <el-option label="审核通过时" value="approved" />
+                <el-option label="付款截止前1天" value="due_1day" />
+                <el-option label="付款截止前3天" value="due_3days" />
+                <el-option label="付款截止前1周" value="due_1week" />
+              </el-select>
+            </el-form-item>
+            
+            <el-form-item label="提醒频率">
+              <el-radio-group v-model="reminderSettings.frequency">
+                <el-radio value="once">仅一次</el-radio>
+                <el-radio value="daily">每天提醒</el-radio>
+                <el-radio value="weekly">每周提醒</el-radio>
+              </el-radio-group>
+            </el-form-item>
+            
+            <el-form-item label="免打扰时间">
+              <div class="quiet-time">
+                <el-time-picker 
+                  v-model="reminderSettings.quietStart" 
+                  format="HH:mm"
+                  placeholder="开始时间"
+                />
+                <span class="time-separator">至</span>
+                <el-time-picker 
+                  v-model="reminderSettings.quietEnd" 
+                  format="HH:mm"
+                  placeholder="结束时间"
+                />
+              </div>
+            </el-form-item>
+          </el-form>
+          
+          <template #footer>
+            <span class="dialog-footer">
+              <el-button @click="reminderSettingsVisible = false">取消</el-button>
+              <el-button type="primary" @click="saveReminderSettings">保存设置</el-button>
+            </span>
+          </template>
+        </el-dialog>
+      </el-card>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-// 账单管理页面
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { 
+  Document, Plus, Download, Refresh, Search, Close, Clock, Check, Warning, Money,
+  List, Delete, View, Edit, Calendar, User, FolderOpened, MoreFilled, CopyDocument, Bell
+} from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+
+// 账单类型定义
+interface Bill {
+  id: string
+  title: string
+  status: 'pending' | 'paid' | 'partial' | 'overdue'
+  totalAmount: number
+  paidAmount: number
+  billDate: string
+  payerName: string
+  type: 'monthly' | 'temporary' | 'expense'
+  description: string
+}
+
+// 响应式数据
+const router = useRouter()
+const loading = ref(false)
+const billList = ref<Bill[]>([])
+const selectedBills = ref<string[]>([])
+const selectAll = ref(false)
+
+// 提醒设置相关数据
+const reminderSettingsVisible = ref(false)
+const reminderSettings = ref({
+  methods: ['email'],
+  remindTime: 'due_1day',
+  frequency: 'once',
+  quietStart: '',
+  quietEnd: ''
+})
+
+// 搜索表单
+const searchForm = reactive({
+  keyword: '',
+  status: '',
+  month: '',
+  type: ''
+})
+
+// 分页信息
+const pagination = reactive({
+  page: 1,
+  size: 20,
+  total: 0
+})
+
+// 账单统计
+const billStats = reactive({
+  pending: 0,
+  paid: 0,
+  overdue: 0,
+  totalAmount: 0
+})
+
+// 月份选项
+const monthOptions = computed(() => {
+  const options = []
+  const now = new Date()
+  for (let i = 0; i < 12; i++) {
+    const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    options.push({
+      value: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
+      label: date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long' })
+    })
+  }
+  return options
+})
+
+// 全选状态
+const isIndeterminate = computed(() => {
+  return selectedBills.value.length > 0 && selectedBills.value.length < billList.value.length
+})
+
+/**
+ * 获取状态标签类型
+ * @param status 账单状态
+ * @returns 状态对应的标签类型
+ */
+const getStatusType = (status: Bill['status']) => {
+  const typeMap = {
+    pending: 'warning',
+    paid: 'success',
+    partial: 'primary',
+    overdue: 'danger'
+  } as const
+  return typeMap[status] || 'info'
+}
+
+/**
+ * 获取状态文本
+ * @param status 账单状态
+ * @returns 状态对应的文本
+ */
+const getStatusText = (status: Bill['status']) => {
+  const textMap = {
+    pending: '待付款',
+    paid: '已付款',
+    partial: '部分付款',
+    overdue: '已逾期'
+  } as const
+  return textMap[status] || '未知'
+}
+
+/**
+ * 获取类型文本
+ * @param type 账单类型
+ * @returns 类型对应的文本
+ */
+const getTypeText = (type: Bill['type']) => {
+  const textMap = {
+    monthly: '月度账单',
+    temporary: '临时账单',
+    expense: '费用账单'
+  } as const
+  return textMap[type] || '未知'
+}
+
+/**
+ * 格式化货币
+ * @param amount 金额
+ * @returns 格式化后的货币字符串
+ */
+const formatCurrency = (amount: number) => {
+  return `¥${amount.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`
+}
+
+/**
+ * 格式化日期
+ * @param date 日期
+ * @returns 格式化后的日期字符串
+ */
+const formatDate = (date: string | Date) => {
+  if (!date) return '-'
+  return new Date(date).toLocaleDateString('zh-CN')
+}
+
+/**
+ * 计算付款进度
+ * @param bill 账单对象
+ * @returns 进度百分比
+ */
+const getPaymentProgress = (bill: any) => {
+  if (!bill.totalAmount) return 0
+  return Math.round(((bill.paidAmount || 0) / bill.totalAmount) * 100)
+}
+
+/**
+ * 获取进度条颜色
+ * @param bill 账单对象
+ * @returns 进度条颜色
+ */
+const getProgressColor = (bill: any) => {
+  if (bill.status === 'paid') return '#67c23a'
+  if (bill.status === 'overdue') return '#f56c6c'
+  if (bill.status === 'partial') return '#e6a23c'
+  return '#909399'
+}
+
+/**
+ * 加载账单列表
+ */
+const loadBillList = async () => {
+  loading.value = true
+  try {
+    // 模拟API调用
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    
+    // 模拟数据
+    const mockBills: Bill[] = [
+      {
+        id: '1',
+        title: '2024年1月住宿费',
+        status: 'paid',
+        totalAmount: 1200.00,
+        paidAmount: 1200.00,
+        billDate: '2024-01-31',
+        payerName: '张三',
+        type: 'monthly',
+        description: '1月份宿舍住宿费用，包含水电网费'
+      },
+      {
+        id: '2',
+        title: '水电费账单',
+        status: 'pending',
+        totalAmount: 280.50,
+        paidAmount: 0,
+        billDate: '2024-02-15',
+        payerName: '李四',
+        type: 'expense',
+        description: '2月份水电费用分摊'
+      },
+      {
+        id: '3',
+        title: '设备维修费',
+        status: 'partial',
+        totalAmount: 500.00,
+        paidAmount: 300.00,
+        billDate: '2024-02-20',
+        payerName: '王五',
+        type: 'temporary',
+        description: '洗衣机维修费用'
+      }
+    ]
+    
+    billList.value = mockBills
+    pagination.total = mockBills.length
+    
+    // 更新统计信息
+    billStats.pending = mockBills.filter(bill => bill.status === 'pending').length
+    billStats.paid = mockBills.filter(bill => bill.status === 'paid').length
+    billStats.overdue = mockBills.filter(bill => bill.status === 'overdue').length
+    billStats.totalAmount = mockBills.reduce((sum, bill) => sum + bill.totalAmount, 0)
+    
+  } catch (error) {
+    console.error('加载账单列表失败:', error)
+    ElMessage.error('加载账单列表失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+/**
+ * 搜索处理
+ */
+const handleSearch = () => {
+  pagination.page = 1
+  loadBillList()
+}
+
+/**
+ * 重置搜索
+ */
+const handleReset = () => {
+  searchForm.keyword = ''
+  searchForm.status = ''
+  searchForm.month = ''
+  searchForm.type = ''
+  pagination.page = 1
+  loadBillList()
+}
+
+/**
+ * 筛选条件变化
+ */
+const handleFilterChange = () => {
+  handleSearch()
+}
+
+/**
+ * 刷新数据
+ */
+const handleRefresh = () => {
+  loadBillList()
+  ElMessage.success('数据已刷新')
+}
+
+/**
+ * 全选/取消全选
+ */
+const handleSelectAll = (checked: boolean) => {
+  if (checked) {
+    selectedBills.value = billList.value.map(bill => bill.id)
+  } else {
+    selectedBills.value = []
+  }
+}
+
+/**
+ * 选择单个账单
+ */
+const handleSelectBill = (billId: string, checked: boolean) => {
+  if (checked) {
+    selectedBills.value.push(billId)
+  } else {
+    selectedBills.value = selectedBills.value.filter(id => id !== billId)
+  }
+}
+
+/**
+ * 查看账单详情
+ */
+const handleViewDetail = (billId: string) => {
+  router.push(`/dashboard/bill/detail/${billId}`)
+}
+
+/**
+ * 编辑账单
+ */
+const handleEditBill = (billId: string) => {
+  router.push(`/dashboard/bill/edit/${billId}`)
+}
+
+/**
+ * 处理付款
+ */
+const handlePayBill = (billId: string) => {
+  router.push(`/dashboard/payment?billId=${billId}`)
+}
+
+/**
+ * 批量删除
+ */
+const handleBatchDelete = async () => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除选中的 ${selectedBills.value.length} 个账单吗？`,
+      '批量删除确认',
+      {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    
+    // 执行删除操作
+    selectedBills.value = []
+    ElMessage.success('批量删除成功')
+    loadBillList()
+  } catch {
+    // 用户取消删除
+  }
+}
+
+/**
+ * 下拉菜单命令处理
+ */
+const handleCommand = async (command: string, billId: string) => {
+  switch (command) {
+    case 'duplicate':
+      ElMessage.success('账单复制功能开发中')
+      break
+    case 'export':
+      ElMessage.success('导出PDF功能开发中')
+      break
+    case 'reminder':
+      // 打开提醒设置对话框
+      reminderSettingsVisible.value = true
+      break
+    case 'delete':
+      try {
+        await ElMessageBox.confirm('确定要删除这个账单吗？', '删除确认', {
+          confirmButtonText: '确定删除',
+          cancelButtonText: '取消',
+          type: 'warning'
+        })
+        ElMessage.success('账单删除成功')
+        loadBillList()
+      } catch {
+        // 用户取消删除
+      }
+      break
+  }
+}
+
+/**
+ * 导出账单
+ */
+const handleExportBills = () => {
+  ElMessage.success('导出功能开发中')
+}
+
+/**
+ * 保存提醒设置
+ */
+const saveReminderSettings = async () => {
+  try {
+    // 模拟保存提醒设置
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    ElMessage.success('提醒设置保存成功')
+    reminderSettingsVisible.value = false
+  } catch (error) {
+    ElMessage.error('保存提醒设置失败')
+  }
+}
+
+/**
+ * 分页大小变化
+ */
+const handleSizeChange = (size: number) => {
+  pagination.size = size
+  pagination.page = 1
+  loadBillList()
+}
+
+/**
+ * 页码变化
+ */
+const handleCurrentChange = (page: number) => {
+  pagination.page = page
+  loadBillList()
+}
+
+// 组件挂载时加载数据
+onMounted(() => {
+  loadBillList()
+})
 </script>
 
 <style scoped>
 .bill-management {
   padding: 20px;
+  background-color: #f5f7fa;
+  min-height: calc(100vh - 120px);
+}
+
+/* 页面头部样式 */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.header-left .page-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 24px;
+  font-weight: 600;
+  color: #303133;
+  margin: 0 0 8px 0;
+}
+
+.title-icon {
+  color: #409eff;
+}
+
+.page-subtitle {
+  color: #909399;
+  margin: 0;
+  font-size: 14px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
+/* 搜索区域样式 */
+.search-section {
+  margin-bottom: 20px;
+}
+
+.search-card {
+  border-radius: 8px;
+}
+
+.search-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* 统计卡片样式 */
+.stats-section {
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  border-radius: 8px;
+  border: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.stat-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: white;
+}
+
+.pending .stat-icon {
+  background: linear-gradient(135deg, #e6a23c, #f2c18d);
+}
+
+.paid .stat-icon {
+  background: linear-gradient(135deg, #67c23a, #85ce61);
+}
+
+.overdue .stat-icon {
+  background: linear-gradient(135deg, #f56c6c, #f78989);
+}
+
+.total .stat-icon {
+  background: linear-gradient(135deg, #409eff, #66b1ff);
+}
+
+.stat-info {
+  flex: 1;
+}
+
+.stat-number {
+  font-size: 24px;
+  font-weight: 700;
+  color: #303133;
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: #909399;
+  margin-top: 4px;
+}
+
+/* 列表区域样式 */
+.list-section {
+  margin-bottom: 20px;
+}
+
+.list-card {
+  border-radius: 8px;
+  border: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.list-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* 账单列表样式 */
+.bill-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bill-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  background: white;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.bill-item:hover {
+  border-color: #409eff;
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.15);
+}
+
+.bill-item.selected {
+  border-color: #409eff;
+  background-color: #f0f9ff;
+}
+
+.bill-checkbox {
+  flex-shrink: 0;
+}
+
+.bill-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.bill-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.bill-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bill-title h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.bill-amount {
+  font-size: 18px;
+  font-weight: 700;
+  color: #409eff;
+}
+
+.bill-info {
+  margin-bottom: 8px;
+}
+
+.bill-meta {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #606266;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.bill-description {
+  font-size: 14px;
+  color: #909399;
+  line-height: 1.4;
+}
+
+.bill-progress {
+  margin-top: 8px;
+}
+
+.progress-label {
+  font-size: 12px;
+  color: #606266;
+  margin-bottom: 4px;
+}
+
+.bill-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* 空状态样式 */
+.empty-state {
+  padding: 40px 0;
+  text-align: center;
+}
+
+/* 分页样式 */
+.pagination-section {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+}
+
+/* 提醒设置样式 */
+.quiet-time {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.time-separator {
+  color: #909399;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  
+  .bill-meta {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .bill-actions {
+    flex-direction: column;
+  }
 }
 </style>
