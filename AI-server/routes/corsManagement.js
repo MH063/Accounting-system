@@ -13,18 +13,28 @@ const logger = require('../config/logger');
 const router = express.Router();
 
 /**
- * 获取当前CORS配置信息
+ * 获取当前CORS配置信息（公开访问，无需认证）
  * GET /api/cors/info
  */
-router.get('/info', authenticateToken, responseWrapper(asyncHandler(async (req, res) => {
-  logger.info('[CORS] 获取CORS配置信息', { user: req.user?.username });
+router.get('/info', responseWrapper(asyncHandler(async (req, res) => {
+  logger.info('[CORS] 获取CORS配置信息（公开访问）');
   
   const corsInfo = getCorsInfo();
   
+  // 返回安全的配置信息，不包含敏感数据
   return res.json({
     success: true,
     message: 'CORS配置信息获取成功',
-    data: corsInfo
+    data: {
+      environment: corsInfo.environment,
+      whitelistCount: corsInfo.whitelistCount,
+      allowAllInDev: corsInfo.allowAllInDev,
+      allowRequestsWithoutOrigin: corsInfo.allowRequestsWithoutOrigin,
+      credentials: corsInfo.credentials,
+      methods: corsInfo.methods,
+      maxAge: corsInfo.maxAge
+      // 注意：不返回具体的whitelist数组，避免暴露内部配置
+    }
   });
 })));
 
@@ -183,6 +193,47 @@ router.post('/test', authenticateToken, responseWrapper(asyncHandler(async (req,
       allowed: isAllowed,
       environment: corsInfo.environment,
       allowAllInDev: corsInfo.allowAllInDev
+    }
+  });
+})));
+
+/**
+ * 公开测试CORS配置（无需认证）
+ * GET /api/cors/test-public
+ * Query参数: ?origin=http://example.com
+ */
+router.get('/test-public', responseWrapper(asyncHandler(async (req, res) => {
+  const { origin } = req.query;
+  
+  if (!origin || typeof origin !== 'string') {
+    return res.status(400).json({
+      success: false,
+      message: '必须提供有效的来源地址作为查询参数，例如: ?origin=http://example.com'
+    });
+  }
+  
+  const { isOriginAllowed } = require('../middleware/corsConfig');
+  const corsInfo = getCorsInfo();
+  
+  const isAllowed = isOriginAllowed(origin, corsInfo.whitelist);
+  
+  logger.info('[CORS] 公开测试来源访问权限', { 
+    origin: origin,
+    allowed: isAllowed,
+    clientIp: req.ip
+  });
+  
+  return res.json({
+    success: true,
+    message: 'CORS公开测试完成',
+    data: {
+      origin: origin,
+      allowed: isAllowed,
+      environment: corsInfo.environment,
+      allowAllInDev: corsInfo.allowAllInDev,
+      timestamp: new Date().toISOString(),
+      clientIp: req.ip,
+      userAgent: req.get('User-Agent')
     }
   });
 })));

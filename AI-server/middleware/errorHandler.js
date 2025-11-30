@@ -21,15 +21,21 @@ const notFound = (req, res, next) => {
  * 包含智能错误分类、重试机制和服务降级
  */
 const errorHandler = async (err, req, res, next) => {
-  // 如果响应状态码是200，设置为500
-  let statusCode = res.statusCode === 200 ? 500 : res.statusCode;
+  // 修复状态码判断逻辑：只有当响应状态码是200（默认值）时才需要重新设置
+  let statusCode = res.statusCode;
   let message = err.message;
   let errorType = 'UNKNOWN';
   let shouldRetry = false;
   let isRecoverable = false;
+  
+  // 如果响应状态码仍然是默认值200，根据错误类型设置合适的状态码
+  if (statusCode === 200) {
+    statusCode = 500; // 默认服务器错误
+  }
 
-  // 数据库连接错误检测
-  if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || err.message.includes('ECONNREFUSED')) {
+  // 数据库连接错误检测 - 增强重试机制
+  if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || err.message.includes('ECONNREFUSED') || 
+      err.message.includes('connect') || err.message.includes('connection')) {
     errorType = 'DATABASE_CONNECTION';
     message = '数据库连接失败';
     statusCode = 503; // Service Unavailable
@@ -37,12 +43,40 @@ const errorHandler = async (err, req, res, next) => {
     isRecoverable = true;
     logger.error('数据库连接错误', { error: err.message, url: req.originalUrl, ip: req.ip });
     
-    // 尝试数据库连接重连
+    // 增强的数据库连接重连机制
     try {
-      pool.query('SELECT 1').then(() => {
-        logger.info('数据库连接恢复');
-      }).catch(() => {
-        logger.error('数据库连接重连失败');
+      const retryConnection = async () => {
+        const maxRetries = 3;
+        let lastError;
+        
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+          try {
+            await pool.query('SELECT 1');
+            logger.info(`数据库连接恢复成功（第${attempt}次尝试）`);
+            return true;
+          } catch (error) {
+            lastError = error;
+            logger.warn(`数据库连接重试第${attempt}次失败:`, error.message);
+            
+            if (attempt < maxRetries) {
+              // 指数退避延迟
+              const delay = Math.pow(2, attempt) * 1000; // 2秒、4秒、8秒
+              await new Promise(resolve => setTimeout(resolve, delay));
+            }
+          }
+        }
+        
+        logger.error('数据库连接重连失败，所有重试都失败:', lastError.message);
+        return false;
+      };
+      
+      // 异步执行重连，不阻塞错误响应
+      retryConnection().then(success => {
+        if (success) {
+          logger.info('数据库连接已恢复');
+        }
+      }).catch(error => {
+        logger.error('重连操作执行失败', { error: error.message });
       });
     } catch (e) {
       logger.error('重连操作执行失败', { error: e.message });
@@ -214,6 +248,41 @@ const errorHandler = async (err, req, res, next) => {
       message = '数据验证失败';
       statusCode = 400;
     }
+  }
+
+  // 修复：确保状态码与错误类型一致，避免状态码冲突
+  if (statusCode === 200 && errorType !== 'UNKNOWN') {
+    // 根据错误类型重新设置状态码
+    const errorTypeToStatus = {
+      'DATABASE_CONNECTION': 503,
+      'DATABASE_CONNECTION_LOST': 503,
+      'DATABASE_UNREACHABLE': 503,
+      'DATABASE_POOL_EXHAUSTED': 503,
+      'DATABASE_POOL_ERROR': 503,
+      'DATABASE_ERROR': 500,
+      'DUPLICATE_ENTRY': 409,
+      'FOREIGN_KEY_VIOLATION': 400,
+      'NOT_NULL_VIOLATION': 400,
+      'CHECK_VIOLATION': 400,
+      'INVALID_ID': 404,
+      'TABLE_NOT_FOUND': 500,
+      'COLUMN_NOT_FOUND': 500,
+      'INVALID_TOKEN': 401,
+      'TOKEN_EXPIRED': 401,
+      'FILE_SIZE_EXCEEDED': 400,
+      'FILE_COUNT_EXCEEDED': 400,
+      'UNEXPECTED_FILE_FIELD': 400,
+      'NETWORK_ERROR': 502,
+      'FILESYSTEM_ERROR': 500,
+      'RESOURCE_EXHAUSTION': 503,
+      'INVALID_JSON': 400,
+      'TIMEOUT_ERROR': 408,
+      'PERMISSION_ERROR': 403,
+      'VALIDATION_ERROR': 400,
+      'INTERNAL_ERROR': 500
+    };
+    
+    statusCode = errorTypeToStatus[errorType] || 500;
   }
 
   // 构建错误日志信息
@@ -418,15 +487,21 @@ const recoveryStrategies = {
         } catch (error) {
           lastError = error;
           
-          // 检查是否是连接池耗尽错误
-          const isPoolExhaustion = error.message.includes('pool') && 
-                                 (error.message.includes('exhausted') || 
-                                  error.message.includes('timeout') ||
-                                  error.message.includes('connect'));
+          // 增强连接池错误检测
+          const isPoolExhaustion = error.message && 
+                                 (error.message.includes('pool') && 
+                                  (error.message.includes('exhausted') || 
+                                   error.message.includes('timeout') ||
+                                   error.message.includes('connect'))) ||
+                                 (error.code && 
+                                  (error.code === '08003' || // 连接不存在
+                                   error.code === '08006' || // 连接失败
+                                   error.code === '08001'));  // 无法连接到服务器
           
           if (isPoolExhaustion) {
             logger.error(`连接池耗尽错误，重试第 ${attempt} 次`, {
               error: error.message,
+              code: error.code,
               attempt,
               maxRetries: this.maxRetries
             });
@@ -441,6 +516,7 @@ const recoveryStrategies = {
           } else {
             logger.warn(`数据库重试第 ${attempt} 次失败`, { 
               error: error.message, 
+              code: error.code,
               attempt,
               maxRetries: this.maxRetries
             });
@@ -662,10 +738,73 @@ const healthCheckHandler = async (req, res) => {
 };
 
 /**
- * 异步错误处理包装器
+ * 增强的异步错误处理包装器
+ * 包含详细的错误日志记录和错误分类
  */
-const asyncHandler = (fn) => (req, res, next) => {
-  Promise.resolve(fn(req, res, next)).catch(next);
+const asyncHandler = (fn) => {
+  return async (req, res, next) => {
+    try {
+      await Promise.resolve(fn(req, res, next));
+    } catch (error) {
+      // 详细记录异步错误信息
+      console.error('异步处理错误:', {
+        error: error?.message || error,
+        stack: error?.stack,
+        route: req.originalUrl,
+        method: req.method,
+        ip: req.ip,
+        userAgent: req.get('User-Agent'),
+        timestamp: new Date().toISOString()
+      });
+      
+      // 使用logger记录错误
+      logger.error('异步处理错误', {
+        error: error?.message || error,
+        stack: error?.stack,
+        route: req.originalUrl,
+        method: req.method,
+        ip: req.ip,
+        userAgent: req.get('User-Agent'),
+        timestamp: new Date().toISOString()
+      });
+      
+      // 错误分类和增强
+      let enhancedError = error;
+      
+      // 如果是数据库错误，添加更多上下文
+      if (error.code && error.code.startsWith('P')) {
+        enhancedError = {
+          ...error,
+          errorType: 'DATABASE_ERROR',
+          context: 'PostgreSQL数据库操作失败',
+          suggestion: '请检查数据库连接和SQL语法'
+        };
+      }
+      
+      // 如果是网络错误
+      if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+        enhancedError = {
+          ...error,
+          errorType: 'NETWORK_ERROR',
+          context: '网络连接失败',
+          suggestion: '请检查网络连接和服务状态'
+        };
+      }
+      
+      // 如果是文件系统错误
+      if (error.code === 'ENOENT' || error.code === 'EACCES') {
+        enhancedError = {
+          ...error,
+          errorType: 'FILESYSTEM_ERROR',
+          context: '文件系统操作失败',
+          suggestion: '请检查文件路径和权限'
+        };
+      }
+      
+      // 传递给下一个错误处理中间件
+      next(enhancedError);
+    }
+  };
 };
 
 module.exports = {

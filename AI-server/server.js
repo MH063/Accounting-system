@@ -286,6 +286,95 @@ startServer();
 app.use(notFound);
 app.use(errorHandler);
 
+// 全局异步错误处理
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('未处理的Promise拒绝:', reason);
+  logger.error('未处理的Promise拒绝', { 
+    reason: reason?.message || reason,
+    stack: reason?.stack,
+    promise: promise.toString()
+  });
+  // 这里可以添加告警机制，比如发送邮件或通知
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('未捕获的异常:', error);
+  logger.error('未捕获的异常', { 
+    error: error.message,
+    stack: error.stack,
+    name: error.name
+  });
+  
+  // 给服务器一些时间来处理当前请求
+  setTimeout(() => {
+    console.log('正在优雅关闭服务器...');
+    process.exit(1);
+  }, 1000);
+});
+
+// 全局异步错误处理包装器 - 用于捕获路由中的异步错误
+const wrapAsync = (fn) => {
+  return (req, res, next) => {
+    Promise.resolve(fn(req, res, next)).catch((error) => {
+      console.error('路由异步错误:', error);
+      logger.error('路由异步错误', {
+        error: error.message,
+        stack: error.stack,
+        route: req.originalUrl,
+        method: req.method,
+        ip: req.ip
+      });
+      next(error);
+    });
+  };
+};
+
+// 重新包装所有异步路由处理函数
+const originalAppGet = app.get.bind(app);
+const originalAppPost = app.post.bind(app);
+const originalAppPut = app.put.bind(app);
+const originalAppDelete = app.delete.bind(app);
+
+app.get = function(path, ...handlers) {
+  const wrappedHandlers = handlers.map(handler => {
+    if (typeof handler === 'function' && handler.constructor.name === 'AsyncFunction') {
+      return wrapAsync(handler);
+    }
+    return handler;
+  });
+  return originalAppGet(path, ...wrappedHandlers);
+};
+
+app.post = function(path, ...handlers) {
+  const wrappedHandlers = handlers.map(handler => {
+    if (typeof handler === 'function' && handler.constructor.name === 'AsyncFunction') {
+      return wrapAsync(handler);
+    }
+    return handler;
+  });
+  return originalAppPost(path, ...wrappedHandlers);
+};
+
+app.put = function(path, ...handlers) {
+  const wrappedHandlers = handlers.map(handler => {
+    if (typeof handler === 'function' && handler.constructor.name === 'AsyncFunction') {
+      return wrapAsync(handler);
+    }
+    return handler;
+  });
+  return originalAppPut(path, ...wrappedHandlers);
+};
+
+app.delete = function(path, ...handlers) {
+  const wrappedHandlers = handlers.map(handler => {
+    if (typeof handler === 'function' && handler.constructor.name === 'AsyncFunction') {
+      return wrapAsync(handler);
+    }
+    return handler;
+  });
+  return originalAppDelete(path, ...wrappedHandlers);
+};
+
 // 优雅关闭
 process.on('SIGINT', () => {
   console.log('\n收到SIGINT信号，正在关闭服务器...');
