@@ -265,8 +265,9 @@ import {
   List, Grid, View, Plus, Tools, Download, Check
 } from '@element-plus/icons-vue'
 import { 
-  confirmPayment as confirmPaymentApi, getPaymentRecords 
+  confirmPayment as confirmPaymentApi
 } from '../services/paymentService'
+import type { PaymentMethod, PaymentRequest } from '../services/paymentService'
 
 // 路由
 const router = useRouter()
@@ -278,24 +279,28 @@ const processing = ref(false)
 const saving = ref(false)
 
 // 当前选中的支付方式
-const selectedMethod = ref({
+const selectedMethod = ref<PaymentMethod & { fee: string; description: string }>({
   id: 'wechat',
   name: '微信支付',
   description: '快速便捷的移动支付',
   icon: 'https://picsum.photos/40/40?random=1',
   fee: '0%',
-  status: 'available'
+  status: 'available',
+  type: 'digital',
+  isDefault: true
 })
 
 // 支付方式列表
-const paymentMethods = ref([
+const paymentMethods = ref<Array<PaymentMethod & { fee: string; description: string }>>([
   {
     id: 'wechat',
     name: '微信支付',
     description: '快速便捷的移动支付',
     icon: 'https://picsum.photos/40/40?random=2',
     fee: '0%',
-    status: 'available'
+    status: 'available',
+    type: 'digital',
+    isDefault: true
   },
   {
     id: 'alipay',
@@ -303,7 +308,9 @@ const paymentMethods = ref([
     description: '安全可靠的在线支付',
     icon: 'https://picsum.photos/40/40?random=3',
     fee: '0%',
-    status: 'available'
+    status: 'available',
+    type: 'digital',
+    isDefault: false
   },
   {
     id: 'bank',
@@ -311,7 +318,9 @@ const paymentMethods = ref([
     description: '支持主流银行卡支付',
     icon: 'https://picsum.photos/40/40?random=4',
     fee: '0.1%',
-    status: 'available'
+    status: 'available',
+    type: 'bank',
+    isDefault: false
   },
   {
     id: 'balance',
@@ -319,7 +328,9 @@ const paymentMethods = ref([
     description: '使用账户余额支付',
     icon: 'https://picsum.photos/40/40?random=5',
     fee: '0%',
-    status: 'available'
+    status: 'available',
+    type: 'digital',
+    isDefault: false
   }
 ])
 
@@ -332,7 +343,13 @@ const availablePaymentMethods = ref([
 ])
 
 // 宿舍成员
-const members = ref([
+interface Member {
+  name: string
+  phone: string
+  email: string
+}
+
+const members = ref<Member[]>([
   { name: '张三', phone: '138****1234', email: 'zhangsan@example.com' },
   { name: '李四', phone: '139****5678', email: 'lisi@example.com' },
   { name: '王五', phone: '136****9012', email: 'wangwu@example.com' },
@@ -340,7 +357,16 @@ const members = ref([
 ])
 
 // 费用列表
-const expenses = ref([
+interface Expense {
+  id: number
+  name: string
+  description: string
+  amount: number
+  category: string
+  payer: string
+}
+
+const expenses = ref<Expense[]>([
   {
     id: 1,
     name: '月度房租',
@@ -368,7 +394,15 @@ const expenses = ref([
 ])
 
 // 快速支付项目
-const quickPayments = ref([
+interface QuickPayment {
+  id: number
+  title: string
+  amount: number
+  description: string
+  processing: boolean
+}
+
+const quickPayments = ref<QuickPayment[]>([
   {
     id: 1,
     title: '今日分摊',
@@ -393,15 +427,30 @@ const quickPayments = ref([
 ])
 
 // 支付表单
-const paymentForm = reactive({
+interface PaymentForm {
+  amount: number
+  method: string
+  remark: string
+}
+
+const paymentForm = reactive<PaymentForm>({
   amount: 0,
   method: 'wechat',
   remark: ''
 })
 
 // 费用表单
-const expenseForm = reactive({
-  id: undefined as number | undefined,
+interface ExpenseForm {
+  id: number | undefined
+  name: string
+  description: string
+  amount: number
+  category: string
+  payer: string
+}
+
+const expenseForm = reactive<ExpenseForm>({
+  id: undefined,
   name: '',
   description: '',
   amount: 0,
@@ -419,8 +468,16 @@ const expenseRules = {
 }
 
 // 计算属性
+interface SharingResult {
+  name: string
+  shouldPay: number
+  paid: number
+  pending: number
+  status: 'pending' | 'completed'
+}
+
 const sharingResults = computed(() => {
-  const results = []
+  const results: SharingResult[] = []
   const perPerson = totalExpense.value / members.value.length
   
   for (const member of members.value) {
@@ -458,7 +515,7 @@ const totalPending = computed(() => {
 })
 
 // 方法
-const selectPaymentMethod = (method: any) => {
+const selectPaymentMethod = (method: PaymentMethod & { fee: string; description: string }) => {
   if (method.status === 'available') {
     selectedMethod.value = method
     ElMessage.success(`已选择 ${method.name}`)
@@ -477,32 +534,25 @@ const addExpense = () => {
   expenseDialogVisible.value = true
 }
 
-const editExpense = (expense: any) => {
+const editExpense = (expense: Expense) => {
   Object.assign(expenseForm, expense)
   expenseDialogVisible.value = true
 }
 
-const deleteExpense = (expense: any) => {
+const deleteExpense = (expense: Expense) => {
   expenses.value = expenses.value.filter(item => item.id !== expense.id)
   ElMessage.success('费用删除成功')
 }
 
-const payForMember = (member: any) => {
+const payForMember = (member: SharingResult) => {
   paymentForm.amount = member.pending
-  // @ts-ignore
   currentExpense.value = member
   paymentDialogVisible.value = true
 }
 
-const processQuickPayment = (quickPay: any) => {
-  quickPay.processing = true
-  setTimeout(() => {
-    quickPay.processing = false
-    ElMessage.success('快速支付处理成功')
-  }, 2000)
-}
 
-const viewPaymentDetail = (quickPay: any) => {
+
+const viewPaymentDetail = (_quickPay: QuickPayment) => {
   ElMessage.info('支付详情查看功能开发中')
 }
 
@@ -621,7 +671,7 @@ const openPaymentConfirm = () => {
 }
 
 // 当前正在支付的记录
-const currentExpense = ref<any>(null)
+const currentExpense = ref<SharingResult | null>(null)
 
 // 生命周期
 onMounted(() => {

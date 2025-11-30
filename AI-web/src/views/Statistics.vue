@@ -3,7 +3,6 @@
     <!-- 页面头部 -->
     <div class="page-header">
       <div class="header-left">
-        <el-button :icon="ArrowLeft" @click="handleBack" text />
         <h1 class="page-title">统计分析</h1>
       </div>
     </div>
@@ -145,11 +144,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
-  ArrowLeft,
   ArrowRight,
   Money,
   Wallet,
@@ -164,11 +161,6 @@ import {
 
 // 路由
 const router = useRouter()
-
-// 方法
-const handleBack = () => {
-  router.push('/dashboard')
-}
 
 const goToExpenseStatistics = () => {
   router.push('/dashboard/expense-statistics')

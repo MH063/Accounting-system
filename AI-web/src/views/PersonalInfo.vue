@@ -367,19 +367,14 @@ import { onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   Plus, 
-  Check, 
   CircleCheck, 
   CircleClose,
   Refresh, 
-  RefreshRight, 
   Upload,
   Download,
-  Camera,
-  InfoFilled,
   Clock,
   MoreFilled,
-  Document,
-  Delete
+  Document
 } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules, UploadFile } from 'element-plus'
 
@@ -389,7 +384,7 @@ const avatarUploadRef = ref()
 const cropImageRef = ref<HTMLImageElement>()
 
 // 个人信息表单数据
-const personalForm = reactive({
+const personalForm = reactive<PersonalForm>({
   username: '',
   realName: '',
   gender: 'secret',
@@ -409,24 +404,52 @@ const avatarUploadStatus = reactive({
   status: 'success' as 'success' | 'exception'
 })
 
+// 裁剪器接口定义
+interface CropperInstance {
+  destroy(): void
+  getCroppedCanvas(options?: CropperGetCroppedCanvasOptions): HTMLCanvasElement
+  reset(): void
+  rotate(degree: number): void
+  scale(scaleX: number, scaleY?: number): void
+  zoom(ratio: number): void
+}
+
+interface CropperGetCroppedCanvasOptions {
+  width?: number
+  height?: number
+  minWidth?: number
+  minHeight?: number
+  maxWidth?: number
+  maxHeight?: number
+  fillColor?: string
+  imageSmoothingEnabled?: boolean
+  imageSmoothingQuality?: 'low' | 'medium' | 'high'
+}
+
 // 裁剪相关数据
-const cropData = reactive({
+const cropData = reactive<{
+  image: string
+  preview: string
+  cropper: CropperInstance | null
+}>({
   image: '',
   preview: '',
-  cropper: null as any
+  cropper: null
 })
 
 // 验证状态
 const phoneVerified = ref(false)
 const emailVerified = ref(false)
 const showVerifyDialog = ref(false)
-const verifyDialog = reactive({
+const verifyDialog = reactive<VerifyDialogState>({
   title: '',
-  type: 'phone' as 'phone' | 'email'
+  type: 'phone'
 })
 
 // 验证表单
-const verifyForm = reactive({
+const verifyForm = reactive<{
+  code: string
+}>({
   code: ''
 })
 
@@ -457,7 +480,7 @@ const formValidationStatus = reactive({
 })
 
 // 更新表单验证状态
-const updateValidationStatus = async () => {
+const updateValidationStatus = async (): Promise<void> => {
   if (!personalFormRef.value) return
   
   try {
@@ -479,7 +502,7 @@ const saveLoading = ref(false)
 const syncLoading = ref(false)
 
 // 隐私设置
-const privacySettings = reactive({
+const privacySettings = reactive<PrivacySettings>({
   showProfile: true,
   showContact: false,
   allowSearch: true
@@ -511,7 +534,7 @@ const formRules: FormRules = {
 }
 
 // 保存个人信息
-const savePersonalInfo = async () => {
+const savePersonalInfo = async (): Promise<void> => {
   if (!personalFormRef.value) return
   
   try {
@@ -544,7 +567,7 @@ const savePersonalInfo = async () => {
 }
 
 // 重置表单
-const resetForm = () => {
+const resetForm = (): void => {
   ElMessageBox.confirm('确定要重置所有修改吗？', '提示', {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
@@ -556,7 +579,7 @@ const resetForm = () => {
 }
 
 // 同步数据
-const syncData = async () => {
+const syncData = async (): Promise<void> => {
   syncLoading.value = true
   showSyncStatus('info', '正在同步', '正在从服务器同步最新数据...')
   
@@ -579,9 +602,12 @@ const syncData = async () => {
 }
 
 // 显示同步状态
-const showSyncStatus = (type: string, title: string, message: string) => {
+// 同步状态类型定义
+type SyncStatusType = 'success' | 'error' | 'warning' | 'info'
+
+const showSyncStatus = (type: SyncStatusType, title: string, message: string): void => {
   syncStatus.visible = true
-  syncStatus.type = type as any
+  syncStatus.type = type
   syncStatus.title = title
   syncStatus.message = message
   
@@ -592,7 +618,7 @@ const showSyncStatus = (type: string, title: string, message: string) => {
 }
 
 // 加载个人信息
-const loadPersonalInfo = async () => {
+const loadPersonalInfo = async (): Promise<void> => {
   console.log('开始加载个人信息...')
   
   try {
@@ -633,7 +659,7 @@ const loadPersonalInfo = async () => {
 }
 
 // 头像上传前验证
-const beforeAvatarUpload = (file: File) => {
+const beforeAvatarUpload = (file: File): boolean => {
   const isImage = file.type.startsWith('image/')
   const isLt2M = file.size / 1024 / 1024 < 2
   
@@ -649,7 +675,7 @@ const beforeAvatarUpload = (file: File) => {
 }
 
 // 处理头像文件选择
-const handleAvatarChange = (uploadFile: UploadFile) => {
+const handleAvatarChange = (uploadFile: UploadFile): void => {
   if (!uploadFile.raw) return
   
   if (!beforeAvatarUpload(uploadFile.raw)) return
@@ -664,8 +690,40 @@ const handleAvatarChange = (uploadFile: UploadFile) => {
   })
 }
 
+// 个人信息表单接口定义
+interface PersonalForm {
+  username: string
+  realName: string
+  gender: 'male' | 'female' | 'secret'
+  birthday: string
+  phone: string
+  email: string
+  bio: string
+}
+
+// 隐私设置接口定义
+interface PrivacySettings {
+  showProfile: boolean
+  showContact: boolean
+  allowSearch: boolean
+}
+
+// 同步历史接口定义
+interface SyncHistoryItem {
+  time: string
+  type: 'manual' | 'auto'
+  status: 'success' | 'failed'
+  message: string
+}
+
+// 验证状态接口定义
+interface VerifyDialogState {
+  title: string
+  type: 'phone' | 'email'
+}
+
 // 初始化裁剪器
-const initCropper = () => {
+const initCropper = (): void => {
   if (!cropImageRef.value) return
   
   // 这里使用简单的裁剪实现，实际项目中可以使用 cropper.js 等库
@@ -676,7 +734,7 @@ const initCropper = () => {
 }
 
 // 重置头像裁剪
-const resetAvatarCrop = () => {
+const resetAvatarCrop = (): void => {
   cropData.image = ''
   cropData.preview = ''
   if (cropData.cropper) {
@@ -686,7 +744,7 @@ const resetAvatarCrop = () => {
 }
 
 // 上传头像
-const uploadAvatar = async () => {
+const uploadAvatar = async (): Promise<void> => {
   if (!cropData.image) {
     ElMessage.error('请先选择图片')
     return
@@ -750,7 +808,7 @@ const handleEmailVerify = () => {
 }
 
 // 发送验证码
-const sendVerifyCode = () => {
+const sendVerifyCode = (): void => {
   if (verifyCooldown.value > 0) return
   
   verifyCooldown.value = 60
@@ -765,7 +823,7 @@ const sendVerifyCode = () => {
 }
 
 // 确认验证
-const confirmVerify = () => {
+const confirmVerify = (): void => {
   if (!verifyForm.code) {
     ElMessage.error('请输入验证码')
     return
@@ -783,12 +841,12 @@ const confirmVerify = () => {
 }
 
 // 禁用日期（不能选择未来日期）
-const disabledDate = (date: Date) => {
+const disabledDate = (date: Date): boolean => {
   return date > new Date()
 }
 
 // 导出个人信息
-const exportPersonalData = () => {
+const exportPersonalData = (): void => {
   try {
     const data = {
       personalInfo: personalForm,
@@ -822,7 +880,7 @@ const exportPersonalData = () => {
 }
 
 // 导入个人信息
-const importPersonalData = () => {
+const importPersonalData = (): void => {
   const input = document.createElement('input')
   input.type = 'file'
   input.accept = '.json'
@@ -885,7 +943,7 @@ const importPersonalData = () => {
 }
 
 // 创建数据备份
-const createDataBackup = () => {
+const createDataBackup = (): void => {
   try {
     const backupData = {
       personalInfo: personalForm,
@@ -911,7 +969,7 @@ const createDataBackup = () => {
 }
 
 // 恢复数据备份
-const restoreDataBackup = () => {
+const restoreDataBackup = (): void => {
   const backupDataStr = localStorage.getItem('personal_data_backup')
   
   if (!backupDataStr) {
@@ -970,7 +1028,7 @@ const restoreDataBackup = () => {
 }
 
 // 清除本地备份
-const clearDataBackup = () => {
+const clearDataBackup = (): void => {
   ElMessageBox.confirm('确定要清除本地备份数据吗？此操作不可恢复。', '清除备份', {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
@@ -981,19 +1039,14 @@ const clearDataBackup = () => {
   }).catch(() => {})
 }
 
-// 同步历史记录
-const syncHistory = ref<Array<{
-  time: string
-  type: 'manual' | 'auto'
-  status: 'success' | 'failed'
-  message: string
-}>>([])
+// 同步历史记录数据
+const syncHistory = ref<SyncHistoryItem[]>([])
 
 // 同步历史对话框状态
 const showSyncHistoryDialog = ref(false)
 
 // 获取操作类型的颜色
-const getOperationTypeColor = (operation: string) => {
+const getOperationTypeColor = (operation: string): string => {
   const colorMap: Record<string, string> = {
     'export': 'success',
     'import': 'primary',
@@ -1004,7 +1057,7 @@ const getOperationTypeColor = (operation: string) => {
 }
 
 // 获取操作类型的文本
-const getOperationTypeText = (operation: string) => {
+const getOperationTypeText = (operation: string): string => {
   const textMap: Record<string, string> = {
     'export': '导出数据',
     'import': '导入数据',
@@ -1015,7 +1068,7 @@ const getOperationTypeText = (operation: string) => {
 }
 
 // 添加同步历史记录
-const addSyncHistory = (type: 'manual' | 'auto', status: 'success' | 'failed', message: string) => {
+const addSyncHistory = (type: 'manual' | 'auto', status: 'success' | 'failed', message: string): void => {
   syncHistory.value.unshift({
     time: new Date().toLocaleString(),
     type,
@@ -1033,7 +1086,7 @@ const addSyncHistory = (type: 'manual' | 'auto', status: 'success' | 'failed', m
 }
 
 // 加载同步历史
-const loadSyncHistory = () => {
+const loadSyncHistory = (): void => {
   const historyStr = localStorage.getItem('sync_history')
   if (historyStr) {
     try {
@@ -1045,7 +1098,7 @@ const loadSyncHistory = () => {
 }
 
 // 清除同步历史
-const clearSyncHistory = () => {
+const clearSyncHistory = (): void => {
   ElMessageBox.confirm('确定要清除同步历史记录吗？', '清除历史', {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
@@ -1057,16 +1110,19 @@ const clearSyncHistory = () => {
   }).catch(() => {})
 }
 
-// 数据操作历史记录
-const dataOperationHistory = ref<Array<{
+// 数据操作历史接口定义
+interface DataOperationHistoryItem {
   time: string
   operation: 'export' | 'import' | 'backup' | 'restore'
   status: 'success' | 'failed'
   message: string
-}>>([])
+}
+
+// 数据操作历史记录
+const dataOperationHistory = ref<DataOperationHistoryItem[]>([])
 
 // 添加数据操作历史记录
-const addDataOperationHistory = (operation: 'export' | 'import' | 'backup' | 'restore', status: 'success' | 'failed', message: string) => {
+const addDataOperationHistory = (operation: 'export' | 'import' | 'backup' | 'restore', status: 'success' | 'failed', message: string): void => {
   dataOperationHistory.value.unshift({
     time: new Date().toLocaleString(),
     operation,
@@ -1084,7 +1140,7 @@ const addDataOperationHistory = (operation: 'export' | 'import' | 'backup' | 're
 }
 
 // 加载数据操作历史
-const loadDataOperationHistory = () => {
+const loadDataOperationHistory = (): void => {
   const historyStr = localStorage.getItem('data_operation_history')
   if (historyStr) {
     try {
@@ -1096,7 +1152,7 @@ const loadDataOperationHistory = () => {
 }
 
 // 清除数据操作历史
-const clearDataOperationHistory = () => {
+const clearDataOperationHistory = (): void => {
   ElMessageBox.confirm(
     '确定要清除所有数据操作历史记录吗？此操作不可恢复。',
     '清除确认',
@@ -1137,14 +1193,14 @@ let autoSaveTimer: NodeJS.Timeout | null = null
 let lastSavedData = ''
 
 // 开始自动保存
-const startAutoSave = () => {
+const startAutoSave = (): void => {
   autoSaveTimer = setInterval(() => {
     checkAndAutoSave()
   }, 30000) // 30秒检查一次
 }
 
 // 停止自动保存
-const stopAutoSave = () => {
+const stopAutoSave = (): void => {
   if (autoSaveTimer) {
     clearInterval(autoSaveTimer)
     autoSaveTimer = null
@@ -1152,7 +1208,7 @@ const stopAutoSave = () => {
 }
 
 // 检查并自动保存
-const checkAndAutoSave = () => {
+const checkAndAutoSave = (): void => {
   const currentData = JSON.stringify({
     personalForm: personalForm,
     privacySettings: privacySettings
@@ -1211,7 +1267,7 @@ onBeforeUnmount(() => {
 })
 
 // 路由离开守卫
-onBeforeRouteLeave((to, from, next) => {
+onBeforeRouteLeave((_to, _from, next) => {
   if (hasUnsavedChanges.value) {
     ElMessageBox.confirm(
       '您有未保存的更改，是否保存后再离开？',

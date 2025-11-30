@@ -217,7 +217,7 @@
           <el-tag :type="getAnomalySeverityType">{{ getAnomalySeverity }}</el-tag>
         </div>
         <div class="anomaly-list">
-          <div v-for="(anomaly, index) in anomalyList" :key="index" class="anomaly-item">
+          <div v-for="(anomaly, index) in anomalyList" :key="anomaly.date + '-' + index" class="anomaly-item">
             <div class="anomaly-date">{{ anomaly.date }}</div>
             <div class="anomaly-value">¥{{ formatAmount(anomaly.value) }}</div>
             <div class="anomaly-deviation" :class="{ high: anomaly.deviation > 2, medium: anomaly.deviation > 1 }">
@@ -294,7 +294,6 @@ import {
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
-const loading = ref(false)
 
 // 图表引用
 const mainChartRef = ref<HTMLElement>()
@@ -366,13 +365,13 @@ const getComparisonLabel = computed(() => {
 })
 
 const getChartTitle = computed(() => {
-  const typeMap = { expense: '支出', income: '收入', balance: '结余' }
-  const granularityMap = { day: '日', week: '周', month: '月' }
+  const typeMap: Record<string, string> = { expense: '支出', income: '收入', balance: '结余' }
+  const granularityMap: Record<string, string> = { day: '日', week: '周', month: '月' }
   return `${typeMap[analysisType.value]}${granularityMap[timeGranularity.value]}趋势分析`
 })
 
 const getComparisonChartTitle = computed(() => {
-  const typeMap = { yoy: '同比', qoq: '环比' }
+  const typeMap: Record<string, string> = { yoy: '同比', qoq: '环比' }
   return `${typeMap[comparisonType.value]}分析`
 })
 
@@ -407,7 +406,7 @@ const getAnomalySeverityType = computed(() => {
 })
 
 const getRiskLevelClass = computed(() => {
-  const riskClass = {
+  const riskClass: Record<string, string> = {
     '低': 'risk-low',
     '中等': 'risk-medium',
     '高': 'risk-high'

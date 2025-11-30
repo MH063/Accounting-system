@@ -237,7 +237,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { 
   Search, ArrowLeft, Refresh, CircleCheck, Clock, CircleClose, 
-  House, View, ChatDotRound, Edit, Delete 
+  House, View, ChatDotRound, Delete 
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -268,7 +268,6 @@ const roomFilter = ref('')
 const currentPage = ref(1)
 const pageSize = ref(12)
 const currentUserRole = ref<'dorm_leader' | 'admin' | 'member'>('admin')
-const contextMenuVisible = ref(false)
 const selectedMember = ref<Member | null>(null)
 const touchStartTime = ref(0)
 const contextmenuRef = ref()
@@ -443,7 +442,7 @@ const handleQuickView = (member: Member) => {
 
 const handleQuickMessage = async (member: Member) => {
   try {
-    const { value: messageText } = await ElMessageBox.prompt(
+    await ElMessageBox.prompt(
       `请输入要发送给 ${member.name} 的消息内容`,
       '发送消息',
       {
@@ -523,21 +522,20 @@ const handleDeleteMember = async (member: Member) => {
 }
 
 // 长按菜单支持
-const handleTouchStart = (event: TouchEvent, member: Member) => {
+const handleTouchStart = () => {
   touchStartTime.value = Date.now()
 }
 
-const handleTouchEnd = (event: TouchEvent, member: Member) => {
+const handleTouchEnd = () => {
   const touchDuration = Date.now() - touchStartTime.value
   if (touchDuration > 500) {
-    showContextMenu(event, member)
+    showContextMenu()
   }
 }
 
-const showContextMenu = (event: Event, member: Member) => {
-  selectedMember.value = member
+const showContextMenu = () => {
   // 这里可以实现右键菜单显示逻辑
-  ElMessage.info(`为 ${member.name} 显示操作菜单`)
+  ElMessage.info(`显示操作菜单`)
 }
 
 const beforeContextMenu = () => {

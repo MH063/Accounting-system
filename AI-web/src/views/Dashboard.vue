@@ -230,11 +230,11 @@ import {
   Setting, 
   Refresh, 
   Bell,
-  MoreFilled,
   DataAnalysis,
   Grid,
   List,
-  Clock
+  Clock,
+  Document
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -255,8 +255,20 @@ const widgetSettings = reactive({
   layout: 'default' // default, compact, detailed
 })
 
+// 智能提醒数据类型
+interface SmartNotification {
+  id: number
+  title: string
+  message: string
+  priority: 'warning' | 'danger' | 'info'
+  type: 'notification' | 'action'
+  actionType?: string
+  actionPath?: string
+  time: Date
+}
+
 // 智能提醒数据
-const smartNotifications = ref([
+const smartNotifications = ref<SmartNotification[]>([
   {
     id: 1,
     title: '预算提醒',
@@ -356,7 +368,7 @@ const formatTime = (time: Date) => {
   return `${Math.floor(minutes / 1440)}天前`
 }
 
-const handleNotificationAction = (notification: any) => {
+const handleNotificationAction = (notification: SmartNotification) => {
   console.log('处理智能提醒:', notification)
   
   // 判断提醒类型

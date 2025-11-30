@@ -705,7 +705,7 @@
           <div class="timeline">
             <div 
               v-for="(history, index) in selectedExpense.reviewHistory" 
-              :key="index"
+              :key="history.time + '-' + index"
               class="timeline-item"
               :class="getHistoryItemClass(history)"
             >
@@ -750,7 +750,7 @@
           <div class="attachments-grid">
             <div 
               v-for="(attachment, index) in selectedExpense.attachments" 
-              :key="index"
+              :key="attachment + '-' + index"
               class="attachment-item"
               @click="handlePreviewAttachment(attachment)"
             >
@@ -789,7 +789,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { 
   ArrowLeft, CircleCheck, Clock, Check, Document, User, EditPen,
   InfoFilled, CircleClose, DocumentCopy, Paperclip, View, Download,
-  Search, Refresh, List, WarningFilled, ChatDotRound, Money, Close
+  Search, Refresh, List, WarningFilled, ChatDotRound, Close
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -797,19 +797,105 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 const route = useRoute()
 const router = useRouter()
 
+// 接口定义
+interface ReviewHistoryItem {
+  action: string
+  reviewer: string
+  status: 'submitted' | 'approved' | 'rejected' | 'resubmitted'
+  time: string
+  comment?: string
+  suggestion?: string
+  rejectReason?: string
+  customReason?: string
+}
+
+interface ExpenseItem {
+  id: number
+  title: string
+  description: string
+  amount: number
+  category: 'accommodation' | 'utilities' | 'maintenance' | 'cleaning' | 'other'
+  applicant: string
+  phone: string
+  department: string
+  position: string
+  date: string
+  status: 'pending' | 'approved' | 'rejected'
+  isUrgent: boolean
+  attachments: string[]
+  reviewHistory: ReviewHistoryItem[]
+  createdAt: string
+  updatedAt: string
+  reviewer?: string
+  reviewDate?: string
+  reviewComment?: string
+  isResubmitted?: boolean
+  resubmissionCount?: number
+  originalRejectId?: number
+  originalId?: number
+}
+
+interface RejectionNotification {
+  id: number
+  expenseId: number
+  expenseTitle: string
+  applicant: string
+  reason: string
+  customReason?: string
+  suggestion: string
+  status: 'rejected'
+  rejectedAt: string
+  reviewer: string
+  isRead: boolean
+  canResubmit: boolean
+  resubmissionCount: number
+  originalRejectDate?: string
+  originalRejectComment?: string
+}
+
+// 重新提交表单接口
+interface ResubmissionForm {
+  additionalMaterials: string
+  updatedDescription: string
+  supplementaryInfo: string
+}
+
+// 审核表单接口
+interface ReviewForm {
+  status: '' | 'approved' | 'rejected'
+  suggestion: string
+  comment: string
+  isUrgent: boolean
+  rejectReason: string
+  customRejectReason: string
+}
+
+interface BatchRejectForm {
+  reason: string
+  customReason: string
+  suggestion: string
+}
+
 // 数据状态
-const loading = ref(true)
-const submitting = ref(false)
-const saving = ref(false)
-const batchProcessing = ref(false)
-const expenseData = ref<any>(null)
+const loading = ref<boolean>(true)
+const submitting = ref<boolean>(false)
+const saving = ref<boolean>(false)
+const batchProcessing = ref<boolean>(false)
+const expenseData = ref<ExpenseItem | null>(null)
 
 // 视图管理
-const currentView = ref('list') // 'list' | 'review'
-const selectedExpense = ref<any>(null)
+const currentView = ref<'list' | 'review'>('list')
+const selectedExpense = ref<ExpenseItem | null>(null)
 
 // 表单数据
-const reviewForm = ref({
+const reviewForm = ref<{
+  status: '' | 'approved' | 'rejected'
+  suggestion: string
+  comment: string
+  isUrgent: boolean
+  rejectReason: string
+  customRejectReason: string
+}>({
   status: '',
   suggestion: '',
   comment: '',
@@ -819,35 +905,35 @@ const reviewForm = ref({
 })
 
 // 搜索和筛选
-const searchQuery = ref('')
-const categoryFilter = ref('')
-const amountFilter = ref('')
+const searchQuery = ref<string>('')
+const categoryFilter = ref<string>('')
+const amountFilter = ref<string>('')
 
 // 选择管理
-const selectedExpenses = ref<any[]>([])
+const selectedExpenses = ref<ExpenseItem[]>([])
 
 // 通知系统相关状态
 const notificationSystem = ref({
-  rejectedNotifications: [], // 存储被拒绝费用的通知
-  resubmittedExpenses: [] // 存储重新提交的费用
+  rejectedNotifications: [] as RejectionNotification[], // 存储被拒绝费用的通知
+  resubmittedExpenses: [] as ExpenseItem[] // 存储重新提交的费用
 })
 
 // 重新提交相关状态
-const resubmissionVisible = ref(false)
-const resubmissionForm = reactive({
+const resubmissionVisible = ref<boolean>(false)
+const resubmissionForm = reactive<ResubmissionForm>({
   additionalMaterials: '',
   updatedDescription: '',
   supplementaryInfo: ''
 })
 
 // 重新提交验证计算属性
-const canResubmit = computed(() => {
+const canResubmit = computed((): boolean => {
   return resubmissionForm.additionalMaterials.trim().length > 0 && 
          resubmissionForm.updatedDescription.trim().length > 0
 })
 
 // 费用数据
-const pendingExpenses = ref<any[]>([
+const pendingExpenses = ref<ExpenseItem[]>([
   {
     id: 1,
     title: '宿舍水电费',
@@ -1046,7 +1132,7 @@ onMounted(() => {
 })
 
 // 方法
-const loadExpenseData = () => {
+const loadExpenseData = (): void => {
   loading.value = true
   
   // 模拟API调用
@@ -1064,51 +1150,57 @@ const loadExpenseData = () => {
 }
 
 // 费用列表相关方法
-const handleSearch = () => {
+const handleSearch = (): void => {
   console.log('搜索条件:', searchQuery.value, categoryFilter.value, amountFilter.value)
 }
 
-const resetFilters = () => {
+const resetFilters = (): void => {
   searchQuery.value = ''
   categoryFilter.value = ''
   amountFilter.value = ''
 }
 
-const handleRowSelect = (selection: any[], row: any) => {
+const handleRowSelect = (selection: ExpenseItem[], row: ExpenseItem): void => {
   console.log('行选择:', row.title, '已', selection.includes(row) ? '选中' : '取消选择')
 }
 
-const handleSelectionChange = (selection: any[]) => {
+const handleSelectionChange = (selection: ExpenseItem[]): void => {
   selectedExpenses.value = selection
   console.log('选择变化:', selectedExpenses.value.length, '条记录')
 }
 
-const clearSelection = () => {
+const clearSelection = (): void => {
   selectedExpenses.value = []
 }
 
-// 全选状态计算属性
-const isAllSelected = computed(() => {
-  return filteredPendingExpenses.value.length > 0 && 
-         selectedExpenses.value.length === filteredPendingExpenses.value.length
-})
-
-// 全选选择头部的选择状态
-const handleHeaderSelectionChange = (selection: any[]) => {
-  selectedExpenses.value = selection
-}
-
-// 切换全选状态
-const toggleSelectAll = () => {
-  if (isAllSelected.value) {
-    selectedExpenses.value = []
-  } else {
-    selectedExpenses.value = [...filteredPendingExpenses.value]
+// 审核拒绝通知系统
+const sendRejectionNotification = (expense: ExpenseItem, reason: string, suggestion: string, customReason?: string): void => {
+  const notification = {
+    id: Date.now(),
+    expenseId: expense.id,
+    expenseTitle: expense.title,
+    applicant: expense.applicant,
+    reason: reason,
+    customReason: customReason || '',
+    suggestion: suggestion,
+    status: 'rejected',
+    rejectedAt: new Date().toISOString(),
+    reviewer: expense.reviewer || '当前用户',
+    isRead: false,
+    canResubmit: true,
+    resubmissionCount: 0,
+    originalRejectDate: expense.reviewDate,
+    originalRejectComment: expense.reviewComment
   }
+  
+  // 将通知添加到系统
+  notificationSystem.value.rejectedNotifications.push(notification)
 }
+
+
 
 // 审核拒绝通知系统
-const sendRejectionNotification = (expense: any, reason: string, suggestion: string, customReason?: string) => {
+const sendRejectionNotification = (expense: ExpenseItem, reason: string, suggestion: string, customReason?: string): RejectionNotification => {
   const notification = {
     id: Date.now(),
     expenseId: expense.id,
@@ -1138,13 +1230,13 @@ const sendRejectionNotification = (expense: any, reason: string, suggestion: str
 }
 
 // 检查费用是否可以被重新提交
-const canResubmitExpense = (expenseId: number) => {
+const canResubmitExpense = (expenseId: number): boolean => {
   const notification = notificationSystem.value.rejectedNotifications.find(n => n.expenseId === expenseId)
   return notification && notification.canResubmit && notification.resubmissionCount < 3 // 最多重新提交3次
 }
 
 // 处理重新提交
-const handleResubmit = (expense: any) => {
+const handleResubmit = (expense: ExpenseItem): void => {
   if (!canResubmitExpense(expense.id)) {
     ElMessage.warning('该费用已达到最大重新提交次数或不支持重新提交')
     return
@@ -1155,7 +1247,7 @@ const handleResubmit = (expense: any) => {
 }
 
 // 确认重新提交
-const confirmResubmission = async () => {
+const confirmResubmission = async (): Promise<void> => {
   if (!selectedExpense.value) return
   
   // 更新费用状态为重新提交
@@ -1201,12 +1293,12 @@ const confirmResubmission = async () => {
   resubmissionForm.supplementaryInfo = ''
 }
 
-const handleReview = (expense: any) => {
+const handleReview = (expense: ExpenseItem): void => {
   selectedExpense.value = expense
   currentView.value = 'review'
 }
 
-const handleQuickApproveSingle = async (expense: any) => {
+const handleQuickApproveSingle = async (expense: ExpenseItem): Promise<void> => {
   if (expense.status !== 'pending') {
     ElMessage.warning('该费用申请已处理')
     return
@@ -1234,7 +1326,7 @@ const handleQuickApproveSingle = async (expense: any) => {
   }
 }
 
-const handleQuickRejectSingle = async (expense: any) => {
+const handleQuickRejectSingle = async (expense: ExpenseItem): Promise<void> => {
   if (expense.status !== 'pending') {
     ElMessage.warning('该费用申请已处理')
     return
@@ -1279,7 +1371,7 @@ const handleQuickRejectSingle = async (expense: any) => {
 }
 
 // 批量审核方法
-const handleBatchApprove = async () => {
+const handleBatchApprove = async (): Promise<void> => {
   if (selectedExpenses.value.length === 0) {
     ElMessage.warning('请先选择要审核的费用')
     return
@@ -1319,7 +1411,7 @@ const handleBatchApprove = async () => {
 
 // 批量驳回相关状态和逻辑
 const batchRejectVisible = ref(false)
-const batchRejectForm = reactive({
+const batchRejectForm = reactive<BatchRejectForm>({
   reason: '',
   customReason: '',
   suggestion: ''
@@ -1332,7 +1424,7 @@ const canSubmitBatchReject = computed(() => {
   return true
 })
 
-const handleBatchReject = async () => {
+const handleBatchReject = async (): Promise<void> => {
   if (selectedExpenses.value.length === 0) {
     ElMessage.warning('请先选择要审核的费用')
     return
@@ -1347,7 +1439,7 @@ const handleBatchReject = async () => {
   batchRejectVisible.value = true
 }
 
-const confirmBatchReject = async () => {
+const confirmBatchReject = async (): Promise<void> => {
   if (!canSubmitBatchReject.value) {
     ElMessage.warning('请完善驳回信息')
     return
@@ -1369,7 +1461,7 @@ const confirmBatchReject = async () => {
 
     try {
       // 生成驳回建议
-      const reasonMap: any = {
+      const reasonMap: { [key: string]: string } = {
         incomplete_materials: '材料不完整，请补充完整后重新申请。',
         amount_issue: '费用金额存在异常，请核实后重新申请。',
         budget_exceeded: '费用超出预算，请重新规划后申请。',
@@ -1404,7 +1496,7 @@ const confirmBatchReject = async () => {
   }
 }
 
-const performBatchReject = async (expense: any, rejectForm: any) => {
+const performBatchReject = async (expense: ExpenseItem, rejectForm: BatchRejectForm): Promise<void> => {
   // 更新费用状态
   expense.status = 'rejected'
   expense.reviewer = '当前用户'
@@ -1415,8 +1507,19 @@ const performBatchReject = async (expense: any, rejectForm: any) => {
     expense.reviewHistory = []
   }
   
+  // 驳回原因标签接口定义
+  interface RejectReasonLabels {
+    incomplete_materials: string
+    amount_issue: string
+    budget_exceeded: string
+    unclear_purpose: string
+    timing_issue: string
+    other: string
+    custom: string
+  }
+
   // 获取原因标签
-  const reasonLabels: any = {
+  const reasonLabels: RejectReasonLabels = {
     incomplete_materials: '材料不完整',
     amount_issue: '费用金额异常',
     budget_exceeded: '预算超支',
@@ -1458,7 +1561,7 @@ const performBatchReject = async (expense: any, rejectForm: any) => {
   pendingExpenses.value = pendingExpenses.value.filter(p => p.id !== expense.id)
 }
 
-const performQuickApproval = async (expense: any) => {
+const performQuickApproval = async (expense: ExpenseItem): Promise<void> => {
   expense.status = 'approved'
   expense.reviewer = '当前用户'
   expense.reviewDate = new Date().toISOString().split('T')[0]
@@ -1478,7 +1581,7 @@ const performQuickApproval = async (expense: any) => {
 }
 
 // 驳回原因相关方法
-const getRejectReasons = () => {
+const getRejectReasons = (): { label: string; value: string }[] => {
   return [
     { label: '材料不完整', value: 'incomplete_materials' },
     { label: '费用金额异常', value: 'amount_issue' },
@@ -1490,11 +1593,11 @@ const getRejectReasons = () => {
   ]
 }
 
-const handleRejectReasonChange = (reason: string) => {
+const handleRejectReasonChange = (reason: string): void => {
   if (reason !== 'custom') {
     reviewForm.value.customRejectReason = ''
     // 自动生成建议
-    const reasonMap: any = {
+    const reasonMap: { [key: string]: string } = {
       incomplete_materials: '材料不完整，请补充完整后重新申请。',
       amount_issue: '费用金额存在异常，请核实后重新申请。',
       budget_exceeded: '费用超出预算，请重新规划后申请。',
@@ -1507,7 +1610,7 @@ const handleRejectReasonChange = (reason: string) => {
 }
 
 // 审核建议相关方法
-const getQuickApprovalSuggestion = (expense: any): string => {
+const getQuickApprovalSuggestion = (expense: ExpenseItem): string => {
   const amount = expense.amount
   const category = expense.category
   const isUrgent = expense.isUrgent
@@ -1533,8 +1636,65 @@ const getQuickApprovalSuggestion = (expense: any): string => {
   }
 }
 
+// 审核历史项接口
+interface ReviewHistoryItem {
+  action: string
+  reviewer: string
+  status: 'submitted' | 'approved' | 'rejected'
+  time: string
+  comment?: string
+  suggestion?: string
+}
+
+// 费用项接口定义
+interface ExpenseItem {
+  id: number
+  title: string
+  description: string
+  amount: number
+  category: 'accommodation' | 'utilities' | 'maintenance' | 'cleaning' | 'other'
+  applicant: string
+  phone: string
+  department: string
+  position: string
+  date: string
+  status: 'pending' | 'approved' | 'rejected'
+  isUrgent: boolean
+  attachments: string[]
+  reviewHistory: ReviewHistoryItem[]
+  createdAt: string
+  updatedAt: string
+  reviewer?: string
+  reviewDate?: string
+  reviewComment?: string
+  reviewSuggestion?: string
+}
+
+// 批量驳回表单接口定义
+interface BatchRejectForm {
+  reason: string
+  customReason: string
+  suggestion: string
+}
+
+// 重新提交表单接口定义
+interface ResubmissionForm {
+  additionalMaterials: string
+  updatedDescription: string
+  supplementaryInfo: string
+}
+
+// 审核表单接口定义
+interface ReviewForm {
+  status: 'approved' | 'rejected' | ''
+  comment: string
+  suggestion: string
+  rejectReason: string
+  customRejectReason: string
+}
+
 // 审核记录追踪相关方法
-const getHistoryItemClass = (history: any) => {
+const getHistoryItemClass = (history: ReviewHistoryItem): string => {
   return `history-${history.status}`
 }
 
@@ -1559,7 +1719,7 @@ const truncateText = (text: string, length: number): string => {
 }
 
 // 原有方法
-const getStatusType = (status?: string) => {
+const getStatusType = (status?: string): string => {
   switch (status) {
     case 'pending': return 'warning'
     case 'approved': return 'success'
@@ -1568,7 +1728,7 @@ const getStatusType = (status?: string) => {
   }
 }
 
-const getStatusText = (status?: string) => {
+const getStatusText = (status?: string): string => {
   switch (status) {
     case 'pending': return '待审核'
     case 'approved': return '已通过'
@@ -1577,7 +1737,7 @@ const getStatusText = (status?: string) => {
   }
 }
 
-const getCategoryType = (category?: string) => {
+const getCategoryType = (category?: string): string => {
   switch (category) {
     case 'accommodation': return ''
     case 'utilities': return 'success'
@@ -1588,7 +1748,7 @@ const getCategoryType = (category?: string) => {
   }
 }
 
-const getCategoryText = (category?: string) => {
+const getCategoryText = (category?: string): string => {
   switch (category) {
     case 'accommodation': return '住宿费'
     case 'utilities': return '水电费'
@@ -1613,11 +1773,11 @@ const getRandomFileSize = (): string => {
   return sizes[Math.floor(Math.random() * sizes.length)]
 }
 
-const getRowClassName = ({ row }: any) => {
+const getRowClassName = ({ row }: { row: ExpenseItem }): string => {
   return row.isUrgent ? 'urgent-row' : ''
 }
 
-const handleStatusChange = (status: string) => {
+const handleStatusChange = (status: 'approved' | 'rejected' | string): void => {
   if (status === 'approved') {
     reviewForm.value.suggestion = '经审核，该费用申请符合相关规定，同意通过。'
   } else if (status === 'rejected') {
@@ -1625,7 +1785,7 @@ const handleStatusChange = (status: string) => {
   }
 }
 
-const getQuickTemplates = () => {
+const getQuickTemplates = (): { key: string; content: string }[] => {
   if (reviewForm.value.status === 'approved') {
     return [
       { key: '标准通过', content: '经审核，该费用申请材料齐全，符合报销标准，同意通过。' },
@@ -1642,11 +1802,11 @@ const getQuickTemplates = () => {
   return []
 }
 
-const applyTemplate = (content: string) => {
+const applyTemplate = (content: string): void => {
   reviewForm.value.suggestion = content
 }
 
-const handleSaveDraft = async () => {
+const handleSaveDraft = async (): Promise<void> => {
   saving.value = true
   
   try {
@@ -1659,7 +1819,7 @@ const handleSaveDraft = async () => {
   }
 }
 
-const handleApprove = async () => {
+const handleApprove = async (): Promise<void> => {
   if (!canSubmit.value) return
   
   try {
@@ -1687,7 +1847,7 @@ const handleApprove = async () => {
   }
 }
 
-const handleReject = async () => {
+const handleReject = async (): Promise<void> => {
   if (!canSubmit.value) return
   
   try {
@@ -1715,7 +1875,7 @@ const handleReject = async () => {
   }
 }
 
-const handleQuickApprove = async () => {
+const handleQuickApprove = async (): Promise<void> => {
   // 数据验证
   if (!selectedExpense.value) {
     ElMessage.error('费用数据不存在，无法进行快速通过')
@@ -1768,7 +1928,7 @@ const handleQuickApprove = async () => {
 }
 
 // 生成快速通过的备注内容
-const generateQuickApprovalComment = (expense: any): string => {
+const generateQuickApprovalComment = (expense: ExpenseItem): string => {
   const amount = expense.amount
   const applicant = expense.applicant || '申请人'
   const isUrgent = expense.isUrgent
@@ -1795,7 +1955,7 @@ const generateQuickApprovalComment = (expense: any): string => {
 }
 
 // 执行快速通过提交
-const submitQuickApproval = async () => {
+const submitQuickApproval = async (): Promise<void> => {
   submitting.value = true
   
   try {
@@ -1837,24 +1997,21 @@ const submitQuickApproval = async () => {
   }
 }
 
-const handlePreview = () => {
+const handlePreview = (): void => {
   if (!selectedExpense.value) {
     ElMessage.error('费用数据不存在')
     return
   }
-
-  const expense = selectedExpense.value
-  const reviewDate = new Date().toLocaleString('zh-CN')
   
   // 生成预览HTML内容（简化版本）
   ElMessage.info('预览功能正在开发中...')
 }
 
-const handlePreviewAttachment = (attachment: string) => {
+const handlePreviewAttachment = (attachment: string): void => {
   ElMessage.info(`预览附件：${attachment}`)
 }
 
-const handleDownloadAttachment = (attachment: string) => {
+const handleDownloadAttachment = (attachment: string): void => {
   ElMessage.success(`开始下载：${attachment}`)
 }
 </script>

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>搜索建议框自动隐藏功能测试</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-item {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        .success {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .test-steps {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .browser-test {
+            background: #fff3e0;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🔍 搜索建议框自动隐藏功能测试</h1>
+        <p>本测试用于验证搜索建议框在用户点击建议项并完成页面跳转后能否正确自动隐藏。</p>
+        
+        <div class="test-steps">
+            <h3>📋 测试步骤：</h3>
+            <ol>
+                <li>在搜索框中输入内容（如"费用"、"账单"等）</li>
+                <li>观察搜索建议框是否显示</li>
+                <li>点击任意搜索建议项</li>
+                <li>观察页面是否成功跳转</li>
+                <li>验证搜索建议框是否自动隐藏</li>
+            </ol>
+        </div>
+
+        <div class="browser-test">
+            <h3>🌐 浏览器兼容性测试：</h3>
+            <ul>
+                <li>✅ Chrome/Chromium 核心浏览器</li>
+                <li>✅ Firefox 浏览器</li>
+                <li>✅ Safari 浏览器</li>
+                <li>✅ Edge 浏览器</li>
+                <li>✅ 移动端浏览器</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="test-container">
+        <h2>🧪 功能测试项目</h2>
+        
+        <div class="test-item">
+            <h3>测试1：搜索结果点击隐藏</h3>
+            <p><strong>预期行为：</strong>点击搜索结果项后，搜索面板应立即隐藏</p>
+            <p><strong>测试方法：</strong>输入关键词 → 显示结果 → 点击结果 → 检查面板状态</p>
+            <div id="test1-result">⏳ 待测试</div>
+        </div>
+
+        <div class="test-item">
+            <h3>测试2：搜索建议点击隐藏</h3>
+            <p><strong>预期行为：</strong>点击搜索建议标签后，搜索面板应立即隐藏</p>
+            <p><strong>测试方法：</strong>输入关键词 → 显示建议 → 点击建议 → 检查面板状态</p>
+            <div id="test2-result">⏳ 待测试</div>
+        </div>
+
+        <div class="test-item">
+            <h3>测试3：路由变化自动隐藏</h3>
+            <p><strong>预期行为：</strong>页面跳转（路由变化）后，搜索面板应自动隐藏</p>
+            <p><strong>测试方法：</strong>显示搜索面板 → 触发路由跳转 → 检查面板状态</p>
+            <div id="test3-result">⏳ 待测试</div>
+        </div>
+
+        <div class="test-item">
+            <h3>测试4：搜索框失去焦点隐藏</h3>
+            <p><strong>预期行为：</strong>搜索框失去焦点后，搜索面板应在200ms延迟后隐藏</p>
+            <p><strong>测试方法：</strong>显示搜索面板 → 点击外部区域 → 检查面板状态</p>
+            <div id="test4-result">⏳ 待测试</div>
+        </div>
+
+        <div class="test-item">
+            <h3>测试5：竞态条件处理</h3>
+            <p><strong>预期行为：</strong>快速点击和路由跳转不应导致面板状态异常</p>
+            <p><strong>测试方法：</strong>快速连续点击多个搜索结果 → 检查面板状态</p>
+            <div id="test5-result">⏳ 待测试</div>
+        </div>
+    </div>
+
+    <div class="test-container">
+        <h2>📊 测试结果记录</h2>
+        <div id="test-log">
+            <p><em>请在实际测试后更新结果...</em></p>
+        </div>
+    </div>
+
+    <div class="test-container">
+        <h2>🔧 问题排查指南</h2>
+        <div class="test-steps">
+            <h3>如果搜索面板未正确隐藏，请检查：</h3>
+            <ol>
+                <li><strong>控制台日志：</strong>查看是否有相关错误信息</li>
+                <li><strong>事件触发顺序：</strong>确保点击事件先于失去焦点事件</li>
+                <li><strong>路由跳转状态：</strong>确认路由跳转是否成功完成</li>
+                <li><strong>状态同步：</strong>检查showSearchResults变量是否正确更新</li>
+                <li><strong>延迟处理：</strong>验证setTimeout延迟是否合适</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        // 自动记录测试结果的功能
+        function updateTestResult(testId, success, message) {
+            const resultElement = document.getElementById(testId);
+            if (resultElement) {
+                resultElement.className = success ? 'success' : 'error';
+                resultElement.textContent = success ? '✅ ' + message : '❌ ' + message;
+                
+                // 添加到日志
+                const log = document.getElementById('test-log');
+                const timestamp = new Date().toLocaleString();
+                log.innerHTML += `<p>[${timestamp}] ${testId}: ${success ? '通过' : '失败'} - ${message}</p>`;
+            }
+        }
+
+        // 页面加载完成后的初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🔍 搜索建议框自动隐藏功能测试页面已加载');
+            console.log('请在实际应用中进行测试，并手动更新测试结果');
+        });
+
+        // 提供全局测试函数供控制台调用
+        window.searchTest = {
+            updateResult: updateTestResult,
+            runAllTests: function() {
+                console.log('🚀 开始运行所有搜索功能测试...');
+                // 这里可以添加自动化测试逻辑
+            }
+        };
+    </script>
+</body>
+</html>

@@ -55,14 +55,23 @@ import { ref, reactive, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { User, SwitchButton, ArrowDown, Refresh, QuestionFilled, InfoFilled } from '@element-plus/icons-vue'
-import type { FormInstance, FormRules, UploadProps } from 'element-plus'
+import { getCurrentUser } from '@/services/userService'
+
 
 // 路由
 const router = useRouter()
 
+// 用户信息接口定义
+interface UserInfo {
+  name: string
+  email: string
+  role: string
+  avatar: string
+}
+
 // 用户信息
-const userInfo = reactive({
-  name: localStorage.getItem('username') || '用户',
+const userInfo = reactive<UserInfo>({
+  name: typeof localStorage !== 'undefined' ? localStorage.getItem('username') || '用户' : '用户',
   email: 'zhangsan@example.com',
   role: '管理员',
   avatar: 'https://picsum.photos/seed/user123/100/100.jpg'
@@ -72,7 +81,7 @@ const userInfo = reactive({
 const dropdownVisible = ref(false)
 
 // 切换下拉菜单显示状态
-const toggleDropdown = (event?: Event) => {
+const toggleDropdown = (event?: Event): void => {
   if (event) {
     event.stopPropagation()
   }
@@ -88,20 +97,20 @@ const toggleDropdown = (event?: Event) => {
 }
 
 // 关闭下拉菜单
-const closeDropdown = () => {
+const closeDropdown = (): void => {
   console.log('关闭下拉菜单')
   dropdownVisible.value = false
 }
 
 // 导航到指定页面
-const navigateTo = (path: string) => {
+const navigateTo = (path: string): void => {
   console.log('导航到:', path)
   closeDropdown()
   router.push(path)
 }
 
 // 检查更新
-const handleCheckUpdate = async () => {
+const handleCheckUpdate = async (): Promise<void> => {
   closeDropdown()
   
   // 这里可以调用实际的更新检查API
@@ -147,39 +156,58 @@ const handleLogout = () => {
   closeDropdown()
   
   // 清除登录状态
-  localStorage.removeItem('isAuthenticated')
-  localStorage.removeItem('username')
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem('isAuthenticated')
+    localStorage.removeItem('username')
+  }
   
   // 立即跳转到首页
   router.push('/')
 }
 
+// 自定义指令绑定接口定义
+interface ClickOutsideBinding {
+  value: (event: Event) => void
+}
+
 // 自定义指令：点击外部关闭下拉菜单
+interface ClickOutsideHTMLElement extends HTMLElement {
+  clickOutsideEvent?: (event: Event) => void
+}
+
 const vClickOutside = {
-  beforeMount(el: any, binding: any) {
-    el.clickOutsideEvent = function(event: any) {
-      if (!(el === event.target || el.contains(event.target))) {
+  beforeMount(el: ClickOutsideHTMLElement, binding: ClickOutsideBinding) {
+    el.clickOutsideEvent = function(event: Event) {
+      if (!(el === event.target || el.contains(event.target as Node))) {
         binding.value(event)
       }
     }
     document.addEventListener('click', el.clickOutsideEvent)
   },
-  unmounted(el: any) {
-    document.removeEventListener('click', el.clickOutsideEvent)
+  unmounted(el: ClickOutsideHTMLElement) {
+    if (el.clickOutsideEvent) {
+      document.removeEventListener('click', el.clickOutsideEvent)
+    }
   }
 }
 
 // 获取用户信息
-const fetchUserInfo = async () => {
+const fetchUserInfo = async (): Promise<void> => {
   try {
-    // 这里应该调用API获取用户信息
-    // const response = await userApi.getUserInfo()
-    // Object.assign(userInfo, response.data)
+    console.log('开始获取用户信息...')
+    const response = await getCurrentUser()
+    console.log('用户信息响应:', response)
     
-    // 模拟数据
-    console.log('获取用户信息')
+    if (response && response.success && response.data) {
+      // 更新用户信息，使用Object.assign保持响应性
+      Object.assign(userInfo, response.data)
+      console.log('用户信息获取成功:', userInfo)
+    } else {
+      console.error('获取用户信息失败:', response?.message || '未知错误')
+      ElMessage.error('获取用户信息失败')
+    }
   } catch (error) {
-    console.error('获取用户信息失败:', error)
+    console.error('获取用户信息异常:', error)
     ElMessage.error('获取用户信息失败')
   }
 }

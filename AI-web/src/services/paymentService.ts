@@ -3,9 +3,13 @@
  * 统一管理所有支付相关的API调用
  */
 
-import { ElMessage } from 'element-plus'
-
 // 支付相关类型定义
+interface ApiResponse<T = unknown> {
+  success: boolean
+  data: T
+  message?: string
+}
+
 export interface PaymentRecord {
   id: number
   orderId: string
@@ -77,7 +81,7 @@ export interface PaymentRequest {
   recipientAccount?: string
   discountCode?: string
   callbackUrl?: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 export interface PaymentResponse {
@@ -88,7 +92,7 @@ export interface PaymentResponse {
   paymentUrl?: string
   qrCodeUrl?: string
   message: string
-  data?: any
+  data?: Record<string, unknown>
 }
 
 export interface PaymentFilter {
@@ -105,8 +109,8 @@ export interface PaymentFilter {
 }
 
 // 基础HTTP请求函数
-const request = async (url: string, options: RequestInit = {}) => {
-  const token = localStorage.getItem('authToken')
+const request = async <T = unknown>(url: string, options: RequestInit = {}): Promise<ApiResponse<T>> => {
+  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('authToken') : null
   
   const config: RequestInit = {
     headers: {
@@ -124,7 +128,7 @@ const request = async (url: string, options: RequestInit = {}) => {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
     
-    const data = await response.json()
+    const data = await response.json() as ApiResponse<T>
     return data
   } catch (error) {
     console.error('API请求失败:', error)
@@ -189,11 +193,11 @@ export const getPaymentRecordDetail = async (orderId: string) => {
 
 /**
  * 获取支付统计数据
- * @param startDate 开始日期
- * @param endDate 结束日期
+ * @param _startDate 开始日期
+ * @param _endDate 结束日期
  * @returns 统计数据
  */
-export const getPaymentStatistics = async (startDate?: string, endDate?: string) => {
+export const getPaymentStatistics = async (_startDate?: string, _endDate?: string) => {
   try {
     await new Promise(resolve => setTimeout(resolve, 600))
     
@@ -281,11 +285,11 @@ export const createQRCode = async (qrCodeData: Omit<QRCode, 'id' | 'createdAt' |
 
 /**
  * 更新收款码
- * @param id 收款码ID
- * @param qrCodeData 收款码数据
+ * @param _id 收款码ID
+ * @param _qrCodeData 收款码数据
  * @returns 更新结果
  */
-export const updateQRCode = async (id: number, qrCodeData: Partial<QRCode>) => {
+export const updateQRCode = async (_id: number, _qrCodeData: Partial<QRCode>) => {
   try {
     await new Promise(resolve => setTimeout(resolve, 800))
     
@@ -304,7 +308,7 @@ export const updateQRCode = async (id: number, qrCodeData: Partial<QRCode>) => {
  * @param id 收款码ID
  * @returns 删除结果
  */
-export const deleteQRCode = async (id: number) => {
+export const deleteQRCode = async (_id: number) => {
   try {
     await new Promise(resolve => setTimeout(resolve, 600))
     
@@ -324,7 +328,7 @@ export const deleteQRCode = async (id: number) => {
  * @param status 新状态
  * @returns 更新结果
  */
-export const toggleQRCodeStatus = async (id: number, status: 'active' | 'inactive') => {
+export const toggleQRCodeStatus = async (_id: number, status: 'active' | 'inactive') => {
   try {
     await new Promise(resolve => setTimeout(resolve, 500))
     
@@ -344,7 +348,7 @@ export const toggleQRCodeStatus = async (id: number, status: 'active' | 'inactiv
  * @param options 生成选项
  * @returns 图片URL
  */
-export const generateQRCodeImage = async (id: number, options: {
+export const generateQRCodeImage = async (_id: number, options: {
   format?: 'png' | 'svg'
   size?: number
   logo?: string
@@ -371,12 +375,12 @@ export const generateQRCodeImage = async (id: number, options: {
  * @param method 分享方式
  * @returns 分享结果
  */
-export const shareQRCode = async (id: number, method: 'copy' | 'email' | 'sms' | 'social') => {
+export const shareQRCode = async (_id: number, _method: 'copy' | 'email' | 'sms' | 'social') => {
   try {
     await new Promise(resolve => setTimeout(resolve, 500))
     
     const shareData = {
-      url: `https://pay.example.com/qr/${id}`,
+      url: `https://pay.example.com/qr/${_id}`,
       message: '收款码分享链接',
       title: '收款码'
     }
@@ -402,7 +406,7 @@ export const shareQRCode = async (id: number, method: 'copy' | 'email' | 'sms' |
  * @param paymentData 支付数据
  * @returns 支付结果
  */
-export const confirmPayment = async (orderId: string, paymentData: any) => {
+export const confirmPayment = async (orderId: string) => {
   try {
     await new Promise(resolve => setTimeout(resolve, 2000))
     
@@ -434,10 +438,7 @@ export const confirmPayment = async (orderId: string, paymentData: any) => {
  * @param refundData 退款数据
  * @returns 退款申请结果
  */
-export const requestRefund = async (orderId: string, refundData: {
-  reason: string
-  amount?: number
-}) => {
+export const requestRefund = async () => {
   try {
     await new Promise(resolve => setTimeout(resolve, 1500))
     

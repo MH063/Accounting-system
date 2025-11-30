@@ -181,7 +181,7 @@
         <div class="attachments-grid">
           <div 
             v-for="(attachment, index) in expenseData?.attachments" 
-            :key="index"
+            :key="attachment.name + '-' + index"
             class="attachment-item"
             @click="handlePreviewAttachment(attachment)"
           >
@@ -219,7 +219,7 @@
         <div class="participants-list">
           <div 
             v-for="(participant, index) in expenseData?.participants" 
-            :key="index"
+            :key="participant.id || participant.name + '-' + index"
             class="participant-item"
           >
             <div class="participant-info">
@@ -530,7 +530,7 @@
         <div class="status-timeline">
           <div 
             v-for="(history, index) in displayedHistory" 
-            :key="index"
+            :key="history.timestamp + '-' + index"
             class="timeline-item"
             :class="getTimelineItemClass(history)"
           >
@@ -664,6 +664,7 @@ import {
   Plus, Setting
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { ExpenseItem, Participant, User as UserType } from '@/types'
 
 // 路由
 const route = useRoute()
@@ -671,27 +672,32 @@ const router = useRouter()
 
 // 数据状态
 const loading = ref(true)
-const expenseData = ref<any>(null)
+const expenseData = ref<ExpenseItem | null>(null)
 
 // 当前用户信息
-const currentUser = ref({
+const currentUser = ref<UserType>({
   id: 1,
   name: '当前用户',
-  role: '系统管理员', // admin | system_admin | auditor | member
+  role: 'system_admin', // admin | system_admin | auditor | member
   avatar: '',
   permissions: ['read', 'write', 'delete', 'review'] // 权限列表
 })
 
 // 评论相关状态
-const comments = ref<any[]>([])
+const comments = ref<Array<{id: number, content: string, author: UserType, createdAt: string, read?: boolean, showReply?: boolean, replyContent?: string, replies?: Array<{id: number, content: string, author: UserType, createdAt: string}>}>>([])
 const newComment = ref({
   content: ''
 })
 const addingComment = ref(false)
 const editingCommentId = ref<number | null>(null)
 
+// 状态历史详情接口定义
+interface StatusHistoryDetail {
+  [key: string]: string | number | boolean
+}
+
 // 状态流转历史相关状态
-const statusHistory = ref<any[]>([])
+const statusHistory = ref<Array<{status: string, description: string, operator: string, timestamp: string, ipAddress?: string, details?: StatusHistoryDetail}>>([])
 const showAllHistory = ref(false)
 const displayedHistory = computed(() => {
   if (showAllHistory.value) {
@@ -717,33 +723,33 @@ const lastOperation = computed(() => {
 
 const hasPaidParticipants = computed(() => {
   if (!expenseData.value?.participants) return false
-  return expenseData.value.participants.some((p: any) => p.paid)
+  return expenseData.value.participants.some((p: Participant) => p.paid)
 })
 
 const paidAmount = computed(() => {
   if (!expenseData.value?.participants) return 0
   return expenseData.value.participants
-    .filter((p: any) => p.paid)
-    .reduce((sum: number, p: any) => sum + p.amount, 0)
+    .filter((p: Participant) => p.paid)
+    .reduce((sum: number, p: Participant) => sum + p.amount, 0)
 })
 
 const pendingAmount = computed(() => {
   if (!expenseData.value?.participants) return 0
   return expenseData.value.participants
-    .filter((p: any) => !p.paid)
-    .reduce((sum: number, p: any) => sum + p.amount, 0)
+    .filter((p: Participant) => !p.paid)
+    .reduce((sum: number, p: Participant) => sum + p.amount, 0)
 })
 
 const lastPaymentDate = computed(() => {
   // 模拟获取最近一次支付时间
   if (!expenseData.value?.participants) return null
   
-  const paidParticipants = expenseData.value.participants.filter((p: any) => p.paid)
+  const paidParticipants = expenseData.value.participants.filter((p: Participant) => p.paid)
   if (paidParticipants.length === 0) return null
   
   // 假设取最后一个支付的时间
-  const mockPaymentDates = paidParticipants.map((_: any, index: number) => {
-    const date = new Date(expenseData.value.reviewDate)
+  const mockPaymentDates = paidParticipants.map((_: Participant, index: number) => {
+    const date = new Date(expenseData.value!.reviewDate!)
     date.setDate(date.getDate() + index + 1)
     return date.toISOString()
   })
@@ -843,7 +849,7 @@ const formatDateTime = (dateString?: string): string => {
   return new Date(dateString).toLocaleString('zh-CN')
 }
 
-const getStatusType = (status?: string) => {
+const getStatusType = (status?: string): 'warning' | 'success' | 'danger' | 'info' => {
   switch (status) {
     case 'pending': return 'warning'
     case 'approved': return 'success'
@@ -852,7 +858,7 @@ const getStatusType = (status?: string) => {
   }
 }
 
-const getStatusText = (status?: string) => {
+const getStatusText = (status?: string): string => {
   switch (status) {
     case 'pending': return '待审核'
     case 'approved': return '已通过'
@@ -861,9 +867,9 @@ const getStatusText = (status?: string) => {
   }
 }
 
-const getCategoryType = (category?: string) => {
+const getCategoryType = (category?: string): 'success' | 'warning' | 'info' | 'danger' => {
   switch (category) {
-    case 'accommodation': return ''
+    case 'accommodation': return 'info'
     case 'utilities': return 'success'
     case 'maintenance': return 'warning'
     case 'cleaning': return 'info'
@@ -872,7 +878,7 @@ const getCategoryType = (category?: string) => {
   }
 }
 
-const getCategoryText = (category?: string) => {
+const getCategoryText = (category?: string): string => {
   switch (category) {
     case 'accommodation': return '住宿费'
     case 'utilities': return '水电费'
@@ -1002,7 +1008,7 @@ const addComment = async () => {
   }
 }
 
-const deleteComment = async (comment: any) => {
+const deleteComment = async (comment: {id: number, content: string, author: UserType, createdAt: string, read?: boolean, showReply?: boolean, replyContent?: string, replies?: Array<{id: number, content: string, author: UserType, createdAt: string}>}) => {
   try {
     await ElMessageBox.confirm(
       '确定要删除这条评论吗？',
@@ -1021,28 +1027,28 @@ const deleteComment = async (comment: any) => {
   }
 }
 
-const editComment = (comment: any) => {
+const editComment = (comment: {id: number, content: string, author: UserType, createdAt: string, read?: boolean, showReply?: boolean, replyContent?: string, replies?: Array<{id: number, content: string, author: UserType, createdAt: string}>}) => {
   editingCommentId.value = comment.id
   newComment.value.content = comment.content
 }
 
-const canEditComment = (comment: any) => {
+const canEditComment = (comment: {id: number, content: string, author: UserType, createdAt: string, read?: boolean, showReply?: boolean, replyContent?: string, replies?: Array<{id: number, content: string, author: UserType, createdAt: string}>}) => {
   return comment.author.id === currentUser.value.id
 }
 
-const canDeleteComment = (comment: any) => {
+const canDeleteComment = (comment: {id: number, content: string, author: UserType, createdAt: string, read?: boolean, showReply?: boolean, replyContent?: string, replies?: Array<{id: number, content: string, author: UserType, createdAt: string}>}) => {
   return comment.author.id === currentUser.value.id || 
          currentUser.value.id === expenseData.value?.applicant
 }
 
-const toggleReply = (comment: any) => {
+const toggleReply = (comment: {id: number, content: string, author: UserType, createdAt: string, read?: boolean, showReply?: boolean, replyContent?: string, replies?: Array<{id: number, content: string, author: UserType, createdAt: string}>}) => {
   comment.showReply = !comment.showReply
   if (!comment.showReply) {
     comment.replyContent = ''
   }
 }
 
-const addReply = async (comment: any) => {
+const addReply = async (comment: {id: number, content: string, author: UserType, createdAt: string, read?: boolean, showReply?: boolean, replyContent?: string, replies?: Array<{id: number, content: string, author: UserType, createdAt: string}>}) => {
   if (!comment.replyContent?.trim()) return
   
   try {
@@ -1069,7 +1075,7 @@ const addReply = async (comment: any) => {
   }
 }
 
-const markCommentAsRead = (comment: any) => {
+const markCommentAsRead = (comment: {id: number, content: string, author: UserType, createdAt: string, read?: boolean, showReply?: boolean, replyContent?: string, replies?: Array<{id: number, content: string, author: UserType, createdAt: string}>}) => {
   comment.read = true
 }
 
@@ -1200,7 +1206,7 @@ const canUploadAttachments = computed(() => {
   return isApplicant && ['pending', 'approved'].includes(expenseData.value.status)
 })
 
-const canMarkAsPaid = computed(() => (participant: any) => {
+const canMarkAsPaid = computed(() => {
   // 只有费用申请人可以标记成员付款状态
   const isApplicant = expenseData.value?.applicant === currentUser.value.name ||
                       expenseData.value?.applicantId === currentUser.value.id
@@ -1208,25 +1214,7 @@ const canMarkAsPaid = computed(() => (participant: any) => {
   return isApplicant && expenseData.value?.status === 'approved'
 })
 
-const getUserPermissionLevel = (permission: string) => {
-  // 权限等级：1-普通成员，2-寝室长，3-审核员，4-管理员，5-系统管理员
-  const roleLevels = {
-    'member': 1,
-    'dorm_leader': 2,
-    'auditor': 3,
-    'admin': 4,
-    'system_admin': 5
-  }
-  
-  const userLevel = roleLevels[currentUser.value.role as keyof typeof roleLevels] || 0
-  
-  // 检查用户是否具有特定权限
-  if (!currentUser.value.permissions?.includes(permission)) {
-    return false
-  }
-  
-  return userLevel >= 2 // 需要至少寝室长权限才能执行操作
-}
+
 
 const showPermissionDeniedMessage = (action: string) => {
   ElMessage.warning(`您没有权限执行${action}操作`)
@@ -1289,8 +1277,8 @@ const loadStatusHistory = () => {
       timestamp: new Date(new Date(expenseData.value.reviewDate).getTime() + 86400000).toISOString(),
       ipAddress: '192.168.1.50',
       details: {
-        '已支付人数': expenseData.value.participants?.filter((p: any) => p.paid).length || 0,
-        '待支付人数': expenseData.value.participants?.filter((p: any) => !p.paid).length || 0,
+        '已支付人数': expenseData.value.participants?.filter((p: Participant) => p.paid).length || 0,
+        '待支付人数': expenseData.value.participants?.filter((p: Participant) => !p.paid).length || 0,
         '已支付金额': `¥${paidAmount.value}`,
         '待支付金额': `¥${pendingAmount.value}`
       }
@@ -1303,8 +1291,8 @@ const toggleHistoryDetails = () => {
 }
 
 // 状态流转历史辅助函数
-const getTimelineItemClass = (history: any) => {
-  const classes = []
+const getTimelineItemClass = (history: StatusHistoryItem): string[] => {
+  const classes: string[] = []
   
   switch (history.status) {
     case 'pending':
@@ -1330,8 +1318,8 @@ const getTimelineItemClass = (history: any) => {
   return classes
 }
 
-const getMarkerClass = (history: any) => {
-  const classes = ['timeline-marker']
+const getMarkerClass = (history: StatusHistoryItem): string[] => {
+  const classes: string[] = ['timeline-marker']
   
   switch (history.status) {
     case 'pending':
@@ -1424,27 +1412,17 @@ const handleManageParticipants = () => {
   // 这里可以打开成员管理的对话框或页面
 }
 
-const toggleParticipantPaymentStatus = (participant: any) => {
-  if (!canMarkAsPaid.value(participant)) {
+const toggleParticipantPaymentStatus = (participant: Participant) => {
+  if (!canMarkAsPaid.value) {
     showPermissionDeniedMessage('标记支付状态')
-    logPermissionCheck('标记支付状态', canMarkAsPaid.value(participant))
+    logPermissionCheck('标记支付状态', canMarkAsPaid.value)
     return
   }
   
   // 切换支付状态
-  const originalStatus = participant.paid
   participant.paid = !participant.paid
   
   ElMessage.success(`已${participant.paid ? '标记' : '取消标记'}${participant.name}为${participant.paid ? '已支付' : '未支付'}`)
-  
-  // 如果需要，可以在这里调用API更新后端数据
-  // 如果API调用失败，需要回滚状态
-  // try {
-  //   await updateParticipantPaymentStatus(participant.id, participant.paid)
-  // } catch (error) {
-  //   participant.paid = originalStatus // 回滚状态
-  //   ElMessage.error('更新支付状态失败，请重试')
-  // }
 }
 </script>
 

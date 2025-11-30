@@ -379,7 +379,7 @@ router.beforeEach(async (to, from, next) => {
   // 如果路由需要认证
   if (to.meta.requiresAuth) {
     // 检查用户是否已登录（使用本地存储）
-    const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true';
+    const isAuthenticated = typeof localStorage !== 'undefined' && localStorage.getItem('isAuthenticated') === 'true';
     if (!isAuthenticated) {
       console.log('User not authenticated, redirecting to login');
       next('/login');
@@ -391,7 +391,7 @@ router.beforeEach(async (to, from, next) => {
 })
 
 // 路由后置守卫，确保每次导航后都回到顶部
-router.afterEach((to, from) => {
+router.afterEach((_to, _from) => {
   // 页面导航后回到顶部
   if (typeof window !== 'undefined') {
     window.scrollTo({

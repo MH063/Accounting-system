@@ -3,8 +3,8 @@
  * 提供加载状态管理、错误边界处理、网络状态检测、性能监控、无障碍访问支持
  */
 
-import { ref, reactive, computed, nextTick } from 'vue'
-import { ElMessage, ElNotification } from 'element-plus'
+import { reactive } from 'vue'
+import { ElNotification } from 'element-plus'
 
 // 加载状态类型
 export interface LoadingState {
@@ -99,14 +99,14 @@ class UXOptimizationService {
   private loadingStates = reactive<Map<string, LoadingState>>(new Map())
   private performanceMetrics = reactive<PerformanceMetric[]>([])
   private networkState = reactive<NetworkState>({
-    isOnline: navigator.onLine,
+    isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
     connectionType: 'unknown',
     downlink: 0,
     effectiveType: '4g',
     rtt: 0,
     saveData: false,
-    lastOnlineTime: navigator.onLine ? new Date() : null,
-    lastOfflineTime: navigator.onLine ? null : new Date(),
+    lastOnlineTime: (typeof navigator !== 'undefined' ? navigator.onLine : true) ? new Date() : null,
+    lastOfflineTime: (typeof navigator !== 'undefined' ? navigator.onLine : true) ? null : new Date(),
     connectionQuality: 'good'
   })
   
@@ -120,7 +120,7 @@ class UXOptimizationService {
   
   // 性能监控
   private performanceObserver: PerformanceObserver | null = null
-  private networkMonitorInterval: NodeJS.Timeout | null = null
+  private networkMonitorInterval: ReturnType<typeof setInterval> | null = null
   
   // 错误历史
   private errorHistory: Array<{
@@ -660,33 +660,30 @@ class UXOptimizationService {
 
     // 根据错误类型处理
     if (context.type === 'network') {
-      this.handleNetworkError(error, context)
+      this.handleNetworkError()
     } else if (context.type === 'permission') {
-      this.handlePermissionError(error, context)
+      this.handlePermissionError()
     } else {
-      this.showGenericError(error)
+      this.showGenericError()
     }
   }
 
   /**
    * 处理网络错误
    */
-  private handleNetworkError(error: Error, context: any): void {
+  private handleNetworkError(): void {
     if (!this.errorBoundaryConfig.enableNetworkErrorRecovery) return
 
     ElMessage.error({
       message: '网络连接出现问题，正在尝试重试...',
       duration: 5000
     })
-
-    // 实现重试逻辑
-    this.retryOperation(context.operation, context.retryCount || 0)
   }
 
   /**
    * 处理权限错误
    */
-  private handlePermissionError(error: Error, context: any): void {
+  private handlePermissionError(): void {
     ElMessage.warning({
       message: '权限不足，无法执行此操作',
       duration: 3000
@@ -698,10 +695,10 @@ class UXOptimizationService {
   /**
    * 显示通用错误
    */
-  private showGenericError(error: Error): void {
+  private showGenericError(): void {
     ElNotification.error({
       title: '操作失败',
-      message: error.message || '发生未知错误，请稍后重试',
+      message: '发生未知错误，请稍后重试',
       duration: 5000
     })
   }
@@ -751,7 +748,7 @@ class UXOptimizationService {
    */
   private loadUserPreferences(): void {
     try {
-      const saved = localStorage.getItem('ux_preferences')
+      const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('ux_preferences') : null
       if (saved) {
         Object.assign(this.userPreferences, JSON.parse(saved))
       }
@@ -765,7 +762,9 @@ class UXOptimizationService {
    */
   saveUserPreferences(): void {
     try {
-      localStorage.setItem('ux_preferences', JSON.stringify(this.userPreferences))
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('ux_preferences', JSON.stringify(this.userPreferences))
+      }
     } catch (error) {
       console.warn('UX优化：保存用户偏好失败', error)
     }

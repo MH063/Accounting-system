@@ -252,7 +252,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
@@ -267,6 +267,16 @@ import {
   CaretBottom,
   Search
 } from '@element-plus/icons-vue'
+import type {
+  EChartsTooltipParams,
+  IncomeAnalysisItem,
+  IncomeSourceStats,
+  ComparisonDataItem,
+  ForecastDataItem,
+  TimeAggregatedItem,
+  AnomalyItem,
+  TrendReportData
+} from '@/types'
 
 const router = useRouter()
 const loading = ref(false)
@@ -322,13 +332,15 @@ let categoryChart: echarts.ECharts | null = null
 let comparisonChart: echarts.ECharts | null = null
 let sourceChart: echarts.ECharts | null = null
 
+// ECharts tooltip参数接口 - 使用全局类型定义
+
 // 收入来源分析数据
-const sourceAnalysisData = computed(() => {
-  const sourceMap = new Map()
+const sourceAnalysisData = computed<IncomeAnalysisItem[]>(() => {
+  const sourceMap = new Map<string, number>()
   
   incomeData.value.forEach(item => {
     if (sourceMap.has(item.source)) {
-      sourceMap.set(item.source, sourceMap.get(item.source) + item.amount)
+      sourceMap.set(item.source, sourceMap.get(item.source)! + item.amount)
     } else {
       sourceMap.set(item.source, item.amount)
     }
@@ -337,7 +349,7 @@ const sourceAnalysisData = computed(() => {
   const total = Array.from(sourceMap.values()).reduce((sum, amount) => sum + amount, 0)
   const colors = ['#409EFF', '#67C23A', '#E6A23C', '#F56C6C', '#909399', '#B3D8FF']
   
-  return Array.from(sourceMap.entries()).map(([name, value], index) => ({
+  return Array.from(sourceMap.entries()).map(([name, value], index): IncomeAnalysisItem => ({
     name,
     value,
     percentage: Math.round((value / total) * 100),
@@ -481,7 +493,7 @@ const initSourceChart = () => {
       },
       tooltip: {
         trigger: 'item',
-        formatter: (params: any) => {
+        formatter: (params: EChartsTooltipParams) => {
           const isAnomaly = anomalies.some(item => item.name === params.name)
           let result = `${params.seriesName} <br/>${params.name}: ¥${formatAmount(params.value)} (${params.percent}%)`
           if (isAnomaly) {
@@ -521,8 +533,8 @@ const initSourceChart = () => {
       },
       tooltip: {
         trigger: 'axis',
-        formatter: (params: any) => {
-          const param = params[0]
+        formatter: (params: EChartsTooltipParams | EChartsTooltipParams[]) => {
+          const param = Array.isArray(params) ? params[0] : params
           const isAnomaly = anomalies.some(item => item.name === param.name)
           let result = `${param.name}: ¥${formatAmount(param.value)}`
           if (isAnomaly) {
@@ -591,9 +603,9 @@ const initTrendChart = () => {
     },
     tooltip: {
       trigger: 'axis',
-      formatter: (params: any) => {
+      formatter: (params: EChartsTooltipParams[]) => {
         let result = params[0].name + '<br/>'
-        params.forEach((param: any) => {
+        params.forEach((param: EChartsTooltipParams) => {
           if (param.seriesName === '收入金额') {
             result += `${param.marker}${param.seriesName}: ¥${formatAmount(param.value)}<br/>`
           } else if (param.seriesName === '预测趋势') {
@@ -731,8 +743,8 @@ const initComparisonChart = () => {
 }
 
 // 辅助函数
-const aggregateDataByTime = (data: any[], granularity: string) => {
-  const aggregated = {}
+const aggregateDataByTime = (data: Array<{date: string, amount: number}>, granularity: 'day' | 'week' | 'month'): TimeAggregatedItem[] => {
+  const aggregated: Record<string, number> = {}
   
   data.forEach(item => {
     const date = new Date(item.date)
@@ -761,12 +773,12 @@ const aggregateDataByTime = (data: any[], granularity: string) => {
   })
   
   return Object.entries(aggregated)
-    .map(([date, value]) => ({ date, value }))
+    .map(([date, value]): TimeAggregatedItem => ({ date, value }))
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 }
 
-const generateComparisonData = (type: string) => {
-  const periods = []
+const generateComparisonData = (type: 'month' | 'quarter' | 'year'): ComparisonDataItem[] => {
+  const periods: ComparisonDataItem[] = []
   const current = new Date()
   
   switch (type) {
@@ -817,7 +829,7 @@ const getComparisonTitle = () => {
 }
 
 // 预测算法函数
-const generateForecastData = (historicalData: any[]) => {
+const generateForecastData = (historicalData: TimeAggregatedItem[]): ForecastDataItem[] => {
   if (historicalData.length < 3) return []
   
   // 简单线性回归预测
@@ -839,7 +851,7 @@ const generateForecastData = (historicalData: any[]) => {
   
   // 生成预测数据点
   const forecastPoints = 3
-  const forecastData = []
+  const forecastData: ForecastDataItem[] = []
   
   for (let i = 1; i <= forecastPoints; i++) {
     const forecastIndex = n + i - 1
@@ -869,7 +881,7 @@ const generateForecastData = (historicalData: any[]) => {
 }
 
 // 异常检测函数
-const detectAnomalies = (data: any[]) => {
+const detectAnomalies = (data: IncomeAnalysisItem[]): AnomalyItem[] => {
   if (data.length < 3) return []
   
   // 计算平均值和标准差
@@ -880,11 +892,14 @@ const detectAnomalies = (data: any[]) => {
   
   // 使用3σ原则检测异常值
   const threshold = 3 * stdDev
-  const anomalies = []
+  const anomalies: AnomalyItem[] = []
   
   data.forEach(item => {
     if (Math.abs(item.value - mean) > threshold) {
-      anomalies.push(item)
+      anomalies.push({
+        name: item.name,
+        value: item.value
+      })
     }
   })
   
@@ -892,11 +907,10 @@ const detectAnomalies = (data: any[]) => {
 }
 
 // 生成趋势报告
-const generateTrendReport = () => {
+const generateTrendReport = (): TrendReportData => {
   const timeData = aggregateDataByTime(incomeData.value, trendGranularity.value)
   const forecastData = generateForecastData(timeData)
   const sourceData = sourceAnalysisData.value
-  const comparisonData = generateComparisonData(comparisonType.value)
   
   // 计算关键指标
   const totalRevenue = totalIncome.value
@@ -907,14 +921,19 @@ const generateTrendReport = () => {
   const avgGrowth = averageGrowthRate.value
   
   // 检测异常
-  const sourceStats = {}
+  const sourceStats: IncomeSourceStats = {}
   incomeData.value.forEach(item => {
     if (!sourceStats[item.source]) {
       sourceStats[item.source] = 0
     }
     sourceStats[item.source] += item.amount
   })
-  const sourceDataForAnomaly = Object.entries(sourceStats).map(([name, value]) => ({ name, value }))
+  const sourceDataForAnomaly = Object.entries(sourceStats).map(([name, value]): IncomeAnalysisItem => ({
+    name,
+    value,
+    percentage: 0,
+    color: ''
+  }))
   const anomalies = detectAnomalies(sourceDataForAnomaly)
   
   return {
@@ -938,7 +957,7 @@ const generateTrendReport = () => {
 }
 
 // 创建报告内容
-const createReportContent = (reportData: any) => {
+const createReportContent = (reportData: TrendReportData) => {
   const {
     reportDate,
     dateRange,
@@ -1106,9 +1125,7 @@ const handleSourcePeriodChange = () => {
   })
 }
 
-const handleDateRangeChange = () => {
-  loadIncomeData()
-}
+
 
 const handleExportReport = () => {
   // 生成详细的趋势报告
@@ -1123,7 +1140,7 @@ const handleExportReport = () => {
   ElMessage.success('收入趋势报告已生成并下载')
 }
 
-const viewIncomeDetail = (row: any) => {
+const viewIncomeDetail = (row: IncomeItem) => {
   ElMessage.info(`查看收入详情: ${row.source} - ¥${formatAmount(row.amount)}`)
 }
 

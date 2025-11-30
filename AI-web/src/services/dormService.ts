@@ -1,5 +1,4 @@
 // 寝室管理服务
-import { ElMessage } from 'element-plus'
 
 export interface DormBasicInfo {
   dormNumber: string

@@ -266,38 +266,72 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, FormInstance } from 'element-plus'
+import { ElMessage, ElMessageBox, FormInstance } from 'element-plus'
 import { 
   Plus, Lock, DataAnalysis, Timer, Check, List, Close, ArrowLeft
 } from '@element-plus/icons-vue'
 import { 
-  getQRCodes, createQRCode, updateQRCode, deleteQRCode as deleteQRCodeApi,
-  toggleQRCodeStatus as toggleQRCodeStatusApi, generateQRCodeImage, shareQRCode as shareQRCodeApi
+  getQRCodesApi,
+  createQRCodeApi,
+  updateQRCodeApi,
+  deleteQRCodeApi,
+  toggleQRCodeStatusApi,
+  shareQRCodeApi,
+  generateQRCodeImage,
+  getQRCodeStatistics
 } from '../services/paymentService'
+import type { QRCodeItem } from '../types/index'
 
-// QRCode类型定义
+// 收款码接口定义
 interface QRCode {
   id: number
   name: string
   type: 'fixed' | 'custom' | 'dynamic'
   amount?: number
-  currency: string
   description: string
   status: 'active' | 'inactive'
   usageLimit?: number
   usageCount: number
   createdAt: string
   updatedAt: string
-  expiresAt?: string
-  qrCodeUrl: string
-  merchantName: string
-  merchantAccount: string
-  isDefault: boolean
   tags: string[]
   backgroundColor?: string
-  logoUrl?: string
+  qrCodeUrl?: string
+  currency?: string
+  merchantName?: string
+  merchantAccount?: string
+  isDefault?: boolean
+}
+
+// 收入趋势数据接口定义
+interface IncomeTrendItem {
+  month: string
+  amount: number
+}
+
+// 支付方式分布数据接口定义
+interface MethodDistributionItem {
+  name: string
+  amount: number
+  percentage: number
+}
+
+// 安全检测结果接口定义
+interface SecurityChecks {
+  qrCodeStatus: 'success' | 'warning' | 'error'
+  usageAnalysis: 'success' | 'warning' | 'error'
+  amountValidation: 'success' | 'warning' | 'error'
+  permissions: 'success' | 'warning' | 'error'
+}
+
+// 提醒设置接口定义
+interface ReminderSettings {
+  enabled: boolean
+  methods: string[]
+  amountThreshold: number
+  intervalMinutes: number
 }
 
 // 响应式数据
@@ -344,7 +378,7 @@ const statistics = reactive({
 })
 
 // 统计数据
-const incomeTrend = ref([
+const incomeTrend = ref<IncomeTrendItem[]>([
   { month: '10月', amount: 120 },
   { month: '11月', amount: 180 },
   { month: '12月', amount: 140 },
@@ -352,14 +386,14 @@ const incomeTrend = ref([
   { month: '2月', amount: 160 }
 ])
 
-const methodDistribution = ref([
+const methodDistribution = ref<MethodDistributionItem[]>([
   { name: '微信支付', amount: 8950.30, percentage: 56.4 },
   { name: '支付宝', amount: 5230.80, percentage: 33.0 },
   { name: '银行卡', amount: 1669.40, percentage: 10.6 }
 ])
 
 // 安全检测结果
-const securityChecks = reactive({
+const securityChecks = ref<SecurityChecks>({
   qrCodeStatus: 'success',
   usageAnalysis: 'success',
   amountValidation: 'success',
@@ -367,7 +401,7 @@ const securityChecks = reactive({
 })
 
 // 提醒设置
-const reminderForm = reactive({
+const reminderForm = ref<ReminderSettings>({
   enabled: true,
   methods: ['email', 'push'],
   amountThreshold: 100.00,
@@ -395,11 +429,11 @@ const filteredQRCodes = computed(() => {
 const router = useRouter()
 
 // 方法
-const goBack = () => {
+const goBack = (): void => {
   router.push('/dashboard/payment')
 }
 
-const getQRCodesList = async () => {
+const getQRCodesList = async (): Promise<void> => {
   try {
     loading.value = true
     const response = await getQRCodes()
@@ -412,7 +446,7 @@ const getQRCodesList = async () => {
   }
 }
 
-const getQRTypeText = (type: string) => {
+const getQRTypeText = (type: 'fixed' | 'custom' | 'dynamic'): string => {
   const typeMap: Record<string, string> = {
     fixed: '固定金额',
     custom: '自定义金额',
@@ -421,27 +455,27 @@ const getQRTypeText = (type: string) => {
   return typeMap[type] || type
 }
 
-const openCreateDialog = () => {
+const openCreateDialog = (): void => {
   isEdit.value = false
   dialogVisible.value = true
 }
 
-const openStatisticsDialog = () => {
+const openStatisticsDialog = (): void => {
   statisticsDialogVisible.value = true
 }
 
-const openSecurityCheck = () => {
+const openSecurityCheck = (): void => {
   // 模拟安全检测
   securityDialogVisible.value = true
 }
 
-const onTypeChange = (type: string) => {
+const onTypeChange = (type: 'fixed' | 'custom' | 'dynamic'): void => {
   if (type !== 'fixed') {
     qrForm.amount = 0
   }
 }
 
-const saveQRCode = async () => {
+const saveQRCode = async (): Promise<void> => {
   if (!qrFormRef.value) return
   
   await qrFormRef.value.validate(async (valid: boolean) => {
@@ -487,7 +521,7 @@ const saveQRCode = async () => {
   })
 }
 
-const resetForm = () => {
+const resetForm = (): void => {
   Object.assign(qrForm, {
     name: '',
     type: 'custom',
@@ -499,76 +533,138 @@ const resetForm = () => {
   })
 }
 
-const shareQRCode = async (qr: any) => {
+const shareQRCode = async (qr: QRCode): Promise<void> => {
   try {
-    await shareQRCodeApi(qr.id, 'copy')
-    ElMessage.success('分享链接已复制到剪贴板')
+    const result = await shareQRCodeApi(qr.id, 'link')
+    if (result.success && result.link) {
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(result.link)
+        ElMessage.success('分享链接已复制到剪贴板')
+      } else {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea')
+        textArea.value = result.link
+        document.body.appendChild(textArea)
+        textArea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textArea)
+        ElMessage.success('分享链接已复制到剪贴板')
+      }
+    }
   } catch (error) {
     ElMessage.error('分享失败')
   }
 }
 
-const downloadQRCode = async (qr: any) => {
+interface GenerateQRCodeOptions {
+  format?: 'png' | 'svg'
+  size?: number
+  logo?: string
+}
+
+const downloadQRCode = async (qr: QRCode): Promise<void> => {
   try {
-    const response = await generateQRCodeImage(qr.id, { format: 'png', size: 300 })
-    const link = document.createElement('a')
-    link.href = response.data.downloadUrl
-    link.download = `${qr.name}.png`
-    link.click()
-    ElMessage.success('收款码下载成功')
+    const options: GenerateQRCodeOptions = { format: 'png', size: 300 }
+    const response = await generateQRCodeImage(qr.id, options)
+    if (response.success && response.data?.downloadUrl) {
+      const link = document.createElement('a')
+      link.href = response.data.downloadUrl
+      link.download = `${qr.name}_${new Date().getTime()}.png`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      ElMessage.success('收款码下载成功')
+    } else {
+      ElMessage.error('下载失败：无效的下载链接')
+    }
   } catch (error) {
+    console.error('下载错误:', error)
     ElMessage.error('下载失败')
   }
 }
 
-const customizeStyle = (qr: any) => {
-  ElMessage.info('样式定制功能开发中')
+const customizeStyle = (qr: QRCode): void => {
+  ElMessage.info(`正在为 ${qr.name} 定制样式功能...`)
+  // TODO: 实现样式定制对话框
 }
 
-const editQRCode = (qr: any) => {
+const editQRCode = (qr: QRCode): void => {
   isEdit.value = true
-  Object.assign(qrForm, qr)
+  // 重置表单并加载数据
+  Object.assign(qrForm, {
+    id: qr.id,
+    name: qr.name,
+    type: qr.type,
+    amount: qr.amount,
+    description: qr.description,
+    usageLimit: qr.usageLimit,
+    backgroundColor: qr.backgroundColor || '#ffffff',
+    tags: [...qr.tags]
+  })
   dialogVisible.value = true
 }
 
-const toggleQRCodeStatus = async (qr: any) => {
+const toggleQRCodeStatus = async (qr: QRCode): Promise<void> => {
   try {
-    const newStatus = qr.status === 'active' ? 'inactive' : 'active'
+    const newStatus: 'active' | 'inactive' = qr.status === 'active' ? 'inactive' : 'active'
     await toggleQRCodeStatusApi(qr.id, newStatus)
     qr.status = newStatus
+    // 更新本地数据
+    const index = qrCodes.value.findIndex(item => item.id === qr.id)
+    if (index !== -1) {
+      qrCodes.value[index].status = newStatus
+      qrCodes.value[index].updatedAt = new Date().toISOString()
+    }
     ElMessage.success(`收款码已${newStatus === 'active' ? '启用' : '禁用'}`)
   } catch (error) {
+    console.error('状态切换错误:', error)
     ElMessage.error('状态切换失败')
   }
 }
 
-const deleteQRCode = async (qr: any) => {
+const deleteQRCode = async (qr: QRCode): Promise<void> => {
   try {
-    await deleteQRCodeApi(qr.id)
-    qrCodes.value = qrCodes.value.filter(item => item.id !== qr.id)
-    ElMessage.success('收款码删除成功')
+    // 添加确认对话框
+    const confirmResult = await ElMessageBox.confirm(
+      `确定要删除收款码 "${qr.name}" 吗？`,
+      '确认删除',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    
+    if (confirmResult === 'confirm') {
+      await deleteQRCodeApi(qr.id)
+      qrCodes.value = qrCodes.value.filter(item => item.id !== qr.id)
+      ElMessage.success('收款码删除成功')
+    }
   } catch (error) {
-    ElMessage.error('删除失败')
+    if (error !== 'cancel') {
+      console.error('删除错误:', error)
+      ElMessage.error('删除失败')
+    }
   }
 }
 
-const filterQRCodes = () => {
+const filterQRCodes = (): void => {
   // 筛选逻辑已在 computed 中实现
 }
 
-const sortQRCodes = () => {
+const sortQRCodes = (): void => {
   // 排序逻辑已在 computed 中实现
 }
 
-const removeTag = (tag: string) => {
+const removeTag = (tag: string): void => {
   qrForm.tags = qrForm.tags.filter(t => t !== tag)
 }
 
-const showInput = () => {
+const showInput = (): void => {
   inputVisible.value = true
 }
 
-const handleInputConfirm = () => {
+const handleInputConfirm = (): void => {
   if (inputValue.value && !qrForm.tags.includes(inputValue.value)) {
     qrForm.tags.push(inputValue.value)
   }
@@ -576,7 +672,7 @@ const handleInputConfirm = () => {
   inputValue.value = ''
 }
 
-const saveReminderSettings = () => {
+const saveReminderSettings = (): void => {
   ElMessage.success('提醒设置已保存')
   reminderDialogVisible.value = false
 }

@@ -745,7 +745,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, nextTick, watch, shallowRef } from 'vue'
+import { ref, computed, onMounted, nextTick, watch, shallowRef, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import { 
@@ -788,12 +788,7 @@ interface History {
   description: string
 }
 
-interface Attachment {
-  id: string
-  name: string
-  size: number
-  url: string
-}
+
 
 interface BillData {
   id: string
@@ -810,7 +805,7 @@ interface BillData {
   participants: Participant[]
   expenses: Expense[]
   history: History[]
-  attachments: Attachment[]
+
 }
 
 // 定义账单版本接口
@@ -1076,7 +1071,7 @@ const getHistoryType = (action: History['action'] | undefined) => {
  * @returns 操作对应的图标
  */
 const getHistoryIcon = (action: History['action'] | undefined) => {
-  const iconMap: Record<string, any> = {
+  const iconMap: Record<string, Component> = {
     create: Plus,
     update: Edit,
     payment: Money,
@@ -1326,7 +1321,7 @@ const compareVersions = async () => {
  * @param param 表格行参数
  * @returns 行类名
  */
-const tableRowClassName = ({ row }: { row: any }) => {
+const tableRowClassName = ({ row }: { row: { status?: string } }) => {
   if (row.status === 'added') {
     return 'row-added'
   } else if (row.status === 'removed') {
@@ -1561,14 +1556,14 @@ const handleAddParticipant = () => {
 /**
  * 编辑成员
  */
-const handleEditMember = (memberId: string) => {
+const handleEditMember = () => {
   ElMessage.success('编辑成员功能开发中')
 }
 
 /**
  * 移除成员
  */
-const handleRemoveMember = async (memberId: string) => {
+const handleRemoveMember = async () => {
   try {
     await ElMessageBox.confirm('确定要移除这个成员吗？', '移除确认', {
       confirmButtonText: '确定移除',
@@ -1605,14 +1600,14 @@ const handleUploadAttachment = () => {
 /**
  * 预览附件
  */
-const handlePreviewAttachment = (attachment: any) => {
+const handlePreviewAttachment = () => {
   ElMessage.success('预览附件功能开发中')
 }
 
 /**
  * 下载附件
  */
-const handleDownloadAttachment = (attachment: any) => {
+const handleDownloadAttachment = () => {
   ElMessage.success('下载附件功能开发中')
 }
 

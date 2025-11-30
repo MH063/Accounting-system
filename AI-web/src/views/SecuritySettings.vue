@@ -472,7 +472,7 @@ const passwordRules = {
   confirmPassword: [
     { required: true, message: '请确认新密码', trigger: 'blur' },
     {
-      validator: (rule: any, value: string, callback: any) => {
+      validator: (_rule: Record<string, unknown>, value: string, callback: (error?: string | Error) => void) => {
         if (value !== passwordForm.newPassword) {
           callback(new Error('两次输入密码不一致'))
         } else {
@@ -617,7 +617,7 @@ const smsCooldown = ref(0)
 const emailCooldown = ref(0)
 
 // 方法
-const changePassword = () => {
+const changePassword = (): void => {
   // 模拟密码修改
   ElMessage.success('密码修改成功')
   showPasswordDialog.value = false
@@ -627,7 +627,7 @@ const changePassword = () => {
   passwordForm.confirmPassword = ''
 }
 
-const toggleTwoFactor = (value: boolean) => {
+const toggleTwoFactor = (value: boolean): void => {
   if (value) {
     ElMessage.success('两步验证已开启')
   } else {
@@ -635,7 +635,7 @@ const toggleTwoFactor = (value: boolean) => {
   }
 }
 
-const toggleLoginProtection = (value: boolean) => {
+const toggleLoginProtection = (value: boolean): void => {
   if (value) {
     ElMessage.success('登录保护已开启')
   } else {
@@ -643,7 +643,7 @@ const toggleLoginProtection = (value: boolean) => {
   }
 }
 
-const toggleAbnormalLoginAlert = (value: boolean) => {
+const toggleAbnormalLoginAlert = (value: boolean): void => {
   if (value) {
     ElMessage.success('异常登录提醒已开启')
   } else {
@@ -651,7 +651,7 @@ const toggleAbnormalLoginAlert = (value: boolean) => {
   }
 }
 
-const sendPhoneCode = () => {
+const sendPhoneCode = (): void => {
   // 模拟发送验证码
   smsCooldown.value = 60
   const timer = setInterval(() => {
@@ -663,7 +663,7 @@ const sendPhoneCode = () => {
   ElMessage.success('验证码已发送到您的手机')
 }
 
-const sendEmailCode = () => {
+const sendEmailCode = (): void => {
   // 模拟发送验证码
   emailCooldown.value = 60
   const timer = setInterval(() => {
@@ -675,7 +675,7 @@ const sendEmailCode = () => {
   ElMessage.success('验证码已发送到您的邮箱')
 }
 
-const bindPhone = () => {
+const bindPhone = (): void => {
   if (!phoneForm.phone || !phoneForm.code) {
     ElMessage.error('请填写完整信息')
     return
@@ -685,7 +685,7 @@ const bindPhone = () => {
   showPhoneDialog.value = false
 }
 
-const bindEmail = () => {
+const bindEmail = (): void => {
   if (!emailForm.email || !emailForm.code) {
     ElMessage.error('请填写完整信息')
     return
@@ -695,7 +695,7 @@ const bindEmail = () => {
   showEmailDialog.value = false
 }
 
-const removeDevice = (deviceId: number) => {
+const removeDevice = (deviceId: number): void => {
   ElMessageBox.confirm('确定要移除该设备吗？', '提示', {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
@@ -711,7 +711,7 @@ const removeDevice = (deviceId: number) => {
   })
 }
 
-const copyBackupCode = async (code: string) => {
+const copyBackupCode = async (code: string): Promise<void> => {
   try {
     await navigator.clipboard.writeText(code)
     ElMessage.success('验证码已复制到剪贴板')
@@ -727,14 +727,14 @@ const copyBackupCode = async (code: string) => {
   }
 }
 
-const regenerateBackupCodes = () => {
+const regenerateBackupCodes = (): void => {
   ElMessageBox.confirm('重新生成备用验证码将使之前的验证码失效，是否继续？', '提示', {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
     type: 'warning'
   }).then(() => {
     // 模拟重新生成验证码
-    backupCodes.value = Array.from({ length: 12 }, (_, i) => 
+    backupCodes.value = Array.from({ length: 12 }, (_i) => 
       Math.floor(100000 + Math.random() * 900000).toString()
     )
     ElMessage.success('备用验证码已重新生成')
@@ -743,12 +743,12 @@ const regenerateBackupCodes = () => {
   })
 }
 
-const saveLoginLimit = () => {
+const saveLoginLimit = (): void => {
   ElMessage.success('登录限制设置已保存')
   showLoginLimitDialog.value = false
 }
 
-const saveSecurityQuestions = () => {
+const saveSecurityQuestions = (): void => {
   if (!securityQuestionForm.question1 || !securityQuestionForm.answer1 ||
       !securityQuestionForm.question2 || !securityQuestionForm.answer2 ||
       !securityQuestionForm.question3 || !securityQuestionForm.answer3) {

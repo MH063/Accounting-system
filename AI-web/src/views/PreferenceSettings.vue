@@ -374,11 +374,17 @@ const exportSettings = () => {
 }
 
 // 导入设置
-const handleImportSettings = (file: any) => {
+const handleImportSettings = (file: File) => {
   const reader = new FileReader()
-  reader.onload = (e) => {
+  reader.onload = (e: ProgressEvent<FileReader>) => {
     try {
-      const settings = JSON.parse(e.target?.result as string)
+      const settings = JSON.parse(e.target?.result as string) as {
+        interface?: Partial<typeof interfaceSettings>
+        notification?: Partial<typeof notificationSettings>
+        privacy?: Partial<typeof privacySettings>
+        locale?: Partial<typeof localeSettings>
+        shortcut?: Partial<typeof shortcutSettings>
+      }
       
       // 导入界面设置
       if (settings.interface) {
@@ -410,7 +416,7 @@ const handleImportSettings = (file: any) => {
       ElMessage.error('设置文件格式错误，请检查文件内容')
     }
   }
-  reader.readAsText(file.raw)
+  reader.readAsText(file)
 }
 
 // 重置所有设置

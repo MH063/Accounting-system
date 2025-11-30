@@ -2,18 +2,22 @@
   <div class="dorm-info">
     <!-- 页面头部 -->
     <div class="page-header">
-      <div class="header-content">
-        <h1>寝室信息</h1>
-        <div class="header-actions">
-          <el-button @click="refreshData">
-            <el-icon><Refresh /></el-icon>
-            刷新
-          </el-button>
-          <el-button @click="$router.back()">
-            <el-icon><ArrowLeft /></el-icon>
-            返回
-          </el-button>
-        </div>
+      <div class="header-left">
+        <h1 class="page-title">寝室信息</h1>
+      </div>
+      <div class="header-actions">
+        <el-button 
+          type="primary" 
+          :icon="ArrowLeft" 
+          @click="handleBack"
+          class="back-btn"
+        >
+          返回
+        </el-button>
+        <el-button @click="refreshData">
+          <el-icon><Refresh /></el-icon>
+          刷新
+        </el-button>
       </div>
     </div>
 
@@ -371,17 +375,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed, watch } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { 
   ArrowLeft, Refresh, Edit, Share, UserFilled, Money, Document, 
-  Plus, Coin, Grid
+  Plus, Grid
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 
-// 页面参数
-const props = defineProps<{ id?: string }>()
-const dormId = computed(() => props.id || 'DORM001')
+
 
 // 响应式数据
 const editMode = ref(false)
@@ -737,6 +739,10 @@ const copyShareInfo = () => {
   }).catch(() => {
     ElMessage.error('复制失败')
   })
+}
+
+const handleBack = () => {
+  window.history.back()
 }
 
 // 生命周期

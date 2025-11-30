@@ -731,11 +731,23 @@ const getInviteMethodText = (method: string) => {
   }
 }
 
-const viewMemberInfo = (member: any) => {
+interface Member {
+  id: number
+  name: string
+  studentId: string
+  phone: string
+  room: string
+  role: 'member' | 'admin'
+  status: 'pending' | 'accepted' | 'rejected'
+  inviteTime: string
+  acceptTime?: string
+}
+
+const viewMemberInfo = (member: Member) => {
   ElMessage.info(`查看成员：${member.name}`)
 }
 
-const removeMember = (member: any) => {
+const removeMember = (member: Member) => {
   ElMessageBox.confirm(
     `确定要移除成员"${member.name}"吗？`,
     '确认移除',
@@ -782,7 +794,17 @@ const viewInviteHistory = () => {
   showInviteHistory.value = true
 }
 
-const revokeInvite = (invite: any) => {
+interface InviteHistory {
+  id: number
+  type: 'direct' | 'code' | 'link'
+  recipient: string
+  status: 'pending' | 'accepted' | 'used' | 'expired'
+  createTime: string
+  expireTime?: string
+  acceptTime?: string
+}
+
+const revokeInvite = (invite: InviteHistory) => {
   const index = inviteHistory.value.findIndex(item => item.id === invite.id)
   if (index > -1) {
     inviteHistory.value.splice(index, 1)

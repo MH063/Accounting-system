@@ -179,17 +179,13 @@ import { ref, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
 import { 
   QuestionFilled, 
-  Document, 
   Phone, 
   Search, 
   CircleCheck, 
   ChatLineRound, 
   Service, 
   Edit,
-  VideoPlay,
-  Guide,
-  Warning,
-  InfoFilled
+  Guide
 } from '@element-plus/icons-vue'
 
 // 搜索功能

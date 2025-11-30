@@ -443,6 +443,16 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, Delete, Plus } from '@element-plus/icons-vue'
 import { dormService } from '@/services/dormService'
+import type { 
+  DormBasicSettings, 
+  DormBillingSettings, 
+  DormNotificationSettings, 
+  DormNotificationCategory,
+  DormMember,
+  HistoryRecord,
+  HistoryChange,
+  PendingFee
+} from '@/types'
 
 // 路由
 const route = useRoute()
@@ -453,7 +463,7 @@ const dormId = ref(route.params.id as string)
 const activeTab = ref('basic')
 
 // 表单数据
-const basicForm = ref({
+const basicForm = ref<DormBasicSettings>({
   dormName: '',
   dormType: 'standard_4',
   openTime: '06:00',
@@ -463,23 +473,19 @@ const basicForm = ref({
   allowOvernightGuests: false
 })
 
-const billingForm = ref({
+const billingForm = ref<DormBillingSettings>({
   sharingType: 'equal',
   waterBillingType: 'equal',
   electricityBillingType: 'equal',
   internetBillingType: 'equal',
-  publicItems: [] as Array<{
-    id: string
-    name: string
-    amount: number
-  }>
+  publicItems: []
 })
 
-const notificationForm = ref({
+const notificationForm = ref<DormNotificationSettings>({
   methods: ['push'],
   quietStart: '22:00',
   quietEnd: '07:00',
-  categories: [] as any[]
+  categories: [] as DormNotificationCategory[]
 })
 
 // 状态管理
@@ -496,14 +502,14 @@ const processing = ref({
 })
 
 // 寝室成员
-const dormMembers = ref([
+const dormMembers = ref<DormMember[]>([
   { id: '1', name: '张三', weight: 1.0 },
   { id: '2', name: '李四', weight: 1.0 },
   { id: '3', name: '王五', weight: 1.0 }
 ])
 
 // 通知类别
-const notificationCategories = ref([
+const notificationCategories = ref<DormNotificationCategory[]>([
   {
     key: 'system',
     name: '系统通知',
@@ -565,7 +571,7 @@ const historyPage = ref({
   total: 0
 })
 
-const historyRecords = ref([
+const historyRecords = ref<HistoryRecord[]>([
   {
     id: '1',
     timestamp: '2024-01-15 14:30:00',
@@ -595,7 +601,7 @@ const hasPendingFees = computed(() => {
   return pendingFees.value.length > 0
 })
 
-const pendingFees = ref([
+const pendingFees = ref<PendingFee[]>([
   { member: '张三', item: '电费', amount: 45.50, status: 'pending' },
   { member: '李四', item: '水费', amount: 23.80, status: 'pending' },
   { member: '王五', item: '网费', amount: 50.00, status: 'paid' }
@@ -767,11 +773,11 @@ const cancelDismiss = async () => {
 }
 
 // 历史记录相关
-const addHistoryRecord = (type: string, description: string, changes: any[]) => {
-  const newRecord = {
+const addHistoryRecord = (type: string, description: string, changes: HistoryChange[]) => {
+  const newRecord: HistoryRecord = {
     id: Date.now().toString(),
     timestamp: new Date().toLocaleString('zh-CN'),
-    type,
+    type: type as 'basic' | 'billing' | 'notification' | 'other',
     operator: '当前用户',
     description,
     changes

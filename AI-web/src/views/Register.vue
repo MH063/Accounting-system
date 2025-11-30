@@ -145,6 +145,16 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 
+// 表单验证规则接口
+interface ValidationRule {
+  field: string
+  value: any
+  callback: (error?: Error) => void
+}
+
+// 自定义验证器类型
+type ValidatorFn = (rule: ValidationRule, value: string, callback: (error?: Error) => void) => void
+
 // 路由实例
 const router = useRouter()
 
@@ -165,7 +175,7 @@ const registerForm = reactive({
 /**
  * 自定义验证规则：确认密码验证
  */
-const validateConfirmPassword = (rule: any, value: string, callback: any) => {
+const validateConfirmPassword: ValidatorFn = (_rule, value: string, callback): void => {
   if (value === '') {
     callback(new Error('请再次输入密码'))
   } else if (value !== registerForm.password) {
@@ -200,7 +210,7 @@ const rules = reactive<FormRules>({
 /**
  * 处理注册逻辑
  */
-const handleRegister = async () => {
+const handleRegister = async (): Promise<void> => {
   if (!registerFormRef.value) return
   
   await registerFormRef.value.validate((valid) => {
@@ -230,14 +240,14 @@ const handleRegister = async () => {
 /**
  * 跳转到登录页面
  */
-const goToLogin = () => {
+const goToLogin = (): void => {
   router.push('/login')
 }
 
 /**
  * 跳转到主页
  */
-const goToHome = () => {
+const goToHome = (): void => {
   router.push('/')
 }
 </script>

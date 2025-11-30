@@ -314,10 +314,7 @@ import {
   Timer,
   Clock,
   CircleCheck,
-  Calendar,
-  User,
-  ChatDotRound,
-  Money
+  ChatDotRound
 } from '@element-plus/icons-vue'
 
 interface Member {
@@ -345,13 +342,7 @@ const loading = ref(false)
 const saving = ref(false)
 const isEditing = ref(false)
 
-// 成员统计数据
-const memberStats = ref({
-  shareAmount: 1250,
-  completedTasks: 15,
-  totalTasks: 20,
-  loginCount: 45
-})
+
 
 // 费用贡献统计数据
 const financialStats = ref({
@@ -536,12 +527,7 @@ const saveMemberInfo = async () => {
   }
 }
 
-const getJoinDays = () => {
-  const joinDate = new Date(currentMember.value.joinDate)
-  const now = new Date()
-  const diffTime = Math.abs(now.getTime() - joinDate.getTime())
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-}
+
 
 const getStatusType = (status: string) => {
   switch (status) {

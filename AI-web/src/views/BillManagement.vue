@@ -499,7 +499,7 @@ const getStatusType = (status: Bill['status']) => {
  * @param status 账单状态
  * @returns 状态对应的文本
  */
-const getStatusText = (status: Bill['status']) => {
+const getStatusText = (status: Bill['status']): string => {
   const textMap = {
     pending: '待付款',
     paid: '已付款',
@@ -514,7 +514,7 @@ const getStatusText = (status: Bill['status']) => {
  * @param type 账单类型
  * @returns 类型对应的文本
  */
-const getTypeText = (type: Bill['type']) => {
+const getTypeText = (type: Bill['type']): string => {
   const textMap = {
     monthly: '月度账单',
     temporary: '临时账单',
@@ -528,7 +528,7 @@ const getTypeText = (type: Bill['type']) => {
  * @param amount 金额
  * @returns 格式化后的货币字符串
  */
-const formatCurrency = (amount: number) => {
+const formatCurrency = (amount: number): string => {
   return `¥${amount.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`
 }
 
@@ -537,7 +537,7 @@ const formatCurrency = (amount: number) => {
  * @param date 日期
  * @returns 格式化后的日期字符串
  */
-const formatDate = (date: string | Date) => {
+const formatDate = (date: string | Date): string => {
   if (!date) return '-'
   return new Date(date).toLocaleDateString('zh-CN')
 }
@@ -547,7 +547,7 @@ const formatDate = (date: string | Date) => {
  * @param bill 账单对象
  * @returns 进度百分比
  */
-const getPaymentProgress = (bill: any) => {
+const getPaymentProgress = (bill: Bill): number => {
   if (!bill.totalAmount) return 0
   return Math.round(((bill.paidAmount || 0) / bill.totalAmount) * 100)
 }
@@ -557,7 +557,7 @@ const getPaymentProgress = (bill: any) => {
  * @param bill 账单对象
  * @returns 进度条颜色
  */
-const getProgressColor = (bill: any) => {
+const getProgressColor = (bill: Bill): string => {
   if (bill.status === 'paid') return '#67c23a'
   if (bill.status === 'overdue') return '#f56c6c'
   if (bill.status === 'partial') return '#e6a23c'
@@ -630,7 +630,7 @@ const loadBillList = async () => {
 /**
  * 搜索处理
  */
-const handleSearch = () => {
+const handleSearch = (): void => {
   pagination.page = 1
   loadBillList()
 }
@@ -638,7 +638,7 @@ const handleSearch = () => {
 /**
  * 重置搜索
  */
-const handleReset = () => {
+const handleReset = (): void => {
   searchForm.keyword = ''
   searchForm.status = ''
   searchForm.month = ''
@@ -650,14 +650,14 @@ const handleReset = () => {
 /**
  * 筛选条件变化
  */
-const handleFilterChange = () => {
+const handleFilterChange = (): void => {
   handleSearch()
 }
 
 /**
  * 刷新数据
  */
-const handleRefresh = () => {
+const handleRefresh = (): void => {
   loadBillList()
   ElMessage.success('数据已刷新')
 }
@@ -665,7 +665,7 @@ const handleRefresh = () => {
 /**
  * 全选/取消全选
  */
-const handleSelectAll = (checked: boolean) => {
+const handleSelectAll = (checked: boolean): void => {
   if (checked) {
     selectedBills.value = billList.value.map(bill => bill.id)
   } else {
@@ -676,7 +676,7 @@ const handleSelectAll = (checked: boolean) => {
 /**
  * 选择单个账单
  */
-const handleSelectBill = (billId: string, checked: boolean) => {
+const handleSelectBill = (billId: string, checked: boolean): void => {
   if (checked) {
     selectedBills.value.push(billId)
   } else {
@@ -687,14 +687,14 @@ const handleSelectBill = (billId: string, checked: boolean) => {
 /**
  * 查看账单详情
  */
-const handleViewDetail = (billId: string) => {
+const handleViewDetail = (billId: string): void => {
   router.push(`/dashboard/bill/detail/${billId}`)
 }
 
 /**
  * 编辑账单
  */
-const handleEditBill = (billId: string) => {
+const handleEditBill = (billId: string): void => {
   router.push(`/dashboard/bill/edit/${billId}`)
 }
 
@@ -732,7 +732,7 @@ const handleBatchDelete = async () => {
 /**
  * 下拉菜单命令处理
  */
-const handleCommand = async (command: string, billId: string) => {
+const handleCommand = async (command: string) => {
   switch (command) {
     case 'duplicate':
       ElMessage.success('账单复制功能开发中')

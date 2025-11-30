@@ -625,8 +625,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox, FormInstance, FormRules } from 'element-plus'
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { 
   ArrowLeft, Money, List, Refresh, View, Check, Document, Tickets, Upload,
   Search, TrendCharts, Warning
@@ -650,8 +649,7 @@ interface Payment {
   createdAt: string
 }
 
-// 路由
-const router = useRouter()
+
 
 // 响应式数据
 const loading = ref(false)
@@ -1175,7 +1173,7 @@ const deleteAttachment = (attachment: string, payment: Payment) => {
   })
 }
 
-const uploadAttachment = (payment: Payment) => {
+const uploadAttachment = () => {
   // 模拟文件上传
   ElMessage.info('打开文件上传对话框...')
   // 实际项目中应该打开文件选择器并上传文件
@@ -1262,11 +1260,11 @@ const getCategoryText = (category: string) => {
   }
 }
 
-const getAttachmentName = (url: string): string => {
-  return url.split('/').pop() || '附件'
+const getAttachmentName = (): string => {
+  return '附件'
 }
 
-const getAttachmentSize = (url: string): number => {
+const getAttachmentSize = (_url: string): number => {
   // 模拟获取文件大小
   return Math.floor(Math.random() * 1024) + 1024
 }

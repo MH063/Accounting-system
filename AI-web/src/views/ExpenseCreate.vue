@@ -202,7 +202,7 @@
                 每人应付：<span class="amount-highlight">¥{{ formatCurrency(calculatePerPersonAmount()) }}</span>
               </div>
               <div class="split-details" v-if="showSplitDetails">
-                <div class="split-item" v-for="(item, index) in splitDetails" :key="index">
+                <div class="split-item" v-for="(item, index) in splitDetails" :key="item.name + '-' + index">
                   <span>{{ item.name }}</span>
                   <span class="split-amount">¥{{ formatCurrency(item.amount) }}</span>
                 </div>
@@ -537,13 +537,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { 
   ArrowLeft, Plus, Document, User, UserFilled, Paperclip, DocumentChecked,
   Check, DocumentCopy, TrendCharts, Search, CircleCheck, Select, Refresh
 } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox, type UploadUserFile } from 'element-plus'
+import { ElMessage, type UploadUserFile } from 'element-plus'
 
 // 路由
 const router = useRouter()
@@ -570,13 +570,23 @@ const splitDetails = ref([
   { name: '赵六', amount: 100.50 }
 ])
 
+// 类型定义
+interface Member {
+  id: number
+  name: string
+  room: string
+  avatar: string
+  role: string
+  status?: string
+}
+
 // 成员相关
 const showMemberDialog = ref(false)
 const memberSearchQuery = ref('')
-const selectedMembers = ref<any[]>([
-  { id: 1, name: '张三', room: 'A-101', avatar: 'https://picsum.photos/40/40?random=1', role: 'dorm_leader' },
-  { id: 2, name: '李四', room: 'A-101', avatar: 'https://picsum.photos/40/40?random=2', role: 'member' },
-  { id: 3, name: '王五', room: 'A-101', avatar: 'https://picsum.photos/40/40?random=3', role: 'member' }
+const selectedMembers = ref<Member[]>([
+  { id: 1, name: '张三', room: 'A-101', avatar: 'https://picsum.photos/40/40?random=1', role: 'dorm_leader', status: 'active' },
+  { id: 2, name: '李四', room: 'A-101', avatar: 'https://picsum.photos/40/40?random=2', role: 'member', status: 'active' },
+  { id: 3, name: '王五', room: 'A-101', avatar: 'https://picsum.photos/40/40?random=3', role: 'member', status: 'active' }
 ])
 
 // 获取当前用户的房间信息
@@ -602,7 +612,7 @@ const getCurrentUserRoom = () => {
 // 当前用户房间
 const currentUserRoom = ref(getCurrentUserRoom())
 
-const allMembers = ref<any[]>([
+const allMembers = ref<Member[]>([
   { id: 1, name: '张三', room: 'A-101', avatar: 'https://picsum.photos/40/40?random=1', role: 'dorm_leader', status: 'active' },
   { id: 2, name: '李四', room: 'A-101', avatar: 'https://picsum.photos/40/40?random=2', role: 'member', status: 'active' },
   { id: 3, name: '王五', room: 'A-101', avatar: 'https://picsum.photos/40/40?random=3', role: 'member', status: 'active' },
@@ -788,11 +798,11 @@ const calculateSplitDetails = () => {
 }
 
 // 成员选择相关方法
-const isMemberSelected = (member: any): boolean => {
+const isMemberSelected = (member: Member): boolean => {
   return selectedMembers.value.some(m => m.id === member.id)
 }
 
-const toggleMember = (member: any) => {
+const toggleMember = (member: Member) => {
   if (isMemberSelected(member)) {
     removeMember(member)
   } else {
@@ -803,7 +813,7 @@ const toggleMember = (member: any) => {
   }
 }
 
-const removeMember = (member: any) => {
+const removeMember = (member: Member) => {
   const index = selectedMembers.value.findIndex(m => m.id === member.id)
   if (index > -1) {
     selectedMembers.value.splice(index, 1)
@@ -893,38 +903,7 @@ const saveDraft = () => {
   }
 }
 
-const loadDraft = () => {
-  try {
-    const draftData = localStorage.getItem('expense_draft')
-    if (draftData) {
-      const draft = JSON.parse(draftData)
-      
-      // 恢复表单数据
-      Object.assign(formData, draft)
-      
-      // 恢复金额显示
-      if (draft.amountDisplay) {
-        amountDisplay.value = draft.amountDisplay
-      } else {
-        amountDisplay.value = formData.amount.toFixed(2)
-      }
-      
-      // 恢复已选成员
-      if (draft.selectedMembers) {
-        selectedMembers.value = draft.selectedMembers
-      }
-      
-      // 重新计算分摊
-      nextTick(() => {
-        calculateSplitDetails()
-      })
-      
-      console.log('草稿已恢复', draft)
-    }
-  } catch (error) {
-    console.error('草稿恢复失败:', error)
-  }
-}
+
 
 // 通用方法
 const disabledDate = (date: Date) => {
@@ -943,7 +922,7 @@ const handleFileRemove = (file: UploadUserFile) => {
   console.log('File removed:', file)
 }
 
-const handleFileExceed = (files: UploadUserFile[]) => {
+const handleFileExceed = () => {
   // 文件超出限制处理
   ElMessage.warning('最多只能上传 5 个文件')
 }

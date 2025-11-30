@@ -51,7 +51,6 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { House, Back, Refresh } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
 
 const route = useRoute()
 const router = useRouter()

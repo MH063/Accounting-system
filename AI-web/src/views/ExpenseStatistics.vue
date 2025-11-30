@@ -3,10 +3,18 @@
     <!-- 页面头部 -->
     <div class="page-header">
       <div class="header-left">
-        <el-button :icon="ArrowLeft" @click="handleBack" text />
         <h1 class="page-title">支出统计</h1>
       </div>
       <div class="header-actions">
+        <!-- 返回按钮 -->
+        <el-button 
+          type="primary" 
+          :icon="ArrowLeft" 
+          @click="handleBack"
+          class="back-btn"
+        >
+          返回
+        </el-button>
         <!-- 时间范围选择器 -->
         <el-date-picker
           v-model="dateRange"
@@ -262,9 +270,35 @@ import {
 // 路由
 const router = useRouter()
 
+// 类型定义
+interface ExpenseItem {
+  id: number
+  date: string
+  category: string
+  description: string
+  amount: number
+  payer: string
+}
+
+interface CategoryDetail {
+  category: string
+  amount: number
+  percentage: number
+}
+
+interface SortInfo {
+  prop: string
+  order: 'ascending' | 'descending'
+}
+
+interface Member {
+  id: number
+  name: string
+}
+
 // 响应式数据
 const loading = ref(false)
-const dateRange = ref([])
+const dateRange = ref<string[]>([])
 const chartTimeRange = ref('30d')
 const memberFilter = ref('')
 const timeGranularity = ref('day')
@@ -285,7 +319,7 @@ const statistics = reactive({
 })
 
 // 表格数据
-const tableData = ref([
+const tableData = ref<ExpenseItem[]>([
   {
     id: 1,
     date: '2024-01-15',
@@ -313,14 +347,14 @@ const tableData = ref([
 ])
 
 // 成员列表
-const memberList = ref([
+const memberList = ref<Member[]>([
   { id: 1, name: '张三' },
   { id: 2, name: '李四' },
   { id: 3, name: '王五' }
 ])
 
 // 分类详情数据
-const categoryDetailData = ref([
+const categoryDetailData = ref<CategoryDetail[]>([
   { category: '餐饮', amount: 6800.50, percentage: 42.9 },
   { category: '交通', amount: 2450.30, percentage: 15.5 },
   { category: '生活用品', amount: 1890.80, percentage: 11.9 },
@@ -426,26 +460,26 @@ const handleSearch = () => {
 }
 
 // 表格排序处理
-const handleSortChange = (sortInfo: any) => {
+const handleSortChange = (sortInfo: SortInfo) => {
   console.log('表格排序:', sortInfo)
   loadExpenseData()
 }
 
 // 表格行点击处理
-const handleRowClick = (row: any) => {
+const handleRowClick = (row: ExpenseItem) => {
   console.log('点击行:', row)
   // 这里可以实现数据下钻功能
   router.push(`/dashboard/expense-detail/${row.id}`)
 }
 
 // 编辑支出
-const handleEdit = (row: any) => {
+const handleEdit = (row: ExpenseItem) => {
   console.log('编辑支出:', row)
   router.push(`/dashboard/expense-edit/${row.id}`)
 }
 
 // 删除支出
-const handleDelete = async (row: any) => {
+const handleDelete = async (row: ExpenseItem) => {
   try {
     await ElMessageBox.confirm('确定要删除这条支出记录吗？', '确认删除', {
       confirmButtonText: '确定',

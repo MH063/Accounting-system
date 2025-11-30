@@ -1,0 +1,90 @@
+[
+  {
+    "filePath": "package.json",
+    "fileName": "package.json",
+    "fileSize": 2562,
+    "fileHash": "389df3c65d0463c90fc9cf3ca0fda3cbeb04e96df6031b510ddc6deaf43a9e7e",
+    "isInfected": false,
+    "viruses": [],
+    "scanTime": "2025-11-30T04:03:24.241Z",
+    "scanDuration": 106,
+    "scannedAt": "2025-11-30T04:03:24.348Z"
+  },
+  {
+    "filePath": "./package.json",
+    "fileName": "package.json",
+    "fileSize": 2562,
+    "fileHash": "389df3c65d0463c90fc9cf3ca0fda3cbeb04e96df6031b510ddc6deaf43a9e7e",
+    "isInfected": false,
+    "viruses": [],
+    "scanTime": "2025-11-30T04:03:49.683Z",
+    "scanDuration": 109,
+    "scannedAt": "2025-11-30T04:03:49.794Z"
+  },
+  {
+    "filePath": "./server.js",
+    "fileName": "server.js",
+    "fileSize": 9397,
+    "fileHash": "99bb5e79621dda394176318a75a4455b67dd0e37b0d2823f2fcf40f7ef5c3558",
+    "isInfected": false,
+    "viruses": [],
+    "scanTime": "2025-11-30T04:03:49.797Z",
+    "scanDuration": 101,
+    "scannedAt": "2025-11-30T04:03:49.911Z"
+  },
+  {
+    "filePath": "./README.md",
+    "fileName": "README.md",
+    "fileSize": 8944,
+    "fileHash": "4c783cf54257ff4a1a6cafe54c9eb2e9d3fbdc0f196cd73d3f293f8b7b87556f",
+    "isInfected": false,
+    "viruses": [],
+    "scanTime": "2025-11-30T04:03:49.917Z",
+    "scanDuration": 102,
+    "scannedAt": "2025-11-30T04:03:50.020Z"
+  },
+  {
+    "filePath": "./package.json",
+    "fileName": "package.json",
+    "fileSize": 2562,
+    "fileHash": "389df3c65d0463c90fc9cf3ca0fda3cbeb04e96df6031b510ddc6deaf43a9e7e",
+    "isInfected": false,
+    "viruses": [],
+    "scanTime": "2025-11-30T04:21:51.180Z",
+    "scanDuration": 106,
+    "scannedAt": "2025-11-30T04:21:51.287Z"
+  },
+  {
+    "filePath": "./package.json",
+    "fileName": "package.json",
+    "fileSize": 2562,
+    "fileHash": "389df3c65d0463c90fc9cf3ca0fda3cbeb04e96df6031b510ddc6deaf43a9e7e",
+    "isInfected": false,
+    "viruses": [],
+    "scanTime": "2025-11-30T04:22:12.843Z",
+    "scanDuration": 103,
+    "scannedAt": "2025-11-30T04:22:12.948Z"
+  },
+  {
+    "filePath": "./server.js",
+    "fileName": "server.js",
+    "fileSize": 9397,
+    "fileHash": "99bb5e79621dda394176318a75a4455b67dd0e37b0d2823f2fcf40f7ef5c3558",
+    "isInfected": false,
+    "viruses": [],
+    "scanTime": "2025-11-30T04:22:12.950Z",
+    "scanDuration": 107,
+    "scannedAt": "2025-11-30T04:22:13.058Z"
+  },
+  {
+    "filePath": "./package.json",
+    "fileName": "package.json",
+    "fileSize": 2562,
+    "fileHash": "389df3c65d0463c90fc9cf3ca0fda3cbeb04e96df6031b510ddc6deaf43a9e7e",
+    "isInfected": false,
+    "viruses": [],
+    "scanTime": "2025-11-30T04:33:42.390Z",
+    "scanDuration": 12,
+    "scannedAt": "2025-11-30T04:33:42.390Z"
+  }
+]

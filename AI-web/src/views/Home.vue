@@ -41,7 +41,7 @@
       </div>
       
       <div class="features-grid">
-        <div class="feature-card" v-for="(feature, index) in features" :key="index">
+        <div class="feature-card" v-for="feature in features" :key="feature.title">
           <div class="feature-icon-wrapper">
             <div class="feature-icon">
               <component :is="feature.icon" :size="32" />
@@ -70,7 +70,7 @@
       <div class="steps-container">
         <div class="steps-connector"></div>
         <div class="steps">
-          <div class="step" v-for="(step, index) in steps" :key="index">
+          <div class="step" v-for="(step, index) in steps" :key="step.title">
             <div class="step-number">{{ index + 1 }}</div>
             <div class="step-content">
               <h3 class="step-title">{{ step.title }}</h3>

@@ -128,15 +128,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { 
   List, 
-  UserFilled, 
-  Phone, 
-  ChatDotRound, 
-  Setting,
-  TrendCharts,
-  Calendar,
-  Money,
-  Bell,
-  Promotion
+  UserFilled
 } from '@element-plus/icons-vue'
 
 const router = useRouter()

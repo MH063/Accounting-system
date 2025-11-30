@@ -801,7 +801,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, nextTick } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { 
@@ -817,7 +817,6 @@ const splitMethod = ref('manual')
 const expenseSummaryType = ref('category')
 const showPreview = ref(false)
 const previewData = ref({})
-const showScheduleSettings = ref(false)
 
 // 账单表单数据
 const billForm = reactive({

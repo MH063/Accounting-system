@@ -2,8 +2,12 @@
   <div class="dorm-create">
     <div class="page-header">
       <h1>创建寝室</h1>
-      <el-button @click="$router.back()">
-        <el-icon><ArrowLeft /></el-icon>
+      <el-button 
+        type="primary" 
+        :icon="ArrowLeft" 
+        @click="$router.back()"
+        class="back-btn"
+      >
         返回
       </el-button>
     </div>
@@ -232,7 +236,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed } from 'vue'
 import { ArrowLeft, Refresh, User, UserFilled, Avatar, Check } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 
 // 步骤控制
@@ -370,7 +374,7 @@ const generateDormId = async () => {
 }
 
 // 性别类型变更处理
-const onGenderTypeChange = (value: string) => {
+const onGenderTypeChange = () => {
   // 根据性别类型过滤规则模板
   typeInfo.ruleTemplate = ''
   typeInfo.customRules = ''

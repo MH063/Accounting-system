@@ -894,6 +894,7 @@
 </template>
 
 <script setup lang="ts">
+import type { BudgetItem, BudgetTemplate, BudgetCategory } from '@/types'
 import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -960,8 +961,23 @@ const remainingBudget = ref(18000)
 const alertCount = ref(3)
 const alertText = ref('需要关注')
 
-// 预算数据
-const budgetData = ref<Array<{
+// 预算建议项接口
+interface BudgetSuggestionItem {
+  id: string
+  type: 'reduce_budget' | 'optimize_budget' | 'seasonal' | 'balance'
+  title: string
+  description: string
+  priority: 'high' | 'medium' | 'low'
+  category: string
+  item?: string
+  recommendedAmount: number
+  currentAmount: number
+  applied: boolean
+  createdAt: string
+}
+
+// 预算数据项接口
+interface BudgetDataItem {
   id: string
   category: string
   item: string
@@ -969,7 +985,37 @@ const budgetData = ref<Array<{
   usedAmount: number
   period: string
   description?: string
-}>>([])
+}
+
+// 时间轴数据项接口
+interface TimelineDataItem {
+  time: string
+  title: string
+  amount: string
+  description: string
+  type: string
+  color: string
+}
+
+// ECharts tooltip参数接口
+interface EChartsTooltipParams {
+  name: string
+  marker: string
+  seriesName: string
+  value: string | number
+}
+
+// ECharts饼图数据项接口
+interface EChartsPieDataItem {
+  name: string
+  value: number
+  itemStyle: {
+    color: string
+  }
+}
+
+// 预算数据
+const budgetData = ref<BudgetDataItem[]>([])
 
 // 预警预算
 const alertBudgets = computed(() => {
@@ -992,9 +1038,9 @@ const budgetForm = reactive({
 
 // 预算建议对话框
 const suggestionDialog = ref(false)
-const appliedSuggestions = ref<any[]>([])
+const appliedSuggestions = ref<BudgetSuggestionItem[]>([])
 const lastRefreshTime = ref('')
-const suggestions = ref<any[]>([])
+const suggestions = ref<BudgetSuggestionItem[]>([])
 
 // 历史对比对话框
 const historicalDialog = ref(false)
@@ -1005,7 +1051,7 @@ const trendAnalysisCategory = ref('all')
 
 // 编辑预算对话框
 const editBudgetDialog = ref(false)
-const editingBudget = ref<any>(null)
+const editingBudget = ref<BudgetDataItem | null>(null)
 
 // 批量调整对话框
 const batchAdjustDialog = ref(false)
@@ -1054,7 +1100,7 @@ const categoryProgress = computed(() => {
 
 // 计算属性：时间轴数据
 const timelineData = computed(() => {
-  const data: any[] = [
+  const data: TimelineDataItem[] = [
     {
       time: '月初',
       title: '预算开始',
@@ -1263,7 +1309,7 @@ const handleChartTypeChange = () => {
 }
 
 // 编辑预算
-const handleEditBudget = (row: any) => {
+const handleEditBudget = (row: BudgetItem) => {
   editingBudget.value = { ...row }
   Object.assign(budgetForm, {
     category: row.category,
@@ -1306,7 +1352,7 @@ const handleSaveEdit = async () => {
 }
 
 // 调整预算
-const handleAdjustBudget = (row: any) => {
+const handleAdjustBudget = (row: BudgetItem) => {
   ElMessageBox.prompt(`请输入${row.item}的新预算金额`, '调整预算', {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
@@ -1359,7 +1405,7 @@ const handleBatchAdjust = () => {
 }
 
 // 应用预算模板
-const applyTemplate = (template: any) => {
+const applyTemplate = (template: BudgetTemplate) => {
   Object.assign(budgetForm, {
     category: template.category,
     item: template.name,
@@ -1375,6 +1421,34 @@ const getProgressColor = (percentage: number) => {
   if (percentage >= 0.9) return '#F56C6C' // 红色 - 超支
   if (percentage >= 0.8) return '#E6A23C' // 橙色 - 警告
   return '#67C23A' // 绿色 - 正常
+}
+
+// 获取趋势图标类型
+const getTrendIcon = (trend: 'up' | 'down' | 'stable') => {
+  switch (trend) {
+    case 'up':
+      return 'TopRight'
+    case 'down':
+      return 'BottomRight'
+    case 'stable':
+      return 'Right'
+    default:
+      return 'Right'
+  }
+}
+
+// 获取趋势颜色
+const getTrendColor = (trend: 'up' | 'down' | 'stable') => {
+  switch (trend) {
+    case 'up':
+      return '#F56C6C' // 红色 - 上升
+    case 'down':
+      return '#67C23A' // 绿色 - 下降
+    case 'stable':
+      return '#909399' // 灰色 - 稳定
+    default:
+      return '#909399'
+  }
 }
 
 // 重置批量调整表单
@@ -1424,9 +1498,9 @@ const initExecutionChart = () => {
       axisPointer: {
         type: 'shadow'
       },
-      formatter: function(params: any) {
+      formatter: function(params: EChartsTooltipParams[]) {
         let result = params[0].name + '<br/>'
-        params.forEach((param: any) => {
+        params.forEach((param: EChartsTooltipParams) => {
           result += param.marker + param.seriesName + ': ' + param.value + '元<br/>'
         })
         return result
@@ -1601,7 +1675,7 @@ const getCategoryData = () => {
   })
   
   const colors = ['#409EFF', '#67C23A', '#E6A23C', '#F56C6C', '#909399', '#B3D8FF']
-  const data: any[] = []
+  const data: EChartsPieDataItem[] = []
   let index = 0
   
   categoryMap.forEach((value, key) => {
@@ -1630,103 +1704,9 @@ const getUsageRateStyle = (usedAmount: number, budgetAmount: number) => {
   }
 }
 
-// 获取预警颜色
-const getAlertColor = (level: string) => {
-  switch (level) {
-    case 'danger':
-      return '#F56C6C'
-    case 'warning':
-      return '#E6A23C'
-    case 'info':
-      return '#909399'
-    default:
-      return '#409EFF'
-  }
-}
 
-// 获取预警图标
-const getAlertIcon = (level: string) => {
-  switch (level) {
-    case 'danger':
-      return '⚠️'
-    case 'warning':
-      return '⚡'
-    case 'info':
-      return 'ℹ️'
-    default:
-      return '📊'
-  }
-}
 
-// 检查预算预警
-const checkBudgetAlerts = () => {
-  const alerts: any[] = []
-  const now = new Date()
-  
-  budgetData.value.forEach(budget => {
-    const usageRate = budget.usedAmount / budget.budgetAmount
-    
-    // 超支预警
-    if (usageRate >= 1) {
-      alerts.push({
-        id: `alert_${budget.id}_overspend`,
-        type: 'overspend',
-        level: 'danger',
-        title: `${budget.category} - ${budget.item}`,
-        description: `预算已超支 ${((usageRate - 1) * 100).toFixed(1)}%`,
-        time: new Date().toLocaleString(),
-        budgetId: budget.id,
-        category: budget.category,
-        item: budget.item,
-        usageRate: usageRate
-      })
-    }
-    // 预警阈值（80%）
-    else if (usageRate >= 0.8) {
-      alerts.push({
-        id: `alert_${budget.id}_warning`,
-        type: 'warning',
-        level: 'warning',
-        title: `${budget.category} - ${budget.item}`,
-        description: `预算使用率已达 ${(usageRate * 100).toFixed(1)}%`,
-        time: new Date().toLocaleString(),
-        budgetId: budget.id,
-        category: budget.category,
-        item: budget.item,
-        usageRate: usageRate
-      })
-    }
-  })
-  
-  // 月度预算预警
-  const monthlyTotal = budgetData.value.reduce((sum, item) => {
-    if (item.period === 'month') {
-      return sum + item.budgetAmount
-    }
-    return sum
-  }, 0)
-  
-  const monthlyUsed = budgetData.value.reduce((sum, item) => {
-    if (item.period === 'month') {
-      return sum + item.usedAmount
-    }
-    return sum
-  }, 0)
-  
-  if (monthlyUsed / monthlyTotal >= 0.9) {
-    alerts.push({
-      id: 'alert_monthly_total',
-      type: 'monthly_total',
-      level: 'warning',
-      title: '月度总预算预警',
-      description: `本月总预算使用率已达 ${((monthlyUsed / monthlyTotal) * 100).toFixed(1)}%`,
-      time: new Date().toLocaleString(),
-      usageRate: monthlyUsed / monthlyTotal
-    })
-  }
-  
-  return alerts
-}
+
 
 // 生成预算建议
 const generateBudgetSuggestions = () => {
@@ -1807,7 +1787,7 @@ const generateBudgetSuggestions = () => {
     suggestions.push(...categoryBalanceSuggestions)
   }
   
-  return suggestions.sort((a: any, b: any) => {
+  return suggestions.sort((a: BudgetSuggestionItem, b: BudgetSuggestionItem) => {
     const priorityOrder: Record<string, number> = { high: 3, medium: 2, low: 1 }
     return priorityOrder[b.priority] - priorityOrder[a.priority]
   })
@@ -1886,7 +1866,7 @@ const getSeasonalSuggestions = () => {
 
 // 获取分类平衡建议
 const getCategoryBalanceSuggestions = () => {
-  const suggestions: any[] = []
+  const suggestions: BudgetSuggestionItem[] = []
   const categoryTotals: Record<string, number> = {}
   
   // 计算各分类总预算
@@ -1940,7 +1920,7 @@ const getCategoryBalanceSuggestions = () => {
 }
 
 // 应用建议
-const applySuggestion = (suggestion: any) => {
+const applySuggestion = (suggestion: BudgetSuggestionItem) => {
   // 显示确认对话框
   ElMessageBox.confirm(
     `确定要应用此建议吗？\n\n建议：${suggestion.title}\n${suggestion.description}`,
@@ -2023,7 +2003,7 @@ const applySuggestion = (suggestion: any) => {
 }
 
 // 忽略建议
-const ignoreSuggestion = (suggestion: any) => {
+const ignoreSuggestion = (suggestion: BudgetSuggestionItem) => {
   ElMessageBox.confirm(
     '确定要忽略此建议吗？\n\n忽略后建议将不再显示',
     '确认忽略建议',
@@ -2085,12 +2065,7 @@ const getSuggestionStats = computed(() => {
   }
 })
 
-// 获取已应用建议历史
-const getAppliedSuggestions = computed(() => {
-  return appliedSuggestions.value.sort((a, b) => 
-    new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime()
-  )
-})
+
 
 // 刷新建议列表
 const refreshSuggestions = () => {
@@ -2112,14 +2087,11 @@ const refreshSuggestions = () => {
 
 // 生成历史对比数据
 const generateHistoricalComparison = () => {
-  const comparisons: any[] = []
-  const currentMonth = new Date().getMonth() + 1
-  const currentYear = new Date().getFullYear()
+  const comparisons: Array<{id: string, type: string, category: string, item: string, currentAmount: number, previousAmount: number, changeAmount: number, change: number, trend: string}> = []
   
   // 同比分析数据（去年同期）
   budgetData.value.forEach(budget => {
     const currentAmount = budget.budgetAmount
-    const usedAmount = budget.usedAmount
     
     // 模拟去年同期数据（增加波动范围使数据更真实）
     const previousAmount = Math.round(currentAmount * (0.75 + Math.random() * 0.5)) // 75%-125%的波动
@@ -2144,13 +2116,10 @@ const generateHistoricalComparison = () => {
 
 // 生成环比对比数据
 const generateMonthOverMonthComparison = () => {
-  const comparisons: any[] = []
-  const currentMonth = new Date().getMonth() + 1
-  const currentYear = new Date().getFullYear()
+  const comparisons: Array<{id: string, type: string, category: string, item: string, currentAmount: number, previousAmount: number, changeAmount: number, change: number, recommendation: string}> = []
   
   budgetData.value.forEach(budget => {
     const currentAmount = budget.budgetAmount
-    const usedAmount = budget.usedAmount
     
     // 模拟上月数据（波动范围较小）
     const previousAmount = Math.round(currentAmount * (0.85 + Math.random() * 0.3)) // 85%-115%的波动
@@ -2189,7 +2158,7 @@ const generateMonthOverMonthComparison = () => {
 
 // 获取分类汇总对比
 const getCategoryComparison = () => {
-  const categoryComparisons: any[] = []
+  const categoryComparisons: Array<{category: string, currentTotal: number, previousTotal: number, change: number, itemCount: number, avgAmount: number}> = []
   const categoryData: Record<string, { currentTotal: number; itemCount: number }> = {}
   
   // 汇总当前数据
@@ -2228,7 +2197,7 @@ const getCategoryComparison = () => {
 
 // 获取趋势分析
 const getTrendAnalysis = () => {
-  const insights: any[] = []
+  const insights: Array<{id: string, type: 'trend' | 'alert' | 'opportunity', title: string, description: string, recommendation: string}> = []
   
   // 根据选择的分类过滤数据
   let filteredData = budgetData.value
@@ -2339,23 +2308,7 @@ const getTrendAnalysis = () => {
   return insights
 }
 
-// 根据趋势获取建议
-const getTrendRecommendation = (trend: string, usageRate: number) => {
-  switch (trend) {
-    case 'increasing':
-      if (usageRate > 1.2) {
-        return '建议增加预算或控制支出'
-      }
-      return '建议关注支出增长原因'
-    case 'decreasing':
-      if (usageRate < 0.4) {
-        return '建议减少预算配置'
-      }
-      return '预算配置可能偏高'
-    default:
-      return '当前配置合理，继续保持'
-  }
-}
+
 
 // 获取同比分析列表
 const getHistoricalComparisonList = computed(() => {
@@ -2617,7 +2570,7 @@ const updateTrendAnalysisChart = (retryCount = 0) => {
         data: seriesData.map(item => item.value),
         type: 'bar',
         itemStyle: {
-          color: function(params: any) {
+          color: function(params: { value: number }) {
             const value = params.value
             if (value > 100) return '#F56C6C'
             if (value > 80) return '#E6A23C'
@@ -2712,9 +2665,9 @@ const updateCategoryComparisonChart = (retryCount = 0) => {
         axisPointer: {
           type: 'shadow'
         },
-        formatter: function(params: any) {
+        formatter: function(params: EChartsTooltipParams[]) {
           let result = params[0].name + '<br/>'
-          params.forEach((param: any) => {
+          params.forEach((param: EChartsTooltipParams) => {
             result += param.marker + param.seriesName + ': ¥' + param.value.toLocaleString() + '<br/>'
           })
           return result
@@ -2817,7 +2770,7 @@ const updateTrendChart = (retryCount = 0) => {
     
     // 按分类生成数据
     const categories = [...new Set(budgetData.value.map(item => item.category))]
-    const series: any[] = []
+    const series: echarts.SeriesOption[] = []
     
     categories.forEach(category => {
       const categoryItems = budgetData.value.filter(item => item.category === category)
@@ -2852,9 +2805,9 @@ const updateTrendChart = (retryCount = 0) => {
       },
       tooltip: {
         trigger: 'axis',
-        formatter: function(params: any) {
+        formatter: function(params: EChartsTooltipParams[]) {
           let result = params[0].name + '<br/>'
-          params.forEach((param: any) => {
+          params.forEach((param: EChartsTooltipParams) => {
             result += param.marker + param.seriesName + ': ¥' + param.value.toLocaleString() + '<br/>'
           })
           return result
@@ -3121,7 +3074,7 @@ const cleanup = () => {
 import { onUnmounted } from 'vue'
 
 // 组件卸载时清理
-let routeUnwatch: any = null
+let routeUnwatch: (() => void) | null = null
 
 onMounted(() => {
   routeUnwatch = watch(() => router.currentRoute.value.path, (newPath) => {

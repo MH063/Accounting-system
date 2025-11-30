@@ -3,7 +3,7 @@
  * 提供全局状态管理、本地数据持久化、离线操作支持等功能
  */
 
-import { reactive, readonly, ref, Ref } from 'vue'
+import { reactive, readonly } from 'vue'
 
 // 状态类型定义
 export interface AppState {
@@ -30,10 +30,10 @@ export interface AppState {
   
   // 数据状态
   data: {
-    expenses: any[]
-    dorms: any[]
-    users: any[]
-    budgets: any[]
+    expenses: ExpenseItem[]
+    dorms: DormItem[]
+    users: User[]
+    budgets: BudgetItem[]
     lastSyncTime: Date | null
     pendingOperations: PendingOperation[]
     cacheVersion: string
@@ -58,7 +58,7 @@ export interface PendingOperation {
   id: string
   type: 'create' | 'update' | 'delete'
   resource: string
-  data: any
+  data: Record<string, unknown>
   timestamp: Date
   retryCount: number
   maxRetries: number
@@ -68,7 +68,7 @@ export interface ErrorInfo {
   id: string
   type: 'network' | 'validation' | 'permission' | 'system'
   message: string
-  details?: any
+  details?: Record<string, unknown>
   timestamp: Date
   resolved: boolean
 }
@@ -90,7 +90,7 @@ export interface CacheStrategy {
 }
 
 // 操作结果类型
-export interface OperationResult<T = any> {
+export interface OperationResult<T = unknown> {
   success: boolean
   data?: T
   error?: Error
@@ -101,7 +101,7 @@ export interface OperationResult<T = any> {
 // 同步冲突解决策略
 export interface ConflictResolution {
   strategy: 'server_wins' | 'client_wins' | 'manual_merge' | 'timestamp_priority'
-  data?: any
+  data?: Record<string, unknown>
   timestamp?: Date
 }
 
@@ -140,8 +140,8 @@ class StateManagementService {
   private offlineQueue: PendingOperation[] = []
   
   // 网络状态监控
-  private syncTimer: NodeJS.Timeout | null = null
-  private isOnline = navigator.onLine
+  private syncTimer: ReturnType<typeof setInterval> | null = null
+  private isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true
 
   constructor(private config: StateManagementConfig) {
     this.initializeState()
@@ -173,7 +173,7 @@ class StateManagementService {
       app: {
         isLoading: false,
         loadingText: '',
-        isOnline: navigator.onLine,
+        isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
         theme: 'light',
         language: 'zh-CN',
         sidebarCollapsed: false,
@@ -189,9 +189,9 @@ class StateManagementService {
         cacheVersion: '1.0.0'
       },
       network: {
-        isOnline: navigator.onLine,
+        isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
         connectionType: 'unknown',
-        lastOnlineTime: navigator.onLine ? new Date() : null,
+        lastOnlineTime: (typeof navigator !== 'undefined' ? navigator.onLine : true) ? new Date() : null,
         queueSize: 0
       },
       errors: {
@@ -647,7 +647,9 @@ class StateManagementService {
         }
       }
       
-      localStorage.setItem(this.storageKeys.state, JSON.stringify(stateToPersist))
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(this.storageKeys.state, JSON.stringify(stateToPersist))
+      }
       console.log('状态管理：持久化状态完成')
     } catch (error) {
       console.error('状态管理：持久化状态失败', error)
@@ -659,7 +661,7 @@ class StateManagementService {
    */
   private loadPersistedState() {
     try {
-      const persisted = localStorage.getItem(this.storageKeys.state)
+      const persisted = typeof localStorage !== 'undefined' ? localStorage.getItem(this.storageKeys.state) : null
       if (persisted) {
         const state = JSON.parse(persisted)
         this.state.user = { ...this.state.user, ...state.user }
@@ -683,7 +685,9 @@ class StateManagementService {
       this.cache.forEach((entry, key) => {
         cacheObj[key] = entry
       })
-      localStorage.setItem(this.storageKeys.cache, JSON.stringify(cacheObj))
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(this.storageKeys.cache, JSON.stringify(cacheObj))
+      }
     } catch (error) {
       console.error('状态管理：持久化缓存失败', error)
     }
@@ -696,7 +700,9 @@ class StateManagementService {
     if (!this.config.enableOffline) return
     
     try {
-      localStorage.setItem(this.storageKeys.offline, JSON.stringify(this.offlineQueue))
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(this.storageKeys.offline, JSON.stringify(this.offlineQueue))
+      }
     } catch (error) {
       console.error('状态管理：持久化离线队列失败', error)
     }
@@ -707,7 +713,7 @@ class StateManagementService {
    */
   private loadOfflineQueue() {
     try {
-      const persisted = localStorage.getItem(this.storageKeys.offline)
+      const persisted = typeof localStorage !== 'undefined' ? localStorage.getItem(this.storageKeys.offline) : null
       if (persisted) {
         this.offlineQueue = JSON.parse(persisted).map((op: any) => ({
           ...op,

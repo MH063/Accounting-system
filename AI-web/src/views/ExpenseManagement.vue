@@ -591,7 +591,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { 
-  ArrowLeft, Plus, Search, Refresh, Wallet, Clock, CircleCheck,
+  Plus, Search, Refresh, Wallet, Clock, CircleCheck,
   Calendar, Money, DocumentChecked, Download, View, Edit, Delete, Grid, List, User, More
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -775,7 +775,7 @@ const formatDate = (dateString: string): string => {
   return new Date(dateString).toLocaleDateString('zh-CN')
 }
 
-const getStatusType = (status: string) => {
+const getStatusType = (status: 'pending' | 'approved' | 'rejected' | string) => {
   switch (status) {
     case 'pending': return 'warning'
     case 'approved': return 'success'
@@ -784,7 +784,7 @@ const getStatusType = (status: string) => {
   }
 }
 
-const getStatusText = (status: string) => {
+const getStatusText = (status: 'pending' | 'approved' | 'rejected' | string) => {
   switch (status) {
     case 'pending': return '待审核'
     case 'approved': return '已通过'
@@ -794,7 +794,7 @@ const getStatusText = (status: string) => {
 }
 
 // 获取状态详细描述
-const getStatusDescription = (status: string) => {
+const getStatusDescription = (status: 'pending' | 'approved' | 'rejected' | string) => {
   switch (status) {
     case 'pending': return '费用正在等待审核，请耐心等待'
     case 'approved': return '费用已通过审核，可以进行后续处理'
@@ -804,7 +804,7 @@ const getStatusDescription = (status: string) => {
 }
 
 // 获取状态图标
-const getStatusIcon = (status: string) => {
+const getStatusIcon = (status: 'pending' | 'approved' | 'rejected' | string) => {
   switch (status) {
     case 'pending': return 'Clock'
     case 'approved': return 'CircleCheck'
@@ -892,7 +892,7 @@ const handleLoadMore = async () => {
   }
 }
 
-const getCategoryType = (category: string) => {
+const getCategoryType = (category: 'accommodation' | 'utilities' | 'maintenance' | 'cleaning' | 'other' | string) => {
   switch (category) {
     case 'accommodation': return ''
     case 'utilities': return 'success'
@@ -903,7 +903,7 @@ const getCategoryType = (category: string) => {
   }
 }
 
-const getCategoryText = (category: string) => {
+const getCategoryText = (category: 'accommodation' | 'utilities' | 'maintenance' | 'cleaning' | 'other' | string) => {
   switch (category) {
     case 'accommodation': return '住宿费'
     case 'utilities': return '水电费'
@@ -1323,13 +1323,7 @@ const handleClearAll = async () => {
 
 
 
-const handleSelectAll = (selection: Expense[]) => {
-  selectedItems.value = [...selection]
-}
 
-const handleSelectionChange = (selection: Expense[]) => {
-  selectedItems.value = [...selection]
-}
 </script>
 
 <style scoped>

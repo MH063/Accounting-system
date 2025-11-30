@@ -88,7 +88,7 @@
               <el-tag
                 v-for="suggestion in searchSuggestions"
                 :key="suggestion"
-                @click="searchQuery = suggestion; performGlobalSearch()"
+                @click="handleSuggestionClick(suggestion)"
                 class="suggestion-tag"
                 size="small"
                 type="info"
@@ -135,6 +135,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Bell, Search, Folder, Document, Star } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import UserProfile from './UserProfile.vue'
+import type { SearchResult } from '../services/searchService'
 
 // 路由实例
 const route = useRoute()
@@ -166,7 +167,7 @@ const showIndicator = ref(true)
 
 // 搜索功能
 const searchQuery = ref('')
-const searchResults = ref([])
+const searchResults = ref<SearchResult[]>([])
 const searchSuggestions = ref<string[]>([])
 const showSearchResults = ref(false)
 const isSearching = ref(false)
@@ -255,21 +256,39 @@ const handleSearchInput = (): void => {
 }
 
 /**
+ * 处理搜索框获得焦点
+ */
+const handleSearchFocus = (): void => {
+  // 搜索框获得焦点时显示搜索建议
+  if (searchSuggestions.value.length > 0 || searchQuery.value.trim()) {
+    showSearchResults.value = true
+  }
+}
+
+/**
  * 处理搜索框失去焦点
  */
 const handleSearchBlur = (): void => {
   // 延迟隐藏，允许点击结果项
+  // 注意：如果已经通过点击隐藏了面板，则不再重复隐藏
   setTimeout(() => {
-    showSearchResults.value = false
+    if (showSearchResults.value) {
+      showSearchResults.value = false
+      searchSuggestions.value = []
+    }
   }, 200)
 }
 
 /**
  * 处理搜索结果点击
  */
-const handleSearchResultClick = (result: any): void => {
+const handleSearchResultClick = (result: SearchResult): void => {
   try {
     console.log('点击搜索结果:', result)
+    
+    // 立即隐藏搜索面板，防止竞态条件
+    showSearchResults.value = false
+    searchSuggestions.value = []
     
     // 检查路径是否有效
     if (!result.path) {
@@ -291,7 +310,6 @@ const handleSearchResultClick = (result: any): void => {
     
     // 清理搜索状态
     searchQuery.value = ''
-    showSearchResults.value = false
     
   } catch (error) {
     console.error('处理搜索结果点击时发生错误:', error)
@@ -300,10 +318,31 @@ const handleSearchResultClick = (result: any): void => {
 }
 
 /**
+ * 处理搜索建议点击
+ */
+const handleSuggestionClick = (suggestion: string): void => {
+  try {
+    console.log('点击搜索建议:', suggestion)
+    
+    // 立即隐藏搜索面板
+    showSearchResults.value = false
+    searchSuggestions.value = []
+    
+    // 设置搜索查询并执行搜索
+    searchQuery.value = suggestion
+    performGlobalSearch()
+    
+  } catch (error) {
+    console.error('处理搜索建议点击时发生错误:', error)
+    ElMessage.error('操作失败，请重试')
+  }
+}
+
+/**
  * 获取搜索结果分类
  */
 const getSearchResultCategories = computed(() => {
-  const categories = {}
+  const categories: Record<string, SearchResult[]> = {}
   searchResults.value.forEach(result => {
     if (!categories[result.category]) {
       categories[result.category] = []
@@ -317,7 +356,7 @@ const getSearchResultCategories = computed(() => {
  * 获取分类显示名称
  */
 const getCategoryDisplayName = (category: string): string => {
-  const categoryMap = {
+  const categoryMap: Record<string, string> = {
     'page': '页面',
     'function': '功能',
     'data': '数据',
@@ -388,6 +427,10 @@ const handleNotification = (): void => {
 // 监听路由变化，更新指示线位置
 watch(() => route.path, () => {
   updateSliderPosition()
+  
+  // 路由变化时自动隐藏搜索面板
+  showSearchResults.value = false
+  searchSuggestions.value = []
 })
 
 // 组件挂载后初始化指示线位置

@@ -123,11 +123,12 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, Document } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
+import type { DormManagementItem, EditingDorm } from '@/types'
 
 const router = useRouter()
 
 // 宿舍列表数据
-const dormList = ref([
+const dormList = ref<DormManagementItem[]>([
   {
     id: 1,
     name: '宿舍A101',
@@ -152,7 +153,7 @@ const dormList = ref([
 const editDialogVisible = ref(false)
 const saving = ref(false)
 const editFormRef = ref<FormInstance>()
-const editingDorm = reactive({
+const editingDorm = reactive<EditingDorm>({
   id: 0,
   name: '',
   dormNumber: '',
@@ -182,13 +183,13 @@ const editFormRules: FormRules = {
 }
 
 // 查看宿舍详情
-const viewDorm = (dorm: any) => {
+const viewDorm = (dorm: DormManagementItem) => {
   console.log('查看宿舍:', dorm)
   router.push(`/dashboard/dorm/info/${dorm.id}`)
 }
 
 // 编辑宿舍信息
-const editDorm = (dorm: any) => {
+const editDorm = (dorm: DormManagementItem) => {
   console.log('编辑宿舍:', dorm)
   // 复制宿舍信息到编辑表单
   Object.assign(editingDorm, {
@@ -277,7 +278,7 @@ const getStatusText = (status: string) => {
 }
 
 // 宿舍设置
-const dormSettings = (dorm: any) => {
+const dormSettings = (dorm: DormManagementItem) => {
   console.log('宿舍设置:', dorm)
   router.push(`/dashboard/dorm/settings/${dorm.id}`)
 }

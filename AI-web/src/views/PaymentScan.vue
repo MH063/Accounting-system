@@ -242,7 +242,7 @@ import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { 
   ArrowLeft, Camera, Search, VideoCamera, RefreshRight, VideoPause, 
-  Picture, Warning, CircleCheck, CircleClose, Document, Refresh, Key, Hide, View
+  Picture, Warning, CircleCheck, CircleClose, Document, Refresh, Key
 } from '@element-plus/icons-vue'
 
 // 相机状态
@@ -441,7 +441,6 @@ const scanFrame = () => {
   canvas.height = video.videoHeight
   context.drawImage(video, 0, 0, canvas.width, canvas.height)
   
-  const imageData = context.getImageData(0, 0, canvas.width, canvas.height)
   // 这里应该集成实际的二维码识别库
   // 为了演示，模拟扫描结果
   simulateQRCodeDetection()

@@ -460,18 +460,28 @@ import {
   Bell, 
   Check, 
   Message, 
-  Star, 
-  Calendar,
+  Star,
   Warning,
   InfoFilled,
   SuccessFilled,
   CircleCheck,
-  Clock,
   User,
   Wallet,
   Document,
   Setting
 } from '@element-plus/icons-vue'
+
+// 类型定义
+interface Notification {
+  id: number
+  title: string
+  message: string
+  type: string
+  isRead: boolean
+  isImportant: boolean
+  actionText?: string
+  createdAt: string
+}
 
 // 响应式数据
 const loading = ref(false)
@@ -515,7 +525,7 @@ const notificationSettings = ref({
 })
 
 // 通知数据（占位数据）
-const notifications = ref([
+const notifications = ref<Notification[]>([
   {
     id: 1,
     title: '费用报销申请待审批',
@@ -812,7 +822,7 @@ const deleteNotification = async (id: number) => {
   }
 }
 
-const handleNotificationClick = (notification: any) => {
+const handleNotificationClick = (notification: Notification) => {
   if (!notification.isRead) {
     markAsRead(notification.id)
   }
@@ -821,7 +831,7 @@ const handleNotificationClick = (notification: any) => {
   console.log('跳转到通知详情:', notification.id)
 }
 
-const handleNotificationAction = (notification: any) => {
+const handleNotificationAction = (notification: Notification) => {
   // TODO: 处理通知操作
   console.log('执行通知操作:', notification.actionText, notification.id)
 }
@@ -861,7 +871,7 @@ const getNotificationIcon = (type: string) => {
   return iconMap[type] || Bell
 }
 
-const getNotificationIconColor = (notification: any) => {
+const getNotificationIconColor = (notification: Notification): string => {
   if (notification.isImportant) return '#f56c6c'
   if (!notification.isRead) return '#409eff'
   return '#909399'
