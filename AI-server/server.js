@@ -103,17 +103,22 @@ async function testDatabaseConnection() {
     const isConnected = await testConnection();
     
     if (!isConnected) {
+      console.log('❌ 数据库连接测试失败');
       return false;
     }
     
     console.log(`连接信息: ${process.env.DB_USER}@${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME || '(未指定数据库)'}`);
     
     // 查询所有数据库
-    const databases = await getDatabases();
-    console.log('\n📋 可用数据库列表:');
-    databases.forEach(db => {
-      console.log(`  - ${db}`);
-    });
+    try {
+      const databases = await getDatabases();
+      console.log('\n📋 可用数据库列表:');
+      databases.forEach(db => {
+        console.log(`  - ${db}`);
+      });
+    } catch (dbError) {
+      console.warn('⚠️ 查询数据库列表失败:', dbError.message);
+    }
     
     // 如果指定了数据库，查询其中的表
     if (process.env.DB_NAME) {
@@ -156,32 +161,42 @@ app.get('/', cacheMiddleware.short(), responseWrapper((req, res) => {
  * GET /api/db-test
  */
 app.get('/api/db-test', responseWrapper(async (req, res) => {
-  // 使用数据库配置中的测试连接函数
-  const isConnected = await testConnection();
-  
-  if (!isConnected) {
-    return res.status(500).json({
+  try {
+    // 使用数据库配置中的测试连接函数
+    const isConnected = await testConnection();
+    
+    if (!isConnected) {
+      return res.status(503).json({
+        success: false,
+        message: '数据库连接测试失败',
+        error: '数据库服务不可用'
+      });
+    }
+    
+    // 执行简单查询获取当前时间
+    const result = await pool.query('SELECT NOW() as current_time');
+    
+    return res.json({
+      success: true,
+      message: '数据库连接测试成功',
+      data: {
+        currentTime: result.rows[0].current_time,
+        databaseInfo: {
+          host: process.env.DB_HOST,
+          port: process.env.DB_PORT,
+          user: process.env.DB_USER,
+          database: process.env.DB_NAME || '(未指定)'
+        }
+      }
+    });
+  } catch (error) {
+    console.error('数据库测试路由错误:', error);
+    return res.status(503).json({
       success: false,
-      message: '数据库连接测试失败'
+      message: '数据库服务暂时不可用',
+      error: error.message
     });
   }
-  
-  // 执行简单查询获取当前时间
-  const result = await pool.query('SELECT NOW() as current_time');
-  
-  return res.json({
-    success: true,
-    message: '数据库连接测试成功',
-    data: {
-      currentTime: result.rows[0].current_time,
-      databaseInfo: {
-        host: process.env.DB_HOST,
-        port: process.env.DB_PORT,
-        user: process.env.DB_USER,
-        database: process.env.DB_NAME || '(未指定)'
-      }
-    }
-  });
 }));
 
 /**
@@ -189,49 +204,78 @@ app.get('/api/db-test', responseWrapper(async (req, res) => {
  * GET /api/tables
  */
 app.get('/api/tables', responseWrapper(async (req, res) => {
-  if (!process.env.DB_NAME) {
-    return res.status(400).json({
+  try {
+    if (!process.env.DB_NAME) {
+      return res.status(400).json({
+        success: false,
+        message: '未指定数据库名称，无法查询表'
+      });
+    }
+    
+    // 先测试数据库连接
+    const isConnected = await testConnection();
+    if (!isConnected) {
+      return res.status(503).json({
+        success: false,
+        message: '数据库连接失败，无法查询表列表',
+        error: '数据库服务不可用'
+      });
+    }
+    
+    // 使用数据库配置中的获取表函数
+    const tables = await getTables();
+    
+    return res.json({
+      success: true,
+      message: '获取数据库表列表成功',
+      data: {
+        tables,
+        count: tables.length
+      }
+    });
+  } catch (error) {
+    console.error('获取表列表路由错误:', error);
+    return res.status(503).json({
       success: false,
-      message: '未指定数据库名称，无法查询表'
+      message: '数据库服务暂时不可用',
+      error: error.message
     });
   }
-  
-  // 使用数据库配置中的获取表函数
-  const tables = await getTables();
-  
-  return res.json({
-    success: true,
-    message: '获取数据库表列表成功',
-    data: {
-      tables,
-      count: tables.length
-    }
-  });
 }));
 
 // 启动服务器
 const startServer = async () => {
   try {
-    // 测试数据库连接
-    const dbConnected = await testDatabaseConnection();
-    
-    if (dbConnected) {
-      // 启动定时任务
-      startScheduledTasks();
-      
-      logger.info('\n🚀 启动API服务器...');
-      
-      app.listen(PORT, () => {
-        logger.info(`✅ 服务器已启动，端口: ${PORT}`);
-        logger.info(`📝 API文档: http://localhost:${PORT}/`);
-        logger.info(`🔧 数据库测试: http://localhost:${PORT}/api/db-test`);
-        logger.info(`📊 表列表查询: http://localhost:${PORT}/api/tables`);
-        logger.info(`📋 日志管理: http://localhost:${PORT}/api/logs`);
-      });
-    } else {
-      logger.error('\n❌ 数据库连接失败，服务器启动中止');
-      process.exit(1);
+    // 测试数据库连接 - 但不阻止服务器启动
+    let dbConnected = false;
+    try {
+      dbConnected = await testDatabaseConnection();
+    } catch (dbError) {
+      logger.warn('⚠️ 数据库连接测试失败，但服务器将继续启动:', dbError.message);
     }
+    
+    // 如果数据库连接成功，启动定时任务
+    if (dbConnected) {
+      startScheduledTasks();
+      logger.info('✅ 定时任务已启动');
+    } else {
+      logger.warn('⚠️ 数据库连接失败，定时任务未启动');
+    }
+    
+    logger.info('\n🚀 启动API服务器...');
+    
+    app.listen(PORT, () => {
+      logger.info(`✅ 服务器已启动，端口: ${PORT}`);
+      logger.info(`📝 API文档: http://localhost:${PORT}/`);
+      logger.info(`🔧 数据库测试: http://localhost:${PORT}/api/db-test`);
+      logger.info(`📊 表列表查询: http://localhost:${PORT}/api/tables`);
+      logger.info(`📋 日志管理: http://localhost:${PORT}/api/logs`);
+      
+      if (!dbConnected) {
+        logger.warn('⚠️ 注意：数据库连接失败，部分功能可能不可用');
+      }
+    });
+    
   } catch (error) {
     logger.error('服务器启动失败:', error);
     process.exit(1);

@@ -20,7 +20,7 @@ const notFound = (req, res, next) => {
  * 全局错误处理中间件
  * 包含智能错误分类、重试机制和服务降级
  */
-const errorHandler = (err, req, res, next) => {
+const errorHandler = async (err, req, res, next) => {
   // 如果响应状态码是200，设置为500
   let statusCode = res.statusCode === 200 ? 500 : res.statusCode;
   let message = err.message;
@@ -105,10 +105,35 @@ const errorHandler = (err, req, res, next) => {
         statusCode = 500;
         break;
       default:
-        errorType = 'DATABASE_ERROR';
-        message = '数据库操作失败';
-        statusCode = 500;
-        logger.error(`未处理的数据库错误`, { code: err.code, message: err.message, stack: err.stack });
+        // 检查连接池相关错误
+        if (err.message && err.message.includes('pool')) {
+          if (err.message.includes('exhausted') || err.message.includes('timeout')) {
+            errorType = 'DATABASE_POOL_EXHAUSTED';
+            message = '数据库连接池耗尽，服务暂时不可用';
+            statusCode = 503;
+            shouldRetry = true;
+            isRecoverable = true;
+            
+            // 触发降级处理
+            try {
+              const { handlePoolExhaustion } = require('../config/database');
+              await handlePoolExhaustion(err);
+            } catch (degradationError) {
+              logger.error(`降级处理失败`, { error: degradationError.message });
+            }
+          } else {
+            errorType = 'DATABASE_POOL_ERROR';
+            message = '数据库连接池错误';
+            statusCode = 503;
+            shouldRetry = true;
+            isRecoverable = true;
+          }
+        } else {
+          errorType = 'DATABASE_ERROR';
+          message = '数据库操作失败';
+          statusCode = 500;
+          logger.error(`未处理的数据库错误`, { code: err.code, message: err.message, stack: err.stack });
+        }
     }
   }
 
@@ -246,7 +271,7 @@ const errorHandler = (err, req, res, next) => {
 };
 
 /**
- * 服务降级机制
+ * 服务降级机制 - 集成连接池降级策略
  */
 const createServiceDegradationHandler = () => {
   const fallbackData = {
@@ -270,12 +295,44 @@ const createServiceDegradationHandler = () => {
       message: '外部服务暂时不可用',
       data: null,
       timestamp: new Date().toISOString()
+    },
+    // 数据库降级专用响应
+    databaseDegraded: {
+      message: '数据库连接池降级中，服务受限',
+      data: { degraded: true, availableConnections: 0, maxConnections: 0 },
+      timestamp: new Date().toISOString()
     }
   };
 
   return (serviceType, req, res, next) => {
     return async (data = null) => {
       try {
+        // 检查连接池降级状态
+        const { getDegradationStatus } = require('../config/database');
+        const degradationStatus = getDegradationStatus();
+        
+        // 如果连接池已降级，优先使用降级模式
+        if (degradationStatus.isDegraded && serviceType === 'database') {
+          logger.warn(`数据库服务降级中，使用降级响应`, {
+            degradationStatus,
+            url: req.originalUrl,
+            method: req.method
+          });
+          
+          // 返回降级响应
+          const fallbackResponse = {
+            success: true,
+            data: fallbackData.databaseDegraded.data,
+            degraded: true,
+            message: fallbackData.databaseDegraded.message,
+            timestamp: fallbackData.databaseDegraded.timestamp,
+            degradationStatus
+          };
+          
+          res.status(206).json(fallbackResponse);
+          return;
+        }
+        
         // 尝试正常处理
         return await data;
       } catch (error) {
@@ -285,6 +342,22 @@ const createServiceDegradationHandler = () => {
           method: req.method,
           ip: req.ip
         });
+
+        // 检查是否是连接池耗尽错误
+        const isPoolExhaustion = error.message && 
+                               error.message.includes('pool') && 
+                               (error.message.includes('exhausted') || 
+                                error.message.includes('timeout'));
+        
+        if (isPoolExhaustion) {
+          // 触发降级处理
+          try {
+            const { handlePoolExhaustion } = require('../config/database');
+            await handlePoolExhaustion(error);
+          } catch (degradationError) {
+            logger.error(`降级处理失败`, { error: degradationError.message });
+          }
+        }
 
         // 返回降级响应
         const fallbackResponse = {
@@ -305,7 +378,7 @@ const createServiceDegradationHandler = () => {
  * 错误恢复策略
  */
 const recoveryStrategies = {
-  // 数据库连接恢复
+  // 数据库连接恢复 - 集成连接池降级策略
   database: {
     maxRetries: 3,
     baseDelay: 1000, // 1秒
@@ -316,6 +389,27 @@ const recoveryStrategies = {
       
       for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
         try {
+          // 检查连接池降级状态
+          const degradationStatus = require('../config/database').getDegradationStatus();
+          
+          if (degradationStatus.isDegraded) {
+            logger.warn(`连接池降级中，重试第 ${attempt} 次`, {
+              degradationStatus,
+              attempt,
+              maxRetries: this.maxRetries
+            });
+            
+            // 如果连接池已降级，增加重试间隔
+            const extendedDelay = this.baseDelay * Math.pow(3, attempt - 1);
+            await new Promise(resolve => setTimeout(resolve, extendedDelay));
+            
+            // 检查是否可以使用降级模式执行操作
+            if (degradationStatus.canDegrade) {
+              logger.info(`尝试使用降级模式执行数据库操作`);
+              return await operation(true); // 传入降级标志
+            }
+          }
+          
           // 测试数据库连接
           await pool.query('SELECT 1');
           
@@ -323,17 +417,45 @@ const recoveryStrategies = {
           return await operation();
         } catch (error) {
           lastError = error;
-          logger.warn(`数据库重试第 ${attempt} 次失败`, { 
-            error: error.message, 
-            attempt,
-            maxRetries: this.maxRetries
-          });
+          
+          // 检查是否是连接池耗尽错误
+          const isPoolExhaustion = error.message.includes('pool') && 
+                                 (error.message.includes('exhausted') || 
+                                  error.message.includes('timeout') ||
+                                  error.message.includes('connect'));
+          
+          if (isPoolExhaustion) {
+            logger.error(`连接池耗尽错误，重试第 ${attempt} 次`, {
+              error: error.message,
+              attempt,
+              maxRetries: this.maxRetries
+            });
+            
+            // 触发降级处理
+            try {
+              const { handlePoolExhaustion } = require('../config/database');
+              await handlePoolExhaustion(error);
+            } catch (degradationError) {
+              logger.error(`降级处理失败`, { error: degradationError.message });
+            }
+          } else {
+            logger.warn(`数据库重试第 ${attempt} 次失败`, { 
+              error: error.message, 
+              attempt,
+              maxRetries: this.maxRetries
+            });
+          }
           
           if (attempt < this.maxRetries) {
             // 计算延迟时间
             let delay = this.exponentialBackoff 
               ? this.baseDelay * Math.pow(2, attempt - 1)
               : this.baseDelay;
+            
+            // 如果是连接池耗尽，增加额外延迟
+            if (isPoolExhaustion) {
+              delay *= 2;
+            }
             
             // 添加随机抖动，避免雷鸣群体效应
             delay += Math.random() * 1000;
@@ -441,7 +563,7 @@ const withRetry = (strategy, operation) => {
 };
 
 /**
- * 健康检查端点处理
+ * 健康检查端点处理 - 集成连接池降级状态
  */
 const healthCheckHandler = async (req, res) => {
   const checks = {
@@ -451,13 +573,37 @@ const healthCheckHandler = async (req, res) => {
   };
 
   try {
-    // 数据库健康检查
+    // 数据库健康检查 - 包含连接池降级状态
     try {
-      await pool.query('SELECT 1');
+      // 获取连接池健康状态
+      const { healthCheck: dbHealthCheck, getDegradationStatus } = require('../config/database');
+      const poolHealth = await dbHealthCheck();
+      const degradationStatus = getDegradationStatus();
+      
       checks.checks.database = {
-        status: 'healthy',
-        responseTime: 'OK'
+        status: poolHealth.status,
+        responseTime: poolHealth.responseTime,
+        details: {
+          poolSize: poolHealth.poolSize,
+          availableConnections: poolHealth.availableConnections,
+          totalConnections: poolHealth.totalConnections,
+          waitingCount: poolHealth.waitingCount,
+          errorCount: poolHealth.errorCount,
+          degradationStatus: degradationStatus
+        }
       };
+      
+      // 如果连接池降级，整体状态设为降级
+      if (degradationStatus.isDegraded) {
+        checks.status = 'degraded';
+        checks.checks.database.status = 'degraded';
+        checks.checks.database.message = '连接池已降级';
+      }
+      
+      // 如果连接池不可用，整体状态设为不可用
+      if (poolHealth.status === 'unhealthy') {
+        checks.status = 'unhealthy';
+      }
     } catch (error) {
       checks.checks.database = {
         status: 'unhealthy',

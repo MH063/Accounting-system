@@ -273,12 +273,12 @@ import {
   Plus, Lock, DataAnalysis, Timer, Check, List, Close, ArrowLeft
 } from '@element-plus/icons-vue'
 import { 
-  getQRCodesApi,
-  createQRCodeApi,
-  updateQRCodeApi,
-  deleteQRCodeApi,
-  toggleQRCodeStatusApi,
-  shareQRCodeApi,
+  getQRCodes as getQRCodesApi,
+  createQRCode as createQRCodeApi,
+  updateQRCode as updateQRCodeApi,
+  deleteQRCode as deleteQRCodeApi,
+  toggleQRCodeStatus as toggleQRCodeStatusApi,
+  shareQRCode as shareQRCodeApi,
   generateQRCodeImage,
   getQRCodeStatistics
 } from '../services/paymentService'
@@ -436,7 +436,7 @@ const goBack = (): void => {
 const getQRCodesList = async (): Promise<void> => {
   try {
     loading.value = true
-    const response = await getQRCodes()
+    const response = await getQRCodesApi()
     qrCodes.value = response.data || []
   } catch (error) {
     console.error('获取收款码列表失败:', error)

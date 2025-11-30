@@ -1206,13 +1206,13 @@ const canUploadAttachments = computed(() => {
   return isApplicant && ['pending', 'approved'].includes(expenseData.value.status)
 })
 
-const canMarkAsPaid = computed(() => {
+const canMarkAsPaid = (participant: Participant): boolean => {
   // 只有费用申请人可以标记成员付款状态
   const isApplicant = expenseData.value?.applicant === currentUser.value.name ||
                       expenseData.value?.applicantId === currentUser.value.id
   
   return isApplicant && expenseData.value?.status === 'approved'
-})
+}
 
 
 
@@ -1413,9 +1413,9 @@ const handleManageParticipants = () => {
 }
 
 const toggleParticipantPaymentStatus = (participant: Participant) => {
-  if (!canMarkAsPaid.value) {
+  if (!canMarkAsPaid(participant)) {
     showPermissionDeniedMessage('标记支付状态')
-    logPermissionCheck('标记支付状态', canMarkAsPaid.value)
+    logPermissionCheck('标记支付状态', canMarkAsPaid(participant))
     return
   }
   

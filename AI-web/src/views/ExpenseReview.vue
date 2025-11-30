@@ -1174,32 +1174,6 @@ const clearSelection = (): void => {
 }
 
 // 审核拒绝通知系统
-const sendRejectionNotification = (expense: ExpenseItem, reason: string, suggestion: string, customReason?: string): void => {
-  const notification = {
-    id: Date.now(),
-    expenseId: expense.id,
-    expenseTitle: expense.title,
-    applicant: expense.applicant,
-    reason: reason,
-    customReason: customReason || '',
-    suggestion: suggestion,
-    status: 'rejected',
-    rejectedAt: new Date().toISOString(),
-    reviewer: expense.reviewer || '当前用户',
-    isRead: false,
-    canResubmit: true,
-    resubmissionCount: 0,
-    originalRejectDate: expense.reviewDate,
-    originalRejectComment: expense.reviewComment
-  }
-  
-  // 将通知添加到系统
-  notificationSystem.value.rejectedNotifications.push(notification)
-}
-
-
-
-// 审核拒绝通知系统
 const sendRejectionNotification = (expense: ExpenseItem, reason: string, suggestion: string, customReason?: string): RejectionNotification => {
   const notification = {
     id: Date.now(),
