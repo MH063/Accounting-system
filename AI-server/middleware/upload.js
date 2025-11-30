@@ -9,6 +9,7 @@ const multer = require('multer');
 const path = require('path');
 const logger = require('../config/logger');
 const { scanFile, hasInfectedFiles } = require('./virusScanner');
+const { scanFileOnline, hasInfectedFiles: hasInfectedFilesOnline } = require('./virusScannerOnline');
 const { compressImage, isImageFile, optimizeStoragePath } = require('../utils/fileOptimizer');
 
 // 确保上传目录存在
@@ -252,7 +253,16 @@ const uploadSingle = (fieldName, compressOptions = {}) => (req, res, next) => {
         
         // 病毒扫描
         logger.info(`[UPLOAD] 开始病毒扫描: ${req.file.originalname}`);
-        const scanResult = await scanFile(req.file.path);
+        
+        // 优先使用在线病毒扫描，如果配置不可用则回退到本地扫描
+        let scanResult;
+        try {
+          scanResult = await scanFileOnline(req.file.path);
+          logger.info(`[UPLOAD] 在线病毒扫描完成: ${req.file.originalname}`);
+        } catch (onlineError) {
+          logger.warn(`[UPLOAD] 在线扫描失败，使用本地扫描: ${onlineError.message}`);
+          scanResult = await scanFile(req.file.path);
+        }
         
         if (scanResult.isInfected) {
           // 删除感染病毒的文件
@@ -365,28 +375,41 @@ const uploadMultiple = (fieldName, maxCount = 5, compressOptions = {}) => (req, 
         
         // 病毒扫描
         logger.info(`[UPLOAD] 开始批量病毒扫描，共 ${req.files.length} 个文件`);
-        for (const file of req.files) {
-          try {
-            const scanResult = await scanFile(file.path);
-            scanResults.push({
-              file: file.originalname,
-              path: file.path,
-              ...scanResult
-            });
-          } catch (scanError) {
-            logger.error(`[UPLOAD] 病毒扫描出错: ${file.originalname} - ${scanError.message}`);
-            scanResults.push({
-              file: file.originalname,
-              path: file.path,
-              isInfected: true,
-              viruses: ['扫描失败'],
-              error: scanError.message
-            });
+        
+        // 优先使用在线病毒扫描，如果配置不可用则回退到本地扫描
+        try {
+          const onlineScanResults = await scanFilesOnline(req.files.map(f => f.path));
+          scanResults.push(...onlineScanResults.map((result, index) => ({
+            file: req.files[index].originalname,
+            path: req.files[index].path,
+            ...result
+          })));
+          logger.info(`[UPLOAD] 在线批量病毒扫描完成`);
+        } catch (onlineError) {
+          logger.warn(`[UPLOAD] 在线批量扫描失败，使用本地扫描: ${onlineError.message}`);
+          for (const file of req.files) {
+            try {
+              const scanResult = await scanFile(file.path);
+              scanResults.push({
+                file: file.originalname,
+                path: file.path,
+                ...scanResult
+              });
+            } catch (scanError) {
+              logger.error(`[UPLOAD] 病毒扫描出错: ${file.originalname} - ${scanError.message}`);
+              scanResults.push({
+                file: file.originalname,
+                path: file.path,
+                isInfected: true,
+                viruses: ['扫描失败'],
+                error: scanError.message
+              });
+            }
           }
         }
         
         // 检查是否有感染病毒的文件
-        if (hasInfectedFiles(scanResults)) {
+        if (hasInfectedFiles(scanResults) || hasInfectedFilesOnline(scanResults)) {
           // 删除所有上传的文件
           req.files.forEach(file => {
             try {

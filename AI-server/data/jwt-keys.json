@@ -1,0 +1,13 @@
+{
+  "currentKeyId": "primary",
+  "keys": [
+    {
+      "id": "primary",
+      "secret": "dev_jwt_secret_key_for_development_only",
+      "createdAt": 1764485222861,
+      "expiresAt": 1767077222861,
+      "isActive": true
+    }
+  ],
+  "lastUpdated": 1764485222861
+}

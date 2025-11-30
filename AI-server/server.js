@@ -4,7 +4,7 @@
  */
 
 const express = require('express');
-const cors = require('cors');
+const { createCorsMiddleware } = require('./middleware/corsConfig');
 const dotenv = require('dotenv');
 const helmet = require('helmet');
 const { pool, testConnection, getTables, getDatabases } = require('./config/database');
@@ -53,13 +53,8 @@ const app = express();
 // 安全头部设置
 app.use(helmet());
 
-// CORS配置 - 允许所有来源
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+// CORS配置 - 使用安全的CORS配置
+app.use(createCorsMiddleware());
 
 // 中间件配置
 app.use(express.json({ limit: '10mb' }));
@@ -87,6 +82,8 @@ app.use('/api/cache', require('./routes/cache'));
 app.use('/api/cache', require('./routes/enhancedCache'));
 app.use('/api/security', require('./routes/security'));
 app.use('/api/health', require('./routes/health'));
+app.use('/api/virus-scan', require('./routes/virusScan'));
+app.use('/api/cors', require('./routes/corsManagement'));
 
 // 服务器端口 - Zeabur 默认使用 3000
 const PORT = process.env.PORT || 3000;
@@ -264,7 +261,7 @@ const startServer = async () => {
     
     logger.info('\n🚀 启动API服务器...');
     
-    app.listen(PORT, () => {
+    app.listen(PORT, '0.0.0.0', () => {
       logger.info(`✅ 服务器已启动，端口: ${PORT}`);
       logger.info(`📝 API文档: http://localhost:${PORT}/`);
       logger.info(`🔧 数据库测试: http://localhost:${PORT}/api/db-test`);

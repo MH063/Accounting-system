@@ -28,11 +28,17 @@ const ALLOWED_TABLES = [
 ];
 
 /**
- * 验证表名是否在白名单中
+ * 验证表名是否在白名单中（增强安全性）
  * @param {string} tableName - 要验证的表名
  * @returns {boolean} 是否在白名单中
  */
 const isTableAllowed = (tableName) => {
+  // 基础验证：只允许字母、数字和下划线
+  if (!tableName || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(tableName)) {
+    return false;
+  }
+  
+  // 检查是否在白名单中
   return ALLOWED_TABLES.includes(tableName);
 };
 
@@ -163,6 +169,7 @@ router.get('/query', responseWrapper(asyncHandler(async (req, res) => {
   }
   
   // 查询表数据 - 使用参数化查询防止SQL注入
+  // 注意：表名不能作为参数化查询的参数，需要使用白名单验证
   const result = await query(`
     SELECT * FROM ${table} LIMIT $1
   `, [parsedLimit]);
