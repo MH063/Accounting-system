@@ -1,7 +1,7 @@
 # Dependencies
 node_modules/
 AI-admin/node_modules/
-AI-serve/node_modules/
+AI-server/node_modules/
 AI-web/node_modules/
 
 # Build outputs
