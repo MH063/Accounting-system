@@ -4,24 +4,49 @@ node_modules/
 
 # 环境变量
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
 # 日志文件
-logs
+logs/
 *.log
+*.log.*
 
 # 运行时文件
-pids
+pids/
 *.pid
 *.seed
 *.pid.lock
 
 # 覆盖率目录
 coverage/
+.nyc_output/
+
+# 敏感数据目录
+data/
+*.json
+!config/*.json
+!package.json
+!tsconfig*.json
+
+# 安全相关报告
+security-reports/
+audit-reports/
+security-config-report.txt
 
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
 
 # 操作系统
 .DS_Store
 Thumbs.db
+
+# 备份文件
+backup/
+*.backup
+*.bak
