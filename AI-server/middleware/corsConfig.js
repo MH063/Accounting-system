@@ -42,15 +42,11 @@ const parseCorsWhitelist = () => {
   if (!whitelistStr) {
     // 默认白名单
     return [
-      'http://localhost:4000',
-      'http://localhost:8000',
-      'http://localhost:8100',
-      'http://127.0.0.1:4000',
-      'http://127.0.0.1:8000',
-      'http://127.0.0.1:8100',
-      'http://172.25.37.9:4000',
-      'http://172.25.37.9:8000',
-      'http://172.25.37.9:8100'
+      'https://your-domain.com',
+  'https://app.your-domain.com',
+  'https://api.your-domain.com',
+      'https://admin.your-domain.com',
+      'https://admin.your-domain.com'
     ];
   }
   

@@ -10,6 +10,52 @@ const loggerModule = require('../config/logger');
 const logger = loggerModule.logger;
 
 /**
+ * 日志API根路径 - 显示日志服务状态
+ * GET /api/logs
+ */
+router.get('/', async (req, res) => {
+  try {
+    // 记录审计日志
+    loggerModule.audit(req, 'LOGS_API_ACCESS', {
+      user: req.user?.id || 'anonymous',
+      ip: req.ip,
+      userAgent: req.get('User-Agent')
+    });
+
+    // 获取基本统计信息
+    const stats = await getLogStats();
+    
+    res.json({
+      success: true,
+      data: {
+        service: '日志管理API',
+        version: '1.0.0',
+        status: 'running',
+        features: {
+          '日志搜索': 'GET /api/logs/search',
+          '日志统计': 'GET /api/logs/stats',
+          '日志轮转': 'POST /api/logs/rotate',
+          '日志压缩': 'POST /api/logs/compress',
+          '配置信息': 'GET /api/logs/config',
+          '最近日志': 'GET /api/logs/recent'
+        },
+        stats: {
+          totalLogTypes: Object.keys(stats).length,
+          timestamp: new Date().toISOString()
+        }
+      }
+    });
+  } catch (error) {
+    logger.error(`[LOG_MANAGEMENT] 日志API根路径访问失败: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      message: '获取日志服务状态失败',
+      error: error.message
+    });
+  }
+});
+
+/**
  * 获取日志统计信息
  * GET /api/logs/stats
  */

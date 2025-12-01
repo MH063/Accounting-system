@@ -935,8 +935,8 @@ class RuleBasedAnomalyDetector {
   _isKnownMaliciousIp(ip) {
     // 简化的恶意IP列表
     const maliciousIps = [
-      '192.168.1.100',
-      '10.0.0.50',
+      '[TRUSTED_IP_1]',
+      '[TRUSTED_IP_2]',
       '172.16.0.1'
     ];
     
@@ -1154,7 +1154,7 @@ class RealTimeMonitor {
   _sendEmailAlert(alert) {
     // 邮件警报实现
     logger.info('[EMAIL_ALERT] 发送邮件警报', {
-      to: process.env.SECURITY_TEAM_EMAIL || 'security@company.com',
+      to: process.env.SECURITY_TEAM_EMAIL || 'security@example.com',
       subject: `安全警报: ${alert.severity} 级别异常行为检测`,
       alertId: alert.id
     });

@@ -312,7 +312,7 @@ const prometheusConfig = {
       job_name: 'ai-server',
       static_configs: [
         {
-          targets: ['localhost:4000'],
+          targets: ['[MONITORING_HOST]:4000'],
           labels: {
             service: 'ai-server',
             environment: 'production'
@@ -327,7 +327,7 @@ const prometheusConfig = {
       job_name: 'node-exporter',
       static_configs: [
         {
-          targets: ['localhost:9100'],
+          targets: ['[NODE_EXPORTER_HOST]:9100'],
           labels: {
             service: 'node-exporter'
           }
@@ -340,7 +340,7 @@ const prometheusConfig = {
       {
         static_configs: [
           {
-            targets: ['localhost:9093']
+            targets: ['[ALERTMANAGER_HOST]:9093']
           }
         ]
       }
@@ -353,8 +353,8 @@ const prometheusConfig = {
  */
 const alertManagerConfig = {
   global: {
-    smtp_smarthost: 'localhost:587',
-    smtp_from: 'alerts@ai-server.com'
+    smtp_smarthost: 'smtp.example.com:587',
+    smtp_from: 'alerts@example.com'
   },
   route: {
     group_by: ['alertname'],
@@ -368,14 +368,14 @@ const alertManagerConfig = {
       name: 'web.hook',
       email_configs: [
         {
-          to: 'admin@ai-server.com',
+          to: 'admin@example.com',
           subject: 'AI服务器告警: {{ .GroupLabels.alertname }}',
           body: '告警详情:\n{{ range .Alerts }}\n- {{ .Annotations.description }}\n{{ end }}'
         }
       ],
       webhook_configs: [
         {
-          url: 'http://localhost:4000/api/monitoring/alerts/webhook',
+          url: 'http://[SERVER_HOST]:4000/api/monitoring/alerts/webhook',
           send_resolved: true
         }
       ]

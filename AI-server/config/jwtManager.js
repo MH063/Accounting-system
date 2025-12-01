@@ -8,28 +8,29 @@ const fs = require('fs');
 const path = require('path');
 const logger = require('./logger');
 const { tokenBlacklist } = require('../security/tokenBlacklist');
+const { getSecureEnv, getSafeEnvDisplay } = require('../utils/secureEnv');
 
 // JWT密钥配置
 const JWT_CONFIG = {
   // 主密钥（从环境变量获取）
-  primarySecret: process.env.JWT_SECRET,
+  primarySecret: getSecureEnv('JWT_SECRET'),
   // 备用密钥（用于密钥轮换）
-  fallbackSecret: process.env.JWT_FALLBACK_SECRET || process.env.JWT_SECRET,
+  fallbackSecret: getSecureEnv('JWT_FALLBACK_SECRET') || getSecureEnv('JWT_SECRET'),
   // 密钥轮换间隔（默认30天）
-  rotationInterval: parseInt(process.env.JWT_ROTATION_INTERVAL) || 30 * 24 * 60 * 60 * 1000,
+  rotationInterval: parseInt(getSecureEnv('JWT_ROTATION_INTERVAL')) || 30 * 24 * 60 * 60 * 1000,
   
   // 令牌过期时间配置
-  accessTokenExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m', // Access token: 15分钟
-  refreshTokenExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d', // Refresh token: 7天
+  accessTokenExpiresIn: getSecureEnv('JWT_ACCESS_EXPIRES_IN') || '15m', // Access token: 15分钟
+  refreshTokenExpiresIn: getSecureEnv('JWT_REFRESH_EXPIRES_IN') || '7d', // Refresh token: 7天
   
   // 密钥文件存储路径
-  keyFilePath: process.env.JWT_KEY_FILE || path.join(__dirname, '../data/jwt-keys.json'),
+  keyFilePath: getSecureEnv('JWT_KEY_FILE') || path.join(__dirname, '../data/jwt-keys.json'),
   // 密钥算法
   algorithm: 'HS256',
   
   // 令牌黑名单
-  blacklistEnabled: process.env.JWT_BLACKLIST_ENABLED !== 'false',
-  blacklistCheck: process.env.JWT_BLACKLIST_CHECK !== 'false'
+  blacklistEnabled: getSecureEnv('JWT_BLACKLIST_ENABLED') !== 'false',
+  blacklistCheck: getSecureEnv('JWT_BLACKLIST_CHECK') !== 'false'
 };
 
 /**

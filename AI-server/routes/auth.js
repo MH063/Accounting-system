@@ -25,8 +25,8 @@ router.post('/login',
     maxRequests: 5,  // 每分钟最多5次登录尝试
     skipSuccessfulRequests: true // 成功后不计入限制
   }), 
-  responseWrapper(asyncHandler(async (req, res) => {
-    return await authController.login(req, res);
+  responseWrapper(asyncHandler(async (req, res, next) => {
+    return await authController.login(req, res, next);
   }))
 );
 
@@ -207,6 +207,96 @@ router.post('/import',
   authenticateToken, 
   responseWrapper(asyncHandler(async (req, res) => {
     return await authController.importUsers(req, res);
+  }))
+);
+
+/**
+ * 发送邮箱验证邮件
+ * POST /api/auth/send-email-verification
+ * 需要有效的JWT令牌才能访问
+ */
+router.post('/send-email-verification', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await authController.sendEmailVerification(req, res);
+  }))
+);
+
+/**
+ * 验证邮箱
+ * POST /api/auth/verify-email
+ */
+router.post('/verify-email', 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await authController.verifyEmail(req, res);
+  }))
+);
+
+/**
+ * 更新QQ号码
+ * PUT /api/auth/qq-number
+ * 需要有效的JWT令牌才能访问
+ */
+router.put('/qq-number', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await authController.updateQQNumber(req, res);
+  }))
+);
+
+/**
+ * 验证QQ号
+ * POST /api/auth/verify-qq
+ * 需要有效的JWT令牌才能访问
+ */
+router.post('/verify-qq', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await authController.verifyQQ(req, res);
+  }))
+);
+
+/**
+ * 请求密码重置
+ * POST /api/auth/request-password-reset
+ */
+router.post('/request-password-reset', 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await authController.requestPasswordReset(req, res);
+  }))
+);
+
+/**
+ * 重置密码
+ * POST /api/auth/reset-password
+ */
+router.post('/reset-password', 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await authController.resetPassword(req, res);
+  }))
+);
+
+/**
+ * 停用账户
+ * POST /api/auth/deactivate
+ * 需要有效的JWT令牌才能访问
+ */
+router.post('/deactivate', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await authController.deactivateAccount(req, res);
+  }))
+);
+
+/**
+ * 删除账户
+ * DELETE /api/auth/account
+ * 需要有效的JWT令牌才能访问
+ */
+router.delete('/account', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await authController.deleteAccount(req, res);
   }))
 );
 

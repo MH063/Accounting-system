@@ -14,6 +14,16 @@ class UserModel {
     this.isActive = data.is_active !== undefined ? data.is_active : true;
     this.role = data.role || 'user';
     this.permissions = data.permissions || [];
+    // 新增邮箱验证相关字段
+    this.emailVerified = data.email_verified !== undefined ? data.email_verified : false;
+    this.verificationToken = data.verification_token || null;
+    this.verificationTokenExpires = data.verification_token_expires || null;
+    // 新增密码重置相关字段
+    this.resetToken = data.reset_token || null;
+    this.resetTokenExpires = data.reset_token_expires || null;
+    // QQ验证相关字段
+    this.qqNumber = data.qq_number || null;
+    this.qqVerified = data.qq_verified !== undefined ? data.qq_verified : false;
   }
 
   /**
@@ -73,7 +83,15 @@ class UserModel {
       updated_at: this.updatedAt,
       is_active: this.isActive,
       role: this.role,
-      permissions: JSON.stringify(this.permissions)
+      permissions: JSON.stringify(this.permissions),
+      // 新增字段
+      email_verified: this.emailVerified,
+      verification_token: this.verificationToken,
+      verification_token_expires: this.verificationTokenExpires,
+      reset_token: this.resetToken,
+      reset_token_expires: this.resetTokenExpires,
+      qq_number: this.qqNumber,
+      qq_verified: this.qqVerified
     };
   }
 
@@ -94,7 +112,15 @@ class UserModel {
       updated_at: dbRecord.updated_at,
       is_active: dbRecord.is_active,
       role: dbRecord.role,
-      permissions: dbRecord.permissions ? JSON.parse(dbRecord.permissions) : []
+      permissions: dbRecord.permissions ? JSON.parse(dbRecord.permissions) : [],
+      // 新增字段
+      email_verified: dbRecord.email_verified || false,
+      verification_token: dbRecord.verification_token || null,
+      verification_token_expires: dbRecord.verification_token_expires || null,
+      reset_token: dbRecord.reset_token || null,
+      reset_token_expires: dbRecord.reset_token_expires || null,
+      qq_number: dbRecord.qq_number || null,
+      qq_verified: dbRecord.qq_verified || false
     });
   }
 
@@ -111,7 +137,11 @@ class UserModel {
       updated_at: this.updatedAt,
       is_active: this.isActive,
       role: this.role,
-      permissions: this.permissions
+      permissions: this.permissions,
+      // 新增验证相关字段
+      email_verified: this.emailVerified,
+      qq_number: this.qqNumber,
+      qq_verified: this.qqVerified
     };
   }
 
@@ -146,7 +176,7 @@ class UserModel {
    * @param {Object} updates - 更新的数据
    */
   update(updates) {
-    const allowedFields = ['username', 'email', 'role', 'is_active', 'permissions'];
+    const allowedFields = ['username', 'email', 'role', 'is_active', 'permissions', 'qq_number'];
     
     Object.keys(updates).forEach(key => {
       if (allowedFields.includes(key)) {
@@ -215,7 +245,8 @@ class UserModel {
       updated_at: new Date(),
       is_active: true,
       role: 'user',
-      permissions: []
+      permissions: [],
+      qq_number: userData.qq_number || null
     });
 
     if (userData.passwordHash) {
@@ -223,6 +254,78 @@ class UserModel {
     }
 
     return user;
+  }
+
+  /**
+   * 设置邮箱验证令牌
+   * @param {string} token - 验证令牌
+   * @param {Date} expires - 过期时间
+   */
+  setEmailVerificationToken(token, expires) {
+    this.verificationToken = token;
+    this.verificationTokenExpires = expires;
+    this.updatedAt = new Date();
+  }
+
+  /**
+   * 验证邮箱
+   */
+  verifyEmail() {
+    this.emailVerified = true;
+    this.verificationToken = null;
+    this.verificationTokenExpires = null;
+    this.updatedAt = new Date();
+  }
+
+  /**
+   * 设置密码重置令牌
+   * @param {string} token - 重置令牌
+   * @param {Date} expires - 过期时间
+   */
+  setPasswordResetToken(token, expires) {
+    this.resetToken = token;
+    this.resetTokenExpires = expires;
+    this.updatedAt = new Date();
+  }
+
+  /**
+   * 重置密码
+   * @param {string} passwordHash - 新密码哈希
+   */
+  resetPassword(passwordHash) {
+    this.setPasswordHash(passwordHash);
+    this.resetToken = null;
+    this.resetTokenExpires = null;
+  }
+
+  /**
+   * 验证QQ号
+   */
+  verifyQQ() {
+    this.qqVerified = true;
+    this.updatedAt = new Date();
+  }
+
+  /**
+   * 检查邮箱验证令牌是否有效
+   * @returns {boolean} 是否有效
+   */
+  isEmailVerificationTokenValid() {
+    if (!this.verificationToken || !this.verificationTokenExpires) {
+      return false;
+    }
+    return new Date() < this.verificationTokenExpires;
+  }
+
+  /**
+   * 检查密码重置令牌是否有效
+   * @returns {boolean} 是否有效
+   */
+  isPasswordResetTokenValid() {
+    if (!this.resetToken || !this.resetTokenExpires) {
+      return false;
+    }
+    return new Date() < this.resetTokenExpires;
   }
 }
 

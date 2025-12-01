@@ -8,6 +8,7 @@ const express = require('express');
 const helmet = require('helmet');
 const { createCorsMiddleware } = require('../middleware/corsConfig');
 const { initialize: initializeConfig, getSafeLogger, filterSensitive } = require('../config');
+const { validateEnvConfig, getSafeEnvDisplay } = require('./secureEnv');
 const { testConnection, getTables, getDatabases } = require('../config/database');
 const { startScheduledTasks } = require('./scheduledTasks');
 const logger = require('../config/logger');
@@ -30,12 +31,20 @@ async function initializeApplication() {
     // 获取安全日志记录器
     const safeLogger = getSafeLogger();
     
+    // 记录环境变量验证结果
+    const envValidation = validateEnvConfig();
+    safeLogger.info('[SERVER] 环境变量验证结果', { 
+      status: envValidation.status,
+      warnings: envValidation.warnings,
+      errors: envValidation.errors
+    });
+    
     // 使用安全日志记录器记录初始化信息
     safeLogger.info('[SERVER] 应用配置初始化成功', {
-      nodeEnv: filterSensitive(process.env.NODE_ENV),
-      port: filterSensitive(process.env.PORT),
-      platform: process.env.ZEABUR ? 'Zeabur' : 'Local'
-    });
+        nodeEnv: getSafeEnvDisplay('NODE_ENV'),
+        port: getSafeEnvDisplay('PORT'),
+        platform: process.env.ZEABUR ? 'Zeabur' : 'Local'
+      });
     
   } catch (error) {
     console.error('❌ 配置初始化失败:', error);
@@ -62,10 +71,10 @@ async function testDatabaseConnection() {
     }
     
     safeLogger.info('[SERVER] 数据库连接成功', {
-      dbUser: filterSensitive(process.env.DB_USER),
-      dbHost: filterSensitive(process.env.DB_HOST),
-      dbPort: filterSensitive(process.env.DB_PORT),
-      dbName: filterSensitive(process.env.DB_NAME || '(未指定数据库)')
+      dbUser: getSafeEnvDisplay('DB_USER'),
+      dbHost: getSafeEnvDisplay('DB_HOST'),
+      dbPort: getSafeEnvDisplay('DB_PORT'),
+      dbName: getSafeEnvDisplay('DB_NAME') || '(未指定数据库)'
     });
     
     // 查询所有数据库
@@ -165,10 +174,10 @@ async function startServer(app) {
     const server = app.listen(PORT, '0.0.0.0', () => {
       safeLogger.info('[SERVER] 服务器已启动', {
         port: PORT,
-        apiDocs: `http://localhost:${PORT}/`,
-        dbTest: `http://localhost:${PORT}/api/db-test`,
-        tables: `http://localhost:${PORT}/api/tables`,
-        logs: `http://localhost:${PORT}/api/logs`
+        apiDocs: `http://[SERVER_HOST]:${PORT}/`,
+        dbTest: `http://[SERVER_HOST]:${PORT}/api/db-test`,
+        tables: `http://[SERVER_HOST]:${PORT}/api/tables`,
+        logs: `http://[SERVER_HOST]:${PORT}/api/logs`
       });
       
       if (!dbConnected) {

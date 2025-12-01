@@ -17,7 +17,26 @@ const { behaviorAnalysisMiddleware } = require('./security/behaviorAnalysisMiddl
 const { cacheMiddleware } = require('./apiCache');
 
 // 压缩中间件
-const { compressionPresets, staticOptimizationMiddleware } = require('./compression');
+const compressionPresets = {
+  gzip: {
+    level: 6,
+    threshold: 1024,
+    filter: (req, res) => {
+      if (req.headers['x-no-compression']) {
+        return false;
+      }
+      return compression.filter(req, res);
+    }
+  },
+  deflate: {
+    level: 6,
+    threshold: 1024
+  },
+  br: {
+    level: 6,
+    threshold: 1024
+  }
+};
 
 // 速率限制
 const { defaultRateLimiter } = require('./rateLimiter');
@@ -59,7 +78,6 @@ module.exports = {
 
   // 压缩中间件
   compressionPresets,
-  staticOptimizationMiddleware,
 
   // 速率限制
   defaultRateLimiter,

@@ -40,7 +40,7 @@ const initClamAV = async () => {
       },
       clamdscan: {
         socket: false, // 不使用socket连接
-        host: '127.0.0.1', // ClamAV守护进程主机
+        host: '[CLAMAV_HOST]', // ClamAV守护进程主机
         port: 3310, // ClamAV守护进程端口
         timeout: 30000, // 30秒超时
         localFallback: true // 如果clamdscan不可用，回退到clamscan

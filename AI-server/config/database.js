@@ -4,6 +4,7 @@
 
 const { Pool } = require('pg');
 const dotenv = require('dotenv');
+const { getSecureEnv, getSafeEnvDisplay } = require('../utils/secureEnv');
 
 dotenv.config({ path: '.env' });
 
@@ -18,7 +19,7 @@ function getDatabaseConfig() {
   } else {
     console.log('⚠️ 使用单独的数据库配置（本地环境）');
     const config = {
-      host: process.env.DB_HOST || '127.0.0.1',
+      host: process.env.DB_HOST || '[DB_HOST]',
       port: process.env.DB_PORT || 5432,
       user: process.env.DB_USER || 'postgres',
       password: process.env.DB_PASSWORD,
@@ -29,11 +30,11 @@ function getDatabaseConfig() {
     // 打印配置以便调试（在开发环境）
     if (process.env.NODE_ENV !== 'production') {
       console.log('🔍 数据库连接配置检查:');
-      console.log('host:', config.host);
-      console.log('port:', config.port);
-      console.log('user:', config.user);
-      console.log('password:', config.password ? '***已设置***' : '未设置');
-      console.log('database:', config.database);
+      console.log('host:', getSafeEnvDisplay('DB_HOST'));
+      console.log('port:', getSafeEnvDisplay('DB_PORT'));
+      console.log('user:', getSafeEnvDisplay('DB_USER'));
+      console.log('password:', getSafeEnvDisplay('DB_PASSWORD') ? '***已设置***' : '未设置');
+      console.log('database:', getSafeEnvDisplay('DB_NAME'));
       console.log('SSL:', config.ssl ? '已启用' : '未启用');
     }
     
@@ -45,11 +46,11 @@ function getDatabaseConfig() {
 const poolConfig = {
   ...getDatabaseConfig(),
   // 连接池大小配置
-  max: process.env.DB_POOL_MAX ? parseInt(process.env.DB_POOL_MAX) : 5,
-  min: process.env.DB_POOL_MIN ? parseInt(process.env.DB_POOL_MIN) : 1,
+  max: getSecureEnv('DB_POOL_MAX') ? parseInt(getSecureEnv('DB_POOL_MAX')) : 5,
+  min: getSecureEnv('DB_POOL_MIN') ? parseInt(getSecureEnv('DB_POOL_MIN')) : 1,
   // 连接生命周期配置
-  idleTimeoutMillis: process.env.DB_IDLE_TIMEOUT ? parseInt(process.env.DB_IDLE_TIMEOUT) : 30000,
-  connectionTimeoutMillis: process.env.DB_CONNECTION_TIMEOUT ? parseInt(process.env.DB_CONNECTION_TIMEOUT) : 10000,
+  idleTimeoutMillis: getSecureEnv('DB_IDLE_TIMEOUT') ? parseInt(getSecureEnv('DB_IDLE_TIMEOUT')) : 30000,
+  connectionTimeoutMillis: getSecureEnv('DB_CONNECTION_TIMEOUT') ? parseInt(getSecureEnv('DB_CONNECTION_TIMEOUT')) : 10000,
   // 连接验证
   allowExitOnIdle: false,
   keepAlive: true,
@@ -149,13 +150,73 @@ const getDatabases = async () => {
   }
 };
 
+// 导入API缓存模块的函数
+const { getStats, resetStats, flush } = require('../middleware/apiCache');
+
+// 获取缓存统计信息
+const getCacheStats = () => {
+  return getStats();
+};
+
+// 重置缓存统计
+const resetCacheStats = () => {
+  resetStats();
+};
+
+// 清空所有缓存
+const flushCache = () => {
+  flush();
+};
+
+// 健康检查函数
+const healthCheck = async () => {
+  try {
+    const client = await pool.connect();
+    const result = await client.query('SELECT NOW() as current_time, version() as version');
+    client.release();
+    
+    return {
+      status: 'healthy',
+      message: '数据库连接正常',
+      timestamp: result.rows[0].current_time,
+      version: result.rows[0].version
+    };
+  } catch (error) {
+    return {
+      status: 'unhealthy',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    };
+  }
+};
+
+// 获取降级状态
+const getDegradationStatus = () => {
+  const poolStatus = getPoolStatus();
+  const isDegraded = poolStatus.waitingCount > 0 || poolStatus.idleCount === 0;
+  
+  return {
+    status: isDegraded ? 'degraded' : 'healthy',
+    details: {
+      ...poolStatus,
+      message: isDegraded ? '连接池负载过高' : '系统运行正常'
+    }
+  };
+};
+
 // 导出模块
 module.exports = {
   pool,
   query,
   testConnection,
+  healthCheck,
+  dbHealthCheck: healthCheck, // 为向后兼容提供别名
   getPoolStatus,
   getTables,
   getDatabases,
-  poolConfig
+  poolConfig,
+  getCacheStats,
+  resetCacheStats,
+  flushCache,
+  getDegradationStatus
 };

@@ -20,8 +20,8 @@ const networkSegmentation = new NetworkMicrosegmentation({
     // 在开发环境中允许HTTP请求和本地访问
     ...(isDevelopment ? [
       { source: '*', target: 'api-server', protocol: 'http' },
-      { source: 'localhost', target: 'api-server', protocol: '*' },
-      { source: '127.0.0.1', target: 'api-server', protocol: '*' }
+      { source: '[TRUSTED_SOURCE]', target: 'api-server', protocol: '*' },
+  { source: '[TRUSTED_IP]', target: 'api-server', protocol: '*' }
     ] : [])
   ],
   defaultPolicy: isDevelopment ? 'allow' : 'deny'
@@ -140,7 +140,7 @@ const zeroTrustAccessControl = (requiredPermissions = [], options = {}) => {
       }
 
       // 4. 网络微隔离检查
-      const sourceService = req.headers['x-service-name'] || (isDevelopment ? 'localhost' : 'external');
+      const sourceService = req.headers['x-service-name'] || (isDevelopment ? '[TRUSTED_SOURCE]' : 'external');
       const targetService = process.env.SERVICE_NAME || 'api-server';
       
       if (!networkSegmentation.isConnectionAllowed(sourceService, targetService, req.protocol)) {
@@ -310,7 +310,7 @@ const calculateUserRiskScore = (req) => {
 };
 
 // 简化的可疑IP集合和请求历史（实际应用中应使用数据库存储）
-const suspiciousIPs = new Set(['192.168.1.100', '10.0.0.50']);
+const suspiciousIPs = new Set(['[SUSPICIOUS_IP_1]', '[SUSPICIOUS_IP_2]']);
 const requestHistory = [];
 
 // 记录请求历史（用于行为分析）

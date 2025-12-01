@@ -18,6 +18,10 @@ const { ipWhitelist, strictRateLimit, securityHeaders, sqlInjectionProtection, r
 const { xssProtection: xssProtectionMiddleware } = require('./middleware/security/xssProtection');
 // 导入csrfProtection
 const { csrfProtection: csrfProtectionMiddleware } = require('./middleware/security/csrfProtection');
+// 导入信息泄露防护中间件
+const { infoLeakProtection, errorLeakProtection, sanitizeRequestData } = require('./middleware/infoLeakProtection');
+// 导入安全环境变量管理
+const { validateEnvConfig, getSafeEnvDisplay } = require('./utils/secureEnv');
 const { startScheduledTasks } = require('./utils/scheduledTasks');
 const { cacheMiddleware } = require('./middleware/apiCache');
 const authRoutes = require('./routes/auth');
@@ -28,28 +32,22 @@ const uploadRoutes = require('./routes/upload');
 // 在 Zeabur 环境中，环境变量会自动设置
 dotenv.config({ path: '.env' });
 
-// 打印环境变量以便调试
-console.log('🔍 环境检查:');
-console.log('NODE_ENV:', process.env.NODE_ENV);
-console.log('PORT:', process.env.PORT);
-console.log('平台:', process.env.ZEABUR ? 'Zeabur' : 'Local');
-
-// 数据库配置检查
-console.log('\n💾 数据库配置:');
-if (process.env.DATABASE_URL) {
-  console.log('DATABASE_URL: 已设置 (Zeabur 数据库)');
-  console.log('解析的连接信息:', {
-    host: process.env.DATABASE_URL.split('@')[1]?.split(':')[0] || 'localhost',
-    port: process.env.DATABASE_URL.split(':')[2]?.split('/')[0] || '5432',
-    database: process.env.DATABASE_URL.split('/').pop() || 'unknown'
-  });
-} else {
-  console.log('DB_HOST:', process.env.DB_HOST);
-  console.log('DB_PORT:', process.env.DB_PORT);
-  console.log('DB_USER:', process.env.DB_USER);
-  console.log('DB_PASSWORD:', process.env.DB_PASSWORD ? '***已设置***' : '未设置');
-  console.log('DB_NAME:', process.env.DB_NAME || '(未设置)');
+// 验证环境变量配置
+const envValidation = validateEnvConfig();
+if (envValidation.status !== 'OK') {
+  console.log('环境变量验证结果:', envValidation.status);
+  if (envValidation.warnings.length > 0) {
+    console.warn('⚠️  警告:', envValidation.warnings);
+  }
+  if (envValidation.errors.length > 0) {
+    console.error('❌ 错误:', envValidation.errors);
+  }
+  if (envValidation.missing.length > 0) {
+    console.error('❌ 缺失的必需变量:', envValidation.missing);
+  }
 }
+
+
 
 // 创建Express应用
 const app = express();
@@ -63,7 +61,7 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdnjs.cloudflare.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com"],
-      imgSrc: ["'self'", "data:", "https:", "http://localhost"],
+      imgSrc: ["'self'", "data:", "https:", "http://[SERVER_HOST]"],
       connectSrc: ["'self'", "https://api.github.com", "https://api.pixabay.com"],
       frameSrc: ["'none'"],
       objectSrc: ["'none'"],
@@ -98,6 +96,10 @@ app.use(createCorsMiddleware());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// 信息泄露防护中间件 - 必须在其他中间件之前
+app.use(sanitizeRequestData()); // 清理请求数据
+app.use(infoLeakProtection()); // 防护响应信息泄露
+
 // 静态文件服务 - 用于提供favicon.ico等静态资源
 // 注意：静态文件中间件应该放在API路由之前，但要有特定的路径前缀
 app.use('/favicon.ico', express.static('public/favicon.ico'));
@@ -126,11 +128,11 @@ app.use('/api/logs', require('./routes/logs'));
 app.use('/api/logs', require('./routes/logManagement'));
 app.use('/api/cache', require('./routes/cache'));
 app.use('/api/cache', require('./routes/enhancedCache'));
-app.use('/api/security', require('./routes/security'));
-app.use('/api/security-test', require('./routes/securityTest'));
+
 app.use('/api/health', require('./routes/health'));
 app.use('/api/virus-scan', require('./routes/virusScan'));
 app.use('/api/cors', require('./routes/corsManagement'));
+app.use('/api/audit', require('./routes/audit'));
 
 // 服务器端口 - Zeabur 默认使用 3000
 const PORT = process.env.PORT || 3000;
@@ -151,7 +153,11 @@ async function testDatabaseConnection() {
       return false;
     }
     
-    console.log(`连接信息: ${process.env.DB_USER}@${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME || '(未指定数据库)'}`);
+    console.log(`连接信息: [USER]@[HOST]:[PORT]/[DATABASE]`); // 不显示实际的连接信息
+    console.log(`数据库用户: ${getSafeEnvDisplay('DB_USER')}`);
+    console.log(`数据库主机: ${getSafeEnvDisplay('DB_HOST')}`);
+    console.log(`数据库端口: ${getSafeEnvDisplay('DB_PORT')}`);
+    console.log(`数据库名称: ${getSafeEnvDisplay('DB_NAME')}`);
     
     // 查询所有数据库
     try {
@@ -192,7 +198,7 @@ async function testDatabaseConnection() {
 }
 
 // 基本路由
-app.get('/', cacheMiddleware.short(), responseWrapper((req, res) => {
+app.get('/', responseWrapper((req, res) => {
   return res.json({
     success: true,
     message: 'API服务运行正常',
@@ -226,10 +232,10 @@ app.get('/api/db-test', responseWrapper(async (req, res) => {
       data: {
         currentTime: result.rows[0].current_time,
         databaseInfo: {
-          host: process.env.DB_HOST,
-          port: process.env.DB_PORT,
-          user: process.env.DB_USER,
-          database: process.env.DB_NAME || '(未指定)'
+          host: '[REDACTED]', // 不暴露数据库主机信息
+          port: '[REDACTED]', // 不暴露数据库端口信息
+          user: '[REDACTED]', // 不暴露数据库用户信息
+          database: '[REDACTED]' // 不暴露数据库名称
         }
       }
     });
@@ -310,10 +316,10 @@ const startServer = async () => {
     
     app.listen(PORT, '0.0.0.0', () => {
       logger.info(`✅ 服务器已启动，端口: ${PORT}`);
-      logger.info(`📝 API文档: http://localhost:${PORT}/`);
-      logger.info(`🔧 数据库测试: http://localhost:${PORT}/api/db-test`);
-      logger.info(`📊 表列表查询: http://localhost:${PORT}/api/tables`);
-      logger.info(`📋 日志管理: http://localhost:${PORT}/api/logs`);
+      logger.info(`📝 API文档: http://[SERVER_HOST]:${PORT}/`);
+      logger.info(`🔧 数据库测试: http://[SERVER_HOST]:${PORT}/api/db-test`);
+      logger.info(`📊 表列表查询: http://[SERVER_HOST]:${PORT}/api/tables`);
+      logger.info(`📋 日志管理: http://[SERVER_HOST]:${PORT}/api/logs`);
       
       if (!dbConnected) {
         logger.warn('⚠️ 注意：数据库连接失败，部分功能可能不可用');
@@ -329,9 +335,9 @@ const startServer = async () => {
 // 启动服务器
 startServer();
 
-// 错误处理中间件
+// 错误处理中间件 - 使用信息泄露防护的错误处理
+app.use(errorLeakProtection()); // 替换原来的errorHandler，防止错误信息泄露
 app.use(notFound);
-app.use(errorHandler);
 
 // 全局异步错误处理
 process.on('unhandledRejection', (reason, promise) => {

@@ -280,10 +280,10 @@ docker-compose logs postgres
 
 ### 监控服务（生产环境）
 
-- **Grafana 监控面板**: http://localhost:3000
-- **Prometheus 指标**: http://localhost:9090
-- **Kibana 日志分析**: http://localhost:5601
-- **Elasticsearch**: http://localhost:9200
+- **Grafana 监控面板**: http://[MONITORING_HOST]:3000
+- **Prometheus 指标**: http://[MONITORING_HOST]:9090
+- **Kibana 日志分析**: http://[MONITORING_HOST]:5601
+- **Elasticsearch**: http://[MONITORING_HOST]:9200
 
 ### 日志管理
 
@@ -399,13 +399,13 @@ docker-compose logs -f ai-serve
 
 ```bash
 # 手动测试健康检查
-curl -v http://localhost:4000/api/health
+curl -v http://[API_HOST]:4000/api/health
 
 # 测试数据库连接
-curl -v http://localhost:4000/api/health/performance
+curl -v http://[API_HOST]:4000/api/health/performance
 
 # 测试错误处理
-curl -v http://localhost:4000/api/health/test/errors/validation
+curl -v http://[API_HOST]:4000/api/health/test/errors/validation
 ```
 
 ## 开发指南

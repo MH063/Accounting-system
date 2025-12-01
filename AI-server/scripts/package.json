@@ -1,0 +1,34 @@
+{
+  "name": "security-monitoring-scripts",
+  "version": "1.0.0",
+  "description": "安全监控脚本集合",
+  "main": "continuousMonitoring.js",
+  "scripts": {
+    "monitor:start": "node continuousMonitoring.js start",
+    "monitor:stop": "node continuousMonitoring.js stop",
+    "monitor:status": "node continuousMonitoring.js status",
+    "monitor:stats": "node continuousMonitoring.js stats",
+    "monitor:check": "node continuousMonitoring.js check",
+    "dashboard": "node monitoringDashboard.js",
+    "sensitive-info": "node sensitiveInfoMonitor.js",
+    "log-monitor": "node logSensitiveInfoMonitor.js",
+    "service-validator": "node thirdPartyServiceValidator.js",
+    "env-validator": "node productionEnvValidator.js",
+    "all": "npm run sensitive-info && npm run log-monitor && npm run service-validator && npm run env-validator"
+  },
+  "keywords": [
+    "security",
+    "monitoring",
+    "sensitive-info",
+    "log-monitoring",
+    "service-validation"
+  ],
+  "author": "Security Team",
+  "license": "MIT",
+  "dependencies": {
+    "nodemailer": "^6.9.7"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

@@ -5,6 +5,51 @@ const logger = require('../config/logger');
 const router = express.Router();
 
 /**
+ * 日志API根路径 - 显示日志服务状态
+ * GET /api/logs
+ */
+router.get('/', (req, res) => {
+  try {
+    // 记录审计日志
+    logger.audit(req, 'LOGS_API_ACCESS', {
+      userId: req.user ? req.user.id : 'anonymous',
+      ip: req.ip || req.connection?.remoteAddress || 'unknown',
+      userAgent: req.get('User-Agent')
+    });
+
+    const stats = logManager.getLogStats();
+    const files = logManager.getLogFiles();
+    
+    res.json({
+      success: true,
+      data: {
+        service: '日志管理API',
+        version: '1.0.0',
+        status: 'running',
+        features: {
+          '日志搜索': 'GET /api/logs/search',
+          '日志统计': 'GET /api/logs/stats',
+          '日志清理': 'POST /api/logs/cleanup',
+          '文件列表': 'GET /api/logs/files'
+        },
+        stats: {
+          totalLogFiles: files.length,
+          logTypes: Object.keys(stats).length,
+          timestamp: new Date().toISOString()
+        }
+      }
+    });
+  } catch (error) {
+    logger.error(`[LOG_API] 日志API根路径访问失败: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      message: '获取日志服务状态失败',
+      error: error.message
+    });
+  }
+});
+
+/**
  * 搜索日志
  * GET /api/logs/search
  * Query参数:

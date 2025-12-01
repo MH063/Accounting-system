@@ -806,6 +806,464 @@ class UserService extends BaseService {
       errors
     };
   }
+
+  /**
+   * 发送邮箱验证邮件
+   * @param {number} userId - 用户ID
+   * @returns {Promise<Object>} 发送结果
+   */
+  async sendEmailVerification(userId) {
+    try {
+      logger.info('[UserService] 发送邮箱验证邮件', { userId });
+
+      const user = await this.userRepository.findById(userId);
+      
+      if (!user) {
+        throw new Error('用户不存在');
+      }
+
+      if (user.emailVerified) {
+        return {
+          success: true,
+          message: '邮箱已验证'
+        };
+      }
+
+      // 生成验证令牌
+      const crypto = require('crypto');
+      const verificationToken = crypto.randomBytes(32).toString('hex');
+      const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24小时过期
+
+      // 保存验证令牌
+      await this.userRepository.update(userId, {
+        verification_token: verificationToken,
+        verification_token_expires: expires
+      });
+
+      // 发送邮件（这里模拟发送，实际项目中需要集成邮件服务）
+      logger.info('[UserService] 邮箱验证邮件已发送', { 
+        userId, 
+        email: user.email,
+        token: verificationToken 
+      });
+
+      return {
+        success: true,
+        message: '验证邮件已发送，请检查您的邮箱',
+        data: {
+          verificationToken, // 开发环境返回token，生产环境应该移除
+          expiresIn: 24 * 60 * 60 // 24小时
+        }
+      };
+
+    } catch (error) {
+      logger.error('[UserService] 发送邮箱验证邮件失败', { 
+        error: error.message,
+        userId 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 验证邮箱
+   * @param {string} token - 验证令牌
+   * @returns {Promise<Object>} 验证结果
+   */
+  async verifyEmail(token) {
+    try {
+      logger.info('[UserService] 验证邮箱', { token: token.substring(0, 8) + '...' });
+
+      const user = await this.userRepository.findByVerificationToken(token);
+      
+      if (!user) {
+        throw new Error('无效的验证令牌');
+      }
+
+      // 检查令牌是否过期
+      if (!user.isEmailVerificationTokenValid()) {
+        throw new Error('验证令牌已过期，请重新发送验证邮件');
+      }
+
+      // 验证邮箱
+      await this.userRepository.update(user.id, {
+        email_verified: true,
+        verification_token: null,
+        verification_token_expires: null
+      });
+
+      logger.info('[UserService] 邮箱验证成功', { userId: user.id });
+
+      return {
+        success: true,
+        message: '邮箱验证成功'
+      };
+
+    } catch (error) {
+      logger.error('[UserService] 邮箱验证失败', { 
+        error: error.message,
+        token: token.substring(0, 8) + '...' 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 更新QQ号码
+   * @param {number} userId - 用户ID
+   * @param {string} qqNumber - QQ号码
+   * @returns {Promise<Object>} 更新结果
+   */
+  async updateQQNumber(userId, qqNumber) {
+    try {
+      logger.info('[UserService] 更新QQ号码', { userId, qqNumber });
+
+      // 验证QQ号码格式
+      if (!/^\d{5,15}$/.test(qqNumber)) {
+        throw new Error('QQ号码格式不正确');
+      }
+
+      const user = await this.userRepository.findById(userId);
+      
+      if (!user) {
+        throw new Error('用户不存在');
+      }
+
+      // 检查QQ号码是否已被使用
+      const existingUser = await this.userRepository.findByQQNumber(qqNumber);
+      if (existingUser && existingUser.id !== userId) {
+        throw new Error('该QQ号码已被其他账户使用');
+      }
+
+      // 更新QQ号码
+      await this.userRepository.update(userId, {
+        qq_number: qqNumber,
+        qq_verified: false // 重置验证状态
+      });
+
+      logger.info('[UserService] QQ号码更新成功', { userId, qqNumber });
+
+      return {
+        success: true,
+        message: 'QQ号码更新成功，需要验证',
+        data: {
+          qq_number: qqNumber,
+          qq_verified: false
+        }
+      };
+
+    } catch (error) {
+      logger.error('[UserService] 更新QQ号码失败', { 
+        error: error.message,
+        userId,
+        qqNumber 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 验证QQ号
+   * @param {number} userId - 用户ID
+   * @param {string} verificationCode - 验证代码
+   * @returns {Promise<Object>} 验证结果
+   */
+  async verifyQQ(userId, verificationCode) {
+    try {
+      logger.info('[UserService] 验证QQ号', { userId });
+
+      // 实际项目中，这里需要验证腾讯QQ API或短信验证
+      // 这里简单模拟验证过程
+      const isValidCode = verificationCode === '123456'; // 模拟验证码
+
+      if (!isValidCode) {
+        throw new Error('验证代码错误');
+      }
+
+      // 验证成功
+      await this.userRepository.update(userId, {
+        qq_verified: true
+      });
+
+      logger.info('[UserService] QQ验证成功', { userId });
+
+      return {
+        success: true,
+        message: 'QQ验证成功'
+      };
+
+    } catch (error) {
+      logger.error('[UserService] QQ验证失败', { 
+        error: error.message,
+        userId 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 请求密码重置
+   * @param {string} email - 邮箱地址
+   * @returns {Promise<Object>} 请求结果
+   */
+  async requestPasswordReset(email) {
+    try {
+      logger.info('[UserService] 请求密码重置', { email });
+
+      const user = await this.userRepository.findByEmail(email);
+      
+      if (!user) {
+        // 为安全考虑，即使用户不存在也返回成功
+        return {
+          success: true,
+          message: '如果该邮箱地址已注册，您将收到密码重置邮件'
+        };
+      }
+
+      // 生成重置令牌
+      const crypto = require('crypto');
+      const resetToken = crypto.randomBytes(32).toString('hex');
+      const expires = new Date(Date.now() + 2 * 60 * 60 * 1000); // 2小时过期
+
+      // 保存重置令牌
+      await this.userRepository.update(user.id, {
+        reset_token: resetToken,
+        reset_token_expires: expires
+      });
+
+      // 发送重置邮件（模拟）
+      logger.info('[UserService] 密码重置邮件已发送', { 
+        userId: user.id,
+        email: user.email,
+        token: resetToken 
+      });
+
+      return {
+        success: true,
+        message: '如果该邮箱地址已注册，您将收到密码重置邮件',
+        data: {
+          resetToken, // 开发环境返回token
+          expiresIn: 2 * 60 * 60 // 2小时
+        }
+      };
+
+    } catch (error) {
+      logger.error('[UserService] 请求密码重置失败', { 
+        error: error.message,
+        email 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 重置密码
+   * @param {string} token - 重置令牌
+   * @param {string} newPassword - 新密码
+   * @returns {Promise<Object>} 重置结果
+   */
+  async resetPassword(token, newPassword) {
+    try {
+      logger.info('[UserService] 重置密码', { token: token.substring(0, 8) + '...' });
+
+      const user = await this.userRepository.findByResetToken(token);
+      
+      if (!user) {
+        throw new Error('无效的重置令牌');
+      }
+
+      // 检查令牌是否过期
+      if (!user.isPasswordResetTokenValid()) {
+        throw new Error('重置令牌已过期，请重新请求密码重置');
+      }
+
+      // 验证新密码强度
+      if (!this.isValidPassword(newPassword)) {
+        throw new Error('新密码不符合安全要求（至少8位，包含大小写字母、数字和特殊字符）');
+      }
+
+      // 加密新密码
+      const saltRounds = 12;
+      const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+
+      // 更新密码并清除重置令牌
+      await this.userRepository.update(user.id, {
+        password_hash: newPasswordHash,
+        reset_token: null,
+        reset_token_expires: null
+      });
+
+      logger.info('[UserService] 密码重置成功', { userId: user.id });
+
+      return {
+        success: true,
+        message: '密码重置成功，请使用新密码登录'
+      };
+
+    } catch (error) {
+      logger.error('[UserService] 密码重置失败', { 
+        error: error.message,
+        token: token.substring(0, 8) + '...' 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 停用账户
+   * @param {number} userId - 用户ID
+   * @param {string} reason - 停用原因
+   * @returns {Promise<Object>} 停用结果
+   */
+  async deactivateAccount(userId, reason = '用户主动停用') {
+    try {
+      logger.info('[UserService] 停用账户', { userId, reason });
+
+      const user = await this.userRepository.findById(userId);
+      
+      if (!user) {
+        throw new Error('用户不存在');
+      }
+
+      if (!user.is_active) {
+        return {
+          success: true,
+          message: '账户已是停用状态'
+        };
+      }
+
+      // 停用账户
+      await this.userRepository.update(userId, {
+        is_active: false
+      });
+
+      // 撤销用户的所有令牌
+      await revokeTokenPair(userId);
+
+      logger.info('[UserService] 账户停用成功', { userId, reason });
+
+      return {
+        success: true,
+        message: '账户已停用'
+      };
+
+    } catch (error) {
+      logger.error('[UserService] 停用账户失败', { 
+        error: error.message,
+        userId,
+        reason 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 删除账户（软删除）
+   * @param {number} userId - 用户ID
+   * @param {string} password - 确认密码
+   * @returns {Promise<Object>} 删除结果
+   */
+  async deleteAccount(userId, password) {
+    try {
+      logger.info('[UserService] 删除账户', { userId });
+
+      const user = await this.userRepository.findById(userId);
+      
+      if (!user) {
+        throw new Error('用户不存在');
+      }
+
+      // 验证密码
+      const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+      
+      if (!isPasswordValid) {
+        throw new Error('密码错误');
+      }
+
+      // 软删除：标记为已删除而不是真正删除
+      const deleteReason = `账户被用户删除于 ${new Date().toISOString()}`;
+      
+      await this.userRepository.update(userId, {
+        username: `deleted_${userId}_${Date.now()}`,
+        email: `deleted_${userId}_${Date.now()}@deleted.com`,
+        password_hash: null,
+        is_active: false,
+        deleted_at: new Date(),
+        delete_reason: deleteReason
+      });
+
+      // 撤销用户的所有令牌
+      await revokeTokenPair(userId);
+
+      logger.info('[UserService] 账户删除成功', { userId });
+
+      return {
+        success: true,
+        message: '账户已删除'
+      };
+
+    } catch (error) {
+      logger.error('[UserService] 删除账户失败', { 
+        error: error.message,
+        userId 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 检查用户名是否可用
+   * @param {string} username - 用户名
+   * @param {number} excludeUserId - 排除的用户ID
+   * @returns {Promise<Object>} 检查结果
+   */
+  async checkUsernameAvailability(username, excludeUserId = null) {
+    try {
+      const exists = await this.userRepository.isUsernameExists(username, excludeUserId);
+      
+      return {
+        success: true,
+        data: {
+          available: !exists
+        },
+        message: exists ? '用户名已被使用' : '用户名可用'
+      };
+
+    } catch (error) {
+      logger.error('[UserService] 检查用户名可用性失败', { 
+        error: error.message,
+        username 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 检查邮箱是否可用
+   * @param {string} email - 邮箱
+   * @param {number} excludeUserId - 排除的用户ID
+   * @returns {Promise<Object>} 检查结果
+   */
+  async checkEmailAvailability(email, excludeUserId = null) {
+    try {
+      const exists = await this.userRepository.isEmailExists(email, excludeUserId);
+      
+      return {
+        success: true,
+        data: {
+          available: !exists
+        },
+        message: exists ? '邮箱已被使用' : '邮箱可用'
+      };
+
+    } catch (error) {
+      logger.error('[UserService] 检查邮箱可用性失败', { 
+        error: error.message,
+        email 
+      });
+      throw error;
+    }
+  }
 }
 
 module.exports = UserService;

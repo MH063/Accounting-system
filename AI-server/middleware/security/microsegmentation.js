@@ -28,7 +28,7 @@ class NetworkMicrosegmentation {
     const isDevelopment = process.env.NODE_ENV === 'development';
     if (isDevelopment) {
       // 在开发环境中允许本地访问
-      if (sourceService === 'localhost' || sourceService === '127.0.0.1' || sourceService === 'unknown') {
+      if (sourceService === '[TRUSTED_SOURCE]' || sourceService === '[TRUSTED_IP]' || sourceService === 'unknown') {
         return true;
       }
     }

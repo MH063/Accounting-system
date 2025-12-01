@@ -41,7 +41,7 @@ router.get('/info', responseWrapper(asyncHandler(async (req, res) => {
 /**
  * 更新CORS白名单
  * PUT /api/cors/whitelist
- * Body: { whitelist: ["http://example.com", "https://app.example.com"] }
+ * Body: { whitelist: ["https://your-domain.com", "https://app.your-domain.com"] }
  */
 router.put('/whitelist', authenticateToken, responseWrapper(asyncHandler(async (req, res) => {
   const { whitelist } = req.body;
@@ -96,7 +96,7 @@ router.put('/whitelist', authenticateToken, responseWrapper(asyncHandler(async (
 /**
  * 添加来源到白名单
  * POST /api/cors/whitelist/add
- * Body: { origin: "http://example.com" }
+ * Body: { origin: "https://your-domain.com" }
  */
 router.post('/whitelist/add', authenticateToken, responseWrapper(asyncHandler(async (req, res) => {
   const { origin } = req.body;
@@ -133,7 +133,7 @@ router.post('/whitelist/add', authenticateToken, responseWrapper(asyncHandler(as
 /**
  * 从白名单中移除来源
  * DELETE /api/cors/whitelist/remove
- * Body: { origin: "http://example.com" }
+ * Body: { origin: "https://your-domain.com" }
  */
 router.delete('/whitelist/remove', authenticateToken, responseWrapper(asyncHandler(async (req, res) => {
   const { origin } = req.body;
@@ -200,7 +200,7 @@ router.post('/test', authenticateToken, responseWrapper(asyncHandler(async (req,
 /**
  * 公开测试CORS配置（无需认证）
  * GET /api/cors/test-public
- * Query参数: ?origin=http://example.com
+ * Query参数: ?origin=https://your-domain.com
  */
 router.get('/test-public', responseWrapper(asyncHandler(async (req, res) => {
   const { origin } = req.query;
@@ -208,7 +208,7 @@ router.get('/test-public', responseWrapper(asyncHandler(async (req, res) => {
   if (!origin || typeof origin !== 'string') {
     return res.status(400).json({
       success: false,
-      message: '必须提供有效的来源地址作为查询参数，例如: ?origin=http://example.com'
+      message: '必须提供有效的来源地址作为查询参数，例如: ?origin=https://your-domain.com'
     });
   }
   

@@ -7,11 +7,18 @@ const winston = require('winston');
 const path = require('path');
 const fs = require('fs');
 const { startLogRotationService } = require('../utils/logRotation');
+const { sanitizeLogData, sanitizeString } = require('../middleware/infoLeakProtection');
 
 // 创建日志目录（如果不存在）
 const logDir = path.join(process.cwd(), 'logs');
+const auditLogDir = path.join(logDir, 'audit');
+
 if (!fs.existsSync(logDir)) {
   fs.mkdirSync(logDir, { recursive: true });
+}
+
+if (!fs.existsSync(auditLogDir)) {
+  fs.mkdirSync(auditLogDir, { recursive: true });
 }
 
 // 自定义日志格式
@@ -79,6 +86,42 @@ const logger = winston.createLogger({
         winston.format.timestamp(),
         winston.format.json()
       )
+    }),
+    // 操作审计日志文件
+    new winston.transports.File({
+      filename: path.join(auditLogDir, 'operation.log'),
+      level: 'info',
+      maxsize: 15728640, // 15MB
+      maxFiles: 15,
+      tailable: true,
+      format: winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.json()
+      )
+    }),
+    // 登录审计日志文件
+    new winston.transports.File({
+      filename: path.join(auditLogDir, 'login.log'),
+      level: 'info',
+      maxsize: 10485760, // 10MB
+      maxFiles: 15,
+      tailable: true,
+      format: winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.json()
+      )
+    }),
+    // 异常审计日志文件
+    new winston.transports.File({
+      filename: path.join(auditLogDir, 'anomaly.log'),
+      level: 'warn',
+      maxsize: 15728640, // 15MB
+      maxFiles: 20,
+      tailable: true,
+      format: winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.json()
+      )
     })
   ],
 });
@@ -107,6 +150,9 @@ setTimeout(() => {
  * @param {Object} details - 操作详情
  */
 const auditLog = (req, action, details = {}) => {
+  // 清理敏感信息
+  const sanitizedDetails = sanitizeLogData(details);
+  
   const auditInfo = {
     timestamp: new Date().toISOString(),
     userId: req.user?.id || 'anonymous',
@@ -116,7 +162,7 @@ const auditLog = (req, action, details = {}) => {
     method: req.method,
     url: req.originalUrl,
     action,
-    details,
+    details: sanitizedDetails,
     sessionId: req.sessionID || 'none'
   };
 
@@ -130,6 +176,9 @@ const auditLog = (req, action, details = {}) => {
  * @param {Object} details - 事件详情
  */
 const securityLog = (req, event, details = {}) => {
+  // 清理敏感信息
+  const sanitizedDetails = sanitizeLogData(details);
+  
   const securityInfo = {
     timestamp: new Date().toISOString(),
     userId: req.user?.id || 'anonymous',
@@ -139,7 +188,7 @@ const securityLog = (req, event, details = {}) => {
     method: req.method,
     url: req.originalUrl,
     event,
-    details,
+    details: sanitizedDetails,
     sessionId: req.sessionID || 'none'
   };
 
@@ -152,10 +201,13 @@ const securityLog = (req, event, details = {}) => {
  * @param {Object} details - 操作详情
  */
 const dbLog = (operation, details = {}) => {
+  // 清理敏感信息
+  const sanitizedDetails = sanitizeLogData(details);
+  
   const dbInfo = {
     timestamp: new Date().toISOString(),
     operation,
-    details
+    details: sanitizedDetails
   };
 
   logger.info(`[DB] ${operation}`, dbInfo);
@@ -168,18 +220,22 @@ const dbLog = (operation, details = {}) => {
  * @param {number} responseTime - 响应时间（毫秒）
  */
 const apiLog = (req, res, responseTime) => {
+  // 清理IP地址和URL中的敏感信息
+  const sanitizedIp = req.ip ? req.ip.replace(/\d+\.\d+\.\d+\.\d+/, '[IP]') : 'unknown';
+  const sanitizedUrl = sanitizeString(req.originalUrl);
+  
   const apiInfo = {
     timestamp: new Date().toISOString(),
     userId: req.user?.id || 'anonymous',
-    ip: req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || 'unknown',
+    ip: sanitizedIp,
     method: req.method,
-    url: req.originalUrl,
+    url: sanitizedUrl,
     statusCode: res.statusCode,
     responseTime: `${responseTime}ms`,
     userAgent: (req.get && req.get('User-Agent')) || 'unknown'
   };
 
-  logger.info(`[API] ${req.method} ${req.originalUrl}`, apiInfo);
+  logger.info(`[API] ${req.method} ${sanitizedUrl}`, apiInfo);
 };
 
 // 导出便捷方法

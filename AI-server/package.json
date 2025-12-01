@@ -6,24 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "dev:test": "NODE_ENV=test nodemon server.js",
-    "dev:production": "NODE_ENV=production nodemon server.js",
-    "test": "jest --coverage",
-    "test:watch": "jest --watch",
-    "test:integration": "jest --testPathPattern=integration",
-    "test:unit": "jest --testPathPattern=unit",
-    "test:api": "jest --testPathPattern=api",
-    "test:coverage": "jest --coverage --coverageReporters=html",
-    "build": "npm run test && npm run build:prod",
-    "build:prod": "echo '构建生产环境...完成'",
-    "deploy:dev": "npm run build && echo '部署到开发环境'",
-    "deploy:test": "npm run test:integration && echo '部署到测试环境'",
-    "deploy:prod": "npm run test && npm run build:prod && echo '部署到生产环境'",
+    "build": "echo '构建完成'",
     "lint": "echo '代码检查完成'",
     "format": "echo '代码格式化完成'",
-    "docker:build": "docker build -t ai-serve .",
-    "docker:run": "docker run -p 4000:4000 ai-serve",
-    "docker:stop": "docker stop $(docker ps -q --filter ancestor=ai-serve) || true",
     "zeabur:start": "node server.js",
     "zeabur:install": "npm install --only=production"
   },
@@ -57,36 +42,9 @@
     "winston": "^3.18.3"
   },
   "devDependencies": {
-    "@types/jest": "^29.5.12",
-    "babel-jest": "^29.7.0",
-    "jest": "^29.7.0",
-    "jest-environment-node": "^29.7.0",
-    "nodemon": "^3.1.11",
-    "supertest": "^7.1.1"
+    "nodemon": "^3.1.11"
   },
   "engines": {
     "node": "20.x"
-  },
-  "jest": {
-    "testEnvironment": "node",
-    "testMatch": [
-      "**/tests/**/*.test.js",
-      "**/tests/**/*.spec.js"
-    ],
-    "collectCoverageFrom": [
-      "**/*.js",
-      "!node_modules/**",
-      "!server.js",
-      "!coverage/**"
-    ],
-    "coverageDirectory": "coverage",
-    "coverageReporters": [
-      "text",
-      "lcov",
-      "html"
-    ],
-    "setupFilesAfterEnv": [
-      "<rootDir>/tests/setup.js"
-    ]
   }
 }

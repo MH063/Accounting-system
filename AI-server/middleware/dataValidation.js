@@ -275,7 +275,7 @@ const maskOutput = (options = {}) => {
     return pattern;
   };
 
-  const maskEmail = (email) => {
+  const maskEmailAddress = (email) => {
     if (typeof email !== 'string' || !email.includes('@')) return email;
     
     const [localPart, domain] = email.split('@');
@@ -287,7 +287,7 @@ const maskOutput = (options = {}) => {
     return `${maskedLocal}@${domain}`;
   };
 
-  const maskPhone = (phone) => {
+  const maskPhoneNumber = (phone) => {
     if (typeof phone !== 'string') return phone;
     
     // 移除非数字字符
@@ -306,7 +306,7 @@ const maskOutput = (options = {}) => {
     return masked;
   };
 
-  const maskCreditCard = (cardNumber) => {
+  const maskCreditCardNumber = (cardNumber) => {
     if (typeof cardNumber !== 'string') return cardNumber;
     
     const digits = cardNumber.replace(/\D/g, '');
@@ -365,12 +365,12 @@ const maskOutput = (options = {}) => {
 
           // 检查是否需要脱敏
           if (shouldMaskField(key)) {
-            if (maskEmail && key.toLowerCase().includes('email')) {
-              masked[key] = maskEmail(value);
-            } else if (maskPhone && key.toLowerCase().includes('phone')) {
-              masked[key] = maskPhone(value);
-            } else if (maskCreditCard && key.toLowerCase().includes('credit')) {
-              masked[key] = maskCreditCard(value);
+            if (options.maskEmail && key.toLowerCase().includes('email')) {
+              masked[key] = maskEmailAddress(value);
+            } else if (options.maskPhone && key.toLowerCase().includes('phone')) {
+              masked[key] = maskPhoneNumber(value);
+            } else if (options.maskCreditCard && key.toLowerCase().includes('credit')) {
+              masked[key] = maskCreditCardNumber(value);
             } else {
               masked[key] = maskString(value);
             }

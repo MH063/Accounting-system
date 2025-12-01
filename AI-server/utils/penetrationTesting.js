@@ -44,7 +44,7 @@ class PenetrationTester {
     };
     
     this.reportDir = options.reportDir || path.join(process.cwd(), 'penetration-reports');
-    this.targetUrl = options.targetUrl || `http://localhost:${process.env.PORT || 3000}`;
+    this.targetUrl = options.targetUrl || `http://[SERVER_HOST]:${process.env.PORT || 3000}`;
     
     // 确保报告目录存在
     if (!fs.existsSync(this.reportDir)) {
@@ -468,7 +468,7 @@ class SecurityScanScheduler {
 
 // 创建全局渗透测试实例
 const penTester = new PenetrationTester({
-  targetUrl: `http://localhost:${process.env.PORT || 3000}`,
+  targetUrl: `http://[SERVER_HOST]:${process.env.PORT || 3000}`,
   reportDir: path.join(process.cwd(), 'penetration-reports')
 });
 
