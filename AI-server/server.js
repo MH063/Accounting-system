@@ -14,6 +14,10 @@ const { defaultRateLimiter } = require('./middleware/rateLimiter');
 const { responseWrapper } = require('./middleware/response');
 const { requestLogger } = require('./middleware/requestLogger');
 const { ipWhitelist, strictRateLimit, securityHeaders, sqlInjectionProtection, requestSizeLimit } = require('./middleware/security');
+// 直接从xssProtection.js导入以绕过索引问题
+const { xssProtection: xssProtectionMiddleware } = require('./middleware/security/xssProtection');
+// 导入csrfProtection
+const { csrfProtection: csrfProtectionMiddleware } = require('./middleware/security/csrfProtection');
 const { startScheduledTasks } = require('./utils/scheduledTasks');
 const { cacheMiddleware } = require('./middleware/apiCache');
 const authRoutes = require('./routes/auth');
@@ -50,8 +54,42 @@ if (process.env.DATABASE_URL) {
 // 创建Express应用
 const app = express();
 
-// 安全头部设置
-app.use(helmet());
+// 安全头部设置 - 使用更完善的Helmet配置
+app.use(helmet({
+  // 内容安全策略
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdnjs.cloudflare.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com"],
+      imgSrc: ["'self'", "data:", "https:", "http://localhost"],
+      connectSrc: ["'self'", "https://api.github.com", "https://api.pixabay.com"],
+      frameSrc: ["'none'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      childSrc: ["'none'"]
+    },
+  },
+  // 阻止页面被嵌入iframe
+  frameguard: { action: 'deny' },
+  // 隐藏X-Powered-By头
+  hidePoweredBy: true,
+  // 防止MIME类型嗅探
+  noSniff: true,
+  // 启用XSS过滤
+  xssFilter: true,
+  // 禁用IE8的DNS预取
+  ieNoOpen: true,
+  // 不显示P3P头
+  noP3P: true,
+  // 严格传输安全
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  }
+}));
 
 // CORS配置 - 使用安全的CORS配置
 app.use(createCorsMiddleware());
@@ -60,16 +98,24 @@ app.use(createCorsMiddleware());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// 静态文件服务 - 用于提供favicon.ico等静态资源
+// 注意：静态文件中间件应该放在API路由之前，但要有特定的路径前缀
+app.use('/favicon.ico', express.static('public/favicon.ico'));
+
 // 安全防护中间件 - 在速率限制之前应用
 app.use(securityHeaders()); // 请求头安全检查
 app.use(sqlInjectionProtection()); // SQL注入防护
-app.use(requestSizeLimit('5mb')); // 请求大小限制
+app.use(xssProtectionMiddleware); // XSS防护
+app.use(requestSizeLimit('10mb')); // 请求大小限制 - 调整为10mb以匹配express.json限制
 
 // 应用速率限制中间件
 app.use(defaultRateLimiter);
 
 // 请求日志中间件
 app.use(requestLogger);
+
+// CSRF保护中间件 - 仅对非API请求生效
+app.use(csrfProtectionMiddleware());
 
 // 路由配置
 app.use('/api/auth', authRoutes);
@@ -81,6 +127,7 @@ app.use('/api/logs', require('./routes/logManagement'));
 app.use('/api/cache', require('./routes/cache'));
 app.use('/api/cache', require('./routes/enhancedCache'));
 app.use('/api/security', require('./routes/security'));
+app.use('/api/security-test', require('./routes/securityTest'));
 app.use('/api/health', require('./routes/health'));
 app.use('/api/virus-scan', require('./routes/virusScan'));
 app.use('/api/cors', require('./routes/corsManagement'));

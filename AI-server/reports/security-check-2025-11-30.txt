@@ -1,0 +1,22 @@
+=== 系统安全配置检查报告 ===
+检查时间: 2025-11-30T13:05:36.349Z
+
+总体统计:
+  通过: 3/8 (38%)
+  失败: 5
+
+环境变量检查:
+  通过: 1/5
+  FAIL: 环境变量 NODE_ENV 未设置
+  FAIL: 环境变量 JWT_SECRET 未设置
+  FAIL: 环境变量 DB_PASSWORD 未设置
+  FAIL: 环境变量 SESSION_SECRET 未设置
+
+文件权限检查:
+  通过: 2/3
+  WARN: 敏感文件存在，可能存在安全风险: D:\Accounting-system\AI-server\.env
+
+依赖包安全性检查:
+  通过: 0/0
+  INFO: 依赖包安全性检查功能待实现
+

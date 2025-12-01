@@ -205,7 +205,11 @@ const requestSizeLimit = (maxSize = '5mb') => {
     const contentLength = req.get('Content-Length');
     const maxBytes = parseSize(maxSize);
     
+    console.log(`[SECURITY DEBUG] 请求大小检查: Content-Length=${contentLength}, 允许大小=${maxBytes}字节, 最大大小=${maxSize}`);
+    logger.info(`[SECURITY] 请求大小检查: Content-Length=${contentLength}, 允许大小=${maxBytes}字节, 最大大小=${maxSize}`);
+    
     if (contentLength && parseInt(contentLength) > maxBytes) {
+      console.log(`[SECURITY DEBUG] 请求大小超限: Content-Length=${contentLength}, 允许大小=${maxBytes}字节, 最大大小=${maxSize}`);
       logger.warn(`[SECURITY] 请求大小超限: IP=${req.ip}, Content-Length=${contentLength}, 允许大小=${maxSize}`);
       return res.status(413).json({
         success: false,
@@ -224,14 +228,18 @@ const requestSizeLimit = (maxSize = '5mb') => {
  */
 const parseSize = (size) => {
   const units = { b: 1, kb: 1024, mb: 1024 * 1024, gb: 1024 * 1024 * 1024 };
-  const match = size.toLowerCase().match(/^(\\d+)([a-z]+)?$/);
+  
+  // 使用更简单的正则表达式来解析大小字符串
+  const match = size.toLowerCase().match(/^(\d+)\s*([a-z]*)$/);
   
   if (!match) {
-    return parseInt(size);
+    // 如果无法解析，尝试直接转换为数字
+    const numericValue = parseFloat(size);
+    return isNaN(numericValue) ? 0 : numericValue;
   }
   
   const value = parseInt(match[1]);
-  const unit = match[2] || 'b';
+  const unit = (match[2] || 'b').toLowerCase();
   
   return value * (units[unit] || 1);
 };

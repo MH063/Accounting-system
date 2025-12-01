@@ -1,9 +1,17 @@
 /**
  * JWT认证中间件
- * 用于验证用户请求中的JWT令牌，支持密钥轮换
+ * 用于验证用户请求中的JWT令牌，支持：
+ * - 密钥轮换
+ * - 双令牌机制 (access/refresh)
+ * - 令牌黑名单检查
  */
 
-const { generateToken, verifyToken } = require('../config/jwtManager');
+const { 
+  verifyToken, 
+  verifyTokenWithBlacklist,
+  generateTokenPair,
+  getTokenExpiry 
+} = require('../config/jwtManager');
 const logger = require('../config/logger');
 
 /**
@@ -30,14 +38,33 @@ const authenticateToken = (req, res, next) => {
   }
   
   try {
-    // 使用密钥管理器验证令牌（支持密钥轮换）
-    const user = verifyToken(token);
+    // 使用JWT管理器验证令牌并检查黑名单（支持密钥轮换、双令牌和黑名单）
+    const result = verifyTokenWithBlacklist(token);
+    
+    if (!result.valid) {
+      logger.security(req, 'JWT认证失败', { 
+        reason: result.reason,
+        timestamp: new Date().toISOString()
+      });
+      return res.status(401).json({
+        success: false,
+        message: result.reason
+      });
+    }
+    
+    const user = result.payload;
     
     // 将用户信息添加到请求对象
     req.user = user;
+    req.tokenInfo = {
+      type: user.type,
+      jti: user.jti,
+      isRevoked: result.isRevoked
+    };
     
     logger.security(req, 'JWT认证成功', { 
-      userId: user.id || user.userId,
+      userId: user.userId || user.id,
+      tokenType: user.type,
       timestamp: new Date().toISOString()
     });
     
@@ -68,29 +95,50 @@ const authenticateToken = (req, res, next) => {
 };
 
 /**
- * 生成JWT令牌
+ * 生成JWT令牌对（双令牌机制）
  * @param {Object} payload - 要编码到令牌中的数据
  * @param {Object} options - 令牌选项
- * @returns {string} JWT令牌
+ * @returns {Object} 包含accessToken和refreshToken的对象
  */
-const createToken = (payload, options = {}) => {
+const createTokenPair = (payload, options = {}) => {
   try {
-    const token = generateToken(payload, options);
+    const tokenPair = generateTokenPair(payload);
     
-    logger.security(null, 'JWT令牌生成成功', { 
-      userId: payload.id || payload.userId,
-      expiresIn: options.expiresIn || process.env.JWT_EXPIRES_IN || '24h',
+    logger.security(null, 'JWT令牌对生成成功', { 
+      userId: payload.userId || payload.id,
+      accessTokenExpiry: getTokenExpiry('access'),
+      refreshTokenExpiry: getTokenExpiry('refresh'),
       timestamp: new Date().toISOString()
     });
     
-    return token;
+    return tokenPair;
   } catch (err) {
-    logger.error('JWT令牌生成失败:', err);
+    logger.error('JWT令牌对生成失败:', err);
     throw new Error('令牌生成失败');
   }
 };
 
+/**
+ * 获取令牌过期时间
+ * @param {string} tokenType - 令牌类型 ('access' 或 'refresh')
+ * @returns {number} 过期时间（秒）
+ */
+const getTokenExpirationTime = (tokenType) => {
+  return getTokenExpiry(tokenType);
+};
+
+/**
+ * 验证令牌是否支持刷新
+ * @param {Object} user - 用户信息
+ * @returns {boolean} 是否支持令牌刷新
+ */
+const canRefreshToken = (user) => {
+  return user && user.type === 'refresh';
+};
+
 module.exports = {
   authenticateToken,
-  generateToken: createToken
+  generateTokenPair: createTokenPair,
+  getTokenExpirationTime,
+  canRefreshToken
 };

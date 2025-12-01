@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const logger = require('./logger');
+const { tokenBlacklist } = require('../security/tokenBlacklist');
 
 // JWT密钥配置
 const JWT_CONFIG = {
@@ -16,12 +17,19 @@ const JWT_CONFIG = {
   fallbackSecret: process.env.JWT_FALLBACK_SECRET || process.env.JWT_SECRET,
   // 密钥轮换间隔（默认30天）
   rotationInterval: parseInt(process.env.JWT_ROTATION_INTERVAL) || 30 * 24 * 60 * 60 * 1000,
-  // 令牌过期时间
-  expiresIn: process.env.JWT_EXPIRES_IN || '24h',
+  
+  // 令牌过期时间配置
+  accessTokenExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m', // Access token: 15分钟
+  refreshTokenExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d', // Refresh token: 7天
+  
   // 密钥文件存储路径
   keyFilePath: process.env.JWT_KEY_FILE || path.join(__dirname, '../data/jwt-keys.json'),
   // 密钥算法
-  algorithm: 'HS256'
+  algorithm: 'HS256',
+  
+  // 令牌黑名单
+  blacklistEnabled: process.env.JWT_BLACKLIST_ENABLED !== 'false',
+  blacklistCheck: process.env.JWT_BLACKLIST_CHECK !== 'false'
 };
 
 /**
@@ -282,14 +290,212 @@ function generateToken(payload, options = {}) {
   }
 
   const tokenOptions = {
-    expiresIn: options.expiresIn || JWT_CONFIG.expiresIn,
+    expiresIn: options.expiresIn || JWT_CONFIG.accessTokenExpiresIn,
     issuer: options.issuer || 'ai-server',
     audience: options.audience || 'api-users',
     algorithm: JWT_CONFIG.algorithm,
-    keyid: currentKey.id
+    keyid: currentKey.id,
+    jwtid: generateJWTId() // 添加唯一标识符
   };
 
   return require('jsonwebtoken').sign(payload, currentKey.secret, tokenOptions);
+}
+
+/**
+ * 生成双令牌对（Access Token + Refresh Token）
+ */
+function generateTokenPair(userId, userInfo = {}) {
+  const currentKey = jwtManager.getCurrentKey();
+  if (!currentKey) {
+    throw new Error('没有可用的JWT密钥');
+  }
+
+  // 生成访问令牌
+  const accessPayload = {
+    userId,
+    type: 'access',
+    role: userInfo.role || 'user',
+    permissions: userInfo.permissions || [],
+    ...userInfo
+  };
+
+  const accessTokenOptions = {
+    expiresIn: JWT_CONFIG.accessTokenExpiresIn,
+    issuer: 'ai-server',
+    audience: 'api-users',
+    algorithm: JWT_CONFIG.algorithm,
+    keyid: currentKey.id,
+    jwtid: generateJWTId()
+  };
+
+  const accessToken = require('jsonwebtoken').sign(
+    accessPayload, 
+    currentKey.secret, 
+    accessTokenOptions
+  );
+
+  // 生成刷新令牌
+  const refreshPayload = {
+    userId,
+    type: 'refresh',
+    tokenPairId: generateJWTId(), // 用于关联同一对的令牌
+    ...userInfo
+  };
+
+  const refreshTokenOptions = {
+    expiresIn: JWT_CONFIG.refreshTokenExpiresIn,
+    issuer: 'ai-server',
+    audience: 'api-users',
+    algorithm: JWT_CONFIG.algorithm,
+    keyid: currentKey.id,
+    jwtid: generateJWTId()
+  };
+
+  const refreshToken = require('jsonwebtoken').sign(
+    refreshPayload, 
+    currentKey.secret, 
+    refreshTokenOptions
+  );
+
+  logger.info('[JWT] 双令牌生成成功', { 
+    userId, 
+    accessExpiry: accessTokenOptions.expiresIn,
+    refreshExpiry: refreshTokenOptions.expiresIn 
+  });
+
+  return {
+    accessToken,
+    refreshToken,
+    expiresIn: {
+      access: JWT_CONFIG.accessTokenExpiresIn,
+      refresh: JWT_CONFIG.refreshTokenExpiresIn
+    },
+    tokenPairId: refreshPayload.tokenPairId
+  };
+}
+
+/**
+ * 刷新访问令牌
+ */
+function refreshAccessToken(refreshToken, userInfo = {}) {
+  try {
+    // 验证刷新令牌
+    const decoded = verifyToken(refreshToken);
+    
+    if (decoded.type !== 'refresh') {
+      throw new Error('无效的刷新令牌类型');
+    }
+
+    // 检查令牌是否在黑名单中
+    if (JWT_CONFIG.blacklistEnabled && JWT_CONFIG.blacklistCheck) {
+      if (tokenBlacklist.isTokenRevoked(refreshToken)) {
+        throw new Error('刷新令牌已被撤销');
+      }
+    }
+
+    // 生成新的访问令牌
+    const newAccessToken = generateToken({
+      userId: decoded.userId,
+      type: 'access',
+      role: userInfo.role || decoded.role,
+      permissions: userInfo.permissions || decoded.permissions,
+      ...userInfo
+    }, {
+      expiresIn: JWT_CONFIG.accessTokenExpiresIn
+    });
+
+    logger.info('[JWT] 访问令牌刷新成功', { 
+      userId: decoded.userId,
+      oldTokenPairId: decoded.tokenPairId 
+    });
+
+    return {
+      accessToken: newAccessToken,
+      expiresIn: JWT_CONFIG.accessTokenExpiresIn
+    };
+  } catch (error) {
+    logger.error('[JWT] 刷新访问令牌失败', { error: error.message });
+    throw error;
+  }
+}
+
+/**
+ * 撤销令牌对
+ */
+function revokeTokenPair(accessToken, refreshToken, reason = 'logout') {
+  const results = {
+    accessToken: false,
+    refreshToken: false
+  };
+
+  try {
+    // 撤销访问令牌（如果提供）
+    if (accessToken) {
+      const accessExpiry = getTokenExpiry(accessToken);
+      const expiresIn = Math.max(1, Math.floor(accessExpiry - Date.now() / 1000));
+      results.accessToken = tokenBlacklist.revokeToken(
+        accessToken, 
+        reason, 
+        expiresIn
+      );
+    }
+  } catch (error) {
+    logger.error('[JWT] 撤销访问令牌失败', { error: error.message });
+  }
+
+  try {
+    // 撤销刷新令牌
+    if (refreshToken) {
+      const refreshExpiry = getTokenExpiry(refreshToken);
+      const expiresIn = Math.max(1, Math.floor(refreshExpiry - Date.now() / 1000));
+      results.refreshToken = tokenBlacklist.revokeToken(
+        refreshToken, 
+        reason, 
+        expiresIn
+      );
+    }
+  } catch (error) {
+    logger.error('[JWT] 撤销刷新令牌失败', { error: error.message });
+  }
+
+  return results;
+}
+
+/**
+ * 验证令牌并检查黑名单
+ */
+function verifyTokenWithBlacklist(token) {
+  // 首先检查黑名单
+  if (JWT_CONFIG.blacklistEnabled && JWT_CONFIG.blacklistCheck) {
+    if (tokenBlacklist.isTokenRevoked(token)) {
+      throw new Error('令牌已被撤销');
+    }
+  }
+
+  // 验证令牌签名
+  return verifyToken(token);
+}
+
+/**
+ * 获取令牌过期时间戳
+ */
+function getTokenExpiry(token) {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return Date.now() / 1000;
+
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+    return payload.exp || Date.now() / 1000;
+  } catch (error) {
+    return Date.now() / 1000;
+  }
+}
+
+/**
+ * 生成JWT唯一标识符
+ */
+function generateJWTId() {
+  return crypto.randomBytes(16).toString('hex');
 }
 
 /**
@@ -332,9 +538,22 @@ function getKeyStatus() {
 }
 
 module.exports = {
+  // 基础功能
   generateToken,
   verifyToken,
   rotateKey,
   getKeyStatus,
+  
+  // 双令牌功能
+  generateTokenPair,
+  refreshAccessToken,
+  revokeTokenPair,
+  verifyTokenWithBlacklist,
+  
+  // 工具函数
+  getTokenExpiry,
+  generateJWTId,
+  
+  // 类实例
   JWTManager: jwtManager
 };

@@ -57,7 +57,7 @@ jest.mock('fs', () => ({
 }));
 
 // 模拟 winston 日志器
-jest.mock('../utils/logger', () => ({
+jest.mock('../config/logger', () => ({
   info: jest.fn(),
   warn: jest.fn(), 
   error: jest.fn(),
