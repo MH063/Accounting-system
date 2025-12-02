@@ -98,7 +98,7 @@ const hasXssPayload = (content, fieldName = '', req = null) => {
       for (const tag of DANGEROUS_TAGS) {
         if (content.toLowerCase().includes(`<${tag}`)) {
           if (req) {
-            logger.securityLog(req, 'XSS防护触发', {
+            logger.security(req, 'XSS防护触发', {
               field: fieldName,
               dangerousTag: tag,
               payload: content.substring(0, 200)
@@ -112,7 +112,7 @@ const hasXssPayload = (content, fieldName = '', req = null) => {
       for (const attr of DANGEROUS_ATTRS) {
         if (content.toLowerCase().includes(attr)) {
           if (req) {
-            logger.securityLog(req, 'XSS防护触发', {
+            logger.security(req, 'XSS防护触发', {
               field: fieldName,
               dangerousAttr: attr,
               payload: content.substring(0, 200)
@@ -126,7 +126,7 @@ const hasXssPayload = (content, fieldName = '', req = null) => {
       for (const protocol of JAVASCRIPT_PROTOCOLS) {
         if (content.toLowerCase().includes(protocol)) {
           if (req) {
-            logger.securityLog(req, 'XSS防护触发', {
+            logger.security(req, 'XSS防护触发', {
               field: fieldName,
               dangerousProtocol: protocol,
               payload: content.substring(0, 200)
@@ -150,7 +150,7 @@ const hasXssPayload = (content, fieldName = '', req = null) => {
       for (const pattern of dangerousPatterns) {
         if (pattern.test(content)) {
           if (req) {
-            logger.securityLog(req, 'XSS防护触发', {
+            logger.security(req, 'XSS防护触发', {
               field: fieldName,
               dangerousPattern: pattern.toString(),
               payload: content.substring(0, 200)
@@ -207,7 +207,7 @@ const xssProtectionMiddleware = (req, res, next) => {
   try {
     // 检查查询参数
     if (hasXssPayload(req.query, '', req)) {
-      logger.securityLog(req, 'XSS防护触发 - 查询参数', {
+      logger.security(req, 'XSS防护触发 - 查询参数', {
         path: req.path,
         query: JSON.stringify(req.query).substring(0, 200)
       });
@@ -220,7 +220,7 @@ const xssProtectionMiddleware = (req, res, next) => {
 
     // 检查请求体
     if (hasXssPayload(req.body, '', req)) {
-      logger.securityLog(req, 'XSS防护触发 - 请求体', {
+      logger.security(req, 'XSS防护触发 - 请求体', {
         path: req.path,
         body: JSON.stringify(req.body).substring(0, 200)
       });
@@ -255,7 +255,7 @@ const xssProtectionMiddleware = (req, res, next) => {
     res.send = function(data) {
       if (typeof data === 'string' && data.includes('<')) {
         const sanitized = cleanHtml(data);
-        logger.securityLog(req, 'XSS防护清理响应内容', {
+        logger.security(req, 'XSS防护清理响应内容', {
           path: req.path,
           originalLength: data.length,
           sanitizedLength: sanitized.length

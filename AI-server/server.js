@@ -24,6 +24,7 @@ const { infoLeakProtection, errorLeakProtection, sanitizeRequestData } = require
 const { validateEnvConfig, getSafeEnvDisplay } = require('./utils/secureEnv');
 const { startScheduledTasks } = require('./utils/scheduledTasks');
 const { cacheMiddleware } = require('./middleware/apiCache');
+const { initSwaggerMiddleware } = require('./middleware/swagger');
 const authRoutes = require('./routes/auth');
 const dbRoutes = require('./routes/db');
 const uploadRoutes = require('./routes/upload');
@@ -96,13 +97,15 @@ app.use(createCorsMiddleware());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// 信息泄露防护中间件 - 必须在其他中间件之前
+// 静态文件服务 - 用于提供HTML测试页面等静态资源
+// 重要：静态文件中间件必须放在所有路由之前，确保静态文件优先级最高
+app.use(express.static('public'));
+app.use(express.static(__dirname));
+app.use('/test-page', express.static(__dirname));
+
+// 信息泄露防护中间件 - 必须在静态文件服务之后，其他中间件之前
 app.use(sanitizeRequestData()); // 清理请求数据
 app.use(infoLeakProtection()); // 防护响应信息泄露
-
-// 静态文件服务 - 用于提供favicon.ico等静态资源
-// 注意：静态文件中间件应该放在API路由之前，但要有特定的路径前缀
-app.use('/favicon.ico', express.static('public/favicon.ico'));
 
 // 安全防护中间件 - 在速率限制之前应用
 app.use(securityHeaders()); // 请求头安全检查
@@ -116,19 +119,53 @@ app.use(defaultRateLimiter);
 // 请求日志中间件
 app.use(requestLogger);
 
-// CSRF保护中间件 - 仅对非API请求生效
+// CSRF保护中间件 - 仅对API请求生效
 app.use(csrfProtectionMiddleware());
 
-// 路由配置
+// ===================== 版本化路由系统集成 =====================
+// 导入版本化路由组件
+const { apiVersionManager } = require('./config/apiVersionManager');
+const { routeConfigManager } = require('./config/routeConfigManager');
+const { versionedRoutingMiddleware } = require('./config/versionedRoutingMiddleware');
+
+// 添加版本化路由中间件 - 在静态文件服务之后，API路由之前
+app.use('/api', versionedRoutingMiddleware.getRouter());
+
+// ===================== 版本化API路由配置 =====================
+// 在版本化系统中注册现有路由，保持向后兼容
+
+// 版本管理API
+app.use('/api/system', apiVersionManager.getRouter());
+
+// 路由配置管理API
+app.use('/api/system', routeConfigManager.getRouter());
+
+// 向后兼容：现有路由保持不变，但增加版本支持
+// 这些路由将通过版本化中间件自动支持版本识别
 app.use('/api/auth', authRoutes);
 app.use('/api/db', dbRoutes);
 app.use('/api/db', require('./routes/dbHealth'));
 app.use('/api/upload', uploadRoutes);
+
+// 注册版本化用户管理路由示例
+app.use('/api/users', require('./routes/versioned-users'));
+
+// 现有用户路由（向后兼容）
+app.use('/api/users', require('./routes/users'));
+
 app.use('/api/logs', require('./routes/logs'));
 app.use('/api/logs', require('./routes/logManagement'));
 app.use('/api/cache', require('./routes/cache'));
 app.use('/api/cache', require('./routes/enhancedCache'));
+app.use('/api/cache', require('./routes/multiLevelCache'));
+app.use('/api/oauth2', require('./routes/oauth2'));
+app.use('/api/permissions', require('./routes/permissions'));
+// API文档路由
+app.use('/api/docs', require('./routes/apiDocs'));
+app.use('/api/queues', require('./routes/messageQueue'));
 
+// 初始化Swagger中间件（在路由注册后）
+initSwaggerMiddleware(app);
 app.use('/api/health', require('./routes/health'));
 app.use('/api/virus-scan', require('./routes/virusScan'));
 app.use('/api/cors', require('./routes/corsManagement'));

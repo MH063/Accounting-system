@@ -75,8 +75,17 @@ const responseWrapper = (handler) => {
         return originalJson.call(this, data);
       };
       
-      // 调用原始处理函数
-      await handler(req, res, next);
+      // 检查处理函数的参数长度，决定是否传递next参数
+      const handlerLength = handler.length;
+      
+      // 调用原始处理函数，根据参数长度决定是否传递next
+      if (handlerLength >= 3) {
+        // 如果处理函数接受3个参数或更多，传递req, res, next
+        await handler(req, res, next);
+      } else {
+        // 如果处理函数接受少于3个参数，只传递req, res
+        await handler(req, res);
+      }
     } catch (error) {
       next(error);
     }

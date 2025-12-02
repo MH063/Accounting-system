@@ -352,7 +352,7 @@ class AuthController extends BaseController {
    * 检查用户名是否可用
    * GET /api/auth/check-username/:username
    */
-  async checkUsername(req, res, next) {
+  async checkUsername(req, res) {
     try {
       const { username } = req.params;
       
@@ -370,7 +370,7 @@ class AuthController extends BaseController {
 
     } catch (error) {
       logger.error('[AuthController] 检查用户名失败', { error: error.message });
-      next(error);
+      return this.sendError(res, error.message, 500);
     }
   }
 
@@ -378,7 +378,7 @@ class AuthController extends BaseController {
    * 检查邮箱是否可用
    * GET /api/auth/check-email/:email
    */
-  async checkEmail(req, res, next) {
+  async checkEmail(req, res) {
     try {
       const { email } = req.params;
       
@@ -396,7 +396,7 @@ class AuthController extends BaseController {
 
     } catch (error) {
       logger.error('[AuthController] 检查邮箱失败', { error: error.message });
-      next(error);
+      return this.sendError(res, error.message, 500);
     }
   }
 

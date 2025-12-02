@@ -10,10 +10,15 @@ const dbHealthRoutes = require('./dbHealth');
 const logManagementRoutes = require('./logManagement');
 const cacheRoutes = require('./cache');
 const enhancedCacheRoutes = require('./enhancedCache');
+const multiLevelCacheRoutes = require('./multiLevelCache');
 const healthRoutes = require('./health');
 const virusScanRoutes = require('./virusScan');
 const corsManagementRoutes = require('./corsManagement');
 const monitorDashboardRoutes = require('./monitorDashboard');
+const oauth2Routes = require('./oauth2');
+const permissionRoutes = require('./permissions');
+const apiDocsRoutes = require('./apiDocs');
+const messageQueueRoutes = require('./messageQueue');
 
 module.exports = {
   authRoutes,
@@ -23,8 +28,13 @@ module.exports = {
   logManagementRoutes,
   cacheRoutes,
   enhancedCacheRoutes,
+  multiLevelCacheRoutes,
   healthRoutes,
   virusScanRoutes,
   corsManagementRoutes,
-  monitorDashboardRoutes
+  monitorDashboardRoutes,
+  oauth2Routes,
+  permissionRoutes,
+  apiDocsRoutes,
+  messageQueueRoutes
 };
