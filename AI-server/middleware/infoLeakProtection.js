@@ -3,7 +3,9 @@
  * 防止敏感信息在响应、日志和错误消息中泄露
  */
 
-const logger = require('../config/logger');
+// 获取logger模块（避免循环依赖）
+const { error, security } = require('../config/logger');
+const loggerModule = { error, security };
 const crypto = require('crypto');
 
 // 敏感信息模式
@@ -158,17 +160,17 @@ const infoLeakProtection = () => {
           
           // 记录清理日志
           if (JSON.stringify(data).length !== JSON.stringify(sanitizedData).length) {
-            logger.security(req, '信息泄露防护 - 清理了响应中的敏感信息', {
-              originalSize: JSON.stringify(data).length,
-              sanitizedSize: JSON.stringify(sanitizedData).length,
-              path: req.path
-            });
+            loggerModule.security(req, '信息泄露防护 - 清理了响应中的敏感信息', {
+             originalSize: JSON.stringify(data).length,
+             sanitizedSize: JSON.stringify(sanitizedData).length,
+             path: req.path
+           });
           }
           
           // 调用原始的json方法
           return originalJson.call(this, sanitizedData);
         } catch (error) {
-          logger.error('信息泄露防护失败:', error);
+          loggerModule.error('信息泄露防护失败:', { error: error.message });
           // 出错时返回安全的默认响应
           return originalJson.call(this, {
             success: false,
@@ -188,11 +190,11 @@ const infoLeakProtection = () => {
             
             // 记录清理日志
             if (data.length !== sanitizedData.length) {
-              logger.security(req, '信息泄露防护 - 清理了文本响应中的敏感信息', {
-                originalSize: data.length,
-                sanitizedSize: sanitizedData.length,
-                path: req.path
-              });
+              loggerModule.security(req, '信息泄露防护 - 清理了文本响应中的敏感信息', {
+                  originalSize: data.length,
+                  sanitizedSize: sanitizedData.length,
+                  path: req.path
+                 });
             }
             
             return originalSend.call(this, sanitizedData);
@@ -200,14 +202,14 @@ const infoLeakProtection = () => {
           
           return originalSend.call(this, data);
         } catch (error) {
-          logger.error('信息泄露防护失败:', error);
-          return originalSend.call(this, '响应处理失败');
+          loggerModule.error('信息泄露防护失败:', { error: error.message });
+          return originalSend.call(this, '[响应处理失败]');
         }
       };
       
       next();
     } catch (error) {
-      logger.error('信息泄露防护中间件初始化失败:', error);
+      loggerModule.error('信息泄露防护中间件初始化失败:', { error: error.message });
       next(error);
     }
   };
@@ -221,11 +223,12 @@ const errorLeakProtection = () => {
   return (err, req, res, next) => {
     try {
       // 记录原始错误（在日志中）
-      logger.error('服务器错误:', {
-        error: sanitizeError(err),
-        path: req.path,
-        method: req.method,
-        ip: req.ip
+      loggerModule.error('服务器错误:', {
+         error: err.message,
+         stack: err.stack,
+         url: req.originalUrl,
+         method: req.method,
+         ip: req.ip
       });
       
       // 清理错误信息
@@ -236,8 +239,8 @@ const errorLeakProtection = () => {
         success: false,
         error: sanitizedError
       });
-    } catch (error) {
-      logger.error('错误处理中间件失败:', error);
+    } catch (err) {
+      loggerModule.error('错误处理中间件失败:', { error: err.message });
       res.status(500).json({
         success: false,
         message: '服务器内部错误'
@@ -277,8 +280,8 @@ const sanitizeRequestData = () => {
       }
       
       next();
-    } catch (error) {
-      logger.error('请求数据清理失败:', error);
+    } catch (err) {
+      loggerModule.error('请求数据清理失败:', { error: err.message });
       next();
     }
   };

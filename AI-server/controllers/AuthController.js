@@ -32,7 +32,7 @@ class AuthController extends BaseController {
       this.validateRequiredFields(req.body, ['username', 'password']);
 
       // 调用服务层进行登录验证（包含登录失败限制和账户锁定功能）
-      const loginResult = await this.userService.login(username, password);
+      const loginResult = await this.userService.login({ username, password });
       
       if (!loginResult.success) {
         // 登录失败，记录安全日志

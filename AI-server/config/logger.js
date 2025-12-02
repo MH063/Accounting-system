@@ -7,7 +7,51 @@ const winston = require('winston');
 const path = require('path');
 const fs = require('fs');
 const { startLogRotationService } = require('../utils/logRotation');
-const { sanitizeLogData, sanitizeString } = require('../middleware/infoLeakProtection');
+
+// 简单的敏感数据清理函数（避免循环依赖）
+const sanitizeLogData = (data) => {
+  if (!data) return data;
+  
+  if (typeof data === 'string') {
+    // 简单替换敏感信息
+    return data
+      .replace(/(password[=:]\s*['"]?[^'"\s]{8,}['"]?)/gi, 'password=[REDACTED]')
+      .replace(/(token[=:]\s*['"]?[a-zA-Z0-9_-]{20,}['"]?)/gi, 'token=[REDACTED]')
+      .replace(/(secret[=:]\s*['"]?[a-zA-Z0-9_-]{20,}['"]?)/gi, 'secret=[REDACTED]')
+      .replace(/(eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*)/g, '[JWT_TOKEN]');
+  }
+  
+  if (typeof data === 'object') {
+    if (Array.isArray(data)) {
+      return data.map(item => sanitizeLogData(item));
+    }
+    
+    const sanitized = {};
+    const sensitiveFields = ['password', 'token', 'secret', 'jwt', 'apiKey', 'secretKey'];
+    
+    for (const [key, value] of Object.entries(data)) {
+      const lowerKey = key.toLowerCase();
+      if (sensitiveFields.some(field => lowerKey.includes(field))) {
+        sanitized[key] = '[REDACTED]';
+      } else {
+        sanitized[key] = sanitizeLogData(value);
+      }
+    }
+    return sanitized;
+  }
+  
+  return data;
+};
+
+const sanitizeString = (str) => {
+  if (typeof str !== 'string') return str;
+  
+  return str
+    .replace(/(password[=:]\s*['"]?[^'"\s]{8,}['"]?)/gi, 'password=[REDACTED]')
+    .replace(/(token[=:]\s*['"]?[a-zA-Z0-9_-]{20,}['"]?)/gi, 'token=[REDACTED]')
+    .replace(/(secret[=:]\s*['"]?[a-zA-Z0-9_-]{20,}['"]?)/gi, 'secret=[REDACTED]')
+    .replace(/(eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*)/g, '[JWT_TOKEN]');
+};
 
 // 创建日志目录（如果不存在）
 const logDir = path.join(process.cwd(), 'logs');
@@ -238,7 +282,7 @@ const apiLog = (req, res, responseTime) => {
   logger.info(`[API] ${req.method} ${sanitizedUrl}`, apiInfo);
 };
 
-// 导出便捷方法
+// 导出便捷方法（避免循环依赖）
 module.exports = {
   info: (message, meta) => logger.info(message, meta),
   error: (message, meta) => logger.error(message, meta),
@@ -256,6 +300,8 @@ module.exports = {
   audit: auditLog,
   // 记录安全日志
   security: securityLog,
-  // 获取原始logger实例
-  logger
+  // 获取原始logger实例（避免循环依赖，使用getter）
+  get logger() {
+    return logger;
+  }
 };
