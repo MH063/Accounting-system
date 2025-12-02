@@ -714,21 +714,21 @@ async function initializeDefaultUsers() {
     {
       username: 'admin',
       email: 'admin@example.com',
-      password: 'admin123',
+      password: process.env.DEFAULT_ADMIN_PASSWORD || 'CHANGE_ME_ON_FIRST_LOGIN',
       firstName: '系统',
       lastName: '管理员'
     },
     {
       username: 'manager',
       email: 'manager@example.com',
-      password: 'manager123',
+      password: process.env.DEFAULT_MANAGER_PASSWORD || 'CHANGE_ME_ON_FIRST_LOGIN',
       firstName: '部门',
       lastName: '经理'
     },
     {
       username: 'user',
       email: 'user@example.com',
-      password: 'user123',
+      password: process.env.DEFAULT_USER_PASSWORD || 'CHANGE_ME_ON_FIRST_LOGIN',
       firstName: '普通',
       lastName: '用户'
     }
