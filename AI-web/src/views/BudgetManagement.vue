@@ -3,10 +3,18 @@
     <!-- 页面头部 -->
     <div class="page-header">
       <div class="header-left">
-        <el-button :icon="ArrowLeft" circle @click="handleBack" />
         <h1 class="page-title">预算管理</h1>
       </div>
       <div class="header-actions">
+        <!-- 返回按钮 -->
+        <el-button 
+          type="primary" 
+          :icon="ArrowLeft" 
+          @click="handleBack"
+          class="back-btn"
+        >
+          返回
+        </el-button>
         <el-button type="primary" :icon="Plus" @click="handleAddBudget">新建预算</el-button>
         <el-button type="success" @click="suggestionDialog = true">预算建议</el-button>
         <el-button type="info" @click="historicalDialog = true">历史对比</el-button>
@@ -1205,7 +1213,7 @@ const filteredBudgetData = computed(() => {
 
 // 方法
 const handleBack = () => {
-  router.push('/dashboard/statistics')
+  router.push('/dashboard/analytics')
 }
 
 // 图表自适应处理
@@ -3309,6 +3317,10 @@ onUnmounted(() => {
 .suggestion-stats {
   display: flex;
   gap: 10px;
+}
+
+.back-btn {
+  margin-right: 12px;
 }
 
 .suggestion-list {

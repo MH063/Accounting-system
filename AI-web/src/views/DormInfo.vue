@@ -1,25 +1,25 @@
 <template>
   <div class="dorm-info">
-    <!-- 页面头部 -->
-    <div class="page-header">
-      <div class="header-left">
-        <h1 class="page-title">寝室信息</h1>
-      </div>
-      <div class="header-actions">
-        <el-button 
-          type="primary" 
-          :icon="ArrowLeft" 
-          @click="handleBack"
-          class="back-btn"
-        >
-          返回
-        </el-button>
-        <el-button @click="refreshData">
-          <el-icon><Refresh /></el-icon>
-          刷新
-        </el-button>
-      </div>
+  <!-- 页面头部 -->
+  <div class="page-header">
+    <div class="header-left">
+      <h1 class="page-title">寝室信息</h1>
     </div>
+    <div class="header-actions">
+      <el-button 
+        type="primary" 
+        :icon="ArrowLeft" 
+        @click="handleBack"
+        class="back-btn"
+      >
+        返回
+      </el-button>
+      <el-button @click="refreshData">
+        <el-icon><Refresh /></el-icon>
+        刷新
+      </el-button>
+    </div>
+  </div>
 
     <!-- 主要内容区域 -->
     <div class="content-wrapper">
@@ -766,28 +766,45 @@ watch(editMode, (newValue) => {
 }
 
 .page-header {
-  margin-bottom: 20px;
-}
-
-.header-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
+  margin-bottom: 20px;
   background: white;
+  padding: 16px 20px;
   border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
-.header-content h1 {
-  margin: 0;
-  color: #303133;
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.page-title {
   font-size: 24px;
+  font-weight: 600;
+  color: #303133;
+  margin: 0;
 }
 
 .header-actions {
   display: flex;
-  gap: 10px;
+  gap: 12px;
+  align-items: center;
+}
+
+.back-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.back-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(24, 144, 255, 0.2);
 }
 
 .content-wrapper {
@@ -1028,7 +1045,7 @@ watch(editMode, (newValue) => {
     padding: 10px;
   }
   
-  .header-content {
+  .page-header {
     flex-direction: column;
     gap: 15px;
     align-items: flex-start;

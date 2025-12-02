@@ -3,10 +3,18 @@
     <!-- 页面头部 -->
     <div class="page-header">
       <div class="header-left">
-        <el-button :icon="ArrowLeft" @click="handleBack" text />
         <h1 class="page-title">趋势分析</h1>
       </div>
       <div class="header-actions">
+        <!-- 返回按钮 -->
+        <el-button 
+          type="primary" 
+          :icon="ArrowLeft" 
+          @click="handleBack"
+          class="back-btn"
+        >
+          返回
+        </el-button>
         <el-date-picker
           v-model="dateRange"
           type="daterange"
@@ -757,7 +765,7 @@ const initPredictionChart = () => {
 
 // 事件处理函数
 const handleBack = () => {
-  router.push('/dashboard')
+  router.push('/dashboard/analytics')
 }
 
 const handleDateRangeChange = () => {
@@ -900,6 +908,18 @@ if (typeof window !== 'undefined') {
   display: flex;
   gap: 12px;
   align-items: center;
+}
+
+.back-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.back-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(24, 144, 255, 0.2);
 }
 
 .filter-section {
@@ -1191,6 +1211,10 @@ if (typeof window !== 'undefined') {
   .header-actions {
     width: 100%;
     justify-content: flex-end;
+  }
+  
+  .back-btn {
+    margin-right: 12px;
   }
   
   .metric-card {

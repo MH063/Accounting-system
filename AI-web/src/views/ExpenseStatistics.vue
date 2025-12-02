@@ -105,9 +105,7 @@
                 <el-radio-button label="90d">近90天</el-radio-button>
               </el-radio-group>
             </div>
-            <div class="chart-container" ref="trendChartRef" style="height: 300px;">
-              <!-- 趋势图表将在这里渲染 -->
-            </div>
+            <div class="chart-container" ref="trendChartRef" style="height: 300px;"></div>
           </div>
         </el-col>
         <!-- 分类占比图 -->
@@ -117,9 +115,7 @@
               <h3>支出分类占比</h3>
               <el-button type="text" size="small" @click="showCategoryDetail">详情</el-button>
             </div>
-            <div class="chart-container" ref="categoryChartRef" style="height: 300px;">
-              <!-- 分类饼图将在这里渲染 -->
-            </div>
+            <div class="chart-container" ref="categoryChartRef" style="height: 300px;"></div>
           </div>
         </el-col>
       </el-row>
@@ -135,9 +131,7 @@
                 <el-option v-for="member in memberList" :key="member.id" :label="member.name" :value="member.id" />
               </el-select>
             </div>
-            <div class="chart-container" ref="memberChartRef" style="height: 250px;">
-              <!-- 成员对比图表 -->
-            </div>
+            <div class="chart-container" ref="memberChartRef" style="height: 250px;"></div>
           </div>
         </el-col>
         <el-col :xs="24" :sm="24" :md="12">
@@ -150,9 +144,7 @@
                 <el-option label="按周" value="week" />
               </el-select>
             </div>
-            <div class="chart-container" ref="timeChartRef" style="height: 250px;">
-              <!-- 时段分布图表 -->
-            </div>
+            <div class="chart-container" ref="timeChartRef" style="height: 250px;"></div>
           </div>
         </el-col>
       </el-row>
@@ -251,7 +243,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed, watch } from 'vue'
+import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
@@ -266,6 +258,7 @@ import {
   CaretTop,
   CaretBottom
 } from '@element-plus/icons-vue'
+import * as echarts from 'echarts'
 
 // 路由
 const router = useRouter()
@@ -298,6 +291,18 @@ interface Member {
 
 // 响应式数据
 const loading = ref(false)
+
+// 图表引用
+const trendChartRef = ref<HTMLElement>()
+const categoryChartRef = ref<HTMLElement>()
+const memberChartRef = ref<HTMLElement>()
+const timeChartRef = ref<HTMLElement>()
+
+// 图表实例
+const trendChart = ref<any>(null)
+const categoryChart = ref<any>(null)
+const memberChart = ref<any>(null)
+const timeChart = ref<any>(null)
 const dateRange = ref<string[]>([])
 const chartTimeRange = ref('30d')
 const memberFilter = ref('')
@@ -373,7 +378,7 @@ const dateRangeText = computed(() => {
 
 // 方法
 const handleBack = () => {
-  router.push('/dashboard/statistics')
+  router.push('/dashboard/analytics')
 }
 
 // 时间范围变化处理
@@ -556,8 +561,299 @@ onMounted(() => {
     endDate.toISOString().split('T')[0]
   ]
   
+  // 等待DOM更新后初始化图表
+  nextTick(() => {
+    initCharts()
+  })
+  
   loadExpenseData()
 })
+
+// 初始化所有图表
+const initCharts = () => {
+  initTrendChart()
+  initCategoryChart()
+  initMemberChart()
+  initTimeChart()
+}
+
+// 初始化趋势图表
+const initTrendChart = () => {
+  if (!trendChartRef.value) return
+  
+  trendChart.value = echarts.init(trendChartRef.value)
+  
+  // 模拟趋势数据
+  const trendData = Array.from({ length: 30 }, (_, i) => {
+    const date = new Date()
+    date.setDate(date.getDate() - (29 - i))
+    return {
+      date: date.toISOString().split('T')[0],
+      amount: Math.floor(Math.random() * 500) + 200
+    }
+  })
+  
+  const option = {
+    title: {
+      text: '支出趋势分析',
+      left: 'center',
+      textStyle: {
+        fontSize: 16,
+        fontWeight: 'bold'
+      }
+    },
+    tooltip: {
+      trigger: 'axis',
+      formatter: (params: any) => {
+        const data = params[0]
+        return `${data.axisValue}<br/>支出: ¥${data.value}`
+      }
+    },
+    xAxis: {
+      type: 'category',
+      data: trendData.map(item => item.date.substring(5))
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: {
+        formatter: '¥{value}'
+      }
+    },
+    series: [{
+      data: trendData.map(item => item.amount),
+      type: 'line',
+      smooth: true,
+      lineStyle: {
+        color: '#409EFF'
+      },
+      areaStyle: {
+        color: {
+          type: 'linear',
+          x: 0,
+          y: 0,
+          x2: 0,
+          y2: 1,
+          colorStops: [
+            { offset: 0, color: 'rgba(64, 158, 255, 0.3)' },
+            { offset: 1, color: 'rgba(64, 158, 255, 0.1)' }
+          ]
+        }
+      }
+    }]
+  }
+  
+  trendChart.value.setOption(option)
+  
+  // 响应式
+  window.addEventListener('resize', () => {
+    trendChart.value.resize()
+  })
+}
+
+// 初始化分类饼图
+const initCategoryChart = () => {
+  if (!categoryChartRef.value) return
+  
+  categoryChart.value = echarts.init(categoryChartRef.value)
+  
+  // 模拟分类数据
+  const categoryData = [
+    { name: '餐饮', value: 6800.50 },
+    { name: '交通', value: 2450.30 },
+    { name: '生活用品', value: 1890.80 },
+    { name: '娱乐', value: 1560.20 },
+    { name: '其他', value: 3158.70 }
+  ]
+  
+  const option = {
+    title: {
+      text: '支出分类占比',
+      left: 'center',
+      textStyle: {
+        fontSize: 16,
+        fontWeight: 'bold'
+      }
+    },
+    tooltip: {
+      trigger: 'item',
+      formatter: '{a} <br/>{b}: ¥{c} ({d}%)'
+    },
+    legend: {
+      orient: 'vertical',
+      left: 'left',
+      top: 'middle'
+    },
+    series: [{
+      name: '支出分类',
+      type: 'pie',
+      radius: ['40%', '70%'],
+      center: ['60%', '50%'],
+      avoidLabelOverlap: false,
+      itemStyle: {
+        borderRadius: 10,
+        borderColor: '#fff',
+        borderWidth: 2
+      },
+      label: {
+        show: false,
+        position: 'center'
+      },
+      emphasis: {
+        label: {
+          show: true,
+          fontSize: 20,
+          fontWeight: 'bold'
+        }
+      },
+      labelLine: {
+        show: false
+      },
+      data: categoryData,
+      color: ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7']
+    }]
+  }
+  
+  categoryChart.value.setOption(option)
+  
+  // 响应式
+  window.addEventListener('resize', () => {
+    categoryChart.value.resize()
+  })
+}
+
+// 初始化成员对比图
+const initMemberChart = () => {
+  if (!memberChartRef.value) return
+  
+  memberChart.value = echarts.init(memberChartRef.value)
+  
+  // 模拟成员数据
+  const memberData = [
+    { name: '张三', amount: 5200.30 },
+    { name: '李四', amount: 3800.80 },
+    { name: '王五', amount: 2456.40 },
+    { name: '赵六', amount: 1890.00 }
+  ]
+  
+  const option = {
+    title: {
+      text: '成员支出对比',
+      left: 'center',
+      textStyle: {
+        fontSize: 16,
+        fontWeight: 'bold'
+      }
+    },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: {
+        type: 'shadow'
+      }
+    },
+    xAxis: {
+      type: 'category',
+      data: memberData.map(item => item.name)
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: {
+        formatter: '¥{value}'
+      }
+    },
+    series: [{
+      data: memberData.map(item => item.amount),
+      type: 'bar',
+      itemStyle: {
+        color: {
+          type: 'linear',
+          x: 0,
+          y: 0,
+          x2: 0,
+          y2: 1,
+          colorStops: [
+            { offset: 0, color: '#667eea' },
+            { offset: 1, color: '#764ba2' }
+          ]
+        },
+        borderRadius: [4, 4, 0, 0]
+      }
+    }]
+  }
+  
+  memberChart.value.setOption(option)
+  
+  // 响应式
+  window.addEventListener('resize', () => {
+    memberChart.value.resize()
+  })
+}
+
+// 初始化时段分布图
+const initTimeChart = () => {
+  if (!timeChartRef.value) return
+  
+  timeChart.value = echarts.init(timeChartRef.value)
+  
+  // 模拟时段数据
+  const timeData = [
+    { period: '00-06', amount: 320 },
+    { period: '06-12', amount: 1240 },
+    { period: '12-18', amount: 2860 },
+    { period: '18-24', amount: 2100 }
+  ]
+  
+  const option = {
+    title: {
+      text: '支出时段分布',
+      left: 'center',
+      textStyle: {
+        fontSize: 16,
+        fontWeight: 'bold'
+      }
+    },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: {
+        type: 'shadow'
+      }
+    },
+    xAxis: {
+      type: 'category',
+      data: timeData.map(item => item.period)
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: {
+        formatter: '¥{value}'
+      }
+    },
+    series: [{
+      data: timeData.map(item => item.amount),
+      type: 'bar',
+      itemStyle: {
+        color: {
+          type: 'linear',
+          x: 0,
+          y: 0,
+          x2: 0,
+          y2: 1,
+          colorStops: [
+            { offset: 0, color: '#4facfe' },
+            { offset: 1, color: '#00f2fe' }
+          ]
+        },
+        borderRadius: [4, 4, 0, 0]
+      }
+    }]
+  }
+  
+  timeChart.value.setOption(option)
+  
+  // 响应式
+  window.addEventListener('resize', () => {
+    timeChart.value.resize()
+  })
+}
 
 // 监听筛选条件变化
 watch([memberFilter, timeGranularity], () => {
@@ -724,10 +1020,6 @@ watch([memberFilter, timeGranularity], () => {
   border-radius: 4px;
   color: #909399;
   font-size: 14px;
-}
-
-.chart-container::before {
-  content: "图表加载中...";
 }
 
 .detail-data {
