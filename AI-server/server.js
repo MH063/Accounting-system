@@ -9,7 +9,8 @@ const dotenv = require('dotenv');
 const helmet = require('helmet');
 const { pool, testConnection, getTables, getDatabases } = require('./config/database');
 const logger = require('./config/logger');
-const { notFound, errorHandler } = require('./middleware/errorHandler');
+const { notFound } = require('./middleware/errorHandling');
+const { errorHandler } = require('./middleware/errorHandling');
 const { defaultRateLimiter } = require('./middleware/rateLimiter');
 const { responseWrapper } = require('./middleware/response');
 const { requestLogger } = require('./middleware/requestLogger');
@@ -372,9 +373,9 @@ const startServer = async () => {
 // 启动服务器
 startServer();
 
-// 错误处理中间件 - 使用信息泄露防护的错误处理
-app.use(errorLeakProtection()); // 替换原来的errorHandler，防止错误信息泄露
-app.use(notFound);
+// 错误处理中间件 - 使用统一的错误处理系统
+app.use(errorLeakProtection()); // 防止错误信息泄露
+app.use(notFound());
 
 // 全局异步错误处理
 process.on('unhandledRejection', (reason, promise) => {

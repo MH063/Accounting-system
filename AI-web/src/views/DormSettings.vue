@@ -420,7 +420,7 @@
               <el-pagination
                 v-model:current-page="historyPage.current"
                 v-model:page-size="historyPage.size"
-                :page-sizes="[10, 20, 50, 100]"
+                :page-sizes="[5, 10, 20, 50, 100]"
                 :total="historyPage.total"
                 layout="total, sizes, prev, pager, next, jumper"
                 @size-change="loadHistory"
@@ -567,7 +567,7 @@ const historyFilters = ref({
 
 const historyPage = ref({
   current: 1,
-  size: 20,
+  size: 5,
   total: 0
 })
 

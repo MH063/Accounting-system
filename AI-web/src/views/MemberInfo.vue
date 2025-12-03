@@ -27,9 +27,13 @@
           <el-icon><Check /></el-icon>
           保存
         </el-button>
-        <el-button @click="router.push('/dashboard/member/list')">
-          <el-icon><ArrowLeft /></el-icon>
-          返回列表
+        <el-button 
+          type="primary" 
+          :icon="ArrowLeft" 
+          @click="router.push('/dashboard/member/list')"
+          class="back-btn"
+        >
+          返回
         </el-button>
       </div>
     </div>
@@ -602,27 +606,46 @@ onMounted(() => {
   align-items: center;
   margin-bottom: 20px;
   background: white;
-  padding: 20px;
+  padding: 16px 20px;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .page-header h1 {
-  margin: 0;
-  color: #303133;
   font-size: 24px;
   font-weight: 600;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  color: #303133;
+  margin: 0;
 }
 
 .header-actions {
   display: flex;
   gap: 12px;
+  align-items: center;
+}
+
+.back-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.back-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(24, 144, 255, 0.2);
+}
+
+.content-section {
+  margin-bottom: 20px;
+}
+
+/* 卡片样式 */
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 /* 联系信息快捷操作 */

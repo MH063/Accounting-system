@@ -6,7 +6,7 @@
 const express = require('express');
 const { getServiceStatus } = require('../middleware/virusScannerOnline');
 const { initClamAV } = require('../middleware/virusScanner');
-const { asyncHandler } = require('../middleware/errorHandler');
+const { asyncHandler } = require('../middleware/errorHandling');
 const { responseWrapper } = require('../middleware/response');
 const logger = require('../config/logger');
 

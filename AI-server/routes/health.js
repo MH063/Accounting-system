@@ -1,8 +1,22 @@
 const express = require('express');
 const router = express.Router();
-const { healthCheckHandler, createServiceDegradationHandler, withRetry } = require('../middleware/errorHandler');
-const { pool } = require('../config/database');
+const { pool, healthCheck } = require('../config/database');
 const logger = require('../config/logger');
+
+// 简单的健康检查处理函数
+const healthCheckHandler = async (req, res) => {
+  try {
+    const result = await healthCheck();
+    res.status(result.status === 'healthy' ? 200 : 503).json(result);
+  } catch (error) {
+    logger.error('[HEALTH] 健康检查失败', { error: error.message });
+    res.status(503).json({
+      status: 'unhealthy',
+      message: '健康检查失败',
+      error: error.message
+    });
+  }
+};
 
 // 健康检查路由
 router.get('/', healthCheckHandler);
@@ -30,18 +44,13 @@ router.get('/test/database-error', async (req, res, next) => {
 
 // 测试服务降级机制
 router.get('/test/degradation', async (req, res, next) => {
-  const degradationHandler = createServiceDegradationHandler();
-  
   try {
     // 模拟服务降级场景
-    const fallbackHandler = degradationHandler('database', req, res);
-    
-    // 模拟数据库操作失败
-    const result = await fallbackHandler(() => {
-      throw new Error('模拟数据库服务不可用');
+    res.status(503).json({
+      success: false,
+      message: '服务降级功能暂不可用',
+      degraded: true
     });
-    
-    res.json(result);
   } catch (error) {
     next(error);
   }
@@ -50,24 +59,10 @@ router.get('/test/degradation', async (req, res, next) => {
 // 测试重试机制
 router.get('/test/retry', async (req, res, next) => {
   try {
-    let attemptCount = 0;
-    
-    const unreliableOperation = async () => {
-      attemptCount++;
-      if (attemptCount < 3) {
-        const error = new Error(`操作失败，已尝试 ${attemptCount} 次`);
-        error.code = 'ECONNREFUSED';
-        throw error;
-      }
-      return { 
-        message: '操作成功', 
-        attempts: attemptCount,
-        timestamp: new Date().toISOString() 
-      };
-    };
-    
-    const result = await withRetry('database', unreliableOperation);
-    res.json(result);
+    res.status(501).json({
+      success: false,
+      message: '重试机制功能暂不可用'
+    });
   } catch (error) {
     next(error);
   }

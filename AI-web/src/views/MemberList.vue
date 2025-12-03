@@ -15,9 +15,13 @@
           </div>
         </div>
         <div class="header-actions">
-          <el-button @click="$router.push('/dashboard/members')" plain>
-            <el-icon><ArrowLeft /></el-icon>
-            返回成员管理
+          <el-button 
+            type="primary" 
+            :icon="ArrowLeft" 
+            @click="$router.push('/dashboard/members')"
+            class="back-btn"
+          >
+            返回
           </el-button>
         </div>
       </div>
@@ -208,7 +212,7 @@
           <el-pagination
             v-model:current-page="currentPage"
             v-model:page-size="pageSize"
-            :page-sizes="[8, 12, 20, 50]"
+            :page-sizes="[5, 8, 12, 20, 50]"
             :total="filteredMembers.length"
             layout="total, sizes, prev, pager, next, jumper"
             @size-change="handleSizeChange"
@@ -266,7 +270,7 @@ const statusFilter = ref('')
 const roleFilter = ref('')
 const roomFilter = ref('')
 const currentPage = ref(1)
-const pageSize = ref(12)
+const pageSize = ref(5)
 const currentUserRole = ref<'dorm_leader' | 'admin' | 'member'>('admin')
 const selectedMember = ref<Member | null>(null)
 const touchStartTime = ref(0)
@@ -716,12 +720,91 @@ onMounted(() => {
   box-shadow: 0 4px 12px rgba(144, 147, 153, 0.4);
 }
 
-/* 卡片容器 */
+/* 成员卡片容器 */
 .members-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 24px;
   margin-bottom: 24px;
+}
+
+/* 页面头部样式 */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  background: white;
+  padding: 16px 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.title-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.stats-summary {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.stat-item {
+  font-size: 14px;
+  color: #606266;
+  padding: 4px 12px;
+  background: #f5f7fa;
+  border-radius: 4px;
+}
+
+.stat-item.online {
+  color: #67c23a;
+  background: #f0f9ff;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.back-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.back-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(24, 144, 255, 0.2);
+}
+
+/* 搜索区域样式 */
+.content-section {
+  margin-bottom: 20px;
+}
+
+.search-bar {
+  padding: 20px 0;
+}
+
+.search-btn {
+  margin-right: 8px;
+}
+
+.reset-btn {
+  margin-left: 8px;
 }
 
 /* 成员卡片样式 */

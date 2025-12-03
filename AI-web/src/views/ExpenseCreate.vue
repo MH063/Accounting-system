@@ -583,11 +583,7 @@ interface Member {
 // 成员相关
 const showMemberDialog = ref(false)
 const memberSearchQuery = ref('')
-const selectedMembers = ref<Member[]>([
-  { id: 1, name: '张三', room: 'A-101', avatar: 'https://picsum.photos/40/40?random=1', role: 'dorm_leader', status: 'active' },
-  { id: 2, name: '李四', room: 'A-101', avatar: 'https://picsum.photos/40/40?random=2', role: 'member', status: 'active' },
-  { id: 3, name: '王五', room: 'A-101', avatar: 'https://picsum.photos/40/40?random=3', role: 'member', status: 'active' }
-])
+const selectedMembers = ref<Member[]>([])
 
 // 获取当前用户的房间信息
 const getCurrentUserRoom = () => {

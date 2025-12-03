@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "maxAge": 86400,
+  "cacheControl": "public, max-age=86400",
+  "etag": true,
+  "lastModified": true,
+  "compression": {
+    "gzip": true,
+    "brotli": true
+  },
+  "staticAssets": {
+    "enabled": true,
+    "maxAge": 31536000,
+    "cacheControl": "public, max-age=31536000, immutable"
+  }
+}

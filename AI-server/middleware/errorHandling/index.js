@@ -6,7 +6,7 @@
 const normalizePath = require('./normalizePath');
 const notFoundHandler = require('./notFound');
 const globalErrorHandler = require('./globalErrorHandler');
-const enhancedGlobalErrorHandler = require('./enhancedErrorHandler');
+const { enhancedGlobalErrorHandler } = require('./enhancedErrorHandler');
 const asyncHandler = require('./asyncHandler');
 
 /**
@@ -51,8 +51,11 @@ const withRetry = (fn, options = {}) => {
 module.exports = {
   normalizePath,
   notFound: notFoundHandler,
+  notFoundHandler,
   errorHandler: globalErrorHandler,
+  globalErrorHandler,
   enhancedErrorHandler: enhancedGlobalErrorHandler,
+  enhancedGlobalErrorHandler,
   asyncHandler,
   withRetry
 };

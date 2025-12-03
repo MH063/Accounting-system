@@ -575,7 +575,7 @@
           <el-pagination
             v-model:current-page="currentPage"
             v-model:page-size="pageSize"
-            :page-sizes="[10, 20, 50, 100]"
+            :page-sizes="[5, 10, 20, 50, 100]"
             :total="filteredExpenses.length"
             layout="total, sizes, prev, pager, next, jumper"
             @size-change="handleSizeChange"
@@ -623,7 +623,7 @@ const statusFilter = ref('')
 const categoryFilter = ref('')
 const monthFilter = ref('')
 const currentPage = ref(1)
-const pageSize = ref(20)
+const pageSize = ref(5)
 
 // 费用数据
 const expenses = ref<Expense[]>([])
@@ -1149,43 +1149,18 @@ const quickFilter = ref('')
 
 // 批量操作方法
 const handleBatchApprove = async () => {
-  if (selectedItems.value.length === 0) return
+  // 获取所有待审核的记录
+  const pendingItems = expenses.value.filter(item => item.status === 'pending')
   
-  try {
-    await ElMessageBox.confirm(
-      `确定要批量审核通过 ${selectedItems.value.filter(item => item.status === 'pending').length} 条待审核记录吗？`,
-      '批量审核确认',
-      {
-        confirmButtonText: '确认通过',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }
-    )
-    
-    batchProcessing.value = true
-    
-    // 模拟批量审核API调用
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    
-    // 更新费用状态
-    selectedItems.value.forEach(item => {
-      if (item.status === 'pending') {
-        item.status = 'approved'
-        item.reviewer = '当前用户'
-        item.reviewDate = new Date().toISOString().split('T')[0]
-        item.reviewComment = '批量审核通过'
-      }
-    })
-    
-    // 清空选择
-    clearSelection()
-    ElMessage.success(`成功审核通过 ${selectedItems.value.length} 条记录`)
-  } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('批量审核失败，请重试')
-    }
-  } finally {
-    batchProcessing.value = false
+  if (pendingItems.length === 0) {
+    ElMessage.warning('当前没有待审核的费用记录')
+    return
+  }
+  
+  // 如果有待审核记录，跳转到费用审核页面进行批量处理
+  if (pendingItems.length > 0) {
+    router.push('/dashboard/expense/review?batch=true')
+    return
   }
 }
 
@@ -1289,7 +1264,7 @@ const handleQuickExport = () => {
 }
 
 const handleStatisticsView = () => {
-  router.push('/dashboard/expense/statistics')
+  router.push('/dashboard/expense-statistics')
 }
 
 const handleClearAll = async () => {
@@ -1389,20 +1364,26 @@ const handleClearAll = async () => {
 }
 
 .summary-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  display: flex;
   gap: 20px;
+  flex-wrap: nowrap;
+}
+
+.summary-grid .summary-item {
+  flex: 1;
+  min-width: 0;
 }
 
 .summary-item {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 24px;
+  gap: 12px;
+  padding: 20px 16px;
   background: white;
   border-radius: 12px;
   box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.08);
   transition: all 0.3s ease;
+  min-width: 0;
 }
 
 .summary-item:hover {
@@ -1431,14 +1412,15 @@ const handleClearAll = async () => {
 }
 
 .summary-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  font-size: 20px;
   color: white;
+  flex-shrink: 0;
 }
 
 .summary-item.total .summary-icon {
@@ -1462,16 +1444,81 @@ const handleClearAll = async () => {
 }
 
 .summary-number {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 700;
   color: #303133;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .summary-text {
-  font-size: 14px;
+  font-size: 13px;
   color: #606266;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 响应式布局 */
+@media (max-width: 1200px) {
+  .summary-grid {
+    gap: 15px;
+  }
+  
+  .summary-item {
+    padding: 16px 12px;
+    gap: 10px;
+  }
+  
+  .summary-icon {
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
+  
+  .summary-number {
+    font-size: 18px;
+  }
+}
+
+@media (max-width: 768px) {
+  .summary-grid {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  
+  .summary-grid .summary-item {
+    flex: 1 1 calc(50% - 6px);
+    min-width: 140px;
+  }
+  
+  .summary-item {
+    padding: 14px 10px;
+    gap: 8px;
+  }
+  
+  .summary-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+  }
+  
+  .summary-number {
+    font-size: 16px;
+  }
+  
+  .summary-text {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .summary-grid .summary-item {
+    flex: 1 1 100%;
+  }
 }
 
 /* 批量操作栏 */

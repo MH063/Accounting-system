@@ -122,7 +122,7 @@
 ```json
 {
   "email": "user@example.com",
-  "password": "password123",
+  "password": "${USER_PASSWORD}",
   "invitation_code": "1234" // 注册时必填
 }
 ```
@@ -173,7 +173,7 @@
 ```json
 {
   "email": "user@example.com",
-  "password": "password123",
+  "password": "${USER_PASSWORD}",
   "username": "张三",
   "phone": "13800138000",
   "invitation_code": "1234",

@@ -11,7 +11,7 @@ const {
   flush: flushApiCache,
   invalidateByPattern
 } = require('../middleware/apiCache');
-const { asyncHandler } = require('../middleware/errorHandler');
+const { asyncHandler } = require('../middleware/errorHandling');
 const { responseWrapper } = require('../middleware/response');
 const logger = require('../config/logger');
 

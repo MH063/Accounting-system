@@ -5,7 +5,7 @@
 
 const express = require('express');
 const { getCorsInfo, updateWhitelist, addToWhitelist, removeFromWhitelist } = require('../middleware/corsConfig');
-const { asyncHandler } = require('../middleware/errorHandler');
+const { asyncHandler } = require('../middleware/errorHandling');
 const { responseWrapper } = require('../middleware/response');
 const { authenticateToken } = require('../middleware/auth');
 const logger = require('../config/logger');

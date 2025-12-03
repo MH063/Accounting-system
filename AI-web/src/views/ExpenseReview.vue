@@ -9,6 +9,24 @@
             <div class="tab-title">
               <el-icon class="tab-icon"><List /></el-icon>
               待审核费用列表
+              <el-tag 
+                v-if="isBatchMode" 
+                type="warning" 
+                size="small" 
+                style="margin-left: 12px"
+              >
+                <el-icon><List /></el-icon>
+                批量审核模式
+              </el-tag>
+            </div>
+            <div class="header-center-section">
+              <el-button 
+                type="default" 
+                :icon="ArrowLeft"
+                @click="handleBackToExpenses"
+              >
+                返回
+              </el-button>
             </div>
             <div class="stats-summary">
               <el-statistic title="待审核总数" :value="pendingExpenses.length" />
@@ -140,12 +158,10 @@
                   {{ row.title }}
                 </div>
                 <div class="expense-desc">{{ truncateText(row.description, 50) }}</div>
-                <div class="expense-meta">
+                <div class="expense-category">
                   <el-tag size="small" :type="getCategoryType(row.category)">
                     {{ getCategoryText(row.category) }}
                   </el-tag>
-                  <span class="applicant-name">{{ row.applicant }}</span>
-                  <span class="apply-date">{{ formatDate(row.date) }}</span>
                 </div>
               </div>
             </template>
@@ -154,21 +170,15 @@
           <el-table-column label="费用金额" width="120" align="center">
             <template #default="{ row }">
               <div class="amount-cell">
-                <span class="amount-value">¥{{ (row.amount || 0).toFixed(2) }}</span>
+                <span class="amount-value-list">¥{{ (row.amount || 0).toFixed(2) }}</span>
               </div>
             </template>
           </el-table-column>
           
-          <el-table-column label="申请人" width="150">
+          <el-table-column label="申请人" width="120">
             <template #default="{ row }">
-              <div class="applicant-cell">
-                <el-avatar size="small" class="applicant-avatar">
-                  {{ getInitials(row.applicant) }}
-                </el-avatar>
-                <div class="applicant-details">
-                  <div class="applicant-name">{{ row.applicant }}</div>
-                  <div class="applicant-contact">{{ row.phone }}</div>
-                </div>
+              <div class="applicant-simple">
+                <span class="applicant-name-simple">{{ row.applicant }}</span>
               </div>
             </template>
           </el-table-column>
@@ -299,6 +309,72 @@
         </template>
       </el-dialog>
 
+      <!-- 快速拒绝对话框 -->
+      <el-dialog
+        v-model="quickRejectVisible"
+        title="快速拒绝原因选择"
+        width="500px"
+        :close-on-click-modal="false"
+        :close-on-press-escape="false"
+      >
+        <div class="batch-reject-dialog-content">
+          <div class="form-item">
+            <label class="form-label">
+              <span class="required">*</span>
+              驳回原因：
+            </label>
+            <el-select
+              v-model="quickRejectForm.reason"
+              placeholder="请选择驳回原因"
+              style="width: 100%;"
+            >
+              <el-option label="材料不完整" value="incomplete_materials"></el-option>
+              <el-option label="费用金额异常" value="amount_issue"></el-option>
+              <el-option label="预算超支" value="budget_exceeded"></el-option>
+              <el-option label="费用用途不明确" value="unclear_purpose"></el-option>
+              <el-option label="时间不符合要求" value="timing_issue"></el-option>
+              <el-option label="其他原因" value="other"></el-option>
+              <el-option label="自定义原因" value="custom"></el-option>
+            </el-select>
+          </div>
+          
+          <div class="form-item" v-if="quickRejectForm.reason === 'custom'">
+            <label class="form-label">
+              <span class="required">*</span>
+              自定义原因：
+            </label>
+            <el-input
+              v-model="quickRejectForm.customReason"
+              type="textarea"
+              :rows="3"
+              placeholder="请输入驳回原因"
+              style="width: 100%;"
+              maxlength="200"
+              show-word-limit
+            ></el-input>
+          </div>
+          
+          <div class="selection-summary" v-if="currentQuickRejectExpense">
+            将拒绝费用申请：{{ currentQuickRejectExpense.title }}
+          </div>
+        </div>
+        
+        <template #footer>
+          <div class="dialog-footer">
+            <el-button @click="quickRejectVisible = false">
+              取消
+            </el-button>
+            <el-button 
+              type="warning" 
+              @click="confirmQuickReject"
+              :disabled="!canSubmitQuickReject"
+            >
+              确认拒绝
+            </el-button>
+          </div>
+        </template>
+      </el-dialog>
+
       <!-- 重新提交对话框 -->
       <el-dialog
         v-model="resubmissionVisible"
@@ -396,20 +472,20 @@
       <!-- 页面头部 -->
       <div class="page-header">
         <div class="header-left">
-          <el-button 
-            type="primary" 
-            :icon="ArrowLeft" 
-            @click="currentView = 'list'"
-            class="back-btn"
-          >
-            返回列表
-          </el-button>
           <h1 class="page-title">
             <el-icon class="title-icon"><CircleCheck /></el-icon>
             费用审核详情
           </h1>
         </div>
         <div class="header-actions">
+          <el-button 
+            type="primary" 
+            :icon="ArrowLeft" 
+            @click="currentView = 'list'"
+            class="back-btn"
+          >
+            返回
+          </el-button>
           <el-button 
             type="info" 
             :icon="View"
@@ -429,6 +505,156 @@
           </el-button>
         </div>
       </div>
+
+      <!-- 费用预览对话框 -->
+      <el-dialog
+        v-model="previewVisible"
+        title="费用申请预览"
+        width="800px"
+        :close-on-click-modal="false"
+        :close-on-press-escape="false"
+        class="expense-preview-dialog"
+      >
+        <div v-if="selectedExpense" class="preview-content">
+          <!-- 预览头部 -->
+          <div class="preview-header">
+            <div class="expense-title-preview">
+              <h2>{{ selectedExpense.title }}</h2>
+              <div class="title-meta">
+                <el-tag :type="getStatusType(selectedExpense.status)" size="large">
+                  {{ getStatusText(selectedExpense.status) }}
+                </el-tag>
+                <el-tag :type="selectedExpense.isUrgent ? 'danger' : 'info'" size="small">
+                  {{ selectedExpense.isUrgent ? '紧急' : '普通' }}
+                </el-tag>
+                <el-tag :type="getCategoryType(selectedExpense.category)" size="small">
+                  {{ getCategoryText(selectedExpense.category) }}
+                </el-tag>
+              </div>
+            </div>
+            <div class="expense-amount-preview">
+              <span class="amount-label">申请金额</span>
+              <span class="amount-value-preview">{{ formatCurrency(selectedExpense.amount || 0) }}</span>
+            </div>
+          </div>
+
+          <!-- 预览主体内容 -->
+          <div class="preview-body">
+            <!-- 基本信息区域 -->
+            <div class="info-section">
+              <h3 class="section-title">
+                <el-icon><Document /></el-icon>
+                基本信息
+              </h3>
+              <div class="info-grid-preview">
+                <div class="info-item-preview">
+                  <label>申请人：</label>
+                  <span>{{ selectedExpense.applicant }}</span>
+                </div>
+                <div class="info-item-preview">
+                  <label>联系电话：</label>
+                  <span>{{ selectedExpense.phone }}</span>
+                </div>
+                <div class="info-item-preview">
+                  <label>所属部门：</label>
+                  <span>{{ selectedExpense.department }}</span>
+                </div>
+                <div class="info-item-preview">
+                  <label>职位：</label>
+                  <span>{{ selectedExpense.position }}</span>
+                </div>
+                <div class="info-item-preview">
+                  <label>申请日期：</label>
+                  <span>{{ formatDate(selectedExpense.date) }}</span>
+                </div>
+                <div class="info-item-preview">
+                  <label>提交时间：</label>
+                  <span>{{ formatDateTime(selectedExpense.createdAt) }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 费用描述区域 -->
+            <div class="info-section">
+              <h3 class="section-title">
+                <el-icon><InfoFilled /></el-icon>
+                费用描述
+              </h3>
+              <div class="description-box">
+                {{ selectedExpense.description || '暂无描述' }}
+              </div>
+            </div>
+
+            <!-- 附件信息区域 -->
+            <div v-if="selectedExpense.attachments && selectedExpense.attachments.length > 0" class="info-section">
+              <h3 class="section-title">
+                <el-icon><Paperclip /></el-icon>
+                附件清单 ({{ selectedExpense.attachments.length }}个文件)
+              </h3>
+              <div class="attachments-list">
+                <div 
+                  v-for="(attachment, index) in selectedExpense.attachments" 
+                  :key="index"
+                  class="attachment-item"
+                  @click="handlePreviewAttachment(attachment)"
+                >
+                  <el-icon class="attachment-icon">
+                    <Document />
+                  </el-icon>
+                  <span class="attachment-name">{{ typeof attachment === 'string' ? attachment : (attachment.name || attachment.url || '未知文件') }}</span>
+                  <el-button 
+                    type="primary" 
+                    size="small" 
+                    :icon="View"
+                    text
+                  >
+                    预览
+                  </el-button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 审核历史区域 -->
+            <div v-if="selectedExpense.reviewHistory && selectedExpense.reviewHistory.length > 0" class="info-section">
+              <h3 class="section-title">
+                <el-icon><Clock /></el-icon>
+                审核历史
+              </h3>
+              <div class="history-timeline">
+                <div 
+                  v-for="(history, index) in selectedExpense.reviewHistory" 
+                  :key="index"
+                  class="history-item"
+                >
+                  <div class="history-time">{{ formatDateTime(history.createdAt || history.time) }}</div>
+                  <div class="history-content">
+                    <div class="history-action">{{ getActionText(history.action) }}</div>
+                    <div class="history-reviewer">{{ history.reviewer || history.reviewerName || '系统' }}</div>
+                    <div class="history-comment" v-if="history.comment">
+                      备注：{{ history.comment }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <template #footer>
+          <div class="dialog-footer">
+            <el-button @click="previewVisible = false">
+              关闭
+            </el-button>
+            <el-button 
+              type="primary" 
+              @click="handlePreviewDownload"
+              :icon="Download"
+            >
+              下载申请
+            </el-button>
+          </div>
+        </template>
+      </el-dialog>
 
       <!-- 加载状态 -->
       <div v-if="loading" class="loading-section">
@@ -689,7 +915,7 @@
         </el-card>
 
         <!-- 审核记录追踪卡片 -->
-        <el-card class="info-card review-history" v-if="selectedExpense?.reviewHistory?.length > 0">
+        <el-card class="info-card review-history" v-if="selectedExpense?.reviewHistory?.length">
           <template #header>
             <div class="card-header">
               <span class="card-title">
@@ -697,7 +923,7 @@
                 审核记录追踪
               </span>
               <el-tag size="small" type="info">
-                共 {{ selectedExpense.reviewHistory.length }} 条记录
+                共 {{ selectedExpense?.reviewHistory?.length || 0 }} 条记录
               </el-tag>
             </div>
           </template>
@@ -705,18 +931,18 @@
           <div class="timeline">
             <div 
               v-for="(history, index) in selectedExpense.reviewHistory" 
-              :key="history.time + '-' + index"
+              :key="(history.createdAt || history.time) + '-' + index"
               class="timeline-item"
               :class="getHistoryItemClass(history)"
             >
               <div class="timeline-marker" :class="history.status"></div>
               <div class="timeline-content">
                 <div class="timeline-header">
-                  <span class="timeline-title">{{ history.action }}</span>
-                  <span class="timeline-time">{{ formatDateTime(history.time) }}</span>
+                  <span class="timeline-title">{{ getActionText(history.action) }}</span>
+                  <span class="timeline-time">{{ formatDateTime(history.createdAt || history.time) }}</span>
                 </div>
-                <div class="timeline-description">
-                  {{ history.reviewer }} 
+                <div class="timeline-description" v-if="selectedExpense">
+                  {{ history.reviewer || history.reviewerName || '系统' }} 
                   <span v-if="history.status === 'approved'" class="status-approved">通过</span>
                   <span v-else-if="history.status === 'rejected'" class="status-rejected">拒绝</span>
                   了申请
@@ -727,9 +953,9 @@
                 </div>
                 <div class="timeline-meta">
                   <el-icon class="meta-icon"><User /></el-icon>
-                  <span class="operator">{{ history.reviewer }}</span>
+                  <span class="operator">{{ history.reviewer || history.reviewerName || '系统' }}</span>
                   <el-icon class="meta-icon"><Clock /></el-icon>
-                  <span class="time">{{ formatDateTime(history.time) }}</span>
+                  <span class="time">{{ formatDateTime(history.createdAt || history.time) }}</span>
                 </div>
               </div>
             </div>
@@ -737,7 +963,7 @@
         </el-card>
 
         <!-- 附件列表卡片 -->
-        <el-card class="info-card attachments-list" v-if="selectedExpense?.attachments?.length > 0">
+        <el-card class="info-card attachments-list" v-if="selectedExpense?.attachments?.length">
           <template #header>
             <div class="card-header">
               <span class="card-title">
@@ -749,14 +975,14 @@
 
           <div class="attachments-grid">
             <div 
-              v-for="(attachment, index) in selectedExpense.attachments" 
+              v-for="(attachment, index) in selectedExpense?.attachments || []" 
               :key="attachment + '-' + index"
               class="attachment-item"
               @click="handlePreviewAttachment(attachment)"
             >
               <el-icon class="attachment-icon"><Document /></el-icon>
               <div class="attachment-info">
-                <div class="attachment-name">{{ getFileName(attachment) }}</div>
+                <div class="attachment-name">{{ getFileNameFromPath(attachment) }}</div>
                 <div class="attachment-size">{{ getRandomFileSize() }}</div>
               </div>
               <div class="attachment-actions">
@@ -784,7 +1010,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { 
   ArrowLeft, CircleCheck, Clock, Check, Document, User, EditPen,
@@ -793,11 +1019,43 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
+// 文件处理辅助函数 - 必须在模板使用前定义
+const getFileNameFromPath = (filePathOrAttachment: string | { url?: string; name?: string }): string => {
+  // 如果是对象，优先使用name属性，如果没有则从url提取
+  if (typeof filePathOrAttachment === 'object' && filePathOrAttachment !== null) {
+    if (filePathOrAttachment.name) {
+      return filePathOrAttachment.name
+    }
+    if (filePathOrAttachment.url) {
+      return getFileNameFromPath(filePathOrAttachment.url)
+    }
+    return '未知文件'
+  }
+  
+  // 如果是字符串，处理URL或文件路径，提取文件名
+  const filePath = filePathOrAttachment as string
+  if (filePath.includes('/')) {
+    return filePath.split('/').pop() || filePath
+  }
+  if (filePath.includes('\\')) {
+    return filePath.split('\\').pop() || filePath
+  }
+  return filePath
+}
+
+const getRandomFileSize = (): string => {
+  const sizes = ['125KB', '256KB', '512KB', '1.2MB', '2.4MB', '3.8MB', '5.1MB']
+  return sizes[Math.floor(Math.random() * sizes.length)]
+}
+
 // 路由
 const route = useRoute()
 const router = useRouter()
 
-// 接口定义
+// 导入标准类型
+import type { ExpenseItem } from '@/types'
+
+// 本地接口定义
 interface ReviewHistoryItem {
   action: string
   reviewer: string
@@ -807,32 +1065,6 @@ interface ReviewHistoryItem {
   suggestion?: string
   rejectReason?: string
   customReason?: string
-}
-
-interface ExpenseItem {
-  id: number
-  title: string
-  description: string
-  amount: number
-  category: 'accommodation' | 'utilities' | 'maintenance' | 'cleaning' | 'other'
-  applicant: string
-  phone: string
-  department: string
-  position: string
-  date: string
-  status: 'pending' | 'approved' | 'rejected'
-  isUrgent: boolean
-  attachments: string[]
-  reviewHistory: ReviewHistoryItem[]
-  createdAt: string
-  updatedAt: string
-  reviewer?: string
-  reviewDate?: string
-  reviewComment?: string
-  isResubmitted?: boolean
-  resubmissionCount?: number
-  originalRejectId?: number
-  originalId?: number
 }
 
 interface RejectionNotification {
@@ -860,16 +1092,6 @@ interface ResubmissionForm {
   supplementaryInfo: string
 }
 
-// 审核表单接口
-interface ReviewForm {
-  status: '' | 'approved' | 'rejected'
-  suggestion: string
-  comment: string
-  isUrgent: boolean
-  rejectReason: string
-  customRejectReason: string
-}
-
 interface BatchRejectForm {
   reason: string
   customReason: string
@@ -882,6 +1104,11 @@ const submitting = ref<boolean>(false)
 const saving = ref<boolean>(false)
 const batchProcessing = ref<boolean>(false)
 const expenseData = ref<ExpenseItem | null>(null)
+
+// 检查URL参数以支持批量模式
+const isBatchMode = computed(() => {
+  return route.query.batch === 'true'
+})
 
 // 视图管理
 const currentView = ref<'list' | 'review'>('list')
@@ -926,6 +1153,9 @@ const resubmissionForm = reactive<ResubmissionForm>({
   supplementaryInfo: ''
 })
 
+// 预览相关状态
+const previewVisible = ref<boolean>(false)
+
 // 重新提交验证计算属性
 const canResubmit = computed((): boolean => {
   return resubmissionForm.additionalMaterials.trim().length > 0 && 
@@ -935,134 +1165,191 @@ const canResubmit = computed((): boolean => {
 // 费用数据
 const pendingExpenses = ref<ExpenseItem[]>([
   {
-    id: 1,
+    id: '1',
     title: '宿舍水电费',
     description: '2024年12月份水电费缴纳，包含电费120.50元和水费36.00元',
     amount: 156.50,
     category: 'utilities',
     applicant: '张三',
-    phone: '13800138001',
-    department: '学生处',
-    position: '宿舍管理员',
+    applicantId: 'user1',
+    phone: '13800138000',
+    department: '行政部',
+    position: '行政专员',
     date: '2024-12-15',
     status: 'pending',
+    createdAt: '2024-12-15T10:30:00',
+    updatedAt: '2024-12-15T10:30:00',
     isUrgent: false,
-    attachments: ['水电费发票.jpg', '缴费凭证.pdf', '预算说明.xlsx'],
+    attachments: [
+      {
+        id: 'att1',
+        name: '水电费发票.jpg',
+        url: 'https://picsum.photos/800/600?random=1',
+        size: 256000,
+        type: 'image/jpeg',
+        uploadedAt: '2024-12-15T10:30:00'
+      }
+    ],
     reviewHistory: [
       {
-        action: '费用申请',
+        id: 'history1',
         reviewer: '张三',
-        status: 'submitted',
+        reviewerId: 'user1',
+        action: 'submitted',
         comment: '',
-        time: '2024-12-15T10:30:00'
+        createdAt: '2024-12-15T10:30:00'
       }
     ],
     createdAt: '2024-12-15T10:30:00',
     updatedAt: '2024-12-16T14:20:00'
   },
   {
-    id: 2,
+    id: '2',
     title: '办公室清洁费',
     description: '年终大扫除清洁用品采购及清洁服务费',
     amount: 850.00,
     category: 'cleaning',
     applicant: '李四',
-    phone: '13900139002',
-    department: '行政部',
-    position: '行政专员',
+    applicantId: 'user2',
+    phone: '13900139000',
+    department: '后勤部',
+    position: '后勤主管',
     date: '2024-12-18',
     status: 'pending',
+    createdAt: '2024-12-18T09:15:00',
+    updatedAt: '2024-12-18T09:15:00',
     isUrgent: true,
-    attachments: ['清洁用品清单.pdf', '服务合同.pdf'],
-    reviewHistory: [
+    attachments: [
       {
-        action: '费用申请',
-        reviewer: '李四',
-        status: 'submitted',
-        comment: '',
-        time: '2024-12-18T09:15:00'
+        id: 'att2',
+        name: '清洁用品清单.pdf',
+        url: 'https://picsum.photos/800/600?random=2',
+        size: 512000,
+        type: 'application/pdf',
+        uploadedAt: '2024-12-18T09:15:00'
       }
     ],
-    createdAt: '2024-12-18T09:15:00',
-    updatedAt: '2024-12-18T09:15:00'
+    reviewHistory: [
+      {
+        id: 'history2',
+        reviewer: '李四',
+        reviewerId: 'user2',
+        action: 'submitted',
+        comment: '',
+        createdAt: '2024-12-18T09:15:00'
+      }
+    ]
   },
   {
-    id: 3,
+    id: '3',
     title: '会议室设备维修',
     description: '投影仪灯泡更换及音响设备检修费用',
     amount: 320.00,
     category: 'maintenance',
     applicant: '王五',
-    phone: '13700137003',
+    applicantId: 'user3',
+    phone: '13700137000',
     department: '技术部',
-    position: '技术支持',
+    position: '设备管理员',
     date: '2024-12-20',
     status: 'pending',
+    createdAt: '2024-12-20T14:20:00',
+    updatedAt: '2024-12-20T14:20:00',
     isUrgent: false,
-    attachments: ['维修报价单.pdf', '设备检测报告.pdf'],
-    reviewHistory: [
+    attachments: [
       {
-        action: '费用申请',
-        reviewer: '王五',
-        status: 'submitted',
-        comment: '',
-        time: '2024-12-20T14:20:00'
+        id: 'att3',
+        name: '维修报价单.pdf',
+        url: 'https://picsum.photos/800/600?random=3',
+        size: 384000,
+        type: 'application/pdf',
+        uploadedAt: '2024-12-20T14:20:00'
       }
     ],
-    createdAt: '2024-12-20T14:20:00',
-    updatedAt: '2024-12-20T14:20:00'
+    reviewHistory: [
+      {
+        id: 'history3',
+        reviewer: '王五',
+        reviewerId: 'user3',
+        action: 'submitted',
+        comment: '',
+        createdAt: '2024-12-20T14:20:00'
+      }
+    ]
   },
   {
-    id: 4,
+    id: '4',
     title: '员工宿舍床位费',
     description: '新员工入职宿舍床位费用及押金',
     amount: 450.00,
     category: 'accommodation',
     applicant: '赵六',
-    phone: '13600136004',
+    applicantId: 'user4',
+    phone: '13600136000',
     department: '人事部',
     position: '人事专员',
     date: '2024-12-21',
     status: 'pending',
+    createdAt: '2024-12-21T10:45:00',
+    updatedAt: '2024-12-21T10:45:00',
     isUrgent: false,
-    attachments: ['宿舍管理协议.pdf', '缴费凭证.jpg'],
-    reviewHistory: [
+    attachments: [
       {
-        action: '费用申请',
-        reviewer: '赵六',
-        status: 'submitted',
-        comment: '',
-        time: '2024-12-21T10:45:00'
+        id: 'att4',
+        name: '宿舍管理协议.pdf',
+        url: 'https://picsum.photos/800/600?random=4',
+        size: 768000,
+        type: 'application/pdf',
+        uploadedAt: '2024-12-21T10:45:00'
       }
     ],
-    createdAt: '2024-12-21T10:45:00',
-    updatedAt: '2024-12-21T10:45:00'
+    reviewHistory: [
+      {
+        id: 'history4',
+        reviewer: '赵六',
+        reviewerId: 'user4',
+        action: 'submitted',
+        comment: '',
+        createdAt: '2024-12-21T10:45:00'
+      }
+    ]
   },
   {
-    id: 5,
+    id: '5',
     title: '节日活动用品',
     description: '春节活动装饰用品及礼品采购费用',
     amount: 1280.00,
     category: 'other',
     applicant: '钱七',
-    phone: '13500135005',
-    department: '市场部',
-    position: '活动专员',
+    applicantId: 'user5',
+    phone: '13500135000',
+    department: '行政部',
+    position: '活动策划专员',
     date: '2024-12-22',
     status: 'pending',
+    createdAt: '2024-12-22T16:30:00',
+    updatedAt: '2024-12-22T16:30:00',
     isUrgent: false,
-    attachments: ['活动方案.pdf', '采购清单.xlsx', '预算表.pdf'],
-    reviewHistory: [
+    attachments: [
       {
-        action: '费用申请',
-        reviewer: '钱七',
-        status: 'submitted',
-        comment: '',
-        time: '2024-12-22T16:30:00'
+        id: 'att5',
+        name: '活动方案.pdf',
+        url: 'https://picsum.photos/800/600?random=5',
+        size: 1024000,
+        type: 'application/pdf',
+        uploadedAt: '2024-12-22T16:30:00'
       }
     ],
-    createdAt: '2024-12-22T16:30:00',
-    updatedAt: '2024-12-22T16:30:00'
+    reviewHistory: [
+      {
+        id: 'history5',
+        reviewer: '钱七',
+        reviewerId: 'user5',
+        action: 'submitted',
+        comment: '',
+        createdAt: '2024-12-22T16:30:00'
+      }
+    ]
   }
 ])
 
@@ -1131,18 +1418,54 @@ onMounted(() => {
   loadExpenseData()
 })
 
+// 监听路由参数变化，防止自动跳转
+watch(() => route.query.id, (newId, oldId) => {
+  console.log('路由ID参数变化:', oldId, '->', newId)
+  // 只有在明确有ID参数时才加载数据，避免自动跳转
+  if (newId && typeof newId === 'string') {
+    const idNumber = parseInt(newId)
+    const foundExpense = pendingExpenses.value.find(expense => expense.id === idNumber)
+    if (foundExpense) {
+      selectedExpense.value = foundExpense
+      currentView.value = 'review'
+      expenseData.value = foundExpense
+    }
+  }
+  // 如果ID参数被移除，保持在当前视图，不自动跳转
+})
+
 // 方法
+const handleBackToExpenses = (): void => {
+  router.push('/dashboard/expenses')
+}
+
 const loadExpenseData = (): void => {
   loading.value = true
   
   // 模拟API调用
   setTimeout(() => {
-    // 如果有传入ID，使用该ID的数据；否则使用第一个
+    // 只有在明确指定ID参数时才跳转到审核详情页面
     const expenseId = route.query.id
-    if (expenseId) {
-      selectedExpense.value = pendingExpenses.value.find(expense => expense.id == expenseId) || pendingExpenses.value[0]
+    if (expenseId && typeof expenseId === 'string') {
+      const idNumber = parseInt(expenseId)
+      const foundExpense = pendingExpenses.value.find(expense => expense.id === idNumber)
+      if (foundExpense) {
+        selectedExpense.value = foundExpense
+        currentView.value = 'review'
+      } else {
+        // 如果找不到指定ID的费用，保持在列表视图
+        selectedExpense.value = null
+        currentView.value = 'list'
+        ElMessage.warning('未找到指定的费用记录')
+      }
+    } else if (isBatchMode.value) {
+      // 批量模式：显示列表视图，提示用户选择费用
+      currentView.value = 'list'
+      ElMessage.info('批量审核模式：请选择需要审核的费用记录')
     } else {
-      selectedExpense.value = pendingExpenses.value[0]
+      // 默认显示列表视图，不自动跳转到详情页面
+      selectedExpense.value = null
+      currentView.value = 'list'
     }
     expenseData.value = selectedExpense.value
     loading.value = false
@@ -1173,15 +1496,20 @@ const clearSelection = (): void => {
   selectedExpenses.value = []
 }
 
+const handleSelectAll = (selection: any[]): void => {
+  console.log('全选操作:', selection.length, '条记录被选中')
+  selectedExpenses.value = selection
+}
+
 // 审核拒绝通知系统
 const sendRejectionNotification = (expense: ExpenseItem, reason: string, suggestion: string, customReason?: string): RejectionNotification => {
-  const notification = {
+  const notification: RejectionNotification = {
     id: Date.now(),
     expenseId: expense.id,
     expenseTitle: expense.title,
     applicant: expense.applicant,
     reason: reason,
-    customReason: customReason || '',
+    customReason: customReason || undefined,
     suggestion: suggestion,
     status: 'rejected',
     rejectedAt: new Date().toISOString(),
@@ -1226,9 +1554,7 @@ const confirmResubmission = async (): Promise<void> => {
   
   // 更新费用状态为重新提交
   selectedExpense.value.status = 'pending'
-  selectedExpense.value.isResubmitted = true
-  selectedExpense.value.resubmissionCount = (selectedExpense.value.resubmissionCount || 0) + 1
-  selectedExpense.value.originalRejectId = selectedExpense.value.id
+  selectedExpense.value.updatedAt = new Date().toISOString()
   
   // 添加重新提交的审核历史
   if (!selectedExpense.value.reviewHistory) {
@@ -1236,26 +1562,18 @@ const confirmResubmission = async (): Promise<void> => {
   }
   
   selectedExpense.value.reviewHistory.push({
-    action: '重新提交',
+    id: `hist_${Date.now()}`,
     reviewer: selectedExpense.value.applicant,
-    status: 'resubmitted',
+    reviewerId: selectedExpense.value.applicantId,
+    action: 'resubmitted',
     comment: `补充材料：${resubmissionForm.additionalMaterials}`,
-    time: new Date().toISOString(),
-    suggestion: `更新说明：${resubmissionForm.updatedDescription}`
+    createdAt: new Date().toISOString()
   })
-  
-  // 更新通知状态
-  const notification = notificationSystem.value.rejectedNotifications.find(n => n.expenseId === selectedExpense.value.id)
-  if (notification) {
-    notification.resubmissionCount++
-    notification.canResubmit = notification.resubmissionCount < 3
-  }
   
   // 将重新提交的费用添加到待审核列表
   pendingExpenses.value.push({
     ...selectedExpense.value,
-    id: Date.now(), // 重新分配ID
-    originalId: selectedExpense.value.id
+    id: String(Date.now()) // 重新分配ID为字符串
   })
   
   ElMessage.success('费用已重新提交，等待审核')
@@ -1306,42 +1624,14 @@ const handleQuickRejectSingle = async (expense: ExpenseItem): Promise<void> => {
     return
   }
 
-  try {
-    await ElMessageBox.confirm(
-      `确定要拒绝"${expense.title}"吗？`,
-      '快速拒绝确认',
-      {
-        confirmButtonText: '确认拒绝',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }
-    )
-
-    // 快速拒绝操作
-    expense.status = 'rejected'
-    expense.reviewer = '当前用户'
-    expense.reviewDate = new Date().toISOString().split('T')[0]
-    
-    if (!expense.reviewHistory) {
-      expense.reviewHistory = []
-    }
-    
-    expense.reviewHistory.push({
-      action: '快速拒绝',
-      status: 'rejected',
-      reviewer: '当前用户',
-      time: new Date().toISOString(),
-      comment: '快速拒绝操作',
-      suggestion: '经审核，该费用申请不符合相关标准，拒绝通过。'
-    })
-
-    ElMessage.success('费用申请已拒绝！')
-
-  } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('快速拒绝操作失败')
-    }
-  }
+  // 重置表单
+  quickRejectForm.reason = ''
+  quickRejectForm.customReason = ''
+  quickRejectForm.suggestion = ''
+  currentQuickRejectExpense.value = expense
+  
+  // 显示快速拒绝原因选择对话框
+  quickRejectVisible.value = true
 }
 
 // 批量审核方法
@@ -1391,10 +1681,26 @@ const batchRejectForm = reactive<BatchRejectForm>({
   suggestion: ''
 })
 
+// 快速拒绝相关状态和逻辑
+const quickRejectVisible = ref(false)
+const quickRejectForm = reactive<BatchRejectForm>({
+  reason: '',
+  customReason: '',
+  suggestion: ''
+})
+const currentQuickRejectExpense = ref<ExpenseItem | null>(null)
+
 // 批量驳回表单验证
 const canSubmitBatchReject = computed(() => {
   if (!batchRejectForm.reason) return false
   if (batchRejectForm.reason === 'custom' && !batchRejectForm.customReason.trim()) return false
+  return true
+})
+
+// 快速拒绝表单验证
+const canSubmitQuickReject = computed(() => {
+  if (!quickRejectForm.reason) return false
+  if (quickRejectForm.reason === 'custom' && !quickRejectForm.customReason.trim()) return false
   return true
 })
 
@@ -1411,6 +1717,54 @@ const handleBatchReject = async (): Promise<void> => {
 
   // 显示驳回原因选择对话框
   batchRejectVisible.value = true
+}
+
+const confirmQuickReject = async (): Promise<void> => {
+  if (!canSubmitQuickReject.value) {
+    ElMessage.warning('请完善驳回信息')
+    return
+  }
+
+  if (!currentQuickRejectExpense.value) {
+    ElMessage.error('未选择要拒绝的费用申请')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确定要拒绝"${currentQuickRejectExpense.value.title}"吗？`,
+      '快速拒绝确认',
+      {
+        confirmButtonText: '确认拒绝',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+
+    // 生成驳回建议
+    const reasonMap: { [key: string]: string } = {
+      incomplete_materials: '材料不完整，请补充完整后重新申请。',
+      amount_issue: '费用金额存在异常，请核实后重新申请。',
+      budget_exceeded: '费用超出预算，请重新规划后申请。',
+      unclear_purpose: '费用用途不明确，请详细说明具体用途。',
+      timing_issue: '申请时间不符合要求，请按期申请。',
+      other: '该申请不符合相关标准，请重新准备。',
+      custom: quickRejectForm.customReason
+    }
+    
+    quickRejectForm.suggestion = reasonMap[quickRejectForm.reason] || '该申请不符合相关标准，请重新准备。'
+
+    // 执行快速拒绝操作
+    await performQuickRejectWithReason(currentQuickRejectExpense.value, quickRejectForm)
+    
+    quickRejectVisible.value = false
+    ElMessage.success('费用申请已拒绝！')
+
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('快速拒绝操作失败')
+    }
+  }
 }
 
 const confirmBatchReject = async (): Promise<void> => {
@@ -1473,9 +1827,7 @@ const confirmBatchReject = async (): Promise<void> => {
 const performBatchReject = async (expense: ExpenseItem, rejectForm: BatchRejectForm): Promise<void> => {
   // 更新费用状态
   expense.status = 'rejected'
-  expense.reviewer = '当前用户'
-  expense.reviewDate = new Date().toISOString().split('T')[0]
-  expense.reviewComment = `批量拒绝操作 - 驳回原因：${rejectForm.reason}`
+  expense.updatedAt = new Date().toISOString()
   
   if (!expense.reviewHistory) {
     expense.reviewHistory = []
@@ -1503,18 +1855,16 @@ const performBatchReject = async (expense: ExpenseItem, rejectForm: BatchRejectF
     custom: '自定义原因'
   }
   
-  const reasonLabel = reasonLabels[rejectForm.reason] || '其他原因'
+  const reasonLabel = reasonLabels[rejectForm.reason as keyof typeof reasonLabels] || '其他原因'
   const suggestion = rejectForm.suggestion || '请按照审核要求补充或修正相关材料'
   
   expense.reviewHistory.push({
-    action: '批量拒绝',
-    status: 'rejected',
+    id: `hist_${Date.now()}`,
     reviewer: '当前用户',
-    time: new Date().toISOString(),
+    reviewerId: 'current_user',
+    action: 'rejected',
     comment: `批量拒绝操作 - 驳回原因：${reasonLabel}`,
-    suggestion: rejectForm.suggestion,
-    rejectReason: rejectForm.reason,
-    customReason: rejectForm.customReason
+    createdAt: new Date().toISOString()
   })
   
   // 自动发送拒绝通知
@@ -1537,21 +1887,88 @@ const performBatchReject = async (expense: ExpenseItem, rejectForm: BatchRejectF
 
 const performQuickApproval = async (expense: ExpenseItem): Promise<void> => {
   expense.status = 'approved'
-  expense.reviewer = '当前用户'
-  expense.reviewDate = new Date().toISOString().split('T')[0]
+  expense.updatedAt = new Date().toISOString()
   
   if (!expense.reviewHistory) {
     expense.reviewHistory = []
   }
   
   expense.reviewHistory.push({
-    action: '快速通过',
-    status: 'approved',
+    id: `hist_${Date.now()}`,
     reviewer: '当前用户',
-    time: new Date().toISOString(),
+    reviewerId: 'current_user',
+    action: 'approved',
     comment: `${expense.applicant}的费用申请快速通过。`,
-    suggestion: getQuickApprovalSuggestion(expense)
+    createdAt: new Date().toISOString()
   })
+}
+
+const performQuickReject = async (expense: ExpenseItem): Promise<void> => {
+  expense.status = 'rejected'
+  expense.updatedAt = new Date().toISOString()
+  
+  if (!expense.reviewHistory) {
+    expense.reviewHistory = []
+  }
+  
+  expense.reviewHistory.push({
+    id: `hist_${Date.now()}`,
+    reviewer: '当前用户',
+    reviewerId: 'current_user',
+    action: 'rejected',
+    comment: `${expense.applicant}的费用申请快速拒绝。`,
+    createdAt: new Date().toISOString()
+  })
+}
+
+const performQuickRejectWithReason = async (expense: ExpenseItem, rejectForm: BatchRejectForm): Promise<void> => {
+  // 更新费用状态
+  expense.status = 'rejected'
+  expense.updatedAt = new Date().toISOString()
+  
+  if (!expense.reviewHistory) {
+    expense.reviewHistory = []
+  }
+  
+  // 驳回原因标签接口定义
+  interface RejectReasonLabels {
+    incomplete_materials: string
+    amount_issue: string
+    budget_exceeded: string
+    unclear_purpose: string
+    timing_issue: string
+    other: string
+    custom: string
+  }
+
+  // 获取原因标签
+  const reasonLabels: RejectReasonLabels = {
+    incomplete_materials: '材料不完整',
+    amount_issue: '费用金额异常',
+    budget_exceeded: '预算超支',
+    unclear_purpose: '费用用途不明确',
+    timing_issue: '时间不符合要求',
+    other: '其他原因',
+    custom: '自定义原因'
+  }
+  
+  const reasonLabel = reasonLabels[rejectForm.reason as keyof typeof reasonLabels] || '其他原因'
+  const suggestion = rejectForm.suggestion || '请按照审核要求补充或修正相关材料'
+  
+  expense.reviewHistory.push({
+    id: `hist_${Date.now()}`,
+    reviewer: '当前用户',
+    reviewerId: 'current_user',
+    action: 'rejected',
+    comment: `快速拒绝操作 - 驳回原因：${reasonLabel}`,
+    createdAt: new Date().toISOString()
+  })
+  
+  // 自动发送拒绝通知
+  sendRejectionNotification(expense, reasonLabel, suggestion, rejectForm.customReason)
+  
+  // 从待审核列表中移除已拒绝的费用
+  pendingExpenses.value = pendingExpenses.value.filter(item => item.id !== expense.id)
 }
 
 // 驳回原因相关方法
@@ -1596,8 +2013,8 @@ const getQuickApprovalSuggestion = (expense: ExpenseItem): string => {
   } else if (amount <= 1000) {
     if (category === 'utilities') {
       return '水电费支出合理，符合预算安排，同意通过。'
-    } else if (category === 'supplies') {
-      return '办公用品采购合理，价格适中，同意通过。'
+    } else if (category === 'other') {
+      return '其他费用支出合理，符合相关规定，同意通过。'
     } else {
       return '费用申请材料齐全，符合报销标准，同意通过。'
     }
@@ -1610,62 +2027,7 @@ const getQuickApprovalSuggestion = (expense: ExpenseItem): string => {
   }
 }
 
-// 审核历史项接口
-interface ReviewHistoryItem {
-  action: string
-  reviewer: string
-  status: 'submitted' | 'approved' | 'rejected'
-  time: string
-  comment?: string
-  suggestion?: string
-}
-
-// 费用项接口定义
-interface ExpenseItem {
-  id: number
-  title: string
-  description: string
-  amount: number
-  category: 'accommodation' | 'utilities' | 'maintenance' | 'cleaning' | 'other'
-  applicant: string
-  phone: string
-  department: string
-  position: string
-  date: string
-  status: 'pending' | 'approved' | 'rejected'
-  isUrgent: boolean
-  attachments: string[]
-  reviewHistory: ReviewHistoryItem[]
-  createdAt: string
-  updatedAt: string
-  reviewer?: string
-  reviewDate?: string
-  reviewComment?: string
-  reviewSuggestion?: string
-}
-
-// 批量驳回表单接口定义
-interface BatchRejectForm {
-  reason: string
-  customReason: string
-  suggestion: string
-}
-
-// 重新提交表单接口定义
-interface ResubmissionForm {
-  additionalMaterials: string
-  updatedDescription: string
-  supplementaryInfo: string
-}
-
-// 审核表单接口定义
-interface ReviewForm {
-  status: 'approved' | 'rejected' | ''
-  comment: string
-  suggestion: string
-  rejectReason: string
-  customRejectReason: string
-}
+// 审核历史项接口 - 移除重复定义
 
 // 审核记录追踪相关方法
 const getHistoryItemClass = (history: ReviewHistoryItem): string => {
@@ -1711,6 +2073,15 @@ const getStatusText = (status?: string): string => {
   }
 }
 
+const getActionText = (action?: string): string => {
+  switch (action) {
+    case 'approved': return '通过申请'
+    case 'rejected': return '拒绝申请'
+    case 'resubmitted': return '重新提交'
+    default: return action || '未知操作'
+  }
+}
+
 const getCategoryType = (category?: string): string => {
   switch (category) {
     case 'accommodation': return ''
@@ -1738,14 +2109,7 @@ const getInitials = (name?: string): string => {
   return name.slice(0, 2).toUpperCase()
 }
 
-const getFileName = (filePath: string): string => {
-  return filePath.split('/').pop() || filePath
-}
-
-const getRandomFileSize = (): string => {
-  const sizes = ['125KB', '256KB', '512KB', '1.2MB', '2.4MB']
-  return sizes[Math.floor(Math.random() * sizes.length)]
-}
+// 文件处理辅助函数（合并重复声明）
 
 const getRowClassName = ({ row }: { row: ExpenseItem }): string => {
   return row.isUrgent ? 'urgent-row' : ''
@@ -1938,9 +2302,11 @@ const submitQuickApproval = async (): Promise<void> => {
     
     // 更新本地数据状态
     if (selectedExpense.value) {
+      const currentExpenseId = selectedExpense.value.id
+      
+      // 更新当前费用状态
       selectedExpense.value.status = 'approved'
-      selectedExpense.value.reviewer = '当前用户' // 实际应该从用户信息获取
-      selectedExpense.value.reviewDate = new Date().toISOString().split('T')[0]
+      selectedExpense.value.updatedAt = new Date().toISOString()
       
       // 添加审核历史记录
       if (!selectedExpense.value.reviewHistory) {
@@ -1948,21 +2314,46 @@ const submitQuickApproval = async (): Promise<void> => {
       }
       
       selectedExpense.value.reviewHistory.push({
-        action: '快速通过',
-        status: 'approved',
+        id: `hist_${Date.now()}`,
         reviewer: '当前用户',
-        time: new Date().toISOString(),
+        reviewerId: 'current_user',
+        action: 'approved',
         comment: reviewForm.value.comment,
-        suggestion: reviewForm.value.suggestion
+        createdAt: new Date().toISOString()
       })
+      
+      // 从待审核列表中移除已通过的费用
+      const currentIndex = pendingExpenses.value.findIndex(expense => expense.id === currentExpenseId)
+      if (currentIndex !== -1) {
+        pendingExpenses.value.splice(currentIndex, 1)
+      }
+      
+      // 选择下一个待审核的费用（如果有的话）
+      const nextExpense = pendingExpenses.value[currentIndex] || pendingExpenses.value[currentIndex - 1]
+      if (nextExpense) {
+        selectedExpense.value = nextExpense
+        expenseData.value = nextExpense
+        currentView.value = 'review'
+      } else {
+        // 如果没有更多费用了，清空选择
+        selectedExpense.value = null
+        expenseData.value = null
+        ElMessage.success('费用申请已快速通过审核！所有待审核费用已完成')
+      }
     }
     
-    ElMessage.success('费用申请已快速通过审核！')
+    // 重置审核表单
+    reviewForm.value = {
+      status: '',
+      suggestion: '',
+      comment: '',
+      isUrgent: false,
+      rejectReason: '',
+      customRejectReason: ''
+    }
     
-    // 延迟跳转到费用管理页面
-    setTimeout(() => {
-      router.push('/dashboard/expense-management')
-    }, 1500)
+    // 审核完成后停留在当前页面，可以继续审核其他费用
+    ElMessage.success('费用申请已快速通过审核！')
     
   } catch (error) {
     throw new Error('提交审核失败')
@@ -1977,16 +2368,634 @@ const handlePreview = (): void => {
     return
   }
   
-  // 生成预览HTML内容（简化版本）
-  ElMessage.info('预览功能正在开发中...')
+  // 打开预览对话框
+  previewVisible.value = true
 }
 
-const handlePreviewAttachment = (attachment: string): void => {
-  ElMessage.info(`预览附件：${attachment}`)
+const handlePreviewDownload = (): void => {
+  if (!selectedExpense.value) {
+    ElMessage.error('费用数据不存在')
+    return
+  }
+  
+  // 生成并下载申请文档
+  generateExpenseApplication()
+  previewVisible.value = false
 }
 
-const handleDownloadAttachment = (attachment: string): void => {
-  ElMessage.success(`开始下载：${attachment}`)
+const generateExpenseApplication = (): void => {
+  const expense = selectedExpense.value
+  if (!expense) return
+  
+  // 生成申请文档内容
+  const documentContent = generateDocumentContent(expense)
+  
+  // 创建Blob对象
+  const blob = new Blob([documentContent], { type: 'text/html;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  
+  // 创建下载链接
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${expense.title}_费用申请_${new Date().toISOString().split('T')[0]}.html`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  
+  // 释放URL对象
+  URL.revokeObjectURL(url)
+  
+  ElMessage.success('费用申请文档已下载')
+}
+
+const generateDocumentContent = (expense: ExpenseItem): string => {
+  return `
+    <!DOCTYPE html>
+    <html lang="zh-CN">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>费用申请文档 - ${expense.title}</title>
+      <style>
+        body { font-family: 'Microsoft YaHei', Arial, sans-serif; margin: 40px; line-height: 1.6; }
+        .header { text-align: center; border-bottom: 2px solid #409eff; padding-bottom: 20px; margin-bottom: 30px; }
+        .title { font-size: 24px; font-weight: bold; color: #303133; }
+        .subtitle { font-size: 16px; color: #606266; margin-top: 10px; }
+        .section { margin-bottom: 25px; }
+        .section-title { font-size: 18px; font-weight: bold; color: #303133; border-left: 4px solid #409eff; padding-left: 12px; margin-bottom: 15px; }
+        .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
+        .info-item { background: #f8f9fa; padding: 12px; border-radius: 6px; }
+        .info-label { font-weight: bold; color: #606266; }
+        .info-value { color: #303133; margin-top: 4px; }
+        .amount-box { background: linear-gradient(135deg, #f56c6c 0%, #f78989 100%); color: white; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0; }
+        .amount-label { font-size: 14px; }
+        .amount-value { font-size: 28px; font-weight: bold; margin-top: 5px; }
+        .description-box { background: #f8f9fa; padding: 20px; border-radius: 6px; border: 1px solid #e4e7ed; }
+        .attachments-list { background: #f8f9fa; padding: 15px; border-radius: 6px; }
+        .attachment-item { display: flex; align-items: center; gap: 10px; padding: 8px; }
+        .history-timeline { background: #f8f9fa; padding: 20px; border-radius: 6px; }
+        .history-item { display: flex; gap: 15px; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid #e4e7ed; }
+        .history-item:last-child { border-bottom: none; margin-bottom: 0; }
+        .history-time { font-weight: bold; color: #409eff; min-width: 120px; }
+        .history-content { flex: 1; }
+        .history-action { font-weight: bold; color: #303133; }
+        .history-reviewer { color: #606266; margin-top: 2px; }
+        .history-comment { color: #909399; font-style: italic; margin-top: 5px; }
+        .footer { margin-top: 40px; text-align: center; color: #909399; font-size: 14px; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div class="title">费用申请文档</div>
+        <div class="subtitle">Expense Application Document</div>
+        <div class="subtitle">生成时间：${new Date().toLocaleString('zh-CN')}</div>
+      </div>
+
+      <div class="section">
+        <div class="amount-box">
+          <div class="amount-label">申请金额</div>
+          <div class="amount-value">${formatCurrency(expense.amount || 0)}</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">基本信息</div>
+        <div class="info-grid">
+          <div class="info-item">
+            <div class="info-label">费用标题</div>
+            <div class="info-value">${expense.title}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">申请人</div>
+            <div class="info-value">${expense.applicant}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">联系电话</div>
+            <div class="info-value">${expense.applicantId || 'N/A'}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">所属部门</div>
+            <div class="info-value">${expense.applicant || 'N/A'}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">职位</div>
+            <div class="info-value">员工</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">申请日期</div>
+            <div class="info-value">${formatDate(expense.createdAt)}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">紧急程度</div>
+            <div class="info-value">${expense.isUrgent ? '紧急' : '普通'}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">费用类别</div>
+            <div class="info-value">${getCategoryText(expense.category)}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">费用描述</div>
+        <div class="description-box">
+          ${expense.description || '暂无描述'}
+        </div>
+      </div>
+
+      ${expense.attachments && expense.attachments.length > 0 ? `
+      <div class="section">
+        <div class="section-title">附件清单 (${expense.attachments.length}个文件)</div>
+        <div class="attachments-list">
+          ${expense.attachments.map(attachment => `
+            <div class="attachment-item">
+              <span>📄</span>
+              <span>${attachment.name}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      ` : ''}
+
+      ${expense.reviewHistory && expense.reviewHistory.length > 0 ? `
+      <div class="section">
+        <div class="section-title">审核历史</div>
+        <div class="history-timeline">
+          ${expense.reviewHistory.map(history => `
+            <div class="history-item">
+              <div class="history-time">${formatDateTime(history.createdAt)}</div>
+              <div class="history-content">
+                <div class="history-action">${history.action}</div>
+                <div class="history-reviewer">${history.reviewer}</div>
+                ${history.comment ? `<div class="history-comment">备注：${history.comment}</div>` : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      ` : ''}
+
+      <div class="footer">
+        <p>此文档由费用管理系统自动生成</p>
+        <p>文档编号：EXP-${expense.id}-${new Date().toISOString().split('T')[0].replace(/-/g, '')}</p>
+      </div>
+    </body>
+    </html>
+  `
+}
+
+const handlePreviewAttachment = (attachment: string | { url?: string; name?: string; type?: string }): void => {
+  try {
+    // 提取URL用于文件类型判断
+    const url = typeof attachment === 'string' ? attachment : (attachment.url || '')
+    
+    // 安全检查URL有效性
+    if (!url) {
+      ElMessage.error('无法找到附件URL')
+      return
+    }
+    
+    // 提取文件扩展名
+    const fileName = getFileNameFromPath(url)
+    const fileExtension = getFileExtension(fileName).toLowerCase()
+    
+    // 支持的文件类型判断
+    const isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(fileExtension)
+    const isPdf = fileExtension === 'pdf'
+    const isDoc = ['doc', 'docx'].includes(fileExtension)
+    
+    // 根据文件类型调用相应的预览函数
+    if (isImage) {
+      // 图片文件预览
+      console.log(`预览图片文件：${fileName}`)
+      showImagePreview(url)
+    } else if (isPdf) {
+      // PDF文件预览
+      console.log(`预览PDF文件：${fileName}`)
+      showPdfPreview(url)
+    } else if (isDoc) {
+      // 文档文件预览
+      console.log(`预览文档文件：${fileName}`)
+      showDocumentPreview(url)
+    } else {
+      // 其他类型文件
+      console.log(`不支持的文件类型：${fileExtension}`)
+      ElMessage.info(`预览${fileName}：暂不支持该文件类型的预览`)
+    }
+  } catch (error) {
+    console.error('预览附件时发生错误:', error)
+    ElMessage.error('预览附件时发生错误，请重试')
+  }
+}
+
+const handleDownloadAttachment = (attachment: string | { url?: string; name?: string; type?: string }): void => {
+  try {
+    const fileName = getFileNameFromPath(attachment)
+    ElMessage.info(`正在准备下载：${fileName}...`)
+    
+    // 提取URL和文件名
+    const url = typeof attachment === 'string' ? attachment : (attachment.url || '')
+    
+    if (!url) {
+      ElMessage.error('无法找到下载链接')
+      return
+    }
+    
+    // 创建下载链接
+    const downloadUrl = generateDownloadUrl(url)
+    
+    // 检查URL有效性
+    if (!downloadUrl || downloadUrl.trim() === '') {
+      ElMessage.error('下载链接无效')
+      return
+    }
+    
+    // 创建临时链接并触发下载
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.download = fileName
+    link.target = '_blank' // 在新窗口打开，避免被阻止
+    link.style.display = 'none'
+    
+    // 添加到DOM并触发点击
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    
+    // 显示下载成功消息
+    ElMessage.success(`${fileName} 下载已开始`)
+    
+    // 记录下载日志
+    console.log(`附件下载：${fileName} (${getRandomFileSize()})`)
+    
+  } catch (error) {
+    console.error('下载附件失败:', error)
+    ElMessage.error(`下载 ${getFileNameFromPath(attachment)} 失败，请重试`)
+  }
+}
+
+// 图片预览功能
+const showImagePreview = (imageUrl: string): void => {
+  try {
+    // 安全检查URL
+    if (!imageUrl) {
+      ElMessage.error('图片URL无效')
+      return
+    }
+
+    const dialog = document.createElement('div')
+    dialog.className = 'attachment-preview-dialog'
+    
+    // 创建DOM结构而不是使用字符串拼接
+    const overlay = document.createElement('div')
+    overlay.className = 'preview-overlay'
+    overlay.onclick = () => {
+      dialog.remove()
+    }
+    
+    const container = document.createElement('div')
+    container.className = 'preview-container'
+    container.onclick = (e) => e.stopPropagation()
+    
+    const header = document.createElement('div')
+    header.className = 'preview-header'
+    const title = document.createElement('h3')
+    title.textContent = '图片预览'
+    const closeBtn = document.createElement('button')
+    closeBtn.className = 'preview-close'
+    closeBtn.textContent = '×'
+    closeBtn.onclick = () => dialog.remove()
+    header.appendChild(title)
+    header.appendChild(closeBtn)
+    
+    const content = document.createElement('div')
+    content.className = 'preview-content'
+    const img = document.createElement('img')
+    img.src = imageUrl
+    img.alt = getFileNameFromPath(imageUrl)
+    img.className = 'preview-image'
+    
+    // 添加图片加载错误处理
+    img.onerror = () => {
+      ElMessage.error('图片加载失败')
+      dialog.remove()
+    }
+    
+    content.appendChild(img)
+    
+    const footer = document.createElement('div')
+    footer.className = 'preview-footer'
+    const fileInfo = document.createElement('div')
+    fileInfo.className = 'file-info'
+    const fileName = document.createElement('span')
+    fileName.className = 'file-name'
+    fileName.textContent = getFileNameFromPath(imageUrl)
+    const fileSize = document.createElement('span')
+    fileSize.className = 'file-size'
+    fileSize.textContent = getRandomFileSize()
+    fileInfo.appendChild(fileName)
+    fileInfo.appendChild(fileSize)
+    
+    const downloadBtn = document.createElement('button')
+    downloadBtn.className = 'download-btn'
+    downloadBtn.textContent = '下载图片'
+    downloadBtn.onclick = () => {
+      try {
+        const downloadUrl = generateDownloadUrl(imageUrl)
+        const fileName = getFileNameFromPath(imageUrl)
+        
+        if (!downloadUrl || downloadUrl.trim() === '') {
+          ElMessage.error('下载链接无效')
+          return
+        }
+        
+        const link = document.createElement('a')
+        link.href = downloadUrl
+        link.download = fileName
+        link.target = '_blank'
+        link.click()
+        ElMessage.success('下载已开始')
+      } catch (error) {
+        ElMessage.error('下载失败，请重试')
+      }
+    }
+    
+    footer.appendChild(fileInfo)
+    footer.appendChild(downloadBtn)
+    
+    container.appendChild(header)
+    container.appendChild(content)
+    container.appendChild(footer)
+    overlay.appendChild(container)
+    dialog.appendChild(overlay)
+    
+    document.body.appendChild(dialog)
+    
+    // 添加ESC键关闭功能
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        dialog.remove()
+        document.removeEventListener('keydown', handleEsc)
+      }
+    }
+    document.addEventListener('keydown', handleEsc)
+    
+    console.log(`图片预览已打开：${imageUrl}`)
+    
+  } catch (error) {
+    console.error('图片预览错误:', error)
+    ElMessage.error('打开图片预览时发生错误')
+  }
+}
+
+// PDF预览功能
+const showPdfPreview = (pdfUrl: string): void => {
+  const fileName = getFileNameFromPath(pdfUrl)
+  ElMessage.info('正在打开PDF预览...')
+  
+  // 创建预览对话框
+  const dialog = document.createElement('div')
+  dialog.className = 'pdf-preview-dialog'
+  
+  const overlay = document.createElement('div')
+  overlay.className = 'preview-overlay'
+  overlay.onclick = () => dialog.remove()
+  
+  const container = document.createElement('div')
+  container.className = 'preview-container'
+  container.onclick = (e) => e.stopPropagation()
+  
+  const header = document.createElement('div')
+  header.className = 'preview-header'
+  const title = document.createElement('h3')
+  title.textContent = 'PDF预览'
+  const closeBtn = document.createElement('button')
+  closeBtn.className = 'preview-close'
+  closeBtn.textContent = '×'
+  closeBtn.onclick = () => dialog.remove()
+  header.appendChild(title)
+  header.appendChild(closeBtn)
+  
+  const content = document.createElement('div')
+  content.className = 'preview-content'
+  
+  // 如果是实际PDF文件，尝试在新窗口打开
+  if (pdfUrl.includes('.pdf')) {
+    const pdfContainer = document.createElement('div')
+    pdfContainer.className = 'pdf-container'
+    
+    const iframe = document.createElement('iframe')
+    iframe.src = pdfUrl
+    iframe.width = '100%'
+    iframe.height = '500px'
+    iframe.frameBorder = '0'
+    
+    const pdfInfo = document.createElement('div')
+    pdfInfo.className = 'pdf-info'
+    const infoP = document.createElement('p')
+    infoP.textContent = '如果PDF预览无法显示，请使用下面的下载按钮在新窗口中查看。'
+    pdfInfo.appendChild(infoP)
+    
+    pdfContainer.appendChild(iframe)
+    pdfContainer.appendChild(pdfInfo)
+    content.appendChild(pdfContainer)
+  } else {
+    // 如果不是PDF文件，显示文件信息
+    const infoContainer = document.createElement('div')
+    infoContainer.className = 'file-info-container'
+    
+    const infoIcon = document.createElement('div')
+    infoIcon.className = 'info-icon'
+    infoIcon.textContent = '📄'
+    
+    const infoDetails = document.createElement('div')
+    infoDetails.className = 'info-details'
+    
+    const title = document.createElement('h4')
+    title.textContent = fileName
+    
+    const typeP = document.createElement('p')
+    typeP.textContent = '类型：PDF文档'
+    
+    const descP = document.createElement('p')
+    descP.textContent = '说明：此文件需要在专门的PDF查看器中打开'
+    
+    infoDetails.appendChild(title)
+    infoDetails.appendChild(typeP)
+    infoDetails.appendChild(descP)
+    
+    infoContainer.appendChild(infoIcon)
+    infoContainer.appendChild(infoDetails)
+    content.appendChild(infoContainer)
+  }
+  
+  const footer = document.createElement('div')
+  footer.className = 'preview-footer'
+  const downloadBtn = document.createElement('button')
+  downloadBtn.className = 'download-btn'
+  downloadBtn.textContent = '下载PDF'
+  downloadBtn.onclick = () => {
+    try {
+      const downloadUrl = generateDownloadUrl(pdfUrl)
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = fileName
+      link.target = '_blank'
+      link.click()
+      ElMessage.success('下载已开始')
+    } catch (error) {
+      ElMessage.error('下载失败，请重试')
+    }
+  }
+  
+  footer.appendChild(downloadBtn)
+  
+  container.appendChild(header)
+  container.appendChild(content)
+  container.appendChild(footer)
+  overlay.appendChild(container)
+  dialog.appendChild(overlay)
+  
+  document.body.appendChild(dialog)
+  
+  console.log(`PDF预览已打开：${fileName}`)
+}
+
+// 文档预览功能
+const showDocumentPreview = (docUrl: string): void => {
+  ElMessage.info(`正在打开 ${getFileNameFromPath(docUrl)} 的预览...`)
+  
+  // 显示文档信息并提供下载选项
+  const dialog = document.createElement('div')
+  dialog.className = 'document-preview-dialog'
+  
+  // 构建HTML内容，避免在字符串中使用HTML标签
+  const fileName = getFileNameFromPath(docUrl)
+  const fileSize = getRandomFileSize()
+  const overlay = document.createElement('div')
+  overlay.className = 'preview-overlay'
+  overlay.onclick = () => dialog.remove()
+  
+  const container = document.createElement('div')
+  container.className = 'preview-container'
+  container.onclick = (e) => e.stopPropagation()
+  
+  const header = document.createElement('div')
+  header.className = 'preview-header'
+  
+  const title = document.createElement('h3')
+  title.textContent = '文档预览'
+  
+  const closeBtn = document.createElement('button')
+  closeBtn.className = 'preview-close'
+  closeBtn.textContent = '×'
+  closeBtn.onclick = () => dialog.remove()
+  
+  header.appendChild(title)
+  header.appendChild(closeBtn)
+  
+  const content = document.createElement('div')
+  content.className = 'preview-content'
+  const docInfo = document.createElement('div')
+  docInfo.className = 'document-info'
+  
+  const infoIcon = document.createElement('div')
+  infoIcon.className = 'info-icon'
+  infoIcon.textContent = '📄'
+  
+  const infoDetails = document.createElement('div')
+  infoDetails.className = 'info-details'
+  
+  const titleEl = document.createElement('h4')
+  titleEl.textContent = fileName
+  
+  const typeP = document.createElement('p')
+  typeP.textContent = '类型：Microsoft Word 文档'
+  
+  const sizeP = document.createElement('p')
+  sizeP.textContent = '大小：' + fileSize
+  
+  const descP = document.createElement('p')
+  descP.textContent = '说明：Word文档需要在相应软件中打开查看'
+  
+  infoDetails.appendChild(titleEl)
+  infoDetails.appendChild(typeP)
+  infoDetails.appendChild(sizeP)
+  infoDetails.appendChild(descP)
+  
+  docInfo.appendChild(infoIcon)
+  docInfo.appendChild(infoDetails)
+  
+  const footer = document.createElement('div')
+  footer.className = 'preview-footer'
+  const downloadBtn = document.createElement('button')
+  downloadBtn.className = 'download-btn'
+  downloadBtn.textContent = '下载文档'
+  downloadBtn.onclick = () => {
+    const link = document.createElement('a')
+    link.href = docUrl
+    link.download = getFileNameFromPath(docUrl)
+    link.click()
+  }
+  
+  const openBtn = document.createElement('button')
+  openBtn.className = 'open-btn'
+  openBtn.textContent = '在新窗口中打开'
+  openBtn.onclick = () => window.open(docUrl, '_blank')
+  
+  footer.appendChild(downloadBtn)
+  footer.appendChild(openBtn)
+  
+  content.appendChild(docInfo)
+  
+  container.appendChild(header)
+  container.appendChild(content)
+  container.appendChild(footer)
+  
+  overlay.appendChild(container)
+  dialog.appendChild(overlay)
+  
+  document.body.appendChild(dialog)
+}
+
+// 辅助函数：生成下载URL
+const generateDownloadUrl = (attachment: string): string => {
+  // 如果是完整的URL，直接返回
+  if (attachment.startsWith('http://') || attachment.startsWith('https://')) {
+    return attachment
+  }
+  
+  // 如果是本地文件路径，尝试构造相对路径
+  // 检查是否是相对路径格式
+  if (attachment.startsWith('/') || attachment.startsWith('./') || attachment.startsWith('../')) {
+    // 在开发环境中相对路径可能需要处理
+    // 这里使用location.origin来确保可以访问
+    const baseUrl = window.location.origin
+    return baseUrl + (attachment.startsWith('/') ? attachment : '/' + attachment)
+  }
+  
+  // 如果是文件名或其他格式，构造基本的文件URL
+  // 在实际项目中，这里应该调用后端API
+  return attachment // 直接返回原始路径
+}
+
+// 辅助函数：获取文件扩展名
+const getFileExtension = (fileNameOrUrl: string): string => {
+  if (!fileNameOrUrl) return ''
+  
+  // 移除查询参数和片段
+  const cleanPath = fileNameOrUrl.split('?')[0].split('#')[0]
+  
+  // 获取文件名部分
+  const fileName = cleanPath.split('/').pop() || ''
+  
+  // 如果没有点号，返回空字符串
+  if (!fileName.includes('.')) return ''
+  
+  // 提取扩展名
+  const extension = fileName.split('.').pop() || ''
+  
+  return extension.toLowerCase()
 }
 </script>
 
@@ -2014,6 +3023,15 @@ const handleDownloadAttachment = (attachment: string): void => {
   justify-content: space-between;
   align-items: center;
   padding: 20px 0;
+  position: relative;
+}
+
+.header-center-section {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
 }
 
 .tab-title {
@@ -2109,6 +3127,10 @@ const handleDownloadAttachment = (attachment: string): void => {
   gap: 8px;
 }
 
+.expense-category {
+  margin-top: 6px;
+}
+
 .applicant-name {
   font-size: 12px;
   color: #606266;
@@ -2128,6 +3150,12 @@ const handleDownloadAttachment = (attachment: string): void => {
   font-weight: 600;
   color: #f56c6c;
   font-size: 16px;
+}
+
+.amount-value-list {
+  font-weight: 500;
+  color: #f56c6c;
+  font-size: 14px;
 }
 
 /* 申请人单元格 */
@@ -2156,6 +3184,17 @@ const handleDownloadAttachment = (attachment: string): void => {
   font-size: 12px;
   color: #909399;
   margin-top: 2px;
+}
+
+/* 简化版申请人显示 */
+.applicant-simple {
+  text-align: center;
+}
+
+.applicant-name-simple {
+  font-weight: 500;
+  color: #303133;
+  font-size: 14px;
 }
 
 /* 操作按钮 */
@@ -2660,6 +3699,252 @@ const handleDownloadAttachment = (attachment: string): void => {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+}
+
+/* 附件预览对话框样式 */
+.attachment-preview-dialog,
+.document-preview-dialog {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.preview-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+
+.preview-container {
+  background: white;
+  border-radius: 12px;
+  max-width: 90vw;
+  max-height: 90vh;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  animation: dialogSlideIn 0.3s ease-out;
+}
+
+@keyframes dialogSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e4e7ed;
+  background: #fafafa;
+}
+
+.preview-header h3 {
+  margin: 0;
+  color: #303133;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.preview-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #909399;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-close:hover {
+  background: #f0f0f0;
+  color: #606266;
+}
+
+.preview-content {
+  padding: 0;
+  max-height: 70vh;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-image {
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.preview-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-top: 1px solid #e4e7ed;
+  background: #fafafa;
+}
+
+.file-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.file-name {
+  font-weight: 600;
+  color: #303133;
+  font-size: 14px;
+}
+
+.file-size {
+  font-size: 12px;
+  color: #909399;
+}
+
+.download-btn,
+.open-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+  min-width: 100px;
+}
+
+.download-btn {
+  background: #409eff;
+  color: white;
+}
+
+.download-btn:hover {
+  background: #337ecc;
+  transform: translateY(-1px);
+}
+
+.open-btn {
+  background: #67c23a;
+  color: white;
+  margin-left: 12px;
+}
+
+.open-btn:hover {
+  background: #5daf34;
+  transform: translateY(-1px);
+}
+
+/* 文档预览样式 */
+.document-info {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 40px;
+  text-align: center;
+}
+
+.info-icon {
+  font-size: 48px;
+  margin-bottom: 8px;
+}
+
+.info-details h4 {
+  margin: 0 0 12px 0;
+  color: #303133;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.info-details p {
+  margin: 4px 0;
+  color: #606266;
+  font-size: 14px;
+}
+
+/* PDF预览窗口样式 */
+.pdf-preview-container {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+/* 响应式设计 - 附件预览 */
+@media (max-width: 768px) {
+  .preview-container {
+    max-width: 95vw;
+    max-height: 95vh;
+    margin: 20px;
+  }
+  
+  .preview-header {
+    padding: 16px 20px;
+  }
+  
+  .preview-footer {
+    padding: 12px 20px;
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .preview-footer .file-info {
+    align-items: center;
+  }
+  
+  .download-btn,
+  .open-btn {
+    width: 100%;
+    margin: 0;
+  }
+  
+  .document-info {
+    flex-direction: column;
+    gap: 16px;
+    padding: 30px 20px;
+  }
+  
+  .info-icon {
+    font-size: 36px;
+  }
+}
+
+@media (max-width: 480px) {
+  .preview-header h3 {
+    font-size: 16px;
+  }
+  
+  .preview-content {
+    max-height: 60vh;
+  }
+  
+  .preview-image {
+    max-height: 60vh;
+  }
 }
 
 /* 响应式设计 */

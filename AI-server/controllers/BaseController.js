@@ -220,6 +220,168 @@ class BaseController {
       message
     });
   }
+
+  /**
+   * 批量创建记录
+   * POST /api/{resource}/batch
+   */
+  async batchCreate(req, res, next) {
+    try {
+      const { items } = req.body;
+      
+      if (!Array.isArray(items) || items.length === 0) {
+        return this.sendError(res, '请提供有效的数据数组', 400);
+      }
+
+      logger.info(`[${this.entityName}] 批量创建记录`, { 
+        userId: req.user?.id,
+        count: items.length 
+      });
+
+      const results = await this.service.batchCreate(items);
+      
+      return res.status(201).json({
+        success: true,
+        message: '批量创建成功',
+        data: results
+      });
+    } catch (error) {
+      logger.error(`[${this.entityName}] 批量创建记录失败`, { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * 批量更新记录
+   * PUT /api/{resource}/batch
+   */
+  async batchUpdate(req, res, next) {
+    try {
+      const { items } = req.body;
+      
+      if (!Array.isArray(items) || items.length === 0) {
+        return this.sendError(res, '请提供有效的数据数组', 400);
+      }
+
+      logger.info(`[${this.entityName}] 批量更新记录`, { 
+        userId: req.user?.id,
+        count: items.length 
+      });
+
+      const results = await this.service.batchUpdate(items);
+      
+      return res.json({
+        success: true,
+        message: '批量更新成功',
+        data: results
+      });
+    } catch (error) {
+      logger.error(`[${this.entityName}] 批量更新记录失败`, { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * 批量删除记录
+   * DELETE /api/{resource}/batch
+   */
+  async batchDelete(req, res, next) {
+    try {
+      const { ids } = req.body;
+      
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return this.sendError(res, '请提供有效的ID数组', 400);
+      }
+
+      logger.info(`[${this.entityName}] 批量删除记录`, { 
+        userId: req.user?.id,
+        count: ids.length 
+      });
+
+      const result = await this.service.batchDelete(ids);
+      
+      return res.json({
+        success: true,
+        message: '批量删除成功',
+        data: result
+      });
+    } catch (error) {
+      logger.error(`[${this.entityName}] 批量删除记录失败`, { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * 分页查询记录（高级）
+   * GET /api/{resource}/paginate
+   */
+  async paginate(req, res, next) {
+    try {
+      const options = {
+        page: parseInt(req.query.page) || 1,
+        limit: parseInt(req.query.limit) || 10,
+        sort: req.query.sort || 'created_at',
+        order: req.query.order || 'DESC',
+        search: req.query.search,
+        filters: req.query.filters ? JSON.parse(req.query.filters) : {},
+        include: req.query.include ? req.query.include.split(',') : []
+      };
+
+      logger.info(`[${this.entityName}] 分页查询记录`, { 
+        userId: req.user?.id,
+        options 
+      });
+
+      const result = await this.service.paginate(options);
+      
+      return res.json({
+        success: true,
+        message: '查询成功',
+        data: result.data,
+        pagination: {
+          total: result.total,
+          page: result.page,
+          limit: result.limit,
+          totalPages: result.totalPages
+        }
+      });
+    } catch (error) {
+      logger.error(`[${this.entityName}] 分页查询失败`, { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * 搜索记录
+   * GET /api/{resource}/search
+   */
+  async search(req, res, next) {
+    try {
+      const { q, fields } = req.query;
+      
+      if (!q) {
+        return this.sendError(res, '请提供搜索关键词', 400);
+      }
+
+      logger.info(`[${this.entityName}] 搜索记录`, { 
+        userId: req.user?.id,
+        query: q,
+        fields 
+      });
+
+      const searchFields = fields ? fields.split(',') : [];
+      const results = await this.service.search(q, searchFields);
+      
+      return res.json({
+        success: true,
+        message: '搜索成功',
+        data: results
+      });
+    } catch (error) {
+      logger.error(`[${this.entityName}] 搜索失败`, { error: error.message });
+      next(error);
+    }
+  }
 }
 
 module.exports = BaseController;

@@ -1,0 +1,366 @@
+/**
+ * 安全功能集成路由
+ * 提供API签名、安全审计、数据加密等安全功能的端点
+ */
+
+const express = require('express');
+const { 
+  apiSignatureVerification, 
+  generateApiSignature, 
+  generateSignatureHeaders 
+} = require('../middleware/apiSignature');
+const { 
+  securityAudit, 
+  getAuditLogs, 
+  generateComplianceReport,
+  SECURITY_EVENTS 
+} = require('../middleware/securityAudit');
+const { DataMasking, LogMasking } = require('../utils/encryption');
+const { authenticateToken } = require('../middleware/auth');
+const { responseWrapper } = require('../middleware/response');
+const { logger } = require('../config/logger');
+
+const router = express.Router();
+
+/**
+ * 获取签名示例和文档
+ * GET /api/security/signature-example
+ */
+router.get('/signature-example', responseWrapper((req, res) => {
+  const exampleParams = {
+    userId: '12345',
+    timestamp: Date.now(),
+    action: 'getUserInfo'
+  };
+
+  const signatureData = generateApiSignature(exampleParams, {}, {
+    method: 'GET',
+    path: '/api/users/12345'
+  });
+
+  res.json({
+    success: true,
+    message: 'API签名示例和文档',
+    data: {
+      signatureAlgorithm: 'HMAC-SHA256',
+      requiredHeaders: [
+        'X-Signature: ' + signatureData.signature,
+        'X-Timestamp: ' + signatureData.timestamp,
+        'X-Nonce: ' + signatureData.nonce,
+        'X-Message-ID: ' + signatureData.messageId
+      ],
+      signatureStringFormat: 'METHOD|PATH|QUERY_PARAMS|BODY|TIMESTAMP|NONCE',
+      example: {
+        method: 'GET',
+        path: '/api/users/12345',
+        params: exampleParams,
+        signature: signatureData.signature,
+        timestamp: signatureData.timestamp,
+        nonce: signatureData.nonce,
+        messageId: signatureData.messageId,
+        signedData: [
+          'GET',
+          '/api/users/12345',
+          'action=getUserInfo&timestamp=' + signatureData.timestamp + '&userId=12345',
+          '{}',
+          signatureData.timestamp,
+          signatureData.nonce
+        ].join('|')
+      },
+      cURL_Example: `curl -X GET "http://localhost:4000/api/users/12345?action=getUserInfo&timestamp=${signatureData.timestamp}&userId=12345" \\
+  -H "X-Signature: ${signatureData.signature}" \\
+  -H "X-Timestamp: ${signatureData.timestamp}" \\
+  -H "X-Nonce: ${signatureData.nonce}" \\
+  -H "X-Message-ID: ${signatureData.messageId}"`
+    }
+  });
+}));
+
+/**
+ * 测试数据脱敏功能
+ * POST /api/security/test-masking
+ */
+router.post('/test-masking', responseWrapper((req, res) => {
+  const testData = req.body || {};
+  
+  const maskedData = DataMasking.maskObject(testData, [
+    'phone', 'idCard', 'bankCard', 'email', 'name', 
+    'password', 'token', 'accessToken', 'refreshToken'
+  ]);
+
+  res.json({
+    success: true,
+    message: '数据脱敏测试完成',
+    data: {
+      originalData: testData,
+      maskedData: maskedData
+    }
+  });
+}));
+
+/**
+ * 获取安全审计日志
+ * GET /api/security/audit-logs
+ */
+router.get('/audit-logs', authenticateToken, securityAudit({ trackApiCalls: false }), responseWrapper((req, res) => {
+  const { 
+    startDate, 
+    endDate, 
+    userId, 
+    type, 
+    severity, 
+    limit = 50, 
+    offset = 0 
+  } = req.query;
+
+  const logs = getAuditLogs({
+    startDate,
+    endDate,
+    userId,
+    type,
+    severity,
+    limit: parseInt(limit),
+    offset: parseInt(offset)
+  });
+
+  res.json({
+    success: true,
+    message: '安全审计日志获取成功',
+    data: logs
+  });
+}));
+
+/**
+ * 生成合规报告
+ * GET /api/security/compliance-report
+ */
+router.get('/compliance-report', authenticateToken, securityAudit({ trackApiCalls: false }), responseWrapper((req, res) => {
+  const { standard = 'gdpr' } = req.query;
+  
+  try {
+    const report = generateComplianceReport(standard.toUpperCase());
+    
+    res.json({
+      success: true,
+      message: '合规报告生成成功',
+      data: report
+    });
+  } catch (error) {
+    logger.error('生成合规报告失败:', error);
+    res.status(400).json({
+      success: false,
+      message: '合规报告生成失败: ' + error.message
+    });
+  }
+}));
+
+/**
+ * 记录安全事件
+ * POST /api/security/log-event
+ */
+router.post('/log-event', authenticateToken, securityAudit({ trackApiCalls: false }), responseWrapper((req, res) => {
+  const eventData = req.body;
+  
+  // 添加当前用户信息
+  eventData.userId = req.user.id;
+  eventData.sourceIp = req.ip;
+  eventData.userAgent = req.get('User-Agent');
+  
+  // 记录安全事件
+  const auditEvent = require('../middleware/securityAudit').logSecurityEvent(eventData);
+  
+  res.json({
+    success: true,
+    message: '安全事件记录成功',
+    data: auditEvent
+  });
+}));
+
+/**
+ * 获取系统安全状态
+ * GET /api/security/status
+ */
+router.get('/status', responseWrapper((req, res) => {
+  const securityStatus = {
+    apiSignature: {
+      enabled: true,
+      algorithm: 'HMAC-SHA256',
+      maxAge: '5分钟',
+      antiReplay: true
+    },
+    dataEncryption: {
+      enabled: true,
+      algorithm: 'AES-256-GCM',
+      keyDerivation: 'PBKDF2',
+      iterations: 100000
+    },
+    dataMasking: {
+      enabled: true,
+      maskedFields: [
+        'password', 'token', 'accessToken', 'refreshToken',
+        'idCard', 'bankCard', 'email', 'phone', 'name'
+      ]
+    },
+    securityAudit: {
+      enabled: true,
+      complianceStandards: ['GDPR', 'SOX', 'ISO27001'],
+      threatDetection: true,
+      maxLogRetention: '1年'
+    },
+    oauth2: {
+      enabled: true,
+      grantTypes: ['authorization_code', 'client_credentials', 'refresh_token'],
+      defaultClientScopes: ['read', 'write']
+    }
+  };
+  
+  res.json({
+    success: true,
+    message: '系统安全状态获取成功',
+    data: securityStatus
+  });
+}));
+
+/**
+ * 测试API签名验证的受保护端点
+ * GET /api/security/protected-endpoint
+ */
+router.get('/protected-endpoint', 
+  apiSignatureVerification({ 
+    secret: process.env.API_SIGNATURE_SECRET || 'default-api-signature-secret' 
+  }),
+  securityAudit({ trackApiCalls: false }),
+  responseWrapper((req, res) => {
+    res.json({
+      success: true,
+      message: 'API签名验证成功，可以访问受保护的端点',
+      data: {
+        timestamp: new Date().toISOString(),
+        verifiedSignature: req.apiSignature,
+        userAgent: req.get('User-Agent'),
+        clientIP: req.ip
+      }
+    });
+  })
+);
+
+/**
+ * 数据加密测试端点
+ * POST /api/security/test-encryption
+ */
+router.post('/test-encryption', 
+  apiSignatureVerification({ 
+    secret: process.env.API_SIGNATURE_SECRET || 'default-api-signature-secret',
+    allowExpired: true // 测试用，允许过期
+  }),
+  securityAudit({ trackApiCalls: false }),
+  responseWrapper(async (req, res) => {
+    const { text, password } = req.body;
+    
+    if (!text || !password) {
+      return res.status(400).json({
+        success: false,
+        message: '文本和密码都是必需的'
+      });
+    }
+    
+    try {
+      const { encrypt, decrypt } = require('../utils/encryption');
+      
+      // 加密数据
+      const encrypted = encrypt(text, password);
+      
+      // 解密数据
+      const decrypted = decrypt(encrypted, password);
+      
+      res.json({
+        success: true,
+        message: '数据加密测试成功',
+        data: {
+          originalText: text,
+          encrypted: encrypted,
+          decrypted: decrypted,
+          encryptionSuccess: text === decrypted
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: '数据加密测试失败: ' + error.message
+      });
+    }
+  })
+);
+
+/**
+ * 获取安全配置
+ * GET /api/security/config
+ */
+router.get('/config', authenticateToken, securityAudit({ trackApiCalls: false }), responseWrapper((req, res) => {
+  const config = {
+    apiSignature: {
+      secret: process.env.API_SIGNATURE_SECRET ? '***' + process.env.API_SIGNATURE_SECRET.slice(-4) : '未设置',
+      allowedClockSkew: '5分钟',
+      antiReplayWindow: '5分钟'
+    },
+    dataEncryption: {
+      algorithm: 'AES-256-GCM',
+      keyIterations: 100000,
+      keyDerivation: 'PBKDF2'
+    },
+    oauth2: {
+      authorizationUrl: process.env.OAUTH_AUTH_URL || 'http://localhost:3000/api/oauth2/authorize',
+      tokenUrl: process.env.OAUTH_TOKEN_URL || 'http://localhost:3000/api/oauth2/token',
+      defaultClient: 'default-client'
+    },
+    audit: {
+      maxLogRetention: '1年',
+      complianceStandards: ['GDPR', 'SOX', 'ISO27001'],
+      threatDetection: true
+    }
+  };
+  
+  res.json({
+    success: true,
+    message: '安全配置获取成功',
+    data: config
+  });
+}));
+
+/**
+ * 手动触发安全审计事件
+ * POST /api/security/test-audit-event
+ */
+router.post('/test-audit-event', 
+  authenticateToken,
+  securityAudit({ trackApiCalls: false }),
+  responseWrapper((req, res) => {
+    const { logSecurityEvent, SECURITY_EVENTS } = require('../middleware/securityAudit');
+    
+    // 记录测试事件
+    const testEvent = {
+      type: SECURITY_EVENTS.SUSPICIOUS_ACTIVITY,
+      userId: req.user.id,
+      sourceIp: req.ip,
+      userAgent: req.get('User-Agent'),
+      resource: '/api/security/test-audit-event',
+      action: 'test_audit',
+      outcome: 'success',
+      severity: 'medium',
+      data: {
+        testMessage: '这是一个测试安全审计事件',
+        timestamp: new Date().toISOString()
+      }
+    };
+    
+    const auditEvent = logSecurityEvent(testEvent);
+    
+    res.json({
+      success: true,
+      message: '测试安全审计事件已记录',
+      data: auditEvent
+    });
+  })
+);
+
+module.exports = router;

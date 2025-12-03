@@ -182,7 +182,7 @@ const handleLogin = async () => {
       // 模拟登录请求
       setTimeout(() => {
         // 简单的模拟登录验证
-        if (loginForm.username === 'admin' && loginForm.password === process.env.VUE_APP_DEFAULT_PASSWORD || '123456') {
+        if (loginForm.username === 'admin' && loginForm.password === '123456') {
           // 设置登录状态
           localStorage.setItem('isAuthenticated', 'true')
           localStorage.setItem('username', loginForm.username)

@@ -6,7 +6,7 @@
 
 const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
-const { asyncHandler } = require('../middleware/errorHandler');
+const { asyncHandler } = require('../middleware/errorHandling');
 const { responseWrapper } = require('../middleware/response');
 const { strictRateLimit } = require('../middleware/security');
 const AuthController = require('../controllers/AuthController');

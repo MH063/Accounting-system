@@ -327,7 +327,7 @@
           <el-pagination
             v-model:current-page="pagination.page"
             v-model:page-size="pagination.size"
-            :page-sizes="[10, 20, 50, 100]"
+            :page-sizes="[5, 10, 20, 50, 100]"
             :total="pagination.total"
             layout="total, sizes, prev, pager, next, jumper"
             @size-change="handleSizeChange"
@@ -341,6 +341,7 @@
           title="账单提醒设置"
           width="500px"
           :close-on-click-modal="false"
+          class="reminder-dialog"
         >
           <el-form :model="reminderSettings" label-width="120px">
             <el-form-item label="提醒方式">
@@ -448,7 +449,7 @@ const searchForm = reactive({
 // 分页信息
 const pagination = reactive({
   page: 1,
-  size: 20,
+  size: 5,
   total: 0
 })
 
@@ -607,17 +608,115 @@ const loadBillList = async () => {
         payerName: '王五',
         type: 'temporary',
         description: '洗衣机维修费用'
+      },
+      {
+        id: '4',
+        title: '网费账单',
+        status: 'pending',
+        totalAmount: 150.00,
+        paidAmount: 0,
+        billDate: '2024-02-28',
+        payerName: '赵六',
+        type: 'monthly',
+        description: '2月份网络费用'
+      },
+      {
+        id: '5',
+        title: '门锁维修',
+        status: 'overdue',
+        totalAmount: 200.00,
+        paidAmount: 0,
+        billDate: '2024-01-15',
+        payerName: '钱七',
+        type: 'temporary',
+        description: '门锁维修费用'
+      },
+      {
+        id: '6',
+        title: '空调清洁费',
+        status: 'paid',
+        totalAmount: 80.00,
+        paidAmount: 80.00,
+        billDate: '2024-01-20',
+        payerName: '孙八',
+        type: 'expense',
+        description: '空调清洁保养'
+      },
+      {
+        id: '7',
+        title: '2024年2月住宿费',
+        status: 'pending',
+        totalAmount: 1200.00,
+        paidAmount: 0,
+        billDate: '2024-02-29',
+        payerName: '周九',
+        type: 'monthly',
+        description: '2月份宿舍住宿费用，包含水电网费'
+      },
+      {
+        id: '8',
+        title: '洗衣机修理费',
+        status: 'partial',
+        totalAmount: 350.00,
+        paidAmount: 200.00,
+        billDate: '2024-02-10',
+        payerName: '吴十',
+        type: 'temporary',
+        description: '洗衣机故障维修'
       }
     ]
     
-    billList.value = mockBills
-    pagination.total = mockBills.length
+    // 根据搜索条件进行筛选
+    let filteredBills = [...mockBills]
     
-    // 更新统计信息
-    billStats.pending = mockBills.filter(bill => bill.status === 'pending').length
-    billStats.paid = mockBills.filter(bill => bill.status === 'paid').length
-    billStats.overdue = mockBills.filter(bill => bill.status === 'overdue').length
-    billStats.totalAmount = mockBills.reduce((sum, bill) => sum + bill.totalAmount, 0)
+    // 关键词搜索
+    if (searchForm.keyword.trim()) {
+      const keyword = searchForm.keyword.trim().toLowerCase()
+      filteredBills = filteredBills.filter(bill => 
+        bill.title.toLowerCase().includes(keyword) ||
+        bill.payerName.toLowerCase().includes(keyword) ||
+        bill.description.toLowerCase().includes(keyword)
+      )
+    }
+    
+    // 状态筛选
+    if (searchForm.status) {
+      filteredBills = filteredBills.filter(bill => bill.status === searchForm.status)
+    }
+    
+    // 类型筛选
+    if (searchForm.type) {
+      filteredBills = filteredBills.filter(bill => bill.type === searchForm.type)
+    }
+    
+    // 月份筛选
+    if (searchForm.month) {
+      filteredBills = filteredBills.filter(bill => bill.billDate.startsWith(searchForm.month))
+    }
+    
+    // 打印筛选信息
+    console.log('搜索条件:', searchForm)
+    console.log('筛选结果:', filteredBills)
+    
+    // 分页处理
+    const start = (pagination.page - 1) * pagination.size
+    const end = start + pagination.size
+    const paginatedBills = filteredBills.slice(start, end)
+    
+    billList.value = paginatedBills
+    pagination.total = filteredBills.length
+    
+    // 更新统计信息（基于筛选后的数据）
+    billStats.pending = filteredBills.filter(bill => bill.status === 'pending').length
+    billStats.paid = filteredBills.filter(bill => bill.status === 'paid').length
+    billStats.overdue = filteredBills.filter(bill => bill.status === 'overdue').length
+    billStats.totalAmount = filteredBills.reduce((sum, bill) => sum + bill.totalAmount, 0)
+    
+    // 如果有筛选条件，显示结果提示
+    const hasFilters = searchForm.keyword.trim() || searchForm.status || searchForm.type || searchForm.month
+    if (hasFilters && filteredBills.length === 0) {
+      ElMessage.warning('未找到符合条件的账单')
+    }
     
   } catch (error) {
     console.error('加载账单列表失败:', error)
@@ -738,7 +837,7 @@ const handleCommand = async (command: string) => {
       ElMessage.success('账单复制功能开发中')
       break
     case 'export':
-      ElMessage.success('导出PDF功能开发中')
+      exportBills('xlsx')
       break
     case 'reminder':
       // 打开提醒设置对话框
@@ -763,8 +862,136 @@ const handleCommand = async (command: string) => {
 /**
  * 导出账单
  */
-const handleExportBills = () => {
-  ElMessage.success('导出功能开发中')
+const handleExportBills = (format: 'csv' | 'xlsx' = 'csv') => {
+  exportBills(format)
+}
+
+/**
+ * 处理下拉菜单导出命令
+ */
+const handleExportCommand = (command: string) => {
+  if (command === 'export') {
+    exportBills('xlsx')
+  }
+}
+
+/**
+ * 导出账单核心函数
+ */
+const exportBills = async (format: 'csv' | 'xlsx' = 'csv') => {
+  try {
+    // 检查是否有数据可以导出
+    if (billList.value.length === 0) {
+      ElMessage.warning('没有数据可以导出')
+      return
+    }
+
+    ElMessage.info(`正在准备导出${format === 'xlsx' ? 'Excel' : 'CSV'}格式文件...`)
+
+    // 准备导出数据 - 使用当前筛选后的数据
+    const exportData = billList.value.map(bill => ({
+      '账单ID': bill.id,
+      '账单标题': bill.title,
+      '账单描述': bill.description || '-',
+      '账单状态': getStatusText(bill.status),
+      '总金额': bill.totalAmount.toFixed(2),
+      '已付金额': bill.paidAmount.toFixed(2),
+      '剩余金额': (bill.totalAmount - bill.paidAmount).toFixed(2),
+      '账单日期': formatDate(bill.billDate),
+      '付款人': bill.payerName,
+      '账单类型': getTypeText(bill.type),
+      '创建时间': formatDate(bill.createdAt || new Date().toISOString()),
+      '更新时间': formatDate(bill.updatedAt || new Date().toISOString())
+    }))
+
+    // 模拟处理时间
+    await new Promise(resolve => setTimeout(resolve, 800))
+
+    const timestamp = new Date().toISOString().split('T')[0]
+    
+    if (format === 'xlsx') {
+      // 导出为Excel格式 (实际使用CSV格式，但文件扩展名为xlsx)
+      const headers = Object.keys(exportData[0])
+      const csvContent = [
+        headers.join(','),
+        ...exportData.map(row => 
+          headers.map(header => {
+            const value = row[header as keyof typeof row]
+            // 处理包含逗号或引号的值
+            return typeof value === 'string' && (value.includes(',') || value.includes('"'))
+              ? `"${value.replace(/"/g, '""')}"`
+              : value
+          }).join(',')
+        )
+      ].join('\n')
+
+      // 添加BOM标记解决Excel中文乱码问题
+      const csvWithBom = '\uFEFF' + csvContent
+      
+      // 创建并下载文件
+      const blob = new Blob([csvWithBom], { type: 'application/vnd.ms-excel;charset=utf-8;' })
+      const link = document.createElement('a')
+      
+      if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob)
+        link.setAttribute('href', url)
+        link.setAttribute('download', `账单记录_${timestamp}.xlsx`)
+        link.style.visibility = 'hidden'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+        
+        ElMessage.success(`成功导出 ${exportData.length} 条账单记录 (Excel格式)`)
+      } else {
+        ElMessage.error('您的浏览器不支持文件下载')
+      }
+    } else {
+      // 导出为CSV格式
+      const headers = Object.keys(exportData[0])
+      const csvContent = [
+        headers.join(','),
+        ...exportData.map(row => 
+          headers.map(header => {
+            const value = row[header as keyof typeof row]
+            // 处理包含逗号或引号的值
+            return typeof value === 'string' && (value.includes(',') || value.includes('"'))
+              ? `"${value.replace(/"/g, '""')}"`
+              : value
+          }).join(',')
+        )
+      ].join('\n')
+
+      // 添加BOM标记解决Excel中文乱码问题
+      const csvWithBom = '\uFEFF' + csvContent
+      
+      // 创建并下载文件
+      const blob = new Blob([csvWithBom], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      
+      if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob)
+        link.setAttribute('href', url)
+        link.setAttribute('download', `账单记录_${timestamp}.csv`)
+        link.style.visibility = 'hidden'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+        
+        ElMessage.success(`成功导出 ${exportData.length} 条账单记录 (CSV格式)`)
+      } else {
+        ElMessage.error('您的浏览器不支持文件下载')
+      }
+    }
+
+    // 记录导出操作日志
+    console.log(`导出${format === 'xlsx' ? 'Excel' : 'CSV'}格式账单记录 ${exportData.length} 条`)
+    
+  } catch (error) {
+    console.error('导出失败:', error)
+    ElMessage.error('导出失败，请重试')
+  }
 }
 
 /**
@@ -1072,10 +1299,20 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  max-width: 100%;
 }
 
 .time-separator {
   color: #909399;
+  white-space: nowrap;
+}
+
+/* 确保时间选择器在小屏幕上正常显示 */
+.quiet-time .el-time-picker {
+  flex: 1;
+  min-width: 100px;
+  max-width: 140px;
 }
 
 /* 响应式设计 */
@@ -1097,6 +1334,57 @@ onMounted(() => {
   
   .bill-actions {
     flex-direction: column;
+  }
+  
+  /* 提醒设置对话框在小屏幕上的适配 */
+  .reminder-dialog {
+    width: 90% !important;
+    max-width: 500px;
+  }
+  
+  .reminder-dialog .el-form-item__label {
+    width: 100px !important;
+  }
+  
+  .reminder-dialog .el-form-item__content {
+    margin-left: 100px !important;
+  }
+  
+  .quiet-time {
+    flex-direction: row;
+    gap: 6px;
+  }
+  
+  .quiet-time .el-time-picker {
+    min-width: 80px;
+    max-width: 120px;
+  }
+}
+
+@media (max-width: 480px) {
+  .reminder-dialog {
+    width: 95% !important;
+  }
+  
+  .reminder-dialog .el-form-item__label {
+    width: 80px !important;
+  }
+  
+  .reminder-dialog .el-form-item__content {
+    margin-left: 80px !important;
+  }
+  
+  .quiet-time {
+    gap: 4px;
+  }
+  
+  .quiet-time .el-time-picker {
+    min-width: 70px;
+    max-width: 100px;
+  }
+  
+  .time-separator {
+    font-size: 12px;
   }
 }
 </style>

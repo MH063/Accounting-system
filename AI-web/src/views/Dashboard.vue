@@ -304,7 +304,7 @@ const smartNotifications = ref<SmartNotification[]>([
     priority: 'danger',
     type: 'action',
     actionType: 'expense-review',
-    actionPath: '/dashboard/expense-review',
+    actionPath: '/dashboard/expense/review',
     time: new Date(Date.now() - 45 * 60 * 1000)
   },
   {

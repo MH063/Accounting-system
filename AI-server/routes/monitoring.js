@@ -6,7 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const { responseWrapper } = require('../middleware/response');
-const { asyncHandler } = require('../middleware/errorHandler');
+const { asyncHandler } = require('../middleware/errorHandling');
 const logger = require('../config/logger');
 const { getMetrics, resetMetrics } = require('../middleware/monitoring');
 const { getTraces, getPerformanceStats } = require('../middleware/apm');

@@ -5,7 +5,7 @@
 
 const express = require('express');
 const { healthCheck, getPoolStatus, getCacheStats } = require('../config/database');
-const { asyncHandler } = require('../middleware/errorHandler');
+const { asyncHandler } = require('../middleware/errorHandling');
 const { responseWrapper } = require('../middleware/response');
 const logger = require('../config/logger');
 

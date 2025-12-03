@@ -59,57 +59,69 @@ const poolConfig = {
 // 创建连接池
 const pool = new Pool(poolConfig);
 
-// 简化的错误处理
+// 简化的错误处理 - 避免信息泄露
 pool.on('error', (err, client) => {
-  console.error('[DB_POOL] 连接池错误:', err.message);
+  console.error('[DB_POOL] 连接池错误: [错误信息已过滤]');
 });
 
 pool.on('connect', (client) => {
-  console.log('[DB_POOL] 新连接已建立');
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[DB_POOL] 新连接已建立');
+  }
 });
 
 pool.on('acquire', (client) => {
-  console.log('[DB_POOL] 连接已从池中获取');
+  // 在生产环境下不输出详细日志
 });
 
 pool.on('remove', (client) => {
-  console.log('[DB_POOL] 连接已从池中移除');
+  // 在生产环境下不输出详细日志
 });
 
-// 简化版查询函数
+// 简化版查询函数 - 过滤敏感信息
 const query = async (text, params = []) => {
-  console.log(`[DB_QUERY] 执行查询: ${text.substring(0, 100)}...`);
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[DB_QUERY] 执行查询: ${text.substring(0, 50)}...`);
+  }
   const start = Date.now();
   
   try {
     const result = await pool.query(text, params);
     const duration = Date.now() - start;
-    console.log(`[DB_QUERY] 查询成功 (${duration}ms)`);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[DB_QUERY] 查询成功 (${duration}ms)`);
+    }
     return result;
   } catch (error) {
     const duration = Date.now() - start;
-    console.error(`[DB_QUERY] 查询失败 (${duration}ms):`, error.message);
+    console.error(`[DB_QUERY] 查询失败 (${duration}ms)`);
     throw error;
   }
 };
 
-// 简化版测试连接函数
+// 简化版测试连接函数 - 避免信息泄露
 const testConnection = async () => {
   console.log('[DB_TEST] 开始测试连接...');
   try {
     const client = await pool.connect();
-    console.log('[DB_TEST] 获得连接');
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[DB_TEST] 获得连接');
+    }
     
     await client.query('SELECT NOW()');
-    console.log('[DB_TEST] 执行查询成功');
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[DB_TEST] 执行查询成功');
+    }
     
     client.release();
-    console.log('[DB_TEST] 连接已释放');
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[DB_TEST] 连接已释放');
+    }
     
     console.log('✅ 数据库连接测试成功');
     return true;
   } catch (error) {
-    console.error('❌ 数据库连接测试失败:', error.message);
+    console.error('❌ 数据库连接测试失败');
     return false;
   }
 };
@@ -168,24 +180,34 @@ const flushCache = () => {
   flush();
 };
 
-// 健康检查函数
+// 健康检查函数 - 过滤敏感信息
 const healthCheck = async () => {
   try {
     const client = await pool.connect();
-    const result = await client.query('SELECT NOW() as current_time, version() as version');
+    const start = Date.now();
+    const result = await client.query('SELECT NOW() as current_time');
+    const responseTime = Date.now() - start;
     client.release();
+    
+    const poolStatus = getPoolStatus();
     
     return {
       status: 'healthy',
       message: '数据库连接正常',
       timestamp: result.rows[0].current_time,
-      version: result.rows[0].version
+      responseTime: `${responseTime}ms`,
+      poolSize: poolStatus.totalCount,
+      availableConnections: poolStatus.idleCount,
+      totalConnections: poolStatus.totalCount,
+      waitingCount: poolStatus.waitingCount
     };
   } catch (error) {
     return {
       status: 'unhealthy',
-      error: error.message,
-      timestamp: new Date().toISOString()
+      message: '数据库连接失败',
+      timestamp: new Date().toISOString(),
+      responseTime: 0,
+      errorCount: 1
     };
   }
 };

@@ -282,26 +282,29 @@ const apiLog = (req, res, responseTime) => {
   logger.info(`[API] ${req.method} ${sanitizedUrl}`, apiInfo);
 };
 
-// 导出便捷方法（避免循环依赖）
-module.exports = {
+// 导出便捷方法和logger实例
+const loggerExports = {
+  // 便捷日志方法
   info: (message, meta) => logger.info(message, meta),
   error: (message, meta) => logger.error(message, meta),
   warn: (message, meta) => logger.warn(message, meta),
   debug: (message, meta) => logger.debug(message, meta),
-  // 记录HTTP请求
   http: (message, meta) => logger.http(message, meta),
-  // 记录数据库操作
+  
+  // 专用日志方法
   db: dbLog,
-  // 记录认证相关操作
   auth: (message, meta) => logger.info(`[AUTH] ${message}`, meta),
-  // 记录API调用
   api: apiLog,
-  // 记录审计日志
   audit: auditLog,
-  // 记录安全日志
   security: securityLog,
-  // 获取原始logger实例（避免循环依赖，使用getter）
-  get logger() {
-    return logger;
-  }
+  
+  // 原始logger实例
+  logger,
+  
+  // 数据清理函数
+  sanitizeLogData,
+  sanitizeString
 };
+
+// 默认导出
+module.exports = loggerExports;

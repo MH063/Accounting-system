@@ -8,11 +8,10 @@ const router = express.Router();
 const os = require('os');
 const fs = require('fs').promises;
 const path = require('path');
-const { healthCheckHandler, createServiceDegradationHandler, withRetry } = require('../middleware/errorHandler');
+const { healthCheckHandler, createServiceDegradationHandler, withRetry, asyncHandler } = require('../middleware/errorHandling');
 const { pool, healthCheck: dbHealthCheck, getPoolStatus, getDegradationStatus } = require('../config/database');
 const logger = require('../config/logger');
 const { responseWrapper } = require('../middleware/response');
-const { asyncHandler } = require('../middleware/errorHandler');
 const { getMetrics, recordHealthMetrics } = require('../middleware/prometheus');
 const { getMetrics: getCustomMetrics } = require('../middleware/monitoring');
 

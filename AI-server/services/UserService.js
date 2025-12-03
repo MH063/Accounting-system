@@ -974,7 +974,7 @@ class UserService extends BaseService {
 
       // 实际项目中，这里需要验证腾讯QQ API或短信验证
       // 这里简单模拟验证过程
-      const isValidCode = verificationCode === process.env.QQ_VERIFICATION_CODE || '123456'; // 模拟验证码
+      const isValidCode = verificationCode === process.env.QQ_VERIFICATION_CODE; // 模拟验证码
 
       if (!isValidCode) {
         throw new Error('验证代码错误');

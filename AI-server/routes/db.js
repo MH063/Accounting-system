@@ -6,7 +6,7 @@
 const express = require('express');
 const { query, getTables } = require('../config/database');
 const logger = require('../config/logger');
-const { asyncHandler } = require('../middleware/errorHandler');
+const { asyncHandler } = require('../middleware/errorHandling');
 const { responseWrapper } = require('../middleware/response');
 const { cacheMiddleware } = require('../middleware/apiCache');
 
