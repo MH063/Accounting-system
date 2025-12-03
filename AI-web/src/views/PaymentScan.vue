@@ -245,6 +245,9 @@ import {
   Picture, Warning, CircleCheck, CircleClose, Document, Refresh, Key
 } from '@element-plus/icons-vue'
 
+// 引入支付服务
+import { confirmPayment as apiConfirmPayment } from '@/services/paymentService'
+
 // 相机状态
 const cameraPermissionGranted = ref(false)
 const requestingPermission = ref(false)
@@ -605,35 +608,51 @@ const confirmPaymentPassword = async () => {
   processing.value = true
   
   try {
-    // 模拟支付处理
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    // 调用支付接口，支持收款码收入记录
+    const orderId = paymentInfo.merchantId + '_' + Date.now()
+    const paymentData = {
+      amount: paymentForm.amount,
+      qrCodeId: extractQRCodeId(paymentInfo.merchantId),
+      merchantName: paymentInfo.merchantName,
+      description: paymentInfo.description || '扫码支付',
+      paymentMethod: 'wechat' as const
+    }
     
-    // 模拟支付结果
-    const success = Math.random() > 0.1 // 90% 成功率
+    // 调用支付服务
+    const result = await apiConfirmPayment(orderId, paymentData)
     
     Object.assign(paymentResult, {
-      success,
-      amount: paymentForm.amount + calculateFee(paymentForm.amount),
-      transactionId: success ? `TXN${Date.now()}${Math.random().toString(36).substr(2, 5)}` : '',
+      success: result.success,
+      amount: paymentForm.amount,
+      transactionId: result.data.transactionId || '',
       timestamp: new Date().toISOString(),
-      errorMessage: success ? '' : '支付处理失败，请重试'
+      errorMessage: result.data.message || '支付处理失败'
     })
     
     passwordDialogVisible.value = false
     showPaymentResult.value = true
     resultDialogVisible.value = true
     
-    if (success) {
-      ElMessage.success('支付成功')
+    if (result.success) {
+      ElMessage.success('支付成功，收款码已记录收入')
     } else {
-      ElMessage.error('支付失败')
+      ElMessage.error('支付失败：' + (result.data.error || '未知错误'))
     }
     
   } catch (error) {
+    console.error('支付处理失败:', error)
     ElMessage.error('支付处理失败')
   } finally {
     processing.value = false
   }
+}
+
+// 从商户ID中提取收款码ID
+const extractQRCodeId = (merchantId: string): number | undefined => {
+  // 模拟从商户ID中提取收款码ID
+  // 在真实应用中，二维码会包含实际的收款码ID
+  const qrCodeId = parseInt(merchantId.replace(/[^\d]/g, '').slice(-2)) || undefined
+  return qrCodeId > 0 ? qrCodeId : undefined
 }
 
 // 分享收据

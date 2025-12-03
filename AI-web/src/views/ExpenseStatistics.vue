@@ -15,18 +15,22 @@
         >
           返回
         </el-button>
-        <!-- 时间范围选择器 -->
-        <el-date-picker
-          v-model="dateRange"
-          type="daterange"
-          range-separator="至"
-          start-placeholder="开始日期"
-          end-placeholder="结束日期"
-          format="YYYY-MM-DD"
-          value-format="YYYY-MM-DD"
-          @change="handleDateRangeChange"
-          style="width: 240px; margin-right: 12px;"
-        />
+        
+        <!-- 快捷时间选择 -->
+        <div class="quick-time-selector">
+          <el-button-group style="margin-right: 12px;">
+            <el-button 
+              v-for="period in timePeriods" 
+              :key="period.value"
+              size="small"
+              :type="selectedTimePeriod === period.value ? 'primary' : 'default'"
+              @click="selectTimePeriod(period.value)"
+            >
+              {{ period.label }}
+            </el-button>
+          </el-button-group>
+        </div>
+        
         <!-- 导出按钮 -->
         <el-button type="primary" :icon="Download" @click="handleExport">
           导出数据
@@ -126,10 +130,6 @@
           <div class="chart-card">
             <div class="chart-header">
               <h3>成员支出对比</h3>
-              <el-select v-model="memberFilter" size="small" placeholder="选择成员" style="width: 120px;">
-                <el-option label="全部成员" value="" />
-                <el-option v-for="member in memberList" :key="member.id" :label="member.name" :value="member.id" />
-              </el-select>
             </div>
             <div class="chart-container" ref="memberChartRef" style="height: 250px;"></div>
           </div>
@@ -155,24 +155,35 @@
       <div class="table-header">
         <h3>支出明细</h3>
         <div class="table-actions">
-          <el-input
-            v-model="searchKeyword"
-            placeholder="搜索支出项目"
-            :prefix-icon="Search"
-            style="width: 200px; margin-right: 12px;"
-            @input="handleSearch"
-          />
-          <el-button type="primary" :icon="Plus" @click="handleAddExpense">
-            记一笔
-          </el-button>
+          <div class="search-container">
+            <el-input
+              v-model="searchKeyword"
+              placeholder="搜索支出项目 (支持描述、分类、支付人)"
+              :prefix-icon="Search"
+              clearable
+              style="width: 280px; margin-right: 12px;"
+              @input="handleSearch"
+              @clear="clearSearch"
+            />
+            <span class="search-hint" v-if="searchKeyword">
+              找到 {{ filteredTableData.length }} 条记录
+            </span>
+          </div>
         </div>
       </div>
       
+      <!-- 搜索结果提示 -->
+      <div v-if="searchKeyword && filteredTableData.length === 0" class="no-search-results">
+        <el-icon><Search /></el-icon>
+        <p>没有找到匹配的支出记录</p>
+        <p>请尝试其他关键词或清除搜索条件</p>
+      </div>
+      
       <el-table
-        :data="tableData"
+        v-else
+        :data="paginatedTableData"
         v-loading="loading"
         style="width: 100%"
-        @row-click="handleRowClick"
         @sort-change="handleSortChange"
       >
         <el-table-column prop="date" label="日期" width="120" sortable="custom" />
@@ -183,21 +194,37 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
+        <el-table-column prop="description" label="描述" width="200" show-overflow-tooltip />
         <el-table-column prop="amount" label="金额" width="120" sortable="custom">
           <template #default="{ row }">
             <span style="color: #f56c6c;">¥{{ formatAmount(row.amount) }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="payer" label="支付人" width="120" />
-        <el-table-column label="操作" width="100" fixed="right">
+        <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
-            <el-button type="text" size="small" @click.stop="handleEdit(row)">
-              编辑
-            </el-button>
-            <el-button type="text" size="small" style="color: #f56c6c;" @click.stop="handleDelete(row)">
-              删除
-            </el-button>
+            <div class="action-buttons">
+              <el-button 
+                type="primary" 
+                size="small" 
+                link
+                @click.stop="handleEdit(row)"
+                class="edit-btn"
+              >
+                <el-icon><Edit /></el-icon>
+                编辑
+              </el-button>
+              <el-button 
+                type="danger" 
+                size="small" 
+                link
+                @click.stop="handleDelete(row)"
+                class="delete-btn"
+              >
+                <el-icon><Delete /></el-icon>
+                删除
+              </el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -249,14 +276,15 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   ArrowLeft, 
   Download, 
-  Plus, 
   Search,
   Money,
   TrendCharts,
   Grid,
   Top,
   CaretTop,
-  CaretBottom
+  CaretBottom,
+  Edit,
+  Delete
 } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 
@@ -303,15 +331,24 @@ const trendChart = ref<any>(null)
 const categoryChart = ref<any>(null)
 const memberChart = ref<any>(null)
 const timeChart = ref<any>(null)
-const dateRange = ref<string[]>([])
+
+const selectedTimePeriod = ref('30d')
 const chartTimeRange = ref('30d')
-const memberFilter = ref('')
 const timeGranularity = ref('day')
 const searchKeyword = ref('')
 const currentPage = ref(1)
 const pageSize = ref(5)
 const total = ref(0)
 const categoryDetailVisible = ref(false)
+
+// 时间周期选项
+const timePeriods = [
+  { label: '近7天', value: '7d' },
+  { label: '近30天', value: '30d' },
+  { label: '近90天', value: '90d' },
+  { label: '近6个月', value: '6m' },
+  { label: '近1年', value: '1y' }
+]
 
 // 统计数据
 const statistics = reactive({
@@ -369,22 +406,63 @@ const categoryDetailData = ref<CategoryDetail[]>([
 
 // 计算属性
 const dateRangeText = computed(() => {
-  if (dateRange.value && dateRange.value.length === 2) {
-    const days = Math.ceil((new Date(dateRange.value[1]) - new Date(dateRange.value[0])) / (1000 * 60 * 60 * 24))
-    return `${days}天`
+  // 基于当前选择的时间周期显示天数
+  const periodDays: Record<string, number> = {
+    '7d': 7,
+    '30d': 30,
+    '90d': 90,
+    '6m': 180,
+    '1y': 365
   }
-  return '30天'
+  const days = periodDays[selectedTimePeriod.value] || 30
+  return `${days}天`
 })
+
+// 搜索过滤后的表格数据
+const filteredTableData = computed(() => {
+  if (!searchKeyword.value.trim()) {
+    return tableData.value
+  }
+  
+  const keyword = searchKeyword.value.trim().toLowerCase()
+  return tableData.value.filter(item => {
+    return (
+      item.description.toLowerCase().includes(keyword) ||
+      item.category.toLowerCase().includes(keyword) ||
+      item.payer.toLowerCase().includes(keyword) ||
+      item.amount.toString().includes(keyword) ||
+      item.date.includes(keyword)
+    )
+  })
+})
+
+// 分页后的表格数据
+const paginatedTableData = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  const end = start + pageSize.value
+  return filteredTableData.value.slice(start, end)
+})
+
+// 更新总数
+const updateTotal = () => {
+  total.value = filteredTableData.value.length
+}
 
 // 方法
 const handleBack = () => {
   router.push('/dashboard/analytics')
 }
 
-// 时间范围变化处理
-const handleDateRangeChange = () => {
-  console.log('时间范围变化:', dateRange.value)
+
+
+// 选择快捷时间周期
+const selectTimePeriod = (period: string) => {
+  selectedTimePeriod.value = period
+  
+  console.log('选择快捷时间周期:', period)
+  currentPage.value = 1
   loadExpenseData()
+  updateStatisticsAndTable() // 只更新统计数据和表格，不影响图表
 }
 
 // 加载支出数据
@@ -392,7 +470,7 @@ const loadExpenseData = async () => {
   loading.value = true
   try {
     // 模拟API调用
-    console.log('加载支出数据，时间范围:', dateRange.value)
+    console.log('加载支出数据，时间周期:', selectedTimePeriod.value)
     // 这里应该调用实际的API获取数据
     await new Promise(resolve => setTimeout(resolve, 1000))
     
@@ -406,15 +484,30 @@ const loadExpenseData = async () => {
   }
 }
 
-// 更新统计数据
-const updateStatistics = () => {
-  // 根据当前筛选条件计算统计数据
-  console.log('更新统计数据')
+// 更新所有图表
+const updateAllCharts = () => {
+  console.log('更新所有图表，时间周期:', selectedTimePeriod.value)
+  updateStatistics()
+  
+  // 重新生成模拟数据（基于时间周期）
+  generateMockData()
+  
+  // 更新所有图表
+  if (trendChart.value) updateTrendChart()
+  if (categoryChart.value) updateCategoryChart()
+  if (memberChart.value) updateMemberChart()
+  if (timeChart.value) updateTimeChart()
 }
 
-// 格式化金额
-const formatAmount = (amount: number) => {
-  return (amount || 0).toFixed(2)
+// 只更新统计数据和表格，不影响图表
+const updateStatisticsAndTable = () => {
+  console.log('更新时间周期筛选数据，时间周期:', selectedTimePeriod.value)
+  
+  // 只重新生成表格数据，基于时间周期计算
+  generateTableDataByPeriod()
+  
+  // 只更新统计数据，不影响图表
+  updateStatistics()
 }
 
 // 获取分类标签类型
@@ -429,169 +522,48 @@ const getCategoryType = (category: string) => {
   return types[category] || 'info'
 }
 
-// 更新趋势图表
+// 格式化金额
+const formatAmount = (amount: number) => {
+  return (amount || 0).toFixed(2)
+}
+
+// 更新趋势图表（并同步更新相关图表）
 const updateTrendChart = () => {
-  console.log('更新趋势图表，时间范围:', chartTimeRange.value)
-  // 这里应该调用图表库更新图表
-}
-
-// 显示分类详情
-const showCategoryDetail = () => {
-  categoryDetailVisible.value = true
-  loadCategoryDetail()
-}
-
-// 加载分类详情
-const loadCategoryDetail = async () => {
-  try {
-    // 模拟API调用
-    console.log('加载分类详情数据')
-    // 这里应该调用实际的API获取分类详情数据
-  } catch (error) {
-    console.error('加载分类详情失败:', error)
+  console.log('支出趋势分析时间筛选变化:', chartTimeRange.value)
+  
+  // 同步更新selectedTimePeriod以保持一致性
+  selectedTimePeriod.value = chartTimeRange.value
+  
+  // 更新趋势图表
+  if (trendChart.value) {
+    updateTrendChartOnly()
   }
-}
-
-// 关闭分类详情
-const closeCategoryDetail = () => {
-  categoryDetailVisible.value = false
-}
-
-// 搜索处理
-const handleSearch = () => {
-  console.log('搜索关键词:', searchKeyword.value)
-  currentPage.value = 1
-  loadExpenseData()
-}
-
-// 表格排序处理
-const handleSortChange = (sortInfo: SortInfo) => {
-  console.log('表格排序:', sortInfo)
-  loadExpenseData()
-}
-
-// 表格行点击处理
-const handleRowClick = (row: ExpenseItem) => {
-  console.log('点击行:', row)
-  // 这里可以实现数据下钻功能
-  router.push(`/dashboard/expense-detail/${row.id}`)
-}
-
-// 编辑支出
-const handleEdit = (row: ExpenseItem) => {
-  console.log('编辑支出:', row)
-  router.push(`/dashboard/expense-edit/${row.id}`)
-}
-
-// 删除支出
-const handleDelete = async (row: ExpenseItem) => {
-  try {
-    await ElMessageBox.confirm('确定要删除这条支出记录吗？', '确认删除', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    })
-    
-    console.log('删除支出:', row)
-    ElMessage.success('删除成功')
-    loadExpenseData()
-  } catch (error) {
-    console.log('取消删除')
+  
+  // 同步更新其他相关图表
+  if (categoryChart.value) {
+    updateCategoryChart()
   }
-}
-
-// 添加支出
-const handleAddExpense = () => {
-  router.push('/dashboard/expense-create')
-}
-
-// 分页处理
-const handleSizeChange = (size: number) => {
-  pageSize.value = size
-  currentPage.value = 1
-  loadExpenseData()
-}
-
-const handleCurrentChange = (page: number) => {
-  currentPage.value = page
-  loadExpenseData()
-}
-
-// 数据导出
-const handleExport = async () => {
-  try {
-    loading.value = true
-    console.log('导出支出数据')
-    
-    // 模拟导出过程
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    
-    // 这里应该调用实际的导出API
-    const exportData = {
-      dateRange: dateRange.value,
-      statistics: statistics,
-      detailData: tableData.value
-    }
-    
-    // 创建下载链接
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `支出统计_${new Date().toISOString().split('T')[0]}.json`
-    link.click()
-    
-    ElMessage.success('数据导出成功')
-  } catch (error) {
-    console.error('导出失败:', error)
-    ElMessage.error('数据导出失败')
-  } finally {
-    loading.value = false
+  
+  if (memberChart.value) {
+    updateMemberChart()
   }
+  
+  if (timeChart.value) {
+    updateTimeChart()
+  }
+  
+  console.log('完成趋势分析模块图表更新')
 }
 
-// 初始化
-onMounted(() => {
-  // 设置默认时间范围（近30天）
-  const endDate = new Date()
-  const startDate = new Date()
-  startDate.setDate(startDate.getDate() - 30)
-  dateRange.value = [
-    startDate.toISOString().split('T')[0],
-    endDate.toISOString().split('T')[0]
-  ]
+// 只更新趋势图表（内部方法）
+const updateTrendChartOnly = () => {
+  if (!trendChart.value) return
   
-  // 等待DOM更新后初始化图表
-  nextTick(() => {
-    initCharts()
-  })
+  console.log('更新趋势图表，时间周期:', selectedTimePeriod.value)
   
-  loadExpenseData()
-})
-
-// 初始化所有图表
-const initCharts = () => {
-  initTrendChart()
-  initCategoryChart()
-  initMemberChart()
-  initTimeChart()
-}
-
-// 初始化趋势图表
-const initTrendChart = () => {
-  if (!trendChartRef.value) return
-  
-  trendChart.value = echarts.init(trendChartRef.value)
-  
-  // 模拟趋势数据
-  const trendData = Array.from({ length: 30 }, (_, i) => {
-    const date = new Date()
-    date.setDate(date.getDate() - (29 - i))
-    return {
-      date: date.toISOString().split('T')[0],
-      amount: Math.floor(Math.random() * 500) + 200
-    }
-  })
+  // 根据时间周期生成数据
+  const days = getDaysByPeriod(selectedTimePeriod.value)
+  const trendData = generateTrendDataByDays(days)
   
   const option = {
     title: {
@@ -642,28 +614,17 @@ const initTrendChart = () => {
     }]
   }
   
-  trendChart.value.setOption(option)
-  
-  // 响应式
-  window.addEventListener('resize', () => {
-    trendChart.value.resize()
-  })
+  trendChart.value.setOption(option, true)
 }
 
-// 初始化分类饼图
-const initCategoryChart = () => {
-  if (!categoryChartRef.value) return
+// 更新分类图表
+const updateCategoryChart = () => {
+  if (!categoryChart.value) return
   
-  categoryChart.value = echarts.init(categoryChartRef.value)
+  console.log('更新分类图表')
   
-  // 模拟分类数据
-  const categoryData = [
-    { name: '餐饮', value: 6800.50 },
-    { name: '交通', value: 2450.30 },
-    { name: '生活用品', value: 1890.80 },
-    { name: '娱乐', value: 1560.20 },
-    { name: '其他', value: 3158.70 }
-  ]
+  const categoryData = generateCategoryData()
+  updateCategoryDetail(categoryData) // 同时更新分类详情数据
   
   const option = {
     title: {
@@ -713,27 +674,29 @@ const initCategoryChart = () => {
     }]
   }
   
-  categoryChart.value.setOption(option)
-  
-  // 响应式
-  window.addEventListener('resize', () => {
-    categoryChart.value.resize()
-  })
+  categoryChart.value.setOption(option, true)
 }
 
-// 初始化成员对比图
-const initMemberChart = () => {
-  if (!memberChartRef.value) return
+// 更新分类详情数据
+const updateCategoryDetail = (categoryData: any[]) => {
+  const totalAmount = categoryData.reduce((sum, item) => sum + item.value, 0)
+  const updatedDetailData = categoryData.map(item => ({
+    category: item.name,
+    amount: item.value,
+    percentage: ((item.value / totalAmount) * 100).toFixed(1)
+  }))
   
-  memberChart.value = echarts.init(memberChartRef.value)
+  categoryDetailData.value = updatedDetailData
+  console.log('更新分类详情数据:', updatedDetailData)
+}
+
+// 更新成员图表
+const updateMemberChart = () => {
+  if (!memberChart.value) return
   
-  // 模拟成员数据
-  const memberData = [
-    { name: '张三', amount: 5200.30 },
-    { name: '李四', amount: 3800.80 },
-    { name: '王五', amount: 2456.40 },
-    { name: '赵六', amount: 1890.00 }
-  ]
+  console.log('更新成员图表')
+  
+  const memberData = generateMemberData()
   
   const option = {
     title: {
@@ -780,31 +743,59 @@ const initMemberChart = () => {
     }]
   }
   
-  memberChart.value.setOption(option)
-  
-  // 响应式
-  window.addEventListener('resize', () => {
-    memberChart.value.resize()
-  })
+  memberChart.value.setOption(option, true)
 }
 
-// 初始化时段分布图
-const initTimeChart = () => {
-  if (!timeChartRef.value) return
+// 更新时段图表
+const updateTimeChart = () => {
+  if (!timeChart.value) return
   
-  timeChart.value = echarts.init(timeChartRef.value)
+  console.log('更新时段图表')
   
-  // 模拟时段数据
-  const timeData = [
-    { period: '00-06', amount: 320 },
-    { period: '06-12', amount: 1240 },
-    { period: '12-18', amount: 2860 },
-    { period: '18-24', amount: 2100 }
-  ]
+  const timeData = generateTimeData()
+  
+  // 根据时间粒度设置不同的标题和样式
+  let chartTitle = '支出时段分布'
+  let xAxisLabel = ''
+  let colorScheme = []
+  
+  switch (timeGranularity.value) {
+    case 'hour':
+      chartTitle = '按小时支出分布'
+      xAxisLabel = '时段'
+      colorScheme = [
+        { offset: 0, color: '#4facfe' },
+        { offset: 1, color: '#00f2fe' }
+      ]
+      break
+    case 'day':
+      chartTitle = '按天支出分布'
+      xAxisLabel = '星期'
+      colorScheme = [
+        { offset: 0, color: '#43e97b' },
+        { offset: 1, color: '#38f9d7' }
+      ]
+      break
+    case 'week':
+      chartTitle = '按周支出分布'
+      xAxisLabel = '周次'
+      colorScheme = [
+        { offset: 0, color: '#fa709a' },
+        { offset: 1, color: '#fee140' }
+      ]
+      break
+    default:
+      chartTitle = '支出时段分布'
+      xAxisLabel = '时段'
+      colorScheme = [
+        { offset: 0, color: '#4facfe' },
+        { offset: 1, color: '#00f2fe' }
+      ]
+  }
   
   const option = {
     title: {
-      text: '支出时段分布',
+      text: chartTitle,
       left: 'center',
       textStyle: {
         fontSize: 16,
@@ -815,14 +806,25 @@ const initTimeChart = () => {
       trigger: 'axis',
       axisPointer: {
         type: 'shadow'
+      },
+      formatter: (params) => {
+        const data = params[0]
+        return `${data.name}<br/>支出金额: ¥${data.value}`
       }
     },
     xAxis: {
       type: 'category',
-      data: timeData.map(item => item.period)
+      data: timeData.map(item => item.period),
+      name: xAxisLabel,
+      nameLocation: 'middle',
+      nameGap: 30,
+      axisLabel: {
+        rotate: timeData.length > 7 ? 45 : 0 // 如果项目过多，倾斜标签
+      }
     },
     yAxis: {
       type: 'value',
+      name: '支出金额(¥)',
       axisLabel: {
         formatter: '¥{value}'
       }
@@ -837,27 +839,487 @@ const initTimeChart = () => {
           y: 0,
           x2: 0,
           y2: 1,
-          colorStops: [
-            { offset: 0, color: '#4facfe' },
-            { offset: 1, color: '#00f2fe' }
-          ]
+          colorStops: colorScheme
         },
         borderRadius: [4, 4, 0, 0]
+      },
+      emphasis: {
+        itemStyle: {
+          shadowBlur: 10,
+          shadowColor: 'rgba(0,0,0,0.3)'
+        }
       }
-    }]
+    }],
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: timeData.length > 7 ? '15%' : '3%',
+      containLabel: true
+    }
   }
   
-  timeChart.value.setOption(option)
+  timeChart.value.setOption(option, true)
   
-  // 响应式
-  window.addEventListener('resize', () => {
-    timeChart.value.resize()
+  console.log(`更新${timeGranularity.value}时段图表，数据点: ${timeData.length}个`)
+}
+
+// 显示分类详情
+const showCategoryDetail = () => {
+  categoryDetailVisible.value = true
+  loadCategoryDetail()
+}
+
+// 加载分类详情
+const loadCategoryDetail = async () => {
+  try {
+    // 模拟API调用
+    console.log('加载分类详情数据')
+    // 这里应该调用实际的API获取分类详情数据
+  } catch (error) {
+    console.error('加载分类详情失败:', error)
+  }
+}
+
+// 关闭分类详情
+const closeCategoryDetail = () => {
+  categoryDetailVisible.value = false
+}
+
+// 搜索处理（带防抖功能）
+const handleSearch = () => {
+  // 清除之前的定时器
+  if (handleSearch.timer) {
+    clearTimeout(handleSearch.timer)
+  }
+  
+  // 设置新的定时器
+  handleSearch.timer = setTimeout(() => {
+    console.log('搜索关键词:', searchKeyword.value)
+    currentPage.value = 1
+    updateTotal()
+  }, 300)
+}
+
+// 清除搜索
+const clearSearch = () => {
+  searchKeyword.value = ''
+  currentPage.value = 1
+  updateTotal()
+  console.log('清除搜索')
+}
+
+// 表格排序处理
+const handleSortChange = (sortInfo: SortInfo) => {
+  console.log('表格排序:', sortInfo)
+  loadExpenseData()
+}
+
+// 编辑支出
+const handleEdit = (row: ExpenseItem) => {
+  console.log('编辑支出:', row)
+  
+  // 将当前行的数据传递给编辑页面
+  const data = encodeURIComponent(JSON.stringify(row))
+  router.push({
+    path: `/dashboard/expense/edit/${row.id}`,
+    query: { data: data }
   })
 }
 
-// 监听筛选条件变化
-watch([memberFilter, timeGranularity], () => {
+// 删除支出
+const handleDelete = async (row: ExpenseItem) => {
+  try {
+    // 显示确认对话框
+    const result = await ElMessageBox.confirm(
+      `确定要删除这条支出记录吗？
+支出项目：${row.description}
+支出金额：¥${row.amount}
+支出日期：${row.date}
+      
+删除后将无法恢复，请谨慎操作！`, 
+      '确认删除', 
+      {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+        dangerouslyUseHTMLString: true,
+        distinguishCancelAndClose: true
+      }
+    )
+    
+    console.log('删除支出:', row)
+    
+    // 显示加载状态 - 修复API调用
+    const loadingMessage = ElMessage({
+      message: '正在删除...',
+      type: 'info',
+      duration: 0
+    })
+    
+    try {
+      // 模拟API调用删除数据
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      // 从本地数据中删除该项
+      const index = tableData.value.findIndex(item => item.id === row.id)
+      if (index !== -1) {
+        tableData.value.splice(index, 1)
+        
+        // 更新总数
+        updateTotal()
+        
+        // 重新生成统计数据
+        generateMockData()
+        
+        console.log('删除成功，更新本地数据')
+        ElMessage.success('删除成功')
+      } else {
+        throw new Error('未找到要删除的记录')
+      }
+      
+    } catch (error) {
+      console.error('删除失败:', error)
+      throw error
+    } finally {
+      // 关闭加载提示
+      ElMessage.closeAll()
+    }
+    
+  } catch (error: any) {
+    if (error === 'cancel' || error === 'close') {
+      console.log('取消删除')
+      ElMessage.info('已取消删除')
+    } else {
+      console.error('删除失败:', error)
+      ElMessage.error(`删除失败: ${error.message || '未知错误'}`)
+    }
+  }
+}
+
+
+
+// 分页处理
+const handleSizeChange = (size: number) => {
+  pageSize.value = size
+  currentPage.value = 1
+  updateTotal() // 更新总数
+}
+
+const handleCurrentChange = (page: number) => {
+  currentPage.value = page
+  // 不需要重新加载数据，只需要更新分页显示
+}
+
+// 数据导出
+const handleExport = async () => {
+  try {
+    loading.value = true
+    console.log('导出支出数据')
+    
+    // 模拟导出过程
+    await new Promise(resolve => setTimeout(resolve, 1500))
+    
+    // 这里应该调用实际的导出API
+    const exportData = {
+      timePeriod: selectedTimePeriod.value,
+      statistics: statistics,
+      detailData: tableData.value
+    }
+    
+    // 创建下载链接
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `支出统计_${new Date().toISOString().split('T')[0]}.json`
+    link.click()
+    
+    ElMessage.success('数据导出成功')
+  } catch (error) {
+    console.error('导出失败:', error)
+    ElMessage.error('数据导出失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+// 初始化
+onMounted(() => {
+  // 等待DOM更新后初始化图表
+  nextTick(() => {
+    initCharts()
+  })
+  
+  // 设置初始总数
+  updateTotal()
+  
   loadExpenseData()
+})
+
+// 初始化所有图表
+const initCharts = () => {
+  if (!trendChartRef.value || !categoryChartRef.value || !memberChartRef.value || !timeChartRef.value) return
+  
+  // 初始化图表实例
+  trendChart.value = echarts.init(trendChartRef.value)
+  categoryChart.value = echarts.init(categoryChartRef.value)
+  memberChart.value = echarts.init(memberChartRef.value)
+  timeChart.value = echarts.init(timeChartRef.value)
+  
+  // 初始化响应式
+  const handleResize = () => {
+    trendChart.value?.resize()
+    categoryChart.value?.resize()
+    memberChart.value?.resize()
+    timeChart.value?.resize()
+  }
+  
+  window.addEventListener('resize', handleResize)
+  
+  // 初始化图表数据
+  updateAllCharts()
+}
+
+// 根据时间周期获取天数
+const getDaysByPeriod = (period: string) => {
+  const periodDays: Record<string, number> = {
+    '7d': 7,
+    '30d': 30,
+    '90d': 90,
+    '6m': 180,
+    '1y': 365
+  }
+  return periodDays[period] || 30
+}
+
+// 生成趋势数据
+const generateTrendDataByDays = (days: number) => {
+  const data = []
+  const endDate = new Date()
+  
+  for (let i = days - 1; i >= 0; i--) {
+    const date = new Date(endDate)
+    date.setDate(date.getDate() - i)
+    data.push({
+      date: date.toISOString().split('T')[0],
+      amount: Math.floor(Math.random() * 500) + 200
+    })
+  }
+  return data
+}
+
+// 生成分类数据
+const generateCategoryData = () => {
+  // 基于趋势分析的时间范围计算总额
+  const days = getDaysByPeriod(chartTimeRange.value)
+  const baseAmount = 1000 // 每日基础金额
+  const totalAmount = baseAmount * days // 根据时间范围调整总额
+  
+  return [
+    { name: '餐饮', value: Math.floor(totalAmount * 0.3) },
+    { name: '交通', value: Math.floor(totalAmount * 0.25) },
+    { name: '生活用品', value: Math.floor(totalAmount * 0.2) },
+    { name: '娱乐', value: Math.floor(totalAmount * 0.15) },
+    { name: '其他', value: Math.floor(totalAmount * 0.1) }
+  ]
+}
+
+// 生成成员数据
+const generateMemberData = () => {
+  // 基于趋势分析的时间范围调整数据
+  const days = getDaysByPeriod(chartTimeRange.value)
+  const timeMultiplier = days / 30 // 以30天作为基准
+  
+  return [
+    { name: '张三', amount: Math.floor((Math.random() * 3000 + 2000) * timeMultiplier) },
+    { name: '李四', amount: Math.floor((Math.random() * 2500 + 1500) * timeMultiplier) },
+    { name: '王五', amount: Math.floor((Math.random() * 2000 + 1000) * timeMultiplier) },
+    { name: '赵六', amount: Math.floor((Math.random() * 1500 + 800) * timeMultiplier) }
+  ]
+}
+
+// 生成时段数据
+const generateTimeData = () => {
+  // 基于趋势分析的时间范围调整时段数据
+  const days = getDaysByPeriod(chartTimeRange.value)
+  const timeMultiplier = Math.sqrt(days / 30) // 使用平方根缩放，避免数值过大
+  
+  let timeData = []
+  
+  switch (timeGranularity.value) {
+    case 'hour':
+      // 按小时显示一天24小时
+      for (let hour = 0; hour < 24; hour++) {
+        const startHour = hour.toString().padStart(2, '0')
+        const endHour = ((hour + 1) % 24).toString().padStart(2, '0')
+        const label = `${startHour}:00-${endHour}:00`
+        
+        // 根据时间段调整基数
+        let baseAmount = 300
+        if (hour >= 6 && hour < 12) baseAmount = 800   // 上午
+        else if (hour >= 12 && hour < 18) baseAmount = 1500 // 下午
+        else if (hour >= 18 && hour < 24) baseAmount = 1200 // 晚上
+        else baseAmount = 200  // 深夜
+        
+        timeData.push({
+          period: label,
+          amount: Math.floor((Math.random() * baseAmount + baseAmount * 0.5) * timeMultiplier)
+        })
+      }
+      break
+      
+    case 'day':
+      // 按天显示一周7天
+      const dayNames = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+      const dayMultipliers = [1.2, 1.1, 1.0, 1.1, 1.3, 1.8, 1.6] // 周末支出更高
+      
+      for (let day = 0; day < 7; day++) {
+        const baseAmount = 600 * dayMultipliers[day]
+        timeData.push({
+          period: dayNames[day],
+          amount: Math.floor((Math.random() * baseAmount + baseAmount * 0.3) * timeMultiplier)
+        })
+      }
+      break
+      
+    case 'week':
+      // 按周显示一个月4周
+      for (let week = 1; week <= 4; week++) {
+        const baseAmount = 2800 + (Math.random() - 0.5) * 800 // 第1-4周略有差异
+        timeData.push({
+          period: `第${week}周`,
+          amount: Math.floor((Math.random() * baseAmount + baseAmount * 0.4) * timeMultiplier)
+        })
+      }
+      break
+      
+    default:
+      // 默认按小时段显示
+      timeData = [
+        { period: '00-06', amount: Math.floor((Math.random() * 500 + 200) * timeMultiplier) },
+        { period: '06-12', amount: Math.floor((Math.random() * 1000 + 800) * timeMultiplier) },
+        { period: '12-18', amount: Math.floor((Math.random() * 2000 + 1500) * timeMultiplier) },
+        { period: '18-24', amount: Math.floor((Math.random() * 1800 + 1200) * timeMultiplier) }
+      ]
+  }
+  
+  console.log(`生成${timeGranularity.value}时段数据，共${timeData.length}个时间段`)
+  return timeData
+}
+
+// 生成模拟数据
+const generateMockData = () => {
+  const days = getDaysByPeriod(selectedTimePeriod.value)
+  const trendData = generateTrendDataByDays(days)
+  
+  // 生成表格数据
+  const mockTableData = []
+  for (let i = 0; i < Math.min(days, 20); i++) {
+    const date = new Date()
+    date.setDate(date.getDate() - i)
+    mockTableData.push({
+      id: i + 1,
+      date: date.toISOString().split('T')[0],
+      category: ['餐饮', '交通', '生活用品', '娱乐', '其他'][Math.floor(Math.random() * 5)],
+      description: '模拟支出项目',
+      amount: Math.floor(Math.random() * 500) + 100,
+      payer: ['张三', '李四', '王五', '赵六'][Math.floor(Math.random() * 4)]
+    })
+  }
+  
+  tableData.value = mockTableData.reverse()
+  
+  // 更新总数
+  updateTotal()
+  
+  // 更新统计数据
+  const totalExpense = trendData.reduce((sum, item) => sum + item.amount, 0)
+  statistics.totalExpense = totalExpense
+  statistics.dailyAverage = totalExpense / days
+  statistics.categoryCount = 5
+  statistics.maxExpense = Math.max(...mockTableData.map(item => item.amount))
+  statistics.maxExpenseCategory = '餐饮'
+}
+
+// 基于时间周期生成表格数据
+const generateTableDataByPeriod = () => {
+  const days = getDaysByPeriod(selectedTimePeriod.value)
+  
+  // 生成基于时间周期的表格数据
+  const mockTableData = []
+  for (let i = 0; i < Math.min(days, 20); i++) {
+    const date = new Date()
+    date.setDate(date.getDate() - i)
+    
+    // 基于时间周期调整数据范围
+    const timeMultiplier = days / 30 // 30天作为基准
+    const baseAmount = 100 * timeMultiplier
+    
+    mockTableData.push({
+      id: i + 1,
+      date: date.toISOString().split('T')[0],
+      category: ['餐饮', '交通', '生活用品', '娱乐', '其他'][Math.floor(Math.random() * 5)],
+      description: '基于时间周期数据',
+      amount: Math.floor(Math.random() * 300 * timeMultiplier) + baseAmount,
+      payer: ['张三', '李四', '王五', '赵六'][Math.floor(Math.random() * 4)]
+    })
+  }
+  
+  tableData.value = mockTableData.reverse()
+  
+  // 更新总数
+  updateTotal()
+  
+  console.log(`生成${days}天内的表格数据，共${mockTableData.length}条记录`)
+}
+
+// 更新统计数据（基于时间周期）
+const updateStatistics = () => {
+  const days = getDaysByPeriod(selectedTimePeriod.value)
+  
+  // 基于当前表格数据计算统计
+  const tableDataArray = tableData.value || []
+  const totalExpense = tableDataArray.reduce((sum, item) => sum + item.amount, 0)
+  const dailyAverage = tableDataArray.length > 0 ? totalExpense / Math.min(days, tableDataArray.length) : 0
+  
+  // 计算支出类别统计
+  const categoryMap = new Map()
+  tableDataArray.forEach(item => {
+    const count = categoryMap.get(item.category) || 0
+    categoryMap.set(item.category, count + 1)
+  })
+  const categoryCount = categoryMap.size
+  
+  // 计算单笔最高支出
+  let maxExpense = 0
+  let maxExpenseCategory = ''
+  tableDataArray.forEach(item => {
+    if (item.amount > maxExpense) {
+      maxExpense = item.amount
+      maxExpenseCategory = item.category
+    }
+  })
+  
+  // 更新统计数据
+  statistics.totalExpense = totalExpense
+  statistics.dailyAverage = dailyAverage
+  statistics.categoryCount = categoryCount
+  statistics.maxExpense = maxExpense
+  statistics.maxExpenseCategory = maxExpenseCategory
+  
+  console.log(`更新统计数据 - 总支出: ¥${totalExpense.toFixed(2)}, 日均: ¥${dailyAverage.toFixed(2)}, 类别数: ${categoryCount}, 最高单笔: ¥${maxExpense}(${maxExpenseCategory})`)
+}
+
+// 监听筛选条件变化
+watch([timeGranularity], () => {
+  console.log('时段粒度变化:', timeGranularity.value)
+  // 直接更新时段图表，而不是调用loadExpenseData
+  if (timeChart.value) {
+    updateTimeChart()
+  } else {
+    // 如果图表实例还没有创建，先调用loadExpenseData初始化数据
+    loadExpenseData()
+  }
 })
 </script>
 
@@ -1059,6 +1521,114 @@ watch([memberFilter, timeGranularity], () => {
   padding: 20px 0;
 }
 
+/* 操作按钮样式 */
+.action-buttons {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.el-button.edit-btn,
+.el-button.delete-btn {
+  min-width: 45px;
+  height: 24px;
+  padding: 3px 6px;
+  font-size: 11px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.el-button.edit-btn:hover,
+.el-button.delete-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.el-button .el-icon {
+  font-size: 12px;
+}
+
+/* 搜索功能样式 */
+.search-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.search-hint {
+  color: #909399;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* 搜索高亮样式 */
+.search-highlight {
+  background-color: #fff3cd;
+  padding: 2px 4px;
+  border-radius: 2px;
+}
+
+/* 无搜索结果样式 */
+.no-search-results {
+  text-align: center;
+  padding: 40px 0;
+  color: #909399;
+}
+
+.no-search-results .el-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .el-button.edit-btn,
+  .el-button.delete-btn {
+    min-width: auto;
+    height: 20px;
+    padding: 2px 4px;
+    font-size: 10px;
+  }
+  
+  .el-button .el-icon {
+    font-size: 10px;
+  }
+  
+  .search-container {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .search-hint {
+    font-size: 11px;
+  }
+}
+
+/* 移动端优化 */
+@media (max-width: 768px) {
+  .action-buttons {
+    gap: 4px;
+    padding: 0 2px;
+  }
+  
+  .action-buttons .el-button {
+    padding: 2px 4px;
+    font-size: 10px;
+    min-width: 35px;
+    height: 20px;
+  }
+  
+  .action-buttons .el-button .el-icon {
+    font-size: 10px;
+    margin-right: 1px;
+  }
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
   .expense-statistics {
@@ -1076,10 +1646,7 @@ watch([memberFilter, timeGranularity], () => {
     justify-content: space-between;
   }
   
-  .header-actions .el-date-picker {
-    flex: 1;
-    margin-right: 8px !important;
-  }
+
   
   .stat-card {
     padding: 16px;

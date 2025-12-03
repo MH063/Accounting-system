@@ -294,25 +294,57 @@ const disabledDate = (time: Date) => {
 const loadExpenseData = async () => {
   try {
     const expenseId = route.params.id as string
-    console.log(`加载费用数据，ID: ${expenseId}`)
     
-    // 模拟API调用
-    setTimeout(() => {
-      // 模拟数据
-      const mockData = {
-        title: '办公室清洁费用',
-        category: 'cleaning',
-        amount: 300.00,
-        date: '2024-12-15',
-        description: '月度办公室清洁服务，包括地面清洁、垃圾清理等',
-        applicant: '张三',
-        phone: '13800138000',
-        department: '行政部门',
-        position: '清洁员'
+    // 检查是否有传入的数据（从路由query或state中获取）
+    let passedData = null
+    
+    if (route.query.data) {
+      // 先解码URL编码的数据，再解析JSON
+      const decodedData = decodeURIComponent(route.query.data as string)
+      passedData = JSON.parse(decodedData)
+    } else if (route.state?.expenseData) {
+      passedData = route.state.expenseData
+    }
+    
+    console.log(`加载费用数据，ID: ${expenseId}`, passedData)
+    
+    if (passedData) {
+      // 使用传入的数据
+      formData.value = {
+        title: passedData.description || '',
+        category: passedData.category === '餐饮' ? 'other' : 
+                 passedData.category === '交通' ? 'utilities' :
+                 passedData.category === '生活用品' ? 'accommodation' :
+                 passedData.category === '娱乐' ? 'maintenance' : 'other',
+        amount: passedData.amount || 0,
+        date: passedData.date || '',
+        description: passedData.description || '',
+        applicant: passedData.payer || '当前用户',
+        phone: '13800138000', // 默认值
+        department: '财务部', // 默认值
+        position: '员工' // 默认值
       }
-      
-      formData.value = { ...mockData }
-    }, 500)
+      console.log('使用传入的数据加载表单:', formData.value)
+    } else {
+      // 模拟API调用获取数据
+      setTimeout(() => {
+        // 模拟数据
+        const mockData = {
+          title: '办公室清洁费用',
+          category: 'cleaning',
+          amount: 300.00,
+          date: '2024-12-15',
+          description: '月度办公室清洁服务，包括地面清洁、垃圾清理等',
+          applicant: '张三',
+          phone: '13800138000',
+          department: '行政部门',
+          position: '清洁员'
+        }
+        
+        formData.value = { ...mockData }
+        console.log('使用默认模拟数据加载表单')
+      }, 500)
+    }
     
   } catch (error) {
     console.error('加载费用数据失败:', error)

@@ -70,6 +70,9 @@ export interface QRCode {
   tags: string[]
   backgroundColor?: string
   logoUrl?: string
+  // 新增支付平台字段
+  platform: 'alipay' | 'wechat' | 'unionpay'
+  isUserUploaded: boolean
 }
 
 export interface PaymentRequest {
@@ -106,6 +109,16 @@ export interface PaymentFilter {
   keyword?: string
   page?: number
   size?: number
+}
+
+export interface SecurityCheckResult {
+  qrCodeStatus: 'success' | 'warning' | 'error'
+  usageAnalysis: 'success' | 'warning' | 'error'
+  amountValidation: 'success' | 'warning' | 'error'
+  permissions: 'success' | 'warning' | 'error'
+  issues?: string[]
+  recommendations?: string[]
+  lastCheckTime: string
 }
 
 // 基础HTTP请求函数
@@ -463,6 +476,74 @@ export const toggleQRCodeStatus = async (_id: number, status: 'active' | 'inacti
 }
 
 /**
+ * 上传收款码图片并创建收款码记录
+ * @param file 上传的图片文件
+ * @param qrCodeData 收款码数据
+ * @returns 上传结果
+ */
+export const uploadQRCodeImage = async (qrCodeData: {
+  file: File
+  platform: 'alipay' | 'wechat' | 'unionpay'
+  description: string
+}) => {
+  try {
+    // 模拟文件上传延迟
+    await new Promise(resolve => setTimeout(resolve, 1500))
+    
+    // 生成唯一的图片URL（使用picsum模拟上传的图片）
+    const imageId = Math.floor(Math.random() * 1000) + Date.now()
+    const uploadedImageUrl = `https://picsum.photos/200/200?random=${imageId}`
+    
+    const newQRCode = {
+      id: Date.now(),
+      name: `${getPlatformName(qrCodeData.platform)}收款码 ${new Date().toLocaleDateString()}`,
+      type: 'custom' as const,
+      amount: 0, // 上传的收款码不预设金额
+      currency: 'CNY',
+      description: qrCodeData.description,
+      status: 'active' as const,
+      usageLimit: undefined,
+      usageCount: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      expiresAt: undefined,
+      qrCodeUrl: uploadedImageUrl, // 使用上传的图片URL
+      merchantName: '宿舍管理系统',
+      merchantAccount: 'dorm_manager',
+      isDefault: false,
+      tags: [],
+      backgroundColor: undefined,
+      logoUrl: undefined,
+      platform: qrCodeData.platform,
+      isUserUploaded: true // 标记为用户上传的收款码
+    }
+    
+    return {
+      success: true,
+      data: newQRCode,
+      message: '收款码上传成功'
+    }
+  } catch (error) {
+    console.error('上传收款码失败:', error)
+    throw new Error('上传收款码失败')
+  }
+}
+
+/**
+ * 获取支付平台中文名称
+ * @param platform 支付平台
+ * @returns 中文名称
+ */
+const getPlatformName = (platform: 'alipay' | 'wechat' | 'unionpay'): string => {
+  const platformNames = {
+    alipay: '支付宝',
+    wechat: '微信',
+    unionpay: '银联'
+  }
+  return platformNames[platform] || platform
+}
+
+/**
  * 生成收款码图片
  * @param id 收款码ID
  * @param options 生成选项
@@ -521,12 +602,18 @@ export const shareQRCode = async (_id: number, _method: 'copy' | 'email' | 'sms'
 // ============= 支付确认相关 API =============
 
 /**
- * 确认支付
+ * 确认支付（支持收款码收入记录）
  * @param orderId 订单ID
  * @param paymentData 支付数据
  * @returns 支付结果
  */
-export const confirmPayment = async (orderId: string) => {
+export const confirmPayment = async (orderId: string, paymentData?: {
+  amount?: number
+  qrCodeId?: number
+  merchantName?: string
+  description?: string
+  paymentMethod?: 'wechat' | 'alipay' | 'bank' | 'cash'
+}) => {
   try {
     await new Promise(resolve => setTimeout(resolve, 2000))
     
@@ -541,8 +628,15 @@ export const confirmPayment = async (orderId: string) => {
         status: success ? 'success' : 'failed',
         completeTime: success ? new Date().toISOString() : undefined,
         message: success ? '支付成功' : '支付失败',
-        error: success ? undefined : '余额不足'
+        error: success ? undefined : '余额不足',
+        amount: paymentData?.amount || 0,
+        qrCodeId: paymentData?.qrCodeId
       }
+    }
+    
+    // 如果支付成功且有收款码ID，则更新收款码使用次数并记录收入
+    if (success && paymentData?.qrCodeId && paymentData?.amount) {
+      await recordQRCodecIncome(paymentData.qrCodeId, paymentData.amount, paymentData)
     }
     
     return response
@@ -550,6 +644,69 @@ export const confirmPayment = async (orderId: string) => {
     console.error('确认支付失败:', error)
     throw new Error('确认支付失败')
   }
+}
+
+/**
+ * 记录收款码收入
+ * @param qrCodeId 收款码ID
+ * @param amount 金额
+ * @param paymentData 支付数据
+ */
+const recordQRCodecIncome = async (qrCodeId: number, amount: number, paymentData: any) => {
+  try {
+    console.log(`记录收款码收入 - ID: ${qrCodeId}, 金额: ${amount}`)
+    
+    // 更新收款码使用次数（模拟）
+    const qrCodes = generateMockQRCodes()
+    const targetQRCode = qrCodes.find(qr => qr.id === qrCodeId)
+    
+    if (targetQRCode) {
+      targetQRCode.usageCount += 1
+      targetQRCode.updatedAt = new Date().toISOString()
+      console.log(`更新收款码使用次数: ${targetQRCode.name}, 当前使用次数: ${targetQRCode.usageCount}`)
+    }
+    
+    // 记录收入到支付记录中
+    const incomeRecord: PaymentRecord = {
+      id: Date.now(),
+      orderId: `INCOME_${Date.now()}`,
+      transactionType: 'income',
+      paymentMethod: paymentData.paymentMethod || 'wechat',
+      amount: amount,
+      status: 'success',
+      createdAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+      description: paymentData.description || '收款码收入',
+      remark: `通过收款码(${qrCodeId})收取`,
+      transactionId: `TXN${Date.now()}`,
+      ipAddress: '127.0.0.1',
+      recipientName: paymentData.merchantName || '宿舍管理系统',
+      recipientAccount: 'dorm_manager'
+    }
+    
+    // 将收入记录添加到全局收入记录中
+    addIncomeRecord(incomeRecord)
+    
+    console.log('收款码收入记录已创建:', incomeRecord)
+  } catch (error) {
+    console.error('记录收款码收入失败:', error)
+    // 记录失败不影响支付流程
+  }
+}
+
+/**
+ * 添加收入记录到全局记录中
+ * @param record 收入记录
+ */
+const addIncomeRecord = (record: PaymentRecord) => {
+  // 这里应该将记录添加到实际的支付记录数组中
+  // 在真实应用中，这会调用后端API保存到数据库
+  console.log('添加收入记录:', record)
+  
+  // 模拟添加到支付记录数组（在真实应用中这会在后端处理）
+  const existingRecords = (window as any).paymentRecords || []
+  existingRecords.push(record)
+  ;(window as any).paymentRecords = existingRecords
 }
 
 /**
@@ -761,7 +918,7 @@ function generateMockQRCodes(): QRCode[] {
   return [
     {
       id: 1,
-      name: '房租收款码',
+      name: '我的支付宝收款码',
       type: 'fixed',
       amount: 1500.00,
       currency: 'CNY',
@@ -771,17 +928,19 @@ function generateMockQRCodes(): QRCode[] {
       usageCount: 15,
       createdAt: '2024-11-01T08:00:00.000Z',
       updatedAt: '2024-11-23T14:30:00.000Z',
-      qrCodeUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=PAY_1',
+      qrCodeUrl: 'https://picsum.photos/200/200?random=1001',
       merchantName: '宿舍管理系统',
       merchantAccount: 'dorm_manager',
       isDefault: true,
       tags: ['房租', '固定'],
       backgroundColor: '#667eea',
-      logoUrl: 'https://picsum.photos/40/40?random=7'
+      logoUrl: 'https://picsum.photos/40/40?random=7',
+      platform: 'alipay',
+      isUserUploaded: true
     },
     {
       id: 2,
-      name: '水电费收款',
+      name: '我的微信收款码',
       type: 'custom',
       amount: 0,
       currency: 'CNY',
@@ -791,17 +950,19 @@ function generateMockQRCodes(): QRCode[] {
       usageCount: 8,
       createdAt: '2024-11-10T10:15:00.000Z',
       updatedAt: '2024-11-22T16:45:00.000Z',
-      qrCodeUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=PAY_2',
+      qrCodeUrl: 'https://picsum.photos/200/200?random=1002',
       merchantName: '宿舍管理系统',
       merchantAccount: 'dorm_manager',
       isDefault: false,
       tags: ['水电费', '灵活'],
       backgroundColor: '#10b981',
-      logoUrl: 'https://picsum.photos/40/40?random=8'
+      logoUrl: 'https://picsum.photos/40/40?random=8',
+      platform: 'wechat',
+      isUserUploaded: true
     },
     {
       id: 3,
-      name: '临时收款',
+      name: '我的银联收款码',
       type: 'dynamic',
       amount: 0,
       currency: 'CNY',
@@ -812,15 +973,181 @@ function generateMockQRCodes(): QRCode[] {
       createdAt: '2024-11-20T14:20:00.000Z',
       updatedAt: '2024-11-20T14:20:00.000Z',
       expiresAt: '2024-11-27T14:20:00.000Z',
-      qrCodeUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=PAY_3',
+      qrCodeUrl: 'https://picsum.photos/200/200?random=1003',
       merchantName: '宿舍管理系统',
       merchantAccount: 'dorm_manager',
       isDefault: false,
       tags: ['临时', '一次性'],
       backgroundColor: '#f59e0b',
-      logoUrl: 'https://picsum.photos/40/40?random=9'
+      logoUrl: 'https://picsum.photos/40/40?random=9',
+      platform: 'unionpay',
+      isUserUploaded: true
     }
   ]
+}
+
+// ============= 安全检测相关 API =============
+
+/**
+ * 执行安全检测
+ * @param qrCodeId 收款码ID，为空则检测所有
+ * @returns 安全检测结果
+ */
+export const performSecurityCheck = async (qrCodeId?: number) => {
+  try {
+    // 模拟API调用延迟
+    await new Promise(resolve => setTimeout(resolve, 1500))
+    
+    // 获取收款码数据
+    const qrCodes = generateMockQRCodes()
+    const targetQRCodes = qrCodeId ? qrCodes.filter(qr => qr.id === qrCodeId) : qrCodes
+    
+    const result: SecurityCheckResult = {
+      qrCodeStatus: 'success',
+      usageAnalysis: 'success', 
+      amountValidation: 'success',
+      permissions: 'success',
+      issues: [],
+      recommendations: [],
+      lastCheckTime: new Date().toISOString()
+    }
+    
+    // 1. 收款码状态检查
+    const inactiveQRCodes = targetQRCodes.filter(qr => qr.status === 'inactive')
+    const expiredQRCodes = targetQRCodes.filter(qr => {
+      if (!qr.expiresAt) return false
+      return new Date(qr.expiresAt) < new Date()
+    })
+    
+    if (inactiveQRCodes.length > 0) {
+      result.qrCodeStatus = 'warning'
+      result.issues?.push(`发现 ${inactiveQRCodes.length} 个已禁用的收款码`)
+      result.recommendations?.push('建议启用必要的收款码或删除不使用的收款码')
+    }
+    
+    if (expiredQRCodes.length > 0) {
+      result.qrCodeStatus = 'error'
+      result.issues?.push(`发现 ${expiredQRCodes.length} 个已过期的收款码`)
+      result.recommendations?.push('立即更新或删除过期的收款码')
+    }
+    
+    // 2. 使用频率分析
+    const lowUsageQRCodes = targetQRCodes.filter(qr => {
+      const daysSinceCreation = Math.floor((Date.now() - new Date(qr.createdAt).getTime()) / (1000 * 60 * 60 * 24))
+      return daysSinceCreation > 30 && qr.usageCount === 0
+    })
+    
+    if (lowUsageQRCodes.length > targetQRCodes.length * 0.5) {
+      result.usageAnalysis = 'warning'
+      result.issues?.push(`${lowUsageQRCodes.length} 个收款码使用频率较低`)
+      result.recommendations?.push('分析使用率低的收款码，考虑优化或替换')
+    }
+    
+    // 检查异常使用模式
+    const highUsageQRCodes = targetQRCodes.filter(qr => qr.usageCount > 100)
+    if (highUsageQRCodes.length > 0) {
+      result.usageAnalysis = 'warning'
+      result.issues?.push(`发现 ${highUsageQRCodes.length} 个高频率使用的收款码，建议监控`)
+      result.recommendations?.push('对高频使用收款码加强监控和安全保障')
+    }
+    
+    // 3. 金额验证
+    const invalidAmountQRCodes = targetQRCodes.filter(qr => {
+      if (qr.type === 'fixed' && (!qr.amount || qr.amount <= 0)) return true
+      if (qr.amount && qr.amount > 10000) return true
+      return false
+    })
+    
+    if (invalidAmountQRCodes.length > 0) {
+      result.amountValidation = 'error'
+      result.issues?.push(`${invalidAmountQRCodes.length} 个收款码金额设置异常`)
+      result.recommendations?.push('检查并修正收款码金额设置')
+    }
+    
+    // 检查零金额收款码
+    const zeroAmountQRCodes = targetQRCodes.filter(qr => qr.amount === 0)
+    if (zeroAmountQRCodes.length > 2) {
+      result.amountValidation = 'warning'
+      result.issues?.push(`发现 ${zeroAmountQRCodes.length} 个零金额收款码`)
+      result.recommendations?.push('合理设置收款码金额，避免误导用户')
+    }
+    
+    // 4. 权限检查
+    const duplicateNames = targetQRCodes.filter((qr, index, arr) => 
+      arr.findIndex(q => q.name === qr.name) !== index
+    )
+    
+    if (duplicateNames.length > 0) {
+      result.permissions = 'warning'
+      result.issues?.push(`发现 ${duplicateNames.length} 个重复名称的收款码`)
+      result.recommendations?.push('避免使用相同名称的收款码，防止混淆')
+    }
+    
+    // 检查默认收款码设置
+    const defaultQRCodes = targetQRCodes.filter(qr => qr.isDefault)
+    if (defaultQRCodes.length === 0 && targetQRCodes.length > 0) {
+      result.permissions = 'warning'
+      result.issues?.push('未设置默认收款码')
+      result.recommendations?.push('建议设置一个默认收款码以提高用户体验')
+    } else if (defaultQRCodes.length > 1) {
+      result.permissions = 'error'
+      result.issues?.push(`设置了 ${defaultQRCodes.length} 个默认收款码`)
+      result.recommendations?.push('只能设置一个默认收款码')
+    }
+    
+    // 总体风险评估
+    const totalIssues = (result.issues?.length || 0)
+    if (totalIssues > 5) {
+      // 保持现有状态，但添加综合建议
+      result.recommendations?.unshift('安全风险较高，建议立即进行全面检查和整改')
+    } else if (totalIssues > 2) {
+      result.recommendations?.unshift('存在一定安全风险，建议及时处理相关问题')
+    }
+    
+    return {
+      success: true,
+      data: result
+    }
+  } catch (error) {
+    console.error('安全检测失败:', error)
+    throw new Error('安全检测失败')
+  }
+}
+
+/**
+ * 获取安全检测历史记录
+ * @param days 天数，默认30天
+ * @returns 历史记录列表
+ */
+export const getSecurityCheckHistory = async (days: number = 30) => {
+  try {
+    await new Promise(resolve => setTimeout(resolve, 600))
+    
+    const history = []
+    const now = new Date()
+    
+    for (let i = 0; i < Math.min(days, 10); i++) {
+      const checkDate = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
+      const issueCount = Math.floor(Math.random() * 5)
+      
+      history.push({
+        id: i + 1,
+        checkTime: checkDate.toISOString(),
+        status: issueCount === 0 ? 'success' : issueCount > 3 ? 'error' : 'warning',
+        issueCount,
+        checkedQRCodes: 3,
+        responseTime: Math.floor(Math.random() * 2000) + 500
+      })
+    }
+    
+    return {
+      success: true,
+      data: history
+    }
+  } catch (error) {
+    console.error('获取安全检测历史失败:', error)
+    throw new Error('获取安全检测历史失败')
+  }
 }
 
 // 导出默认实例配置

@@ -15,15 +15,22 @@
         >
           返回
         </el-button>
-        <el-date-picker
-          v-model="dateRange"
-          type="daterange"
-          range-separator="至"
-          start-placeholder="开始日期"
-          end-placeholder="结束日期"
-          size="default"
-          @change="handleDateRangeChange"
-        />
+        
+        <!-- 快捷时间选择 -->
+        <div class="quick-time-selector" style="margin-right: 12px;">
+          <el-button-group>
+            <el-button 
+              v-for="period in timePeriods" 
+              :key="period.value"
+              size="small"
+              :type="selectedTimePeriod === period.value ? 'primary' : 'default'"
+              @click="selectTimePeriod(period.value)"
+            >
+              {{ period.label }}
+            </el-button>
+          </el-button-group>
+        </div>
+        
         <el-button :icon="Download" @click="handleExportReport" type="primary">
           导出报告
         </el-button>
@@ -175,7 +182,7 @@
     <!-- 对比分析 -->
     <div class="comparison-analysis" v-if="comparisonType !== 'none'">
       <el-row :gutter="20">
-        <el-col :xs="24" :md="12">
+        <el-col :xs="24" :md="24">
           <div class="chart-card">
             <div class="chart-header">
               <h3>{{ getComparisonChartTitle }}</h3>
@@ -185,36 +192,51 @@
             </div>
           </div>
         </el-col>
-        <el-col :xs="24" :md="12">
-          <div class="chart-card">
-            <div class="chart-header">
-              <h3>详细对比数据</h3>
-            </div>
-            <div class="comparison-data">
-              <el-table :data="comparisonTableData" style="width: 100%">
-                <el-table-column prop="period" label="时期" width="120" />
-                <el-table-column prop="current" label="本期" width="100">
-                  <template #default="{ row }">
-                    ¥{{ formatAmount(row.current) }}
-                  </template>
-                </el-table-column>
-                <el-table-column prop="comparison" label="对比期" width="100">
-                  <template #default="{ row }">
-                    ¥{{ formatAmount(row.comparison) }}
-                  </template>
-                </el-table-column>
-                <el-table-column prop="change" label="变化" width="80">
-                  <template #default="{ row }">
-                    <span :class="{ 'text-success': row.change > 0, 'text-danger': row.change < 0 }">
-                      {{ row.change > 0 ? '+' : '' }}{{ row.change }}%
-                    </span>
-                  </template>
-                </el-table-column>
-              </el-table>
-            </div>
-          </div>
-        </el-col>
       </el-row>
+    </div>
+
+    <!-- 详细对比数据 -->
+    <div class="comparison-data-detail" v-if="comparisonType !== 'none' && comparisonTableData.length > 0">
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3>详细对比数据</h3>
+        </div>
+        <div class="comparison-data">
+          <el-table :data="paginatedComparisonData" style="width: 100%">
+            <el-table-column prop="period" label="时期" width="120" />
+            <el-table-column prop="current" label="本期" width="100">
+              <template #default="{ row }">
+                ¥{{ formatAmount(row.current) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="comparison" label="对比期" width="100">
+              <template #default="{ row }">
+                ¥{{ formatAmount(row.comparison) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="change" label="变化" width="80">
+              <template #default="{ row }">
+                <span :class="{ 'text-success': row.change > 0, 'text-danger': row.change < 0 }">
+                  {{ row.change > 0 ? '+' : '' }}{{ row.change }}%
+                </span>
+              </template>
+            </el-table-column>
+          </el-table>
+          
+          <!-- 分页组件 -->
+          <div class="pagination-section" v-if="comparisonTableData.length > 0">
+            <el-pagination
+              v-model:current-page="currentPage"
+              v-model:page-size="pageSize"
+              :page-sizes="pageSizes"
+              :total="totalComparisonData"
+              layout="total, sizes, prev, pager, next, jumper"
+              @size-change="handleSizeChange"
+              @current-change="handleCurrentChange"
+            />
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- 异常检测面板 -->
@@ -290,6 +312,8 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
+import * as XLSX from 'xlsx'
+import { saveAs } from 'file-saver'
 import { 
   ArrowLeft, 
   Download, 
@@ -363,6 +387,22 @@ let mainChart: echarts.ECharts | null = null
 let comparisonChart: echarts.ECharts | null = null
 let predictionChart: echarts.ECharts | null = null
 
+// 快捷时间选择相关
+const selectedTimePeriod = ref('30d')
+const timePeriods = [
+  { label: '近7天', value: '7d' },
+  { label: '近30天', value: '30d' },
+  { label: '近90天', value: '90d' },
+  { label: '近6个月', value: '6m' },
+  { label: '近1年', value: '1y' }
+]
+
+// 详细对比数据分页相关
+const currentPage = ref(1)
+const pageSize = ref(5)
+const pageSizes = [5, 8, 12, 20, 50]
+const totalComparisonData = ref(0)
+
 // 计算属性
 const getComparisonLabel = computed(() => {
   switch (comparisonType.value) {
@@ -420,6 +460,14 @@ const getRiskLevelClass = computed(() => {
     '高': 'risk-high'
   }
   return riskClass[predictionSummary.riskLevel] || 'risk-medium'
+})
+
+// 详细对比数据分页相关计算属性
+const paginatedComparisonData = computed(() => {
+  if (!comparisonTableData.value) return []
+  const start = (currentPage.value - 1) * pageSize.value
+  const end = start + pageSize.value
+  return comparisonTableData.value.slice(start, end)
 })
 
 // 工具函数
@@ -600,6 +648,12 @@ const initComparisonChart = () => {
     change: comparisonData[index] ? Math.round(((item.value - comparisonData[index].value) / comparisonData[index].value) * 100 * 100) / 100 : 0
   }))
   
+  // 更新总数据量
+  totalComparisonData.value = comparisonTableData.value.length
+  
+  // 重置分页状态
+  currentPage.value = 1
+  
   const option = {
     title: {
       text: getComparisonChartTitle.value,
@@ -763,12 +817,36 @@ const initPredictionChart = () => {
   predictionChart.setOption(option)
 }
 
-// 事件处理函数
-const handleBack = () => {
-  router.push('/dashboard/analytics')
-}
-
-const handleDateRangeChange = () => {
+// 快捷时间选择处理函数
+const selectTimePeriod = (period: string) => {
+  selectedTimePeriod.value = period
+  
+  const now = new Date()
+  let startDate: Date
+  
+  switch (period) {
+    case '7d':
+      startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+      break
+    case '30d':
+      startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+      break
+    case '90d':
+      startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+      break
+    case '6m':
+      startDate = new Date(now.getTime() - 6 * 30 * 24 * 60 * 60 * 1000)
+      break
+    case '1y':
+      startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+      break
+    default:
+      startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+  }
+  
+  dateRange.value = [startDate, now]
+  
+  // 更新图表数据
   initMainChart()
   if (comparisonType.value !== 'none') {
     initComparisonChart()
@@ -777,6 +855,13 @@ const handleDateRangeChange = () => {
     initPredictionChart()
   }
 }
+
+// 事件处理函数
+const handleBack = () => {
+  router.push('/dashboard/analytics')
+}
+
+
 
 const handleAnalysisTypeChange = () => {
   initMainChart()
@@ -805,22 +890,157 @@ const handlePredictionToggle = () => {
   }
 }
 
-const handleExportReport = () => {
-  // 生成趋势分析报告
-  const reportData = {
-    title: '财务趋势分析报告',
-    dateRange: `${dateRange.value[0].toLocaleDateString()} 至 ${dateRange.value[1].toLocaleDateString()}`,
-    analysisType: analysisType.value,
-    currentPeriodTotal: currentPeriodTotal.value,
-    currentPeriodChange: currentPeriodChange.value,
-    trendDirection: trendDirection.value,
-    volatility: volatility.value,
-    anomalyCount: anomalyCount.value,
-    predictionAccuracy: predictionAccuracy.value
+// 分页事件处理函数
+const handleSizeChange = (size: number) => {
+  pageSize.value = size
+  currentPage.value = 1 // 重置到第一页
+}
+
+const handleCurrentChange = (page: number) => {
+  currentPage.value = page
+}
+
+const handleExportReport = async () => {
+  try {
+    ElMessage.info('正在生成报告...')
+    
+    // 生成基础数据
+    const trendData = generateMockData()
+    
+    // 创建工作簿
+    const workbook = XLSX.utils.book_new()
+    
+    // 1. 报告概要
+    const summaryData = [
+      ['财务趋势分析报告', ''],
+      ['报告生成时间', new Date().toLocaleString('zh-CN')],
+      ['分析期间', `${dateRange.value[0].toLocaleDateString()} 至 ${dateRange.value[1].toLocaleDateString()}`],
+      ['分析类型', analysisType.value === 'expense' ? '支出趋势' : analysisType.value === 'income' ? '收入趋势' : '结余趋势'],
+      ['时间粒度', timeGranularity.value === 'day' ? '按日' : timeGranularity.value === 'week' ? '按周' : '按月'],
+      ['对比类型', comparisonType.value === 'yoy' ? '同比分析' : comparisonType.value === 'qoq' ? '环比分析' : '不对比'],
+      ['', ''],
+      ['关键指标', ''],
+      ['本期总额', `¥${formatAmount(currentPeriodTotal.value)}`],
+      ['对比值', `¥${formatAmount(comparisonValue.value)}`],
+      ['变化率', `${currentPeriodChange.value > 0 ? '+' : ''}${currentPeriodChange.value}%`],
+      ['异常检测数量', anomalyCount.value],
+      ['异常检测状态', anomalyStatus.value],
+      ['预测准确率', `${predictionAccuracy.value}%`],
+      ['', ''],
+      ['趋势分析', ''],
+      ['增长趋势', trendDirection.value === 'up' ? '上升' : trendDirection.value === 'down' ? '下降' : '稳定'],
+      ['波动性', volatility.value],
+      ['季节性', seasonality.value],
+      ['预测趋势', predictionDirection.value === 'up' ? '上升' : predictionDirection.value === 'down' ? '下降' : '稳定']
+    ]
+    const summarySheet = XLSX.utils.aoa_to_sheet(summaryData)
+    XLSX.utils.book_append_sheet(workbook, summarySheet, '报告概要')
+    
+    // 2. 趋势数据
+    const trendSheetData = [
+      ['日期', '金额(元)', '类型']
+    ]
+    trendData.forEach(item => {
+      trendSheetData.push([
+        item.date,
+        item.value,
+        analysisType.value === 'expense' ? '支出' : analysisType.value === 'income' ? '收入' : '结余'
+      ])
+    })
+    const trendSheet = XLSX.utils.aoa_to_sheet(trendSheetData)
+    XLSX.utils.book_append_sheet(workbook, trendSheet, '趋势数据')
+    
+    // 3. 对比分析数据（如果启用）
+    if (comparisonType.value !== 'none' && comparisonTableData.value.length > 0) {
+      const comparisonSheetData = [
+        ['时期', '本期金额(元)', '对比期金额(元)', '变化率(%)']
+      ]
+      comparisonTableData.value.forEach(item => {
+        comparisonSheetData.push([
+          item.period,
+          item.current,
+          item.comparison,
+          item.change
+        ])
+      })
+      const comparisonSheet = XLSX.utils.aoa_to_sheet(comparisonSheetData)
+      XLSX.utils.book_append_sheet(workbook, comparisonSheet, '对比分析')
+    }
+    
+    // 4. 异常检测数据（如果有）
+    if (anomalyList.value.length > 0) {
+      const anomalySheetData = [
+        ['日期', '金额(元)', '偏离度', '异常原因']
+      ]
+      anomalyList.value.forEach(item => {
+        anomalySheetData.push([
+          item.date,
+          item.value,
+          item.deviation,
+          item.reason
+        ])
+      })
+      const anomalySheet = XLSX.utils.aoa_to_sheet(anomalySheetData)
+      XLSX.utils.book_append_sheet(workbook, anomalySheet, '异常检测')
+    }
+    
+    // 5. 预测数据（如果启用）
+    if (enablePrediction.value) {
+      const predictionSheetData = [
+        ['预测摘要', ''],
+        ['预测期间', predictionSummary.period],
+        ['预期总额', `¥${formatAmount(predictionSummary.total)}`],
+        ['置信度', `${predictionSummary.confidence}%`],
+        ['风险等级', predictionSummary.riskLevel],
+        ['', ''],
+        ['预测详情', ''],
+        ['数据点', '预测值(元)', '置信区间']
+      ]
+      
+      // 生成预测数据点
+      const predictionData = generateMockData()
+      predictionData.forEach((item, index) => {
+        const confidence = predictionSummary.confidence - (index * 2) // 随时间递减的置信度
+        predictionSheetData.push([
+          `预测点${index + 1}`,
+          item.value,
+          `${Math.max(0, confidence)}%`
+        ])
+      })
+      
+      const predictionSheet = XLSX.utils.aoa_to_sheet(predictionSheetData)
+      XLSX.utils.book_append_sheet(workbook, predictionSheet, '预测分析')
+    }
+    
+    // 生成文件
+    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+    const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    
+    // 生成文件名
+    const fileName = `趋势分析报告_${new Date().toISOString().split('T')[0]}_${Date.now()}.xlsx`
+    
+    // 下载文件
+    saveAs(blob, fileName)
+    
+    ElMessage.success(`报告导出成功！文件已保存为: ${fileName}`)
+    
+    // 记录导出日志
+    console.log('趋势分析报告已导出:', {
+      fileName,
+      fileSize: blob.size,
+      exportTime: new Date().toISOString(),
+      dataSummary: {
+        trendDataPoints: trendData.length,
+        anomalies: anomalyList.value.length,
+        hasComparison: comparisonType.value !== 'none',
+        hasPrediction: enablePrediction.value
+      }
+    })
+    
+  } catch (error) {
+    console.error('导出报告失败:', error)
+    ElMessage.error('导出报告失败，请重试')
   }
-  
-  ElMessage.success('趋势分析报告已生成')
-  console.log('趋势分析报告:', reportData)
 }
 
 // 生命周期
@@ -849,6 +1069,26 @@ watch(predictionPeriod, () => {
     initPredictionChart()
   }
 })
+
+// 监听对比类型变化，重置分页状态
+watch(comparisonType, (newType, oldType) => {
+  if (newType !== 'none') {
+    currentPage.value = 1
+    nextTick(() => {
+      initComparisonChart()
+    })
+  }
+})
+
+// 监听对比表格数据变化，更新总数据量
+watch(comparisonTableData, (newData) => {
+  totalComparisonData.value = newData.length
+  // 如果当前页超出范围，重置到第一页
+  const maxPage = Math.ceil(totalComparisonData.value / pageSize.value)
+  if (currentPage.value > maxPage && maxPage > 0) {
+    currentPage.value = 1
+  }
+}, { deep: true })
 
 // 响应式处理
 const handleResize = () => {
@@ -920,6 +1160,52 @@ if (typeof window !== 'undefined') {
 .back-btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(24, 144, 255, 0.2);
+}
+
+/* 分页样式 */
+.pagination-section {
+  margin-top: 16px;
+  padding: 16px 20px;
+  border-top: 1px solid #ebeef5;
+  display: flex;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  overflow: visible;
+  min-height: 60px; /* 确保足够高度 */
+  background-color: #fafafa; /* 添加背景色提高可读性 */
+}
+
+.pagination-section .el-pagination {
+  white-space: nowrap;
+  overflow: visible;
+  display: flex;
+  align-items: center;
+  gap: 12px; /* 增加元素间距 */
+  font-size: 14px; /* 确保字体大小合适 */
+}
+
+/* 确保分页总条数可见 */
+.pagination-section .el-pagination__total {
+  flex-shrink: 0; /* 防止总条数被压缩 */
+  min-width: 100px; /* 增加最小宽度 */
+  white-space: nowrap;
+  overflow: visible;
+  color: #303133; /* 确保文字颜色清晰 */
+  font-weight: 500; /* 增加字体权重 */
+  margin-right: 8px; /* 增加右边距 */
+}
+
+@media (max-width: 768px) {
+  .pagination-section {
+    overflow-x: auto;
+    padding: 16px 10px;
+  }
+  
+  .pagination-section .el-pagination {
+    min-width: 650px; /* 进一步增加最小宽度 */
+    overflow: visible;
+  }
 }
 
 .filter-section {

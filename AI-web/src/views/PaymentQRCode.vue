@@ -10,59 +10,28 @@
         <el-button @click="goBack" :icon="ArrowLeft">
           返回
         </el-button>
-        <el-button type="primary" @click="openCreateDialog" :icon="Plus">
-          创建收款码
+
+        <el-button type="success" @click="openUploadDialog" :icon="Upload">
+          上传收款码
         </el-button>
         <el-button @click="openSecurityCheck" :icon="Lock">安全检测</el-button>
         <el-button @click="openStatisticsDialog" :icon="DataAnalysis">收款统计</el-button>
       </div>
     </div>
 
-    <!-- 统计概览卡片 -->
-    <div class="stats-overview">
-      <div class="stat-card">
-        <div class="stat-icon total">
-          <DataAnalysis />
-        </div>
-        <div class="stat-content">
-          <div class="stat-value">{{ statistics.totalIncome.toFixed(2) }}</div>
-          <div class="stat-label">总收入 (¥)</div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon today">
-          <Timer />
-        </div>
-        <div class="stat-content">
-          <div class="stat-value">{{ statistics.todayIncome.toFixed(2) }}</div>
-          <div class="stat-label">今日收入 (¥)</div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon active">
-          <Check />
-        </div>
-        <div class="stat-content">
-          <div class="stat-value">{{ activeQRCodes }}</div>
-          <div class="stat-label">活跃收款码</div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon transactions">
-          <List />
-        </div>
-        <div class="stat-content">
-          <div class="stat-value">{{ statistics.totalTransactions }}</div>
-          <div class="stat-label">交易次数</div>
-        </div>
-      </div>
-    </div>
+
 
     <!-- 收款码列表 -->
     <div class="qr-codes-section">
       <div class="section-header">
         <h2>收款码列表</h2>
         <div class="section-actions">
+          <el-select v-model="filterPlatform" placeholder="支付平台" style="width: 120px" @change="filterQRCodes">
+            <el-option label="全部平台" value="all" />
+            <el-option label="支付宝" value="alipay" />
+            <el-option label="微信支付" value="wechat" />
+            <el-option label="银联支付" value="unionpay" />
+          </el-select>
           <el-select v-model="filterStatus" placeholder="状态筛选" style="width: 120px" @change="filterQRCodes">
             <el-option label="全部" value="all" />
             <el-option label="启用" value="active" />
@@ -71,7 +40,6 @@
           <el-select v-model="sortBy" placeholder="排序方式" style="width: 120px" @change="sortQRCodes">
             <el-option label="创建时间" value="createdAt" />
             <el-option label="使用次数" value="usageCount" />
-            <el-option label="收款金额" value="totalAmount" />
           </el-select>
         </div>
       </div>
@@ -81,7 +49,9 @@
           <div class="qr-card-header">
             <div class="qr-info">
               <h3>{{ qr.name }}</h3>
-              <span class="qr-type" :class="qr.type">{{ getQRTypeText(qr.type) }}</span>
+              <el-tag size="small" :type="qr.platform === 'alipay' ? 'primary' : qr.platform === 'wechat' ? 'success' : 'warning'">
+                {{ getQRPlatformText(qr.platform) }}
+              </el-tag>
             </div>
             <div class="qr-status">
               <el-tag :type="qr.status === 'active' ? 'success' : 'info'">
@@ -95,22 +65,12 @@
           </div>
           
           <div class="qr-details">
-            <div class="qr-amount">
-              <span v-if="qr.type === 'fixed'">¥{{ qr.amount?.toFixed(2) }}</span>
-              <span v-else>自定义金额</span>
-            </div>
             <div class="qr-stats">
               <span>使用次数: {{ qr.usageCount }}</span>
-              <span v-if="qr.usageLimit">限制: {{ qr.usageLimit }}</span>
             </div>
-            <div class="qr-description">{{ qr.description }}</div>
           </div>
           
           <div class="qr-actions">
-            <el-button size="small" @click="shareQRCode(qr)">分享</el-button>
-            <el-button size="small" @click="downloadQRCode(qr)">下载</el-button>
-            <el-button size="small" @click="customizeStyle(qr)">样式</el-button>
-            <el-button size="small" @click="editQRCode(qr)">编辑</el-button>
             <el-button 
               size="small" 
               :type="qr.status === 'active' ? 'warning' : 'success'"
@@ -124,65 +84,7 @@
       </div>
     </div>
 
-    <!-- 创建/编辑收款码对话框 -->
-    <el-dialog
-      v-model="dialogVisible"
-      :title="isEdit ? '编辑收款码' : '创建收款码'"
-      width="600px"
-      @close="resetForm"
-    >
-      <el-form :model="qrForm" :rules="qrRules" ref="qrFormRef" label-width="100px">
-        <el-form-item label="收款码名称" prop="name">
-          <el-input v-model="qrForm.name" placeholder="请输入收款码名称" />
-        </el-form-item>
-        <el-form-item label="收款码类型" prop="type">
-          <el-select v-model="qrForm.type" placeholder="选择收款码类型" @change="onTypeChange">
-            <el-option label="固定金额" value="fixed" />
-            <el-option label="自定义金额" value="custom" />
-            <el-option label="动态金额" value="dynamic" />
-          </el-select>
-        </el-form-item>
-        <el-form-item v-if="qrForm.type === 'fixed'" label="固定金额" prop="amount">
-          <el-input-number v-model="qrForm.amount" :min="0.01" :precision="2" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="收款描述" prop="description">
-          <el-input v-model="qrForm.description" placeholder="请输入收款描述" />
-        </el-form-item>
-        <el-form-item label="使用限制" prop="usageLimit">
-          <el-input-number v-model="qrForm.usageLimit" :min="1" placeholder="不限制请留空" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="背景颜色" prop="backgroundColor">
-          <el-color-picker v-model="qrForm.backgroundColor" />
-        </el-form-item>
-        <el-form-item label="标签">
-          <el-tag
-            v-for="tag in qrForm.tags"
-            :key="tag"
-            closable
-            @close="removeTag(tag)"
-          >
-            {{ tag }}
-          </el-tag>
-          <el-input
-            v-if="inputVisible"
-            ref="inputRef"
-            v-model="inputValue"
-            class="tag-input"
-            @keyup.enter="handleInputConfirm"
-            @blur="handleInputConfirm"
-          />
-          <el-button v-else class="add-tag" @click="showInput">+ 标签</el-button>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="dialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="saveQRCode" :loading="saving">
-            {{ isEdit ? '更新' : '创建' }}
-          </el-button>
-        </span>
-      </template>
-    </el-dialog>
+
 
     <!-- 收款统计对话框 -->
     <el-dialog v-model="statisticsDialogVisible" title="收款统计" width="800px">
@@ -210,29 +112,85 @@
     </el-dialog>
 
     <!-- 安全检测对话框 -->
-    <el-dialog v-model="securityDialogVisible" title="安全检测" width="500px">
+    <el-dialog 
+      v-model="securityDialogVisible" 
+      :title="`安全检测报告 (${securityCheckResult?.lastCheckTime ? new Date(securityCheckResult.lastCheckTime).toLocaleString() : ''})`" 
+      width="700px"
+      :loading="securityCheckLoading"
+    >
       <div class="security-check">
+        <div class="check-summary">
+          <div class="summary-header">
+            <h3>检测摘要</h3>
+            <el-button size="small" @click="openSecurityCheck" :loading="securityCheckLoading">
+              重新检测
+            </el-button>
+          </div>
+        </div>
+        
         <div class="check-item" :class="securityChecks.qrCodeStatus">
           <el-icon><Check v-if="securityChecks.qrCodeStatus === 'success'" /><Close v-else /></el-icon>
           <span>收款码状态检查</span>
-          <span class="check-status">{{ securityChecks.qrCodeStatus === 'success' ? '正常' : '异常' }}</span>
+          <span class="check-status">{{ securityChecks.qrCodeStatus === 'success' ? '正常' : securityChecks.qrCodeStatus === 'warning' ? '警告' : '错误' }}</span>
         </div>
         <div class="check-item" :class="securityChecks.usageAnalysis">
           <el-icon><Check v-if="securityChecks.usageAnalysis === 'success'" /><Close v-else /></el-icon>
           <span>使用频率分析</span>
-          <span class="check-status">{{ securityChecks.usageAnalysis === 'success' ? '正常' : '异常' }}</span>
+          <span class="check-status">{{ securityChecks.usageAnalysis === 'success' ? '正常' : securityChecks.usageAnalysis === 'warning' ? '警告' : '错误' }}</span>
         </div>
-        <div class="check-item" :class="securityChecks.amountValidation">
-          <el-icon><Check v-if="securityChecks.amountValidation === 'success'" /><Close v-else /></el-icon>
-          <span>金额验证</span>
-          <span class="check-status">{{ securityChecks.amountValidation === 'success' ? '正常' : '异常' }}</span>
-        </div>
+
         <div class="check-item" :class="securityChecks.permissions">
           <el-icon><Check v-if="securityChecks.permissions === 'success'" /><Close v-else /></el-icon>
           <span>权限检查</span>
-          <span class="check-status">{{ securityChecks.permissions === 'success' ? '正常' : '异常' }}</span>
+          <span class="check-status">{{ securityChecks.permissions === 'success' ? '正常' : securityChecks.permissions === 'warning' ? '警告' : '错误' }}</span>
+        </div>
+        
+        <!-- 问题列表 -->
+        <div v-if="securityCheckResult?.issues && securityCheckResult.issues.length > 0" class="issues-section">
+          <h4>发现的问题</h4>
+          <ul class="issues-list">
+            <li v-for="(issue, index) in securityCheckResult.issues" :key="index" class="issue-item">
+              <el-icon class="issue-icon"><Warning /></el-icon>
+              <span>{{ issue }}</span>
+            </li>
+          </ul>
+        </div>
+        
+        <!-- 建议列表 -->
+        <div v-if="securityCheckResult?.recommendations && securityCheckResult.recommendations.length > 0" class="recommendations-section">
+          <h4>改进建议</h4>
+          <ul class="recommendations-list">
+            <li v-for="(recommendation, index) in securityCheckResult.recommendations" :key="index" class="recommendation-item">
+              <el-icon class="recommendation-icon"><Star /></el-icon>
+              <span>{{ recommendation }}</span>
+            </li>
+          </ul>
+        </div>
+        
+        <!-- 检测历史 -->
+        <div v-if="securityCheckHistory.length > 0" class="history-section">
+          <h4>检测历史</h4>
+          <div class="history-timeline">
+            <div 
+              v-for="history in securityCheckHistory.slice(0, 5)" 
+              :key="history.id" 
+              class="history-item"
+            >
+              <div class="history-time">{{ new Date(history.checkTime).toLocaleDateString() }}</div>
+              <div class="history-status" :class="history.status">
+                <el-icon><Check v-if="history.status === 'success'" /><Warning v-else-if="history.status === 'warning'" /><Close v-else /></el-icon>
+                {{ history.issueCount === 0 ? '正常' : `发现 ${history.issueCount} 个问题` }}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+      
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="securityDialogVisible = false">关闭</el-button>
+        </span>
+      </template>
     </el-dialog>
 
     <!-- 收款提醒设置对话框 -->
@@ -248,9 +206,6 @@
             <el-checkbox label="push">推送</el-checkbox>
           </el-checkbox-group>
         </el-form-item>
-        <el-form-item label="提醒金额阈值">
-          <el-input-number v-model="reminderForm.amountThreshold" :min="0" style="width: 100%" />
-        </el-form-item>
         <el-form-item label="提醒间隔(分钟)">
           <el-input-number v-model="reminderForm.intervalMinutes" :min="5" style="width: 100%" />
         </el-form-item>
@@ -262,27 +217,87 @@
         </span>
       </template>
     </el-dialog>
+
+
+
+    <!-- 上传收款码对话框 -->
+    <el-dialog v-model="uploadDialogVisible" title="上传收款码" width="500px">
+      <el-form :model="uploadForm" label-width="100px">
+        <el-form-item label="选择图片" required>
+          <el-upload
+            class="upload-demo"
+            drag
+            action="#"
+            :before-upload="handleFileUpload"
+            :show-file-list="false"
+            accept="image/*"
+          >
+            <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+            <div class="el-upload__text">
+              拖拽图片到此处或 <em>点击上传</em>
+            </div>
+            <template #tip>
+              <div class="el-upload__tip">
+                只能上传图片文件，且不超过 2MB
+              </div>
+            </template>
+          </el-upload>
+          <div v-if="uploadForm.file" class="upload-file-info">
+            <el-icon><Document /></el-icon>
+            <span>{{ uploadForm.file.name }}</span>
+            <el-button type="text" @click="uploadForm.file = null">移除</el-button>
+          </div>
+        </el-form-item>
+        <el-form-item label="支付平台" required>
+          <el-select v-model="uploadForm.platform" placeholder="请选择支付平台" style="width: 100%">
+            <el-option label="支付宝" value="alipay" />
+            <el-option label="微信支付" value="wechat" />
+            <el-option label="银联支付" value="unionpay" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="描述">
+          <el-input v-model="uploadForm.description" type="textarea" placeholder="请输入描述信息" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="uploadDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="handleUploadQRCode">上传</el-button>
+        </span>
+      </template>
+    </el-dialog>
+
+
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox, FormInstance } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
-  Plus, Lock, DataAnalysis, Timer, Check, List, Close, ArrowLeft
+  ArrowLeft,
+  Lock,
+  DataAnalysis,
+  Timer,
+  Check,
+  List,
+  Warning,
+  Star,
+  Close,
+  Upload,
+  Edit,
+  UploadFilled,
+  Document
 } from '@element-plus/icons-vue'
 import { 
   getQRCodes as getQRCodesApi,
-  createQRCode as createQRCodeApi,
-  updateQRCode as updateQRCodeApi,
   deleteQRCode as deleteQRCodeApi,
   toggleQRCodeStatus as toggleQRCodeStatusApi,
-  shareQRCode as shareQRCodeApi,
-  generateQRCodeImage,
-  getQRCodeStatistics
+  performSecurityCheck,
+  getSecurityCheckHistory,
+  type SecurityCheckResult
 } from '../services/paymentService'
-import type { QRCodeItem } from '../types/index'
 
 // 收款码接口定义
 interface QRCode {
@@ -303,6 +318,9 @@ interface QRCode {
   merchantName?: string
   merchantAccount?: string
   isDefault?: boolean
+  // 新增支付平台字段
+  platform: 'alipay' | 'wechat' | 'unionpay'
+  isUserUploaded: boolean
 }
 
 // 收入趋势数据接口定义
@@ -322,7 +340,6 @@ interface MethodDistributionItem {
 interface SecurityChecks {
   qrCodeStatus: 'success' | 'warning' | 'error'
   usageAnalysis: 'success' | 'warning' | 'error'
-  amountValidation: 'success' | 'warning' | 'error'
   permissions: 'success' | 'warning' | 'error'
 }
 
@@ -330,45 +347,49 @@ interface SecurityChecks {
 interface ReminderSettings {
   enabled: boolean
   methods: string[]
-  amountThreshold: number
   intervalMinutes: number
 }
 
 // 响应式数据
 const qrCodes = ref<QRCode[]>([])
 const loading = ref(false)
-const dialogVisible = ref(false)
-const statisticsDialogVisible = ref(false)
-const securityDialogVisible = ref(false)
-const reminderDialogVisible = ref(false)
-const isEdit = ref(false)
-const saving = ref(false)
-const inputVisible = ref(false)
-const inputValue = ref('')
+const filterStatus = ref('all')
+const filterPlatform = ref('all')
 
-// 表单数据
-const qrForm = reactive({
-  id: undefined as number | undefined,
-  name: '',
-  type: 'fixed' as 'fixed' | 'custom' | 'dynamic',
-  amount: undefined as number | undefined,
-  description: '',
-  usageLimit: undefined as number | undefined,
-  backgroundColor: '#ffffff',
-  tags: [] as string[]
+// 安全检测相关数据
+const securityCheckLoading = ref(false)
+const securityCheckResult = ref<SecurityCheckResult | null>(null)
+const securityCheckHistory = ref<any[]>([])
+
+
+
+// 统计相关数据
+const activeQRCodes = computed(() => {
+  return qrCodes.value.filter(qr => qr.status === 'active').length
 })
 
-// 表单验证规则
-const qrRules = {
-  name: [{ required: true, message: '请输入收款码名称', trigger: 'blur' }],
-  type: [{ required: true, message: '请选择收款码类型', trigger: 'change' }],
-  amount: [{ required: true, message: '请输入金额', trigger: 'blur' }],
-  description: [{ required: true, message: '请输入收款描述', trigger: 'blur' }]
-}
-
-// 筛选和排序
-const filterStatus = ref('all')
-const sortBy = ref('createdAt')
+const filteredQRCodes = computed(() => {
+  let filtered = qrCodes.value.filter(qr => qr.isUserUploaded === true)
+  
+  // 状态筛选
+  if (filterStatus.value !== 'all') {
+    filtered = filtered.filter(qr => qr.status === filterStatus.value)
+  }
+  
+  // 平台筛选
+  if (filterPlatform.value !== 'all') {
+    filtered = filtered.filter(qr => qr.platform === filterPlatform.value)
+  }
+  
+  // 排序
+  if (sortBy.value === 'createdAt') {
+    filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+  } else if (sortBy.value === 'usageCount') {
+    filtered.sort((a, b) => b.usageCount - a.usageCount)
+  }
+  
+  return filtered
+})
 
 // 统计数据
 const statistics = reactive({
@@ -396,7 +417,6 @@ const methodDistribution = ref<MethodDistributionItem[]>([
 const securityChecks = ref<SecurityChecks>({
   qrCodeStatus: 'success',
   usageAnalysis: 'success',
-  amountValidation: 'success',
   permissions: 'success'
 })
 
@@ -404,26 +424,15 @@ const securityChecks = ref<SecurityChecks>({
 const reminderForm = ref<ReminderSettings>({
   enabled: true,
   methods: ['email', 'push'],
-  amountThreshold: 100.00,
   intervalMinutes: 30
 })
 
-// 表单引用
-const qrFormRef = ref<FormInstance>()
-const inputRef = ref()
+const sortBy = ref('createdAt')
+const statisticsDialogVisible = ref(false)
+const securityDialogVisible = ref(false)
+const reminderDialogVisible = ref(false)
 
-// 计算属性
-const activeQRCodes = computed(() => {
-  return qrCodes.value.filter(qr => qr.status === 'active').length
-})
-
-const filteredQRCodes = computed(() => {
-  let filtered = qrCodes.value
-  if (filterStatus.value !== 'all') {
-    filtered = filtered.filter(qr => qr.status === filterStatus.value)
-  }
-  return filtered
-})
+// 计算属性已在上面定义
 
 // 路由
 const router = useRouter()
@@ -455,153 +464,63 @@ const getQRTypeText = (type: 'fixed' | 'custom' | 'dynamic'): string => {
   return typeMap[type] || type
 }
 
-const openCreateDialog = (): void => {
-  isEdit.value = false
-  dialogVisible.value = true
+const getQRPlatformText = (platform: 'alipay' | 'wechat' | 'unionpay'): string => {
+  const platformMap: Record<string, string> = {
+    alipay: '支付宝',
+    wechat: '微信支付',
+    unionpay: '银联支付'
+  }
+  return platformMap[platform] || platform
 }
 
 const openStatisticsDialog = (): void => {
   statisticsDialogVisible.value = true
 }
 
-const openSecurityCheck = (): void => {
-  // 模拟安全检测
-  securityDialogVisible.value = true
-}
-
-const onTypeChange = (type: 'fixed' | 'custom' | 'dynamic'): void => {
-  if (type !== 'fixed') {
-    qrForm.amount = 0
-  }
-}
-
-const saveQRCode = async (): Promise<void> => {
-  if (!qrFormRef.value) return
-  
-  await qrFormRef.value.validate(async (valid: boolean) => {
-    if (valid) {
-      try {
-        saving.value = true
-        
-        // 准备数据
-        const qrData = {
-          name: qrForm.name,
-          type: qrForm.type,
-          amount: qrForm.type === 'fixed' ? (qrForm.amount || 0) : 0,
-          currency: 'CNY',
-          description: qrForm.description,
-          status: 'active' as 'active' | 'inactive',
-          usageLimit: qrForm.usageLimit || undefined,
-          merchantName: '宿舍管理系统',
-          merchantAccount: 'dorm_manager',
-          isDefault: false,
-          backgroundColor: qrForm.backgroundColor,
-          tags: qrForm.tags
-        }
-        
-        if (isEdit.value && qrForm.id) {
-          // 更新收款码
-          await updateQRCode(qrForm.id, qrData)
-          ElMessage.success('收款码更新成功')
-        } else {
-          // 创建收款码
-          await createQRCode(qrData)
-          ElMessage.success('收款码创建成功')
-        }
-        
-        dialogVisible.value = false
-        resetForm()
-        getQRCodesList()
-      } catch (error) {
-        ElMessage.error('操作失败')
-      } finally {
-        saving.value = false
-      }
-    }
-  })
-}
-
-const resetForm = (): void => {
-  Object.assign(qrForm, {
-    name: '',
-    type: 'custom',
-    amount: 0,
-    description: '',
-    usageLimit: null,
-    backgroundColor: '#667eea',
-    tags: []
-  })
-}
-
-const shareQRCode = async (qr: QRCode): Promise<void> => {
+const openSecurityCheck = async (): Promise<void> => {
   try {
-    const result = await shareQRCodeApi(qr.id, 'link')
-    if (result.success && result.link) {
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(result.link)
-        ElMessage.success('分享链接已复制到剪贴板')
+    securityCheckLoading.value = true
+    ElMessage.info('正在执行安全检测...')
+    
+    // 调用真实的安全检测API
+    const response = await performSecurityCheck()
+    
+    if (response.success) {
+      securityCheckResult.value = response.data
+      
+      // 更新显示的检测结果
+      securityChecks.value = {
+        qrCodeStatus: response.data.qrCodeStatus,
+        usageAnalysis: response.data.usageAnalysis,
+        permissions: response.data.permissions
+      }
+      
+      // 获取安全检测历史
+      const historyResponse = await getSecurityCheckHistory(30)
+      if (historyResponse.success) {
+        securityCheckHistory.value = historyResponse.data
+      }
+      
+      securityDialogVisible.value = true
+      
+      // 显示检测摘要
+      const issueCount = response.data.issues?.length || 0
+      if (issueCount === 0) {
+        ElMessage.success('安全检测完成，未发现安全问题')
+      } else if (issueCount <= 2) {
+        ElMessage.warning(`安全检测完成，发现 ${issueCount} 个问题，建议关注`)
       } else {
-        // Fallback for older browsers
-        const textArea = document.createElement('textarea')
-        textArea.value = result.link
-        document.body.appendChild(textArea)
-        textArea.select()
-        document.execCommand('copy')
-        document.body.removeChild(textArea)
-        ElMessage.success('分享链接已复制到剪贴板')
+        ElMessage.error(`安全检测完成，发现 ${issueCount} 个问题，需要立即处理`)
       }
-    }
-  } catch (error) {
-    ElMessage.error('分享失败')
-  }
-}
-
-interface GenerateQRCodeOptions {
-  format?: 'png' | 'svg'
-  size?: number
-  logo?: string
-}
-
-const downloadQRCode = async (qr: QRCode): Promise<void> => {
-  try {
-    const options: GenerateQRCodeOptions = { format: 'png', size: 300 }
-    const response = await generateQRCodeImage(qr.id, options)
-    if (response.success && response.data?.downloadUrl) {
-      const link = document.createElement('a')
-      link.href = response.data.downloadUrl
-      link.download = `${qr.name}_${new Date().getTime()}.png`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      ElMessage.success('收款码下载成功')
     } else {
-      ElMessage.error('下载失败：无效的下载链接')
+      ElMessage.error('安全检测失败，请稍后重试')
     }
   } catch (error) {
-    console.error('下载错误:', error)
-    ElMessage.error('下载失败')
+    console.error('安全检测错误:', error)
+    ElMessage.error('安全检测过程中发生错误')
+  } finally {
+    securityCheckLoading.value = false
   }
-}
-
-const customizeStyle = (qr: QRCode): void => {
-  ElMessage.info(`正在为 ${qr.name} 定制样式功能...`)
-  // TODO: 实现样式定制对话框
-}
-
-const editQRCode = (qr: QRCode): void => {
-  isEdit.value = true
-  // 重置表单并加载数据
-  Object.assign(qrForm, {
-    id: qr.id,
-    name: qr.name,
-    type: qr.type,
-    amount: qr.amount,
-    description: qr.description,
-    usageLimit: qr.usageLimit,
-    backgroundColor: qr.backgroundColor || '#ffffff',
-    tags: [...qr.tags]
-  })
-  dialogVisible.value = true
 }
 
 const toggleQRCodeStatus = async (qr: QRCode): Promise<void> => {
@@ -611,7 +530,7 @@ const toggleQRCodeStatus = async (qr: QRCode): Promise<void> => {
     qr.status = newStatus
     // 更新本地数据
     const index = qrCodes.value.findIndex(item => item.id === qr.id)
-    if (index !== -1) {
+    if (index !== -1 && qrCodes.value[index]) {
       qrCodes.value[index].status = newStatus
       qrCodes.value[index].updatedAt = new Date().toISOString()
     }
@@ -656,25 +575,82 @@ const sortQRCodes = (): void => {
   // 排序逻辑已在 computed 中实现
 }
 
-const removeTag = (tag: string): void => {
-  qrForm.tags = qrForm.tags.filter(t => t !== tag)
-}
-
-const showInput = (): void => {
-  inputVisible.value = true
-}
-
-const handleInputConfirm = (): void => {
-  if (inputValue.value && !qrForm.tags.includes(inputValue.value)) {
-    qrForm.tags.push(inputValue.value)
-  }
-  inputVisible.value = false
-  inputValue.value = ''
-}
-
 const saveReminderSettings = (): void => {
   ElMessage.success('提醒设置已保存')
   reminderDialogVisible.value = false
+}
+
+const uploadForm = reactive({
+  file: null as File | null,
+  description: '',
+  platform: 'alipay' as 'alipay' | 'wechat' | 'unionpay'
+})
+
+const uploadDialogVisible = ref(false)
+
+const openUploadDialog = (): void => {
+  uploadDialogVisible.value = true
+}
+
+const handleFileUpload = (file: File): boolean => {
+  const isImage = file.type.startsWith('image/')
+  const isLt2M = file.size / 1024 / 1024 < 2
+  
+  if (!isImage) {
+    ElMessage.error('只能上传图片文件!')
+    return false
+  }
+  if (!isLt2M) {
+    ElMessage.error('图片大小不能超过 2MB!')
+    return false
+  }
+  
+  uploadForm.file = file
+  return true
+}
+
+const handleUploadQRCode = async (): Promise<void> => {
+  if (!uploadForm.file) {
+    ElMessage.error('请选择要上传的图片')
+    return
+  }
+
+  if (!uploadForm.platform) {
+    ElMessage.error('请选择支付平台')
+    return
+  }
+
+  try {
+    ElMessage.info('正在上传收款码图片...')
+
+    // 调用专门的上传API
+    const { uploadQRCodeImage } = await import('../services/paymentService')
+    const response = await uploadQRCodeImage({
+      file: uploadForm.file,
+      platform: uploadForm.platform,
+      description: uploadForm.description
+    })
+
+    if (response.success) {
+      ElMessage.success(response.message || '收款码上传成功')
+      uploadDialogVisible.value = false
+
+      // 重置表单
+      Object.assign(uploadForm, {
+        file: null,
+        description: '',
+        platform: 'alipay'
+      })
+
+      // 更新列表以显示新上传的收款码
+      await getQRCodesList()
+      
+      console.log('新上传的收款码数据:', response.data)
+    }
+  } catch (error) {
+    console.error('上传收款码失败:', error)
+    ElMessage.error('上传收款码失败')
+  }
 }
 
 // 生命周期
@@ -1017,5 +993,24 @@ onMounted(() => {
 .qr-reminder-item .reminder-actions {
   margin-left: auto;
   font-size: 14px;
+}
+
+.upload-file-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: #f5f7fa;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.upload-file-info .el-icon {
+  color: #409eff;
+}
+
+.upload-demo {
+  width: 100%;
 }
 </style>
