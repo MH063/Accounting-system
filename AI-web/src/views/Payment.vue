@@ -201,6 +201,91 @@
       </template>
     </el-dialog>
 
+    <!-- 支付详情对话框 -->
+    <el-dialog
+      v-model="detailDialogVisible"
+      title="支付详情"
+      width="600px"
+      destroy-on-close
+    >
+      <div v-if="currentQuickPayment" class="payment-detail">
+        <el-descriptions :column="2" border>
+          <el-descriptions-item label="快速支付类型">
+            <el-tag :type="getQuickPayTagType(currentQuickPayment.id)">
+              {{ currentQuickPayment.title }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="支付金额">
+            <span class="detail-amount">¥{{ currentQuickPayment.amount.toFixed(2) }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="支付描述">
+            {{ currentQuickPayment.description }}
+          </el-descriptions-item>
+          <el-descriptions-item label="处理状态">
+            <el-tag :type="currentQuickPayment.processing ? 'warning' : 'info'">
+              {{ currentQuickPayment.processing ? '处理中' : '等待操作' }}
+            </el-tag>
+          </el-descriptions-item>
+        </el-descriptions>
+
+        <!-- 费用明细 -->
+        <div class="payment-breakdown">
+          <h4>费用明细</h4>
+          <div class="breakdown-content">
+            <div class="breakdown-item">
+              <span class="label">总费用</span>
+              <span class="value">¥{{ totalExpense.toFixed(2) }}</span>
+            </div>
+            <div class="breakdown-item">
+              <span class="label">待支付</span>
+              <span class="value">¥{{ totalPending.toFixed(2) }}</span>
+            </div>
+            <div class="breakdown-item" v-if="currentQuickPayment.id === 2">
+              <span class="label">代付金额</span>
+              <span class="value">¥{{ (totalPending * 0.5).toFixed(2) }}</span>
+            </div>
+            <div class="breakdown-item">
+              <span class="label">已支付</span>
+              <span class="value">¥{{ totalPaid.toFixed(2) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 成员分摊详情 -->
+        <div class="sharing-breakdown">
+          <h4>成员分摊详情</h4>
+          <div class="member-list">
+            <div v-for="member in sharingResults" :key="member.name" class="member-item">
+              <div class="member-info">
+                <span class="member-name">{{ member.name }}</span>
+                <el-tag :type="getStatusType(member.status)" size="small">
+                  {{ getStatusText(member.status) }}
+                </el-tag>
+              </div>
+              <div class="member-amounts">
+                <span class="amount-item">应支付: ¥{{ member.shouldPay.toFixed(2) }}</span>
+                <span class="amount-item">已支付: ¥{{ member.paid.toFixed(2) }}</span>
+                <span class="amount-item pending">待支付: ¥{{ member.pending.toFixed(2) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="detailDialogVisible = false">关闭</el-button>
+          <el-button 
+            type="primary" 
+            @click="processQuickPayment(currentQuickPayment!)"
+            :disabled="currentQuickPayment?.processing || totalPending === 0"
+            :loading="currentQuickPayment?.processing"
+          >
+            立即支付
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
+
     <!-- 添加费用对话框 -->
     <el-dialog
       v-model="expenseDialogVisible"
@@ -277,6 +362,8 @@ const paymentDialogVisible = ref(false)
 const expenseDialogVisible = ref(false)
 const processing = ref(false)
 const saving = ref(false)
+const detailDialogVisible = ref(false)
+const currentQuickPayment = ref<QuickPayment | null>(null)
 
 // 当前选中的支付方式
 const selectedMethod = ref<PaymentMethod & { fee: string; description: string }>({
@@ -527,7 +614,99 @@ const calculateSharing = () => {
 }
 
 const exportSharing = () => {
-  ElMessage.info('导出功能开发中')
+  try {
+    // 构建导出数据
+    const exportData = {
+      basic: {
+        exportTime: new Date().toLocaleString('zh-CN'),
+        totalExpense: totalExpense.value,
+        perPersonShare: perPersonShare.value,
+        totalPaid: totalPaid.value,
+        totalPending: totalPending.value,
+        memberCount: sharingResults.value.length
+      },
+      expenses: expenses.value.map(expense => ({
+        id: expense.id,
+        name: expense.name,
+        description: expense.description,
+        category: expense.category,
+        amount: expense.amount,
+        payer: expense.payer,
+        percentage: ((expense.amount / (totalExpense.value || 1)) * 100).toFixed(2) + '%'
+      })),
+      sharingResults: sharingResults.value.map(member => ({
+        name: member.name,
+        shouldPay: member.shouldPay.toFixed(2),
+        paid: member.paid.toFixed(2),
+        pending: member.pending.toFixed(2),
+        status: getStatusText(member.status),
+        statusType: member.status,
+        completionRate: ((member.paid / (member.shouldPay || 1)) * 100).toFixed(2) + '%'
+      }))
+    }
+
+    // 生成CSV格式数据
+    const csvContent = generateCSV(exportData)
+    
+    // 创建下载链接
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+      link.setAttribute('download', `费用分摊结果_${new Date().toISOString().split('T')[0]}.csv`)
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      ElMessage.success('导出成功！文件已下载')
+    } else {
+      ElMessage.error('您的浏览器不支持文件下载')
+    }
+  } catch (error) {
+    console.error('导出失败:', error)
+    ElMessage.error('导出失败，请重试')
+  }
+}
+
+const generateCSV = (data: any) => {
+  const lines = []
+  
+  // 添加基本信息头部
+  lines.push('=== 费用分摊计算结果 ===')
+  lines.push(`导出时间,${data.basic.exportTime}`)
+  lines.push(`总费用,¥${data.basic.totalExpense.toFixed(2)}`)
+  lines.push(`人均分摊,¥${data.basic.perPersonShare.toFixed(2)}`)
+  lines.push(`已支付金额,¥${data.basic.totalPaid.toFixed(2)}`)
+  lines.push(`待支付金额,¥${data.basic.totalPending.toFixed(2)}`)
+  lines.push(`参与人数,${data.basic.memberCount}人`)
+  lines.push('')
+  
+  // 添加费用明细
+  lines.push('=== 费用明细 ===')
+  lines.push('费用名称,描述,类别,金额,支付人,占总费用比例')
+  data.expenses.forEach((expense: any) => {
+    lines.push(`${expense.name},${expense.description},${expense.category},¥${expense.amount.toFixed(2)},${expense.payer},${expense.percentage}`)
+  })
+  lines.push('')
+  
+  // 添加分摊结果
+  lines.push('=== 分摊结果 ===')
+  lines.push('成员姓名,应支付金额,已支付金额,待支付金额,支付状态,完成率')
+  data.sharingResults.forEach((member: any) => {
+    lines.push(`${member.name},¥${member.shouldPay},¥${member.paid},¥${member.pending},${member.status},${member.completionRate}`)
+  })
+  lines.push('')
+  
+  // 添加统计信息
+  lines.push('=== 统计信息 ===')
+  lines.push(`待支付成员数,${data.sharingResults.filter((m: any) => m.statusType === 'pending').length}`)
+  lines.push(`已付清成员数,${data.sharingResults.filter((m: any) => m.statusType === 'completed').length}`)
+  lines.push(`部分支付成员数,${data.sharingResults.filter((m: any) => m.statusType === 'partial').length}`)
+  
+  return lines.join('\n')
 }
 
 const addExpense = () => {
@@ -550,25 +729,112 @@ const payForMember = (member: SharingResult) => {
   paymentDialogVisible.value = true
 }
 
+const processQuickPayment = async (quickPay: QuickPayment) => {
+  try {
+    quickPay.processing = true
+    
+    let amount = 0
+    let description = ''
+    let transactionType = ''
+    
+    switch (quickPay.id) {
+      case 1: // 今日分摊
+        amount = totalPending.value
+        description = '今日费用分摊支付'
+        transactionType = 'expense'
+        break
+      case 2: // 代付服务
+        amount = (totalPending.value || 0) * 0.5
+        description = '代付其他成员费用'
+        transactionType = 'expense'
+        break
+      case 3: // 批量支付
+        amount = totalExpense.value
+        description = '批量支付所有费用'
+        transactionType = 'expense'
+        break
+    }
+    
+    if (amount <= 0) {
+      ElMessage.warning('没有需要支付的金额')
+      return
+    }
+    
+    // 直接执行支付而不是显示支付对话框
+    const orderId = `QUICKPAY_${Date.now()}_${quickPay.id}`
+    
+    try {
+      // 模拟支付处理
+      await new Promise(resolve => setTimeout(resolve, 1500))
+      
+      // 90%成功率
+      const success = Math.random() > 0.1
+      
+      if (success) {
+        ElMessage.success(`${quickPay.title}支付成功！金额：¥${amount.toFixed(2)}`)
+        
+        // 更新支付状态（这里可以集成真实的支付记录更新）
+        updatePaymentStatus(quickPay.id, transactionType, amount, description)
+      } else {
+        ElMessage.error(`${quickPay.title}支付失败，请重试`)
+      }
+    } catch (error) {
+      ElMessage.error(`${quickPay.title}处理失败`)
+    }
+    
+  } catch (error) {
+    console.error('处理快速支付失败:', error)
+    ElMessage.error('处理快速支付失败')
+  } finally {
+    quickPay.processing = false
+  }
+}
+
+// 更新支付状态的辅助函数
+const updatePaymentStatus = (quickPayId: number, type: string, amount: number, description: string) => {
+  // 这里可以集成真实的支付记录保存逻辑
+  console.log('更新支付状态:', {
+    quickPayId,
+    type,
+    amount,
+    description,
+    timestamp: new Date().toISOString()
+  })
+  
+  // 更新本地数据状态
+  const quickPayment = quickPayments.value.find(qp => qp.id === quickPayId)
+  if (quickPayment) {
+    quickPayment.amount = Math.max(0, quickPayment.amount - amount)
+  }
+}
 
 
-const viewPaymentDetail = (_quickPay: QuickPayment) => {
-  ElMessage.info('支付详情查看功能开发中')
+
+const viewPaymentDetail = (quickPay: QuickPayment) => {
+  currentQuickPayment.value = quickPay
+  detailDialogVisible.value = true
 }
 
 const confirmPayment = async () => {
   try {
     processing.value = true
-    await confirmPaymentApi(`ORDER_${Date.now()}`, {
-      amount: paymentForm.amount,
-      method: paymentForm.method,
-      remark: paymentForm.remark
-    })
-    ElMessage.success('支付成功')
-    paymentDialogVisible.value = false
-    resetPaymentForm()
+    
+    // 创建订单ID
+    const orderId = `ORDER_${Date.now()}`
+    
+    // 调用支付确认API
+    const result = await confirmPayment(`ORDER_${Date.now()}`)
+    
+    if (result.success) {
+      ElMessage.success('支付成功')
+      paymentDialogVisible.value = false
+      resetPaymentForm()
+    } else {
+      ElMessage.error(result.data?.message || '支付失败')
+    }
   } catch (error) {
-    ElMessage.error('支付失败')
+    console.error('支付失败:', error)
+    ElMessage.error('支付失败，请重试')
   } finally {
     processing.value = false
   }
@@ -651,6 +917,15 @@ const getStatusText = (status: string) => {
     overdue: '已逾期'
   }
   return textMap[status] || '未知'
+}
+
+const getQuickPayTagType = (id: number) => {
+  const typeMap: Record<number, string> = {
+    1: 'success',    // 今日分摊
+    2: 'warning',    // 代付服务
+    3: 'primary'     // 批量支付
+  }
+  return typeMap[id] || 'info'
 }
 
 // 导航方法
@@ -965,5 +1240,97 @@ onMounted(() => {
   font-size: 18px;
   font-weight: bold;
   color: #409eff;
+}
+
+.detail-amount {
+  font-size: 16px;
+  font-weight: bold;
+  color: #303133;
+}
+
+.payment-breakdown,
+.sharing-breakdown {
+  margin-top: 20px;
+}
+
+.payment-breakdown h4,
+.sharing-breakdown h4 {
+  margin: 0 0 15px 0;
+  color: #303133;
+  font-size: 16px;
+}
+
+.breakdown-content {
+  background: #f5f7fa;
+  padding: 15px;
+  border-radius: 6px;
+}
+
+.breakdown-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.breakdown-item:last-child {
+  border-bottom: none;
+}
+
+.breakdown-item .label {
+  color: #606266;
+  font-size: 14px;
+}
+
+.breakdown-item .value {
+  font-weight: bold;
+  color: #303133;
+  font-size: 14px;
+}
+
+.member-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.member-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  background: #fafafa;
+}
+
+.member-item:last-child {
+  margin-bottom: 0;
+}
+
+.member-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.member-name {
+  font-weight: 500;
+  color: #303133;
+}
+
+.member-amounts {
+  display: flex;
+  gap: 15px;
+}
+
+.amount-item {
+  font-size: 12px;
+  color: #606266;
+}
+
+.amount-item.pending {
+  color: #e6a23c;
+  font-weight: 500;
 }
 </style>

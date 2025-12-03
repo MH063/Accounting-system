@@ -56,70 +56,112 @@
 
     <!-- 搜索和筛选 -->
     <div class="filter-section">
-      <el-card>
-        <el-form :inline="true" :model="filterForm" class="filter-form">
-          <el-form-item label="搜索">
-            <el-input
-              v-model="filterForm.keyword"
-              placeholder="搜索订单号、描述、收款人"
-              clearable
-              @clear="handleSearch"
-              @keyup.enter="handleSearch"
-            >
-              <template #prefix>
+      <el-card class="filter-card">
+        <el-row :gutter="16" align="middle">
+          <el-col :span="6">
+            <div class="filter-item">
+              <label class="filter-label">
                 <el-icon><Search /></el-icon>
-              </template>
-            </el-input>
-          </el-form-item>
-          <el-form-item label="支付状态">
-            <el-select v-model="filterForm.status" placeholder="全部状态" clearable @change="handleSearch">
-              <el-option label="全部" value="" />
-              <el-option label="成功" value="success" />
-              <el-option label="失败" value="failed" />
-              <el-option label="处理中" value="processing" />
-              <el-option label="待支付" value="pending" />
-              <el-option label="已退款" value="refunded" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="支付方式">
-            <el-select v-model="filterForm.paymentMethod" placeholder="全部方式" clearable @change="handleSearch">
-              <el-option label="全部" value="" />
-              <el-option label="微信支付" value="wechat" />
-              <el-option label="支付宝" value="alipay" />
-              <el-option label="银行卡" value="bank" />
-              <el-option label="现金" value="cash" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="交易类型">
-            <el-select v-model="filterForm.transactionType" placeholder="全部类型" clearable @change="handleSearch">
-              <el-option label="全部" value="" />
-              <el-option label="收入" value="income" />
-              <el-option label="支出" value="expense" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="日期范围">
-            <el-date-picker
-              v-model="dateRange"
-              type="daterange"
-              range-separator="至"
-              start-placeholder="开始日期"
-              end-placeholder="结束日期"
-              format="YYYY-MM-DD"
-              value-format="YYYY-MM-DD"
-              @change="handleDateChange"
-            />
-          </el-form-item>
-          <el-form-item>
-            <el-button type="primary" @click="handleSearch">
-              <el-icon><Search /></el-icon>
-              搜索
-            </el-button>
-            <el-button @click="handleReset">
-              <el-icon><Refresh /></el-icon>
-              重置
-            </el-button>
-          </el-form-item>
-        </el-form>
+                关键词搜索
+              </label>
+              <el-input
+                v-model="filterForm.keyword"
+                placeholder="搜索订单号、描述、收款人"
+                clearable
+                @clear="handleSearch"
+                @keyup.enter="handleSearch"
+              />
+            </div>
+          </el-col>
+          <el-col :span="4">
+            <div class="filter-item">
+              <label class="filter-label">
+                <el-icon><Document /></el-icon>
+                支付状态
+              </label>
+              <el-select
+                v-model="filterForm.status"
+                placeholder="全部状态"
+                clearable
+                @change="handleSearch"
+              >
+                <el-option label="全部" value="" />
+                <el-option label="成功" value="success" />
+                <el-option label="失败" value="failed" />
+                <el-option label="处理中" value="processing" />
+                <el-option label="待支付" value="pending" />
+                <el-option label="已退款" value="refunded" />
+              </el-select>
+            </div>
+          </el-col>
+          <el-col :span="4">
+            <div class="filter-item">
+              <label class="filter-label">
+                <el-icon><Wallet /></el-icon>
+                支付方式
+              </label>
+              <el-select
+                v-model="filterForm.paymentMethod"
+                placeholder="全部方式"
+                clearable
+                @change="handleSearch"
+              >
+                <el-option label="全部" value="" />
+                <el-option label="微信支付" value="wechat" />
+                <el-option label="支付宝" value="alipay" />
+                <el-option label="银行卡" value="bank" />
+                <el-option label="现金" value="cash" />
+              </el-select>
+            </div>
+          </el-col>
+          <el-col :span="4">
+            <div class="filter-item">
+              <label class="filter-label">
+                <el-icon><TrendCharts /></el-icon>
+                交易类型
+              </label>
+              <el-select
+                v-model="filterForm.transactionType"
+                placeholder="全部类型"
+                clearable
+                @change="handleSearch"
+              >
+                <el-option label="全部" value="" />
+                <el-option label="收入" value="income" />
+                <el-option label="支出" value="expense" />
+              </el-select>
+            </div>
+          </el-col>
+          <el-col :span="4">
+            <div class="filter-item">
+              <label class="filter-label">
+                <el-icon><Calendar /></el-icon>
+                日期范围
+              </label>
+              <el-date-picker
+                v-model="dateRange"
+                type="daterange"
+                range-separator="至"
+                start-placeholder="开始日期"
+                end-placeholder="结束日期"
+                format="YYYY-MM-DD"
+                value-format="YYYY-MM-DD"
+                @change="handleDateChange"
+                style="width: 100%;"
+              />
+            </div>
+          </el-col>
+          <el-col :span="2">
+            <div class="filter-actions">
+              <el-button type="primary" :icon="Search" @click="handleSearch" class="search-btn">
+                搜索
+              </el-button>
+              <el-button :icon="Refresh" @click="handleReset" class="reset-btn">
+                重置
+              </el-button>
+            </div>
+          </el-col>
+        </el-row>
       </el-card>
     </div>
 
@@ -140,7 +182,7 @@
         <div v-if="viewMode === 'timeline'" class="timeline-view">
           <el-timeline>
             <el-timeline-item
-              v-for="record in paymentRecords"
+              v-for="record in paginatedPaymentRecords"
               :key="record.id"
               :timestamp="formatDateTime(record.createdAt)"
               :type="getTimelineType(record.status)"
@@ -286,7 +328,7 @@
             v-model:current-page="pagination.page"
             v-model:page-size="pagination.size"
             :total="pagination.total"
-            :page-sizes="[5, 10, 20, 50, 100]"
+            :page-sizes="[5, 8, 12, 20, 50]"
             layout="total, sizes, prev, pager, next, jumper"
             @size-change="handleSizeChange"
             @current-change="handleCurrentChange"
@@ -361,17 +403,26 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  Search,
-  Download,
+import { 
+  Search, 
+  Refresh, 
+  Download, 
+  ArrowLeft,
   Document,
-  Wallet,
   User,
-  Refresh,
-  ArrowLeft
+  Wallet,
+  Calendar,
+  View,
+  Money,
+  Check,
+  Warning,
+  Clock,
+  List,
+  Filter,
+  TrendCharts
 } from '@element-plus/icons-vue'
 import type { PaymentRecord, PaymentFilter, PaymentStatistics } from '@/services/paymentService'
 import {
@@ -420,9 +471,16 @@ const dateRange = ref<string[]>([])
 // 分页
 const pagination = reactive({
   page: 1,
-  size: 20,
+  size: 5,
   total: 0,
   pages: 0
+})
+
+// 计算分页后的支付记录
+const paginatedPaymentRecords = computed(() => {
+  const start = (pagination.page - 1) * pagination.size
+  const end = start + pagination.size
+  return paymentRecords.value.slice(start, end)
 })
 
 // 详情对话框
@@ -588,7 +646,7 @@ const handleExport = async () => {
       // 创建下载链接
       const link = document.createElement('a')
       link.href = response.data.downloadUrl
-      link.download = `payment_records_${new Date().toISOString().split('T')[0]}.xlsx`
+      link.download = response.data.fileName || `payment_records_${new Date().toISOString().split('T')[0]}.xlsx`
       link.click()
       ElMessage.success('导出成功')
     }
@@ -685,10 +743,43 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 
-.filter-form {
+.filter-card {
+  padding: 20px;
+}
+
+.filter-item {
+  width: 100%;
+}
+
+.filter-label {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #606266;
+  margin-bottom: 8px;
+}
+
+.filter-label .el-icon {
+  font-size: 16px;
+  color: #909399;
+}
+
+.filter-actions {
+  display: flex;
+  flex-direction: column;
   gap: 10px;
+  height: 100%;
+  justify-content: flex-end;
+}
+
+.search-btn {
+  width: 100%;
+}
+
+.reset-btn {
+  width: 100%;
 }
 
 .card-header {

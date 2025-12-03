@@ -448,7 +448,7 @@ const searchForm = reactive({
 // 分页信息
 const pagination = reactive({
   page: 1,
-  size: 20,
+  size: 5,
   total: 0
 })
 

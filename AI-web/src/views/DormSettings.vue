@@ -420,7 +420,7 @@
               <el-pagination
                 v-model:current-page="historyPage.current"
                 v-model:page-size="historyPage.size"
-                :page-sizes="[5, 10, 20, 50, 100]"
+                :page-sizes="[5, 8, 12, 20, 50]"
                 :total="historyPage.total"
                 layout="total, sizes, prev, pager, next, jumper"
                 @size-change="loadHistory"
