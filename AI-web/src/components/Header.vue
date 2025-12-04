@@ -3,7 +3,7 @@
     <div class="header-container">
       <div class="logo">
         <div class="logo-container">
-          <img src="https://picsum.photos/40/40" alt="Logo" />
+          <img src="/accounting-logo.png" alt="Logo" />
           <div class="logo-glow"></div>
         </div>
         <span class="logo-text">记账系统</span>

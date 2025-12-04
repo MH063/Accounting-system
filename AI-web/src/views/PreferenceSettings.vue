@@ -230,6 +230,52 @@
           </div>
           
           <div class="setting-section">
+            <h3>预设管理</h3>
+            <div class="setting-item">
+              <span class="setting-label">保存为预设</span>
+              <el-button @click="showPresetDialog = true" icon="Document">
+                保存预设
+              </el-button>
+            </div>
+            
+            <div class="setting-item">
+              <span class="setting-label">加载预设</span>
+              <el-select 
+                v-model="selectedPreset" 
+                placeholder="选择预设" 
+                @change="loadPreset"
+                clearable
+              >
+                <el-option
+                  v-for="preset in presets"
+                  :key="preset.id"
+                  :label="preset.name"
+                  :value="preset.id"
+                />
+              </el-select>
+            </div>
+            
+            <div class="setting-item" v-if="presets.length > 0">
+              <span class="setting-label">删除预设</span>
+              <el-button @click="deleteSelectedPreset" type="danger" icon="Delete">
+                删除选中预设
+              </el-button>
+            </div>
+          </div>
+          
+          <div class="setting-section">
+            <h3>自动保存</h3>
+            <div class="setting-item">
+              <span class="setting-label">启用自动保存</span>
+              <el-switch 
+                v-model="enableAutoSave" 
+                @change="toggleAutoSave"
+                active-text="开启后将每隔30秒自动保存设置"
+              />
+            </div>
+          </div>
+          
+          <div class="setting-section">
             <h3>重置选项</h3>
             <div class="setting-item">
               <span class="setting-label">重置所有设置</span>
@@ -251,12 +297,25 @@
         <el-button @click="resetSettings">重置默认</el-button>
       </div>
     </div>
+    
+    <!-- 保存预设对话框 -->
+    <el-dialog v-model="showPresetDialog" title="保存预设" width="400px">
+      <el-form>
+        <el-form-item label="预设名称">
+          <el-input v-model="newPresetName" placeholder="请输入预设名称" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showPresetDialog = false">取消</el-button>
+        <el-button type="primary" @click="savePreset">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadInstance } from 'element-plus'
 
 // 当前激活的标签页
@@ -306,75 +365,144 @@ const shortcutSettings = reactive({
   enableKeyboardShortcuts: true
 })
 
+// 预设管理
+const showPresetDialog = ref(false)
+const newPresetName = ref('')
+const selectedPreset = ref('')
+const presets = ref<Array<{id: string, name: string, settings: any}>>([])
+
+// 自动保存功能
+const enableAutoSave = ref(false)
+let autoSaveTimer: number | null = null
+
 // 保存设置
 const saveSettings = () => {
-  console.log('保存偏好设置:', {
-    interface: interfaceSettings,
-    notification: notificationSettings,
-    privacy: privacySettings,
-    locale: localeSettings,
-    shortcut: shortcutSettings
-  })
-  ElMessage.success('设置保存成功')
+  try {
+    // 保存到 localStorage
+    const settings = {
+      interface: interfaceSettings,
+      notification: notificationSettings,
+      privacy: privacySettings,
+      locale: localeSettings,
+      shortcut: shortcutSettings,
+      lastSaved: new Date().toISOString()
+    }
+    
+    localStorage.setItem('user-preferences', JSON.stringify(settings))
+    
+    // 应用设置到系统
+    applySettings()
+    
+    ElMessage.success('设置保存成功')
+    console.log('偏好设置已保存:', settings)
+  } catch (error) {
+    console.error('保存设置失败:', error)
+    ElMessage.error('设置保存失败，请重试')
+  }
+}
+
+// 应用设置到系统
+const applySettings = () => {
+  // 应用主题设置
+  document.documentElement.setAttribute('data-theme', interfaceSettings.theme)
+  
+  // 应用主色调
+  document.documentElement.style.setProperty('--primary-color', interfaceSettings.primaryColor)
+  
+  // 触发自定义事件，通知其他组件设置已更新
+  window.dispatchEvent(new CustomEvent('preferences-updated', {
+    detail: {
+      interface: interfaceSettings,
+      notification: notificationSettings,
+      privacy: privacySettings,
+      locale: localeSettings,
+      shortcut: shortcutSettings
+    }
+  }))
 }
 
 // 重置设置
 const resetSettings = () => {
-  // 重置为默认值
-  interfaceSettings.theme = 'light'
-  interfaceSettings.primaryColor = '#409EFF'
-  interfaceSettings.sidebarCollapsed = false
-  interfaceSettings.showBreadcrumb = true
-  interfaceSettings.tabMode = false
-  
-  notificationSettings.systemNotification = true
-  notificationSettings.emailNotification = true
-  notificationSettings.smsNotification = false
-  notificationSettings.billReminder = true
-  notificationSettings.reminderTime = new Date(2023, 0, 1, 9, 0, 0)
-  
-  privacySettings.publicProfile = false
-  privacySettings.allowSearch = true
-  privacySettings.usageAnalytics = true
-  privacySettings.personalizedRecommendations = false
-  
-  localeSettings.language = 'zh-CN'
-  localeSettings.timezone = 'Asia/Shanghai'
-  localeSettings.currency = 'CNY'
-  localeSettings.dateFormat = 'YYYY-MM-DD'
-  
-  shortcutSettings.showQuickMenu = true
-  shortcutSettings.quickMenuItems = ['dashboard', 'bill', 'expense']
-  shortcutSettings.enableKeyboardShortcuts = true
-  
-  ElMessage.success('设置已重置为默认值')
+  ElMessageBox.confirm(
+    '确定要重置所有设置为默认值吗？此操作不可恢复。',
+    '确认重置',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).then(() => {
+    // 重置为默认值
+    interfaceSettings.theme = 'light'
+    interfaceSettings.primaryColor = '#409EFF'
+    interfaceSettings.sidebarCollapsed = false
+    interfaceSettings.showBreadcrumb = true
+    interfaceSettings.tabMode = false
+    
+    notificationSettings.systemNotification = true
+    notificationSettings.emailNotification = true
+    notificationSettings.smsNotification = false
+    notificationSettings.billReminder = true
+    notificationSettings.reminderTime = new Date(2023, 0, 1, 9, 0, 0)
+    
+    privacySettings.publicProfile = false
+    privacySettings.allowSearch = true
+    privacySettings.usageAnalytics = true
+    privacySettings.personalizedRecommendations = false
+    
+    localeSettings.language = 'zh-CN'
+    localeSettings.timezone = 'Asia/Shanghai'
+    localeSettings.currency = 'CNY'
+    localeSettings.dateFormat = 'YYYY-MM-DD'
+    
+    shortcutSettings.showQuickMenu = true
+    shortcutSettings.quickMenuItems = ['dashboard', 'bill', 'expense']
+    shortcutSettings.enableKeyboardShortcuts = true
+    
+    // 保存重置后的设置
+    saveSettings()
+    
+    ElMessage.success('设置已重置为默认值')
+  }).catch(() => {
+    // 用户取消操作
+  })
 }
 
 // 导出设置
 const exportSettings = () => {
-  const settings = {
-    interface: interfaceSettings,
-    notification: notificationSettings,
-    privacy: privacySettings,
-    locale: localeSettings,
-    shortcut: shortcutSettings,
-    exportTime: new Date().toISOString()
+  try {
+    const settings = {
+      interface: interfaceSettings,
+      notification: notificationSettings,
+      privacy: privacySettings,
+      locale: localeSettings,
+      shortcut: shortcutSettings,
+      exportTime: new Date().toISOString(),
+      version: '1.0'
+    }
+    
+    const dataStr = JSON.stringify(settings, null, 2)
+    const dataBlob = new Blob([dataStr], { type: 'application/json' })
+    const url = URL.createObjectURL(dataBlob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `preference-settings-${new Date().toISOString().split('T')[0]}.json`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    
+    ElMessage.success('设置导出成功')
+  } catch (error) {
+    console.error('导出设置失败:', error)
+    ElMessage.error('设置导出失败，请重试')
   }
-  
-  const dataStr = JSON.stringify(settings, null, 2)
-  const dataBlob = new Blob([dataStr], { type: 'application/json' })
-  const url = URL.createObjectURL(dataBlob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `preference-settings-${new Date().toISOString().split('T')[0]}.json`
-  link.click()
-  URL.revokeObjectURL(url)
-  
-  ElMessage.success('设置导出成功')
 }
 
 // 导入设置
-const handleImportSettings = (file: File) => {
+const handleImportSettings = (file: any) => {
+  if (!file.raw) return
+  
   const reader = new FileReader()
   reader.onload = (e: ProgressEvent<FileReader>) => {
     try {
@@ -384,56 +512,283 @@ const handleImportSettings = (file: File) => {
         privacy?: Partial<typeof privacySettings>
         locale?: Partial<typeof localeSettings>
         shortcut?: Partial<typeof shortcutSettings>
+        version?: string
       }
       
-      // 导入界面设置
-      if (settings.interface) {
-        Object.assign(interfaceSettings, settings.interface)
-      }
-      
-      // 导入通知设置
-      if (settings.notification) {
-        Object.assign(notificationSettings, settings.notification)
-      }
-      
-      // 导入隐私设置
-      if (settings.privacy) {
-        Object.assign(privacySettings, settings.privacy)
-      }
-      
-      // 导入语言和地区设置
-      if (settings.locale) {
-        Object.assign(localeSettings, settings.locale)
-      }
-      
-      // 导入快捷操作设置
-      if (settings.shortcut) {
-        Object.assign(shortcutSettings, settings.shortcut)
-      }
-      
-      ElMessage.success('设置导入成功')
+      ElMessageBox.confirm(
+        `确定要导入此设置文件吗？这将覆盖您当前的所有设置。${settings.version ? `文件版本: ${settings.version}` : ''}`,
+        '确认导入',
+        {
+          confirmButtonText: '确定导入',
+          cancelButtonText: '取消',
+          type: 'warning'
+        }
+      ).then(() => {
+        // 导入界面设置
+        if (settings.interface) {
+          Object.assign(interfaceSettings, settings.interface)
+        }
+        
+        // 导入通知设置
+        if (settings.notification) {
+          Object.assign(notificationSettings, settings.notification)
+        }
+        
+        // 导入隐私设置
+        if (settings.privacy) {
+          Object.assign(privacySettings, settings.privacy)
+        }
+        
+        // 导入语言和地区设置
+        if (settings.locale) {
+          Object.assign(localeSettings, settings.locale)
+        }
+        
+        // 导入快捷操作设置
+        if (settings.shortcut) {
+          Object.assign(shortcutSettings, settings.shortcut)
+        }
+        
+        // 保存导入的设置
+        saveSettings()
+        
+        ElMessage.success('设置导入成功')
+      }).catch(() => {
+        // 用户取消导入
+      })
     } catch (error) {
+      console.error('导入设置失败:', error)
       ElMessage.error('设置文件格式错误，请检查文件内容')
     }
   }
-  reader.readAsText(file)
+  reader.onerror = () => {
+    ElMessage.error('文件读取失败')
+  }
+  reader.readAsText(file.raw)
 }
 
 // 重置所有设置
 const resetAllSettings = () => {
   resetSettings()
-  ElMessage.success('所有设置已重置为默认值')
+}
+
+// 预设管理功能
+const savePreset = () => {
+  if (!newPresetName.value.trim()) {
+    ElMessage.warning('请输入预设名称')
+    return
+  }
+  
+  const preset = {
+    id: Date.now().toString(),
+    name: newPresetName.value.trim(),
+    settings: {
+      interface: { ...interfaceSettings },
+      notification: { ...notificationSettings },
+      privacy: { ...privacySettings },
+      locale: { ...localeSettings },
+      shortcut: { ...shortcutSettings }
+    }
+  }
+  
+  // 保存到预设列表
+  presets.value.push(preset)
+  savePresetsToStorage()
+  
+  // 重置表单
+  newPresetName.value = ''
+  showPresetDialog.value = false
+  
+  ElMessage.success('预设保存成功')
+}
+
+const loadPreset = (presetId: string) => {
+  if (!presetId) return
+  
+  const preset = presets.value.find(p => p.id === presetId)
+  if (!preset) {
+    ElMessage.error('未找到指定预设')
+    return
+  }
+  
+  ElMessageBox.confirm(
+    `确定要加载预设"${preset.name}"吗？这将覆盖您当前的所有设置。`,
+    '确认加载',
+    {
+      confirmButtonText: '确定加载',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).then(() => {
+    // 加载预设设置
+    if (preset.settings.interface) {
+      Object.assign(interfaceSettings, preset.settings.interface)
+    }
+    
+    if (preset.settings.notification) {
+      Object.assign(notificationSettings, preset.settings.notification)
+    }
+    
+    if (preset.settings.privacy) {
+      Object.assign(privacySettings, preset.settings.privacy)
+    }
+    
+    if (preset.settings.locale) {
+      Object.assign(localeSettings, preset.settings.locale)
+    }
+    
+    if (preset.settings.shortcut) {
+      Object.assign(shortcutSettings, preset.settings.shortcut)
+    }
+    
+    // 保存并应用设置
+    saveSettings()
+    
+    ElMessage.success(`预设"${preset.name}"加载成功`)
+  }).catch(() => {
+    // 用户取消操作
+    selectedPreset.value = ''
+  })
+}
+
+const deleteSelectedPreset = () => {
+  if (!selectedPreset.value) {
+    ElMessage.warning('请先选择要删除的预设')
+    return
+  }
+  
+  const preset = presets.value.find(p => p.id === selectedPreset.value)
+  if (!preset) {
+    ElMessage.error('未找到指定预设')
+    return
+  }
+  
+  ElMessageBox.confirm(
+    `确定要删除预设"${preset.name}"吗？此操作不可恢复。`,
+    '确认删除',
+    {
+      confirmButtonText: '确定删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).then(() => {
+    presets.value = presets.value.filter(p => p.id !== selectedPreset.value)
+    selectedPreset.value = ''
+    savePresetsToStorage()
+    
+    ElMessage.success(`预设"${preset.name}"删除成功`)
+  }).catch(() => {
+    // 用户取消操作
+  })
+}
+
+const savePresetsToStorage = () => {
+  try {
+    localStorage.setItem('user-presets', JSON.stringify(presets.value))
+  } catch (error) {
+    console.error('保存预设失败:', error)
+  }
+}
+
+const loadPresetsFromStorage = () => {
+  try {
+    const presetsStr = localStorage.getItem('user-presets')
+    if (presetsStr) {
+      presets.value = JSON.parse(presetsStr)
+    }
+  } catch (error) {
+    console.error('加载预设失败:', error)
+  }
+}
+
+// 切换自动保存功能
+const toggleAutoSave = (value: boolean) => {
+  enableAutoSave.value = value
+  if (value) {
+    startAutoSave()
+    ElMessage.info('已开启自动保存，设置将每隔30秒自动保存')
+  } else {
+    stopAutoSave()
+    ElMessage.info('已关闭自动保存')
+  }
+}
+
+// 启动自动保存
+const startAutoSave = () => {
+  if (autoSaveTimer) {
+    clearInterval(autoSaveTimer)
+  }
+  
+  autoSaveTimer = window.setInterval(() => {
+    saveSettings()
+  }, 30000) // 每30秒自动保存一次
+}
+
+// 停止自动保存
+const stopAutoSave = () => {
+  if (autoSaveTimer) {
+    clearInterval(autoSaveTimer)
+    autoSaveTimer = null
+  }
 }
 
 // 加载设置
 const loadSettings = () => {
-  // 模拟从后端加载设置
-  console.log('加载用户偏好设置')
+  try {
+    // 从 localStorage 加载设置
+    const savedSettingsStr = localStorage.getItem('user-preferences')
+    if (savedSettingsStr) {
+      const savedSettings = JSON.parse(savedSettingsStr)
+      
+      // 恢复界面设置
+      if (savedSettings.interface) {
+        Object.assign(interfaceSettings, savedSettings.interface)
+      }
+      
+      // 恢复通知设置
+      if (savedSettings.notification) {
+        Object.assign(notificationSettings, savedSettings.notification)
+      }
+      
+      // 恢复隐私设置
+      if (savedSettings.privacy) {
+        Object.assign(privacySettings, savedSettings.privacy)
+      }
+      
+      // 恢复语言和地区设置
+      if (savedSettings.locale) {
+        Object.assign(localeSettings, savedSettings.locale)
+      }
+      
+      // 恢复快捷操作设置
+      if (savedSettings.shortcut) {
+        Object.assign(shortcutSettings, savedSettings.shortcut)
+      }
+      
+      // 应用设置
+      applySettings()
+      
+      console.log('用户偏好设置已加载:', savedSettings)
+    } else {
+      // 如果没有保存的设置，使用默认设置并保存
+      saveSettings()
+      console.log('使用默认偏好设置')
+    }
+  } catch (error) {
+    console.error('加载设置失败:', error)
+    ElMessage.error('加载用户设置失败，将使用默认设置')
+  }
 }
 
-// 组件挂载时加载设置
+// 组件挂载时加载设置和预设
 onMounted(() => {
   loadSettings()
+  loadPresetsFromStorage()
+})
+
+// 组件卸载时清理
+onUnmounted(() => {
+  stopAutoSave()
 })
 </script>
 
@@ -469,6 +824,9 @@ onMounted(() => {
 
 .setting-section {
   margin-bottom: 30px;
+  padding: 20px;
+  background: #fafafa;
+  border-radius: 6px;
 }
 
 .setting-section h3 {
@@ -485,6 +843,12 @@ onMounted(() => {
   align-items: center;
   margin-bottom: 15px;
   padding: 10px 0;
+  border-bottom: 1px dashed #e4e7ed;
+}
+
+.setting-item:last-child {
+  margin-bottom: 0;
+  border-bottom: none;
 }
 
 .setting-label {
@@ -522,6 +886,12 @@ onMounted(() => {
   text-align: right;
 }
 
+/* 预设选择器样式 */
+.el-select {
+  width: 200px;
+}
+
+/* 响应式设计 */
 @media (max-width: 768px) {
   .setting-item {
     flex-direction: column;
@@ -531,6 +901,18 @@ onMounted(() => {
   
   .setting-label {
     min-width: auto;
+  }
+  
+  .el-select {
+    width: 100%;
+  }
+  
+  .settings-actions {
+    text-align: center;
+  }
+  
+  .settings-actions .el-button {
+    margin-bottom: 10px;
   }
 }
 </style>

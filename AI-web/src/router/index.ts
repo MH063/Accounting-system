@@ -267,7 +267,6 @@ const routes: Array<RouteRecordRaw> = [
           title: '预算管理'
         }
       },
-
       {
         path: 'profile',
         name: 'Profile',
@@ -299,6 +298,33 @@ const routes: Array<RouteRecordRaw> = [
         component: () => import('@/views/AboutSystem.vue'),
         meta: { 
           title: '关于系统',
+          requiresAuth: true
+        }
+      },
+      {
+        path: 'user-agreement',
+        name: 'UserAgreement',
+        component: () => import('@/views/UserAgreement.vue'),
+        meta: { 
+          title: '用户协议',
+          requiresAuth: true
+        }
+      },
+      {
+        path: 'privacy-policy',
+        name: 'PrivacyPolicy',
+        component: () => import('@/views/PrivacyPolicy.vue'),
+        meta: { 
+          title: '隐私政策',
+          requiresAuth: true
+        }
+      },
+      {
+        path: 'terms-of-service',
+        name: 'TermsOfService',
+        component: () => import('@/views/TermsOfService.vue'),
+        meta: { 
+          title: '服务条款',
           requiresAuth: true
         }
       },

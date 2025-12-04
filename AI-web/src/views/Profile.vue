@@ -10,10 +10,10 @@
       <div class="profile-sidebar">
         <div class="user-info-card">
           <div class="avatar-container">
-            <img src="https://picsum.photos/100/100" alt="用户头像" class="user-avatar" />
+            <img :src="userInfo.avatar" alt="用户头像" class="user-avatar" />
           </div>
-          <h3 class="user-name">用户名</h3>
-          <p class="user-email">user@example.com</p>
+          <h3 class="user-name">{{ userInfo.name }}</h3>
+          <p class="user-email">{{ userInfo.email }}</p>
         </div>
         
         <el-menu
@@ -45,14 +45,27 @@
 </template>
 
 <script setup lang="ts">
-import { ref, shallowRef, markRaw } from 'vue'
+import { ref, shallowRef, markRaw, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { User, Setting, Lock } from '@element-plus/icons-vue'
 import PersonalInfo from './PersonalInfo.vue'
 import PreferenceSettings from './PreferenceSettings.vue'
 import SecuritySettings from './SecuritySettings.vue'
+import { getCurrentUser } from '@/services/userService'
 
 // 当前激活的菜单
 const activeMenu = ref('personal-info')
+
+// 路由相关
+const route = useRoute()
+const router = useRouter()
+
+// 用户信息
+const userInfo = ref({
+  name: '用户名',
+  email: 'user@example.com',
+  avatar: 'https://picsum.photos/100/100'
+})
 
 // 组件映射
 const components = {
@@ -64,11 +77,65 @@ const components = {
 // 当前显示的组件
 const currentComponent = shallowRef(components['personal-info'])
 
+// 路由参数到菜单索引的映射
+const tabMapping: Record<string, string> = {
+  'basic': 'personal-info',
+  'preferences': 'preference-settings',
+  'security': 'security-settings'
+}
+
+// 反向映射，用于更新URL
+const reverseTabMapping: Record<string, string> = {
+  'personal-info': 'basic',
+  'preference-settings': 'preferences',
+  'security-settings': 'security'
+}
+
 // 菜单选择处理
 const handleMenuSelect = (index: string) => {
   activeMenu.value = index
   currentComponent.value = components[index as keyof typeof components]
+  
+  // 更新路由参数但不刷新页面
+  const tabParam = reverseTabMapping[index] || index
+  router.replace({ query: { ...route.query, tab: tabParam } })
 }
+
+// 根据路由参数设置激活的菜单项
+const setActiveMenuFromRoute = () => {
+  const tab = route.query.tab as string
+  const menuIndex = tabMapping[tab] || tab
+  
+  if (menuIndex && components[menuIndex as keyof typeof components]) {
+    activeMenu.value = menuIndex
+    currentComponent.value = components[menuIndex as keyof typeof components]
+  }
+}
+
+// 获取用户信息
+const fetchUserInfo = async () => {
+  try {
+    const response = await getCurrentUser()
+    if (response.success && response.data) {
+      userInfo.value.name = response.data.name
+      userInfo.value.email = response.data.email
+      userInfo.value.avatar = response.data.avatar || 'https://picsum.photos/100/100'
+    }
+  } catch (error) {
+    console.error('获取用户信息失败:', error)
+  }
+}
+
+// 组件挂载时处理路由参数并获取用户信息
+onMounted(() => {
+  setActiveMenuFromRoute()
+  fetchUserInfo()
+})
+
+// 监听路由变化
+watch(() => route.query, () => {
+  setActiveMenuFromRoute()
+})
 </script>
 
 <style scoped>
