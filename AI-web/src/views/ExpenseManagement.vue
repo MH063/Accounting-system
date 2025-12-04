@@ -620,6 +620,12 @@
                   <span>银行卡转账</span>
                 </div>
               </el-radio>
+              <el-radio label="cash" size="large">
+                <div class="method-option">
+                  <el-icon><Money /></el-icon>
+                  <span>现金支付</span>
+                </div>
+              </el-radio>
             </el-radio-group>
           </div>
         </div>
@@ -646,17 +652,19 @@
             v-if="!showQRCode" 
             type="primary" 
             @click="handleConfirmPayment"
-            :disabled="!selectedPaymentMethod"
+            :disabled="!isPaymentMethodValid"
           >
             确认支付
           </el-button>
-          <el-button 
-            v-else 
-            type="success" 
-            @click="handleClosePaymentDialog"
-          >
-            完成
-          </el-button>
+          <div v-else>
+            <el-button @click="showQRCode = false">返回</el-button>
+            <el-button 
+              type="success" 
+              @click="handleClosePaymentDialog"
+            >
+              完成
+            </el-button>
+          </div>
         </div>
       </template>
     </el-dialog>
@@ -708,6 +716,9 @@ const currentExpense = ref<Expense | null>(null)
 const selectedPaymentMethod = ref('')
 const showQRCode = ref(false)
 const qrCodeUrl = ref('')
+
+// 支付方式有效性状态
+const isPaymentMethodValid = ref(false)
 
 // 存储收款码数据用于实时检查
 const qrCodesData = ref<any[]>([])
@@ -823,6 +834,7 @@ const handlePayExpense = (expense: Expense) => {
   // 设置当前费用并打开支付对话框
   currentExpense.value = expense
   selectedPaymentMethod.value = ''
+  isPaymentMethodValid.value = false
   showQRCode.value = false
   showPaymentDialog.value = true
 }
@@ -830,6 +842,13 @@ const handlePayExpense = (expense: Expense) => {
 // 处理支付方式选择 - 第二步：选择支付方式
 const handleSelectPaymentMethod = async (method: string) => {
   selectedPaymentMethod.value = method
+  isPaymentMethodValid.value = false
+  
+  // 现金支付不需要检查收款码
+  if (method === 'cash') {
+    isPaymentMethodValid.value = true
+    return
+  }
   
   // 获取最新的收款码数据
   try {
@@ -854,6 +873,7 @@ const handleSelectPaymentMethod = async (method: string) => {
       // 如果找到了启用的收款码，不显示任何提示
       if (activeQRCode) {
         // 不需要提示，收款码正常
+        isPaymentMethodValid.value = true
         return
       }
       
@@ -887,6 +907,18 @@ const handleConfirmPayment = async () => {
   
   // 直接显示二维码，不需要调用支付服务（因为是线下扫码支付）
   try {
+    // 特殊处理现金支付
+    if (selectedPaymentMethod.value === 'cash') {
+      // 现金支付直接完成，不需要显示二维码
+      currentExpense.value.status = 'paid'
+      ElMessage.success('现金支付已完成')
+      // 关闭支付对话框
+      setTimeout(() => {
+        handleClosePaymentDialog()
+      }, 1000)
+      return
+    }
+    
     // 获取对应的收款码
     const qrResponse = await getQRCodes()
     if (qrResponse.success && qrResponse.data) {

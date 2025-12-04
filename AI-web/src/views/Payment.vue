@@ -164,40 +164,88 @@
     <!-- 支付对话框 -->
     <el-dialog
       v-model="paymentDialogVisible"
-      :title="`支付 - ${currentExpense?.name || ''}`"
+      title="费用支付"
       width="500px"
       @close="resetPaymentForm"
     >
-      <el-form :model="paymentForm" label-width="120px">
-        <el-form-item label="支付金额">
-          <span class="payment-amount">¥{{ (paymentForm.amount || 0).toFixed(2) }}</span>
-        </el-form-item>
-        <el-form-item label="支付方式">
-          <el-select v-model="paymentForm.method" placeholder="选择支付方式">
-            <el-option 
-              v-for="method in availablePaymentMethods" 
-              :key="method.value"
-              :label="method.label"
-              :value="method.value"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="备注">
-          <el-input 
-            v-model="paymentForm.remark" 
-            placeholder="可选备注信息"
-            type="textarea"
-            :rows="3"
-          />
-        </el-form-item>
-      </el-form>
+      <div v-if="currentExpense" class="payment-dialog">
+        <!-- 费用信息 -->
+        <div class="expense-info">
+          <h3>{{ currentExpense.name }}</h3>
+          <p class="expense-description">代为支付其他成员的费用</p>
+          <p class="expense-amount">金额：<strong>¥{{ (paymentForm.amount || 0).toFixed(2) }}</strong></p>
+        </div>
+        
+        <!-- 支付方式选择 -->
+        <div v-if="!showQRCode" class="payment-methods">
+          <h4>选择支付方式</h4>
+          <div class="method-options">
+            <el-radio-group v-model="paymentForm.method" @change="handlePaymentMethodChange">
+              <el-radio label="alipay" size="large">
+                <div class="method-option">
+                  <el-icon><CreditCard /></el-icon>
+                  <span>支付宝</span>
+                </div>
+              </el-radio>
+              <el-radio label="wechat" size="large">
+                <div class="method-option">
+                  <el-icon><ChatLineRound /></el-icon>
+                  <span>微信支付</span>
+                </div>
+              </el-radio>
+              <el-radio label="bank" size="large">
+                <div class="method-option">
+                  <el-icon><Postcard /></el-icon>
+                  <span>银行卡转账</span>
+                </div>
+              </el-radio>
+              <el-radio label="cash" size="large">
+                <div class="method-option">
+                  <el-icon><Money /></el-icon>
+                  <span>现金支付</span>
+                </div>
+              </el-radio>
+            </el-radio-group>
+          </div>
+        </div>
+        
+        <!-- 收款码展示 -->
+        <div v-if="showQRCode" class="qr-code-section">
+          <h4>请扫描下方二维码完成支付</h4>
+          <div class="qr-code-container">
+            <img :src="qrCodeUrl" alt="收款码" class="qr-code-image" />
+            <p class="qr-code-tip">扫描二维码完成支付</p>
+          </div>
+          <div class="payment-status">
+            <el-icon class="success-icon"><SuccessFilled /></el-icon>
+            <p>支付成功！</p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 对话框底部按钮 -->
       <template #footer>
-        <span class="dialog-footer">
+        <div class="dialog-footer">
           <el-button @click="paymentDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="confirmPayment" :loading="processing">
+          <el-button 
+            v-if="!showQRCode" 
+            type="primary" 
+            @click="confirmPayment"
+            :disabled="!isPaymentMethodValid"
+            :loading="processing"
+          >
             确认支付
           </el-button>
-        </span>
+          <div v-else>
+            <el-button @click="showQRCode = false">返回</el-button>
+            <el-button 
+              type="success" 
+              @click="paymentDialogVisible = false"
+            >
+              完成
+            </el-button>
+          </div>
+        </div>
       </template>
     </el-dialog>
 
@@ -347,10 +395,12 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { 
-  List, Grid, View, Plus, Tools, Download, Check
+  List, Grid, View, Plus, Tools, Download, Check,
+  CreditCard, ChatLineRound, Postcard, Money, SuccessFilled
 } from '@element-plus/icons-vue'
 import { 
-  confirmPayment as confirmPaymentApi
+  confirmPayment as confirmPaymentApi,
+  getQRCodes
 } from '../services/paymentService'
 import type { PaymentMethod, PaymentRequest } from '../services/paymentService'
 
@@ -364,6 +414,8 @@ const processing = ref(false)
 const saving = ref(false)
 const detailDialogVisible = ref(false)
 const currentQuickPayment = ref<QuickPayment | null>(null)
+const showQRCode = ref(false)
+const qrCodeUrl = ref('')
 
 // 当前选中的支付方式
 const selectedMethod = ref<PaymentMethod & { fee: string; description: string }>({
@@ -522,7 +574,7 @@ interface PaymentForm {
 
 const paymentForm = reactive<PaymentForm>({
   amount: 0,
-  method: 'wechat',
+  method: '',
   remark: ''
 })
 
@@ -725,8 +777,65 @@ const deleteExpense = (expense: Expense) => {
 
 const payForMember = (member: SharingResult) => {
   paymentForm.amount = member.pending
+  paymentForm.method = ''
+  isPaymentMethodValid.value = false
   currentExpense.value = member
   paymentDialogVisible.value = true
+}
+
+// 处理支付方式选择
+const handlePaymentMethodChange = async (method: string) => {
+  paymentForm.method = method
+  isPaymentMethodValid.value = false
+  
+  // 现金支付不需要检查收款码
+  if (method === 'cash') {
+    isPaymentMethodValid.value = true
+    return
+  }
+  
+  // 获取最新的收款码数据
+  try {
+    const qrResponse = await getQRCodes()
+    if (qrResponse.success && qrResponse.data) {
+      // 根据支付方式检查收款码状态
+      const platformMap: Record<string, string> = {
+        'alipay': 'alipay',
+        'wechat': 'wechat',
+        'bank': 'unionpay'
+      }
+      
+      const platform = platformMap[method]
+      
+      // 查找启用的收款码
+      const activeQRCode = qrResponse.data.find(qr => 
+        qr.platform === platform && qr.status === 'active' && qr.isUserUploaded
+      )
+      
+      // 如果找到了启用的收款码，不显示任何提示
+      if (activeQRCode) {
+        // 不需要提示，收款码正常
+        isPaymentMethodValid.value = true
+        return
+      }
+      
+      // 查找禁用的收款码
+      const disabledQRCode = qrResponse.data.find(qr => 
+        qr.platform === platform && qr.status === 'inactive' && qr.isUserUploaded
+      )
+      
+      // 如果找到了禁用的收款码，提示用户
+      if (disabledQRCode) {
+        ElMessage.warning(`该支付方式的收款码已被停用或禁用，请联系管理员`)
+        return
+      }
+      
+      // 如果完全没有找到对应平台的收款码
+      ElMessage.warning(`未找到对应的收款码，请联系管理员`)
+    }
+  } catch (error) {
+    console.error('获取收款码信息失败:', error)
+  }
 }
 
 const processQuickPayment = async (quickPay: QuickPayment) => {
@@ -816,25 +925,69 @@ const viewPaymentDetail = (quickPay: QuickPayment) => {
 }
 
 const confirmPayment = async () => {
+  if (!paymentForm.method) {
+    ElMessage.warning('请选择支付方式')
+    return
+  }
+  
   try {
     processing.value = true
     
-    // 创建订单ID
-    const orderId = `ORDER_${Date.now()}`
-    
-    // 调用支付确认API
-    const result = await confirmPayment(`ORDER_${Date.now()}`)
-    
-    if (result.success) {
-      ElMessage.success('支付成功')
+    // 特殊处理现金支付
+    if (paymentForm.method === 'cash') {
+      // 现金支付直接完成，不需要显示二维码
+      ElMessage.success('现金支付已完成')
       paymentDialogVisible.value = false
       resetPaymentForm()
+      return
+    }
+    
+    // 获取对应的收款码
+    const qrResponse = await getQRCodes()
+    if (qrResponse.success && qrResponse.data) {
+      // 根据支付方式筛选收款码
+      const platformMap: Record<string, string> = {
+        'alipay': 'alipay',
+        'wechat': 'wechat',
+        'bank': 'unionpay'
+      }
+      
+      const platform = platformMap[paymentForm.method]
+      // 首先查找启用的收款码
+      let matchingQRCode = qrResponse.data.find(qr => 
+        qr.platform === platform && qr.status === 'active' && qr.isUserUploaded
+      )
+      
+      // 如果找到了启用的收款码，直接使用
+      if (matchingQRCode && matchingQRCode.qrCodeUrl) {
+        qrCodeUrl.value = matchingQRCode.qrCodeUrl
+        showQRCode.value = true
+      } 
+      // 如果没有找到启用的收款码，则查找禁用的收款码
+      else {
+        const disabledQRCode = qrResponse.data.find(qr => 
+          qr.platform === platform && qr.status === 'inactive' && qr.isUserUploaded
+        )
+        
+        // 如果找到了禁用的收款码，提示用户
+        if (disabledQRCode) {
+          ElMessage.warning(`该支付方式的收款码已被停用或禁用，请联系管理员`)
+          // 不显示二维码，保持showQRCode为false
+          return
+        } 
+        // 如果完全没有找到对应平台的收款码
+        else {
+          ElMessage.warning(`未找到对应的收款码，请联系管理员`)
+          // 不显示二维码，保持showQRCode为false
+          return
+        }
+      }
     } else {
-      ElMessage.error(result.data?.message || '支付失败')
+      ElMessage.error('获取收款码失败')
     }
   } catch (error) {
-    console.error('支付失败:', error)
-    ElMessage.error('支付失败，请重试')
+    console.error('获取收款码过程中出现错误:', error)
+    ElMessage.error('获取收款码过程中出现错误')
   } finally {
     processing.value = false
   }
@@ -889,6 +1042,8 @@ const resetPaymentForm = () => {
     method: 'wechat',
     remark: ''
   })
+  showQRCode.value = false
+  qrCodeUrl.value = ''
 }
 
 const resetExpenseForm = () => {
@@ -947,6 +1102,9 @@ const openPaymentConfirm = () => {
 
 // 当前正在支付的记录
 const currentExpense = ref<SharingResult | null>(null)
+
+// 支付方式有效性状态
+const isPaymentMethodValid = ref(false)
 
 // 生命周期
 onMounted(() => {
@@ -1332,5 +1490,112 @@ onMounted(() => {
 .amount-item.pending {
   color: #e6a23c;
   font-weight: 500;
+}
+
+/* 支付对话框样式 */
+.payment-dialog {
+  padding: 20px 0;
+}
+
+.expense-info {
+  text-align: center;
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #eee;
+}
+
+.expense-info h3 {
+  margin: 0 0 12px 0;
+  font-size: 20px;
+  color: #303133;
+}
+
+.expense-description {
+  margin: 0 0 16px 0;
+  color: #606266;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.expense-amount {
+  margin: 0;
+  font-size: 18px;
+  color: #f56c6c;
+}
+
+.expense-amount strong {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.payment-methods h4,
+.qr-code-section h4 {
+  margin: 0 0 20px 0;
+  font-size: 18px;
+  color: #303133;
+  text-align: center;
+}
+
+.method-options {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.method-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  color: #303133;
+}
+
+.method-option .el-icon {
+  font-size: 20px;
+}
+
+.qr-code-container {
+  text-align: center;
+  margin: 24px 0;
+}
+
+.qr-code-image {
+  width: 200px;
+  height: 200px;
+  margin: 0 auto 16px;
+  display: block;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.qr-code-tip {
+  margin: 0;
+  font-size: 14px;
+  color: #606266;
+}
+
+.payment-status {
+  text-align: center;
+  margin-top: 24px;
+}
+
+.payment-status .success-icon {
+  font-size: 48px;
+  color: #67c23a;
+  margin-bottom: 16px;
+}
+
+.payment-status p {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #67c23a;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 </style>

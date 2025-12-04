@@ -312,7 +312,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
-import * as XLSX from 'xlsx'
+// 移除xlsx依赖，使用安全的CSV导出方式
 import { saveAs } from 'file-saver'
 import { 
   ArrowLeft, 
@@ -907,117 +907,85 @@ const handleExportReport = async () => {
     // 生成基础数据
     const trendData = generateMockData()
     
-    // 创建工作簿
-    const workbook = XLSX.utils.book_new()
+    // 创建CSV内容
+    const csvLines: string[] = []
     
     // 1. 报告概要
-    const summaryData = [
-      ['财务趋势分析报告', ''],
-      ['报告生成时间', new Date().toLocaleString('zh-CN')],
-      ['分析期间', `${dateRange.value[0].toLocaleDateString()} 至 ${dateRange.value[1].toLocaleDateString()}`],
-      ['分析类型', analysisType.value === 'expense' ? '支出趋势' : analysisType.value === 'income' ? '收入趋势' : '结余趋势'],
-      ['时间粒度', timeGranularity.value === 'day' ? '按日' : timeGranularity.value === 'week' ? '按周' : '按月'],
-      ['对比类型', comparisonType.value === 'yoy' ? '同比分析' : comparisonType.value === 'qoq' ? '环比分析' : '不对比'],
-      ['', ''],
-      ['关键指标', ''],
-      ['本期总额', `¥${formatAmount(currentPeriodTotal.value)}`],
-      ['对比值', `¥${formatAmount(comparisonValue.value)}`],
-      ['变化率', `${currentPeriodChange.value > 0 ? '+' : ''}${currentPeriodChange.value}%`],
-      ['异常检测数量', anomalyCount.value],
-      ['异常检测状态', anomalyStatus.value],
-      ['预测准确率', `${predictionAccuracy.value}%`],
-      ['', ''],
-      ['趋势分析', ''],
-      ['增长趋势', trendDirection.value === 'up' ? '上升' : trendDirection.value === 'down' ? '下降' : '稳定'],
-      ['波动性', volatility.value],
-      ['季节性', seasonality.value],
-      ['预测趋势', predictionDirection.value === 'up' ? '上升' : predictionDirection.value === 'down' ? '下降' : '稳定']
-    ]
-    const summarySheet = XLSX.utils.aoa_to_sheet(summaryData)
-    XLSX.utils.book_append_sheet(workbook, summarySheet, '报告概要')
+    csvLines.push('财务趋势分析报告')
+    csvLines.push(`报告生成时间,${new Date().toLocaleString('zh-CN')}`)
+    csvLines.push(`分析期间,${dateRange.value[0].toLocaleDateString()} 至 ${dateRange.value[1].toLocaleDateString()}`)
+    csvLines.push(`分析类型,${analysisType.value === 'expense' ? '支出趋势' : analysisType.value === 'income' ? '收入趋势' : '结余趋势'}`)
+    csvLines.push(`时间粒度,${timeGranularity.value === 'day' ? '按日' : timeGranularity.value === 'week' ? '按周' : '按月'}`)
+    csvLines.push(`对比类型,${comparisonType.value === 'yoy' ? '同比分析' : comparisonType.value === 'qoq' ? '环比分析' : '不对比'}`)
+    csvLines.push('')
+    csvLines.push('关键指标')
+    csvLines.push(`本期总额,¥${formatAmount(currentPeriodTotal.value)}`)
+    csvLines.push(`对比值,¥${formatAmount(comparisonValue.value)}`)
+    csvLines.push(`变化率,${currentPeriodChange.value > 0 ? '+' : ''}${currentPeriodChange.value}%`)
+    csvLines.push(`异常检测数量,${anomalyCount.value}`)
+    csvLines.push(`异常检测状态,${anomalyStatus.value}`)
+    csvLines.push(`预测准确率,${predictionAccuracy.value}%`)
+    csvLines.push('')
+    csvLines.push('趋势分析')
+    csvLines.push(`增长趋势,${trendDirection.value === 'up' ? '上升' : trendDirection.value === 'down' ? '下降' : '稳定'}`)
+    csvLines.push(`波动性,${volatility.value}`)
+    csvLines.push(`季节性,${seasonality.value}`)
+    csvLines.push(`预测趋势,${predictionDirection.value === 'up' ? '上升' : predictionDirection.value === 'down' ? '下降' : 'stable'}`)
+    csvLines.push('')
     
     // 2. 趋势数据
-    const trendSheetData = [
-      ['日期', '金额(元)', '类型']
-    ]
+    csvLines.push('趋势数据')
+    csvLines.push('日期,金额(元),类型')
     trendData.forEach(item => {
-      trendSheetData.push([
-        item.date,
-        item.value,
-        analysisType.value === 'expense' ? '支出' : analysisType.value === 'income' ? '收入' : '结余'
-      ])
+      csvLines.push(`${item.date},${item.value},${analysisType.value === 'expense' ? '支出' : analysisType.value === 'income' ? '收入' : '结余'}`)
     })
-    const trendSheet = XLSX.utils.aoa_to_sheet(trendSheetData)
-    XLSX.utils.book_append_sheet(workbook, trendSheet, '趋势数据')
+    csvLines.push('')
     
     // 3. 对比分析数据（如果启用）
     if (comparisonType.value !== 'none' && comparisonTableData.value.length > 0) {
-      const comparisonSheetData = [
-        ['时期', '本期金额(元)', '对比期金额(元)', '变化率(%)']
-      ]
+      csvLines.push('对比分析')
+      csvLines.push('时期,本期金额(元),对比期金额(元),变化率(%)')
       comparisonTableData.value.forEach(item => {
-        comparisonSheetData.push([
-          item.period,
-          item.current,
-          item.comparison,
-          item.change
-        ])
+        csvLines.push(`${item.period},${item.current},${item.comparison},${item.change}`)
       })
-      const comparisonSheet = XLSX.utils.aoa_to_sheet(comparisonSheetData)
-      XLSX.utils.book_append_sheet(workbook, comparisonSheet, '对比分析')
+      csvLines.push('')
     }
     
     // 4. 异常检测数据（如果有）
     if (anomalyList.value.length > 0) {
-      const anomalySheetData = [
-        ['日期', '金额(元)', '偏离度', '异常原因']
-      ]
+      csvLines.push('异常检测')
+      csvLines.push('日期,金额(元),偏离度,异常原因')
       anomalyList.value.forEach(item => {
-        anomalySheetData.push([
-          item.date,
-          item.value,
-          item.deviation,
-          item.reason
-        ])
+        csvLines.push(`${item.date},${item.value},${item.deviation},${item.reason}`)
       })
-      const anomalySheet = XLSX.utils.aoa_to_sheet(anomalySheetData)
-      XLSX.utils.book_append_sheet(workbook, anomalySheet, '异常检测')
+      csvLines.push('')
     }
     
     // 5. 预测数据（如果启用）
     if (enablePrediction.value) {
-      const predictionSheetData = [
-        ['预测摘要', ''],
-        ['预测期间', predictionSummary.period],
-        ['预期总额', `¥${formatAmount(predictionSummary.total)}`],
-        ['置信度', `${predictionSummary.confidence}%`],
-        ['风险等级', predictionSummary.riskLevel],
-        ['', ''],
-        ['预测详情', ''],
-        ['数据点', '预测值(元)', '置信区间']
-      ]
+      csvLines.push('预测摘要')
+      csvLines.push(`预测期间,${predictionSummary.period}`)
+      csvLines.push(`预期总额,¥${formatAmount(predictionSummary.total)}`)
+      csvLines.push(`置信度,${predictionSummary.confidence}%`)
+      csvLines.push(`风险等级,${predictionSummary.riskLevel}`)
+      csvLines.push('')
+      csvLines.push('预测详情')
+      csvLines.push('数据点,预测值(元),置信区间')
       
       // 生成预测数据点
       const predictionData = generateMockData()
       predictionData.forEach((item, index) => {
         const confidence = predictionSummary.confidence - (index * 2) // 随时间递减的置信度
-        predictionSheetData.push([
-          `预测点${index + 1}`,
-          item.value,
-          `${Math.max(0, confidence)}%`
-        ])
+        csvLines.push(`预测点${index + 1},${item.value},${Math.max(0, confidence)}%`)
       })
-      
-      const predictionSheet = XLSX.utils.aoa_to_sheet(predictionSheetData)
-      XLSX.utils.book_append_sheet(workbook, predictionSheet, '预测分析')
     }
     
-    // 生成文件
-    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
-    const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    // 生成CSV文件内容
+    const csvContent = csvLines.join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     
     // 生成文件名
-    const fileName = `趋势分析报告_${new Date().toISOString().split('T')[0]}_${Date.now()}.xlsx`
+    const fileName = `趋势分析报告_${new Date().toISOString().split('T')[0]}_${Date.now()}.csv`
     
     // 下载文件
     saveAs(blob, fileName)
