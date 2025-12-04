@@ -127,6 +127,12 @@
           </el-button>
         </el-col>
         <el-col :xs="24" :sm="12" :md="6">
+          <el-button class="action-btn" @click="goToBudgetManagement">
+            <el-icon><Wallet /></el-icon>
+            预算管理
+          </el-button>
+        </el-col>
+        <el-col :xs="24" :sm="12" :md="6">
           <el-button class="action-btn" @click="setBudget">
             <el-icon><Setting /></el-icon>
             设置预算
@@ -171,7 +177,7 @@ const goToTrendAnalysis = () => {
 }
 
 const goToBudgetManagement = () => {
-  router.push('/dashboard/budget-management')
+  router.push('/dashboard/budget')
 }
 
 const goToExpenseManagement = () => {
@@ -183,7 +189,7 @@ const exportData = () => {
 }
 
 const setBudget = () => {
-  router.push('/dashboard/budget-management')
+  router.push('/dashboard/budget')
 }
 
 const viewReport = () => {

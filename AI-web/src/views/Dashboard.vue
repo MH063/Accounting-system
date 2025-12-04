@@ -314,6 +314,16 @@ const smartNotifications = ref<SmartNotification[]>([
     priority: 'info',
     type: 'notification',
     time: new Date(Date.now() - 60 * 60 * 1000)
+  },
+  {
+    id: 6,
+    title: '预算超支提醒',
+    message: '交通预算已超支¥100，请及时调整支出计划',
+    priority: 'danger',
+    type: 'action',
+    actionType: 'budget-management',
+    actionPath: '/dashboard/budget',
+    time: new Date(Date.now() - 10 * 60 * 1000)
   }
 ])
 

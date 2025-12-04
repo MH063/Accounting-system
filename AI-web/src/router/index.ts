@@ -260,13 +260,14 @@ const routes: Array<RouteRecordRaw> = [
         }
       },
       {
-        path: 'budget-management',
+        path: 'budget',
         name: 'BudgetManagement',
         component: () => import('@/views/BudgetManagement.vue'),
         meta: { 
           title: '预算管理'
         }
       },
+
       {
         path: 'profile',
         name: 'Profile',
