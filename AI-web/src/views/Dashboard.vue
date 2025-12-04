@@ -97,16 +97,37 @@
     <div class="widget-grid" v-if="enabledWidgets.includes('activities')">
       <el-row :gutter="20">
         <el-col :span="24">
-          <el-card>
+          <el-card class="activity-history-card">
             <template #header>
-              <span>最近活动</span>
+              <div class="card-header">
+                <span><el-icon><Clock /></el-icon> 最近活动</span>
+                <el-tag type="info" size="small">
+                  {{ recentActivities.length }} 条记录
+                </el-tag>
+              </div>
             </template>
-            <el-timeline>
-              <el-timeline-item>张同学支付了电费 ¥120</el-timeline-item>
-              <el-timeline-item>李同学创建了新的支出记录</el-timeline-item>
-              <el-timeline-item>王同学更新了宿舍设置</el-timeline-item>
-              <el-timeline-item>赵同学加入了宿舍</el-timeline-item>
-            </el-timeline>
+            <div class="activity-history">
+              <div v-if="recentActivities.length === 0" class="no-activities">
+                <el-empty description="暂无活动记录" :image-size="60" />
+              </div>
+              <div v-else class="activities-list">
+                <div v-for="activity in recentActivities" :key="activity.id" 
+                     class="activity-item" :class="getActivityTypeClass(activity.type)">
+                  <div class="activity-icon">
+                    <el-icon><component :is="getActivityIcon(activity.type)" /></el-icon>
+                  </div>
+                  <div class="activity-content">
+                    <div class="activity-title">{{ activity.title }}</div>
+                    <div class="activity-description">{{ activity.description }}</div>
+                    <div class="activity-meta">
+                      <span class="activity-time">{{ formatTime(activity.time) }}</span>
+                      <span v-if="activity.user" class="activity-user">{{ activity.user }}</span>
+                      <span v-if="activity.amount" class="activity-amount">¥{{ activity.amount }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </el-card>
         </el-col>
       </el-row>
@@ -224,29 +245,54 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, onUnmounted, reactive } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
-  Setting, 
-  Refresh, 
+  TrendingUp, 
+  User, 
+  Wallet, 
+  Document,
   Bell,
+  Warning,
+  InfoFilled,
+  SuccessFilled,
+  Star,
+  Setting,
+  Refresh,
+  CaretTop,
+  CaretBottom,
+  Clock,
   DataAnalysis,
   Grid,
-  List,
-  Clock,
-  Document
+  List
 } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { useNotifications } from '../services/notificationService'
+import type { Notification } from '../services/notificationService'
 
 // 路由实例
+const route = useRoute()
 const router = useRouter()
 
-// 响应式数据
-const autoRefreshEnabled = ref(false)
+// 使用通知服务
+const { notifications, getSmartReminders } = useNotifications()
+
+// 活动历史数据类型
+interface Activity {
+  id: number
+  title: string
+  description: string
+  time: Date
+  type: 'payment' | 'expense' | 'member' | 'setting' | 'bill'
+  amount?: number
+  user?: string
+}
+
+// 状态管理
+const loading = ref(false)
+const autoRefreshEnabled = ref(true)
 const refreshInterval = ref<NodeJS.Timeout | null>(null)
 const lastUpdateTime = ref(new Date())
-
-// Widget系统
 const enabledWidgets = ref(['stats', 'smart-notifications', 'activities'])
 const widgetSettings = reactive({
   autoRefresh: true,
@@ -255,77 +301,78 @@ const widgetSettings = reactive({
   layout: 'default' // default, compact, detailed
 })
 
-// 智能提醒数据类型
-interface SmartNotification {
-  id: number
-  title: string
-  message: string
-  priority: 'warning' | 'danger' | 'info'
-  type: 'notification' | 'action'
-  actionType?: string
-  actionPath?: string
-  time: Date
-}
-
-// 智能提醒数据
-const smartNotifications = ref<SmartNotification[]>([
+// 活动历史数据
+const activityHistory = ref<Activity[]>([
   {
     id: 1,
-    title: '预算提醒',
-    message: '本月支出已达到预算的80%，请注意控制开支',
-    priority: 'warning',
-    type: 'notification', // notification: 通知类, action: 操作类
-    time: new Date(Date.now() - 5 * 60 * 1000)
+    title: '支付电费',
+    description: '张同学支付了宿舍电费',
+    time: new Date(Date.now() - 2 * 60 * 60 * 1000),
+    type: 'payment',
+    amount: 120,
+    user: '张同学'
   },
   {
     id: 2,
-    title: '账单提醒',
-    message: '有3笔账单等待确认，请及时处理',
-    priority: 'danger',
-    type: 'action',
-    actionType: 'bill-review', // 具体的操作类型
-    actionPath: '/dashboard/bills', // 跳转路径
-    time: new Date(Date.now() - 15 * 60 * 1000)
+    title: '创建支出记录',
+    description: '李同学创建了新的支出记录',
+    time: new Date(Date.now() - 5 * 60 * 60 * 1000),
+    type: 'expense',
+    user: '李同学'
   },
   {
     id: 3,
-    title: '成员提醒',
-    message: '新成员加入申请待审核',
-    priority: 'info',
-    type: 'action',
-    actionType: 'member-approval',
-    actionPath: '/dashboard/members',
-    time: new Date(Date.now() - 30 * 60 * 1000)
+    title: '更新宿舍设置',
+    description: '王同学更新了宿舍设置',
+    time: new Date(Date.now() - 8 * 60 * 60 * 1000),
+    type: 'setting',
+    user: '王同学'
   },
   {
     id: 4,
-    title: '支出审核',
-    message: '有2笔支出记录需要审核',
-    priority: 'danger',
-    type: 'action',
-    actionType: 'expense-review',
-    actionPath: '/dashboard/expense/review',
-    time: new Date(Date.now() - 45 * 60 * 1000)
+    title: '新成员加入',
+    description: '赵同学加入了宿舍',
+    time: new Date(Date.now() - 12 * 60 * 60 * 1000),
+    type: 'member',
+    user: '赵同学'
   },
   {
     id: 5,
-    title: '系统通知',
-    message: '系统将于今晚进行维护，预计持续30分钟',
-    priority: 'info',
-    type: 'notification',
-    time: new Date(Date.now() - 60 * 60 * 1000)
+    title: '生成月度账单',
+    description: '系统生成了本月的集体账单',
+    time: new Date(Date.now() - 24 * 60 * 60 * 1000),
+    type: 'bill'
   },
   {
     id: 6,
-    title: '预算超支提醒',
-    message: '交通预算已超支¥100，请及时调整支出计划',
-    priority: 'danger',
-    type: 'action',
-    actionType: 'budget-management',
-    actionPath: '/dashboard/budget',
-    time: new Date(Date.now() - 10 * 60 * 1000)
+    title: '预算调整',
+    description: '陈同学调整了本月的餐饮预算',
+    time: new Date(Date.now() - 48 * 60 * 60 * 1000),
+    type: 'setting',
+    user: '陈同学'
   }
 ])
+
+// 智能提醒数据 - 改为从通知服务获取
+const smartNotifications = computed(() => {
+  return getSmartReminders().map(notification => ({
+    id: notification.id,
+    title: notification.title,
+    message: notification.message,
+    priority: notification.isImportant ? (notification.type === 'warning' ? 'danger' : 'warning') : 'info',
+    type: notification.actionPath ? 'action' : 'notification',
+    actionType: notification.type,
+    actionPath: notification.actionPath,
+    time: new Date(notification.createdAt)
+  }))
+})
+
+// 最近活动数据（只显示最近的5条）
+const recentActivities = computed(() => {
+  return [...activityHistory.value]
+    .sort((a, b) => b.time.getTime() - a.time.getTime())
+    .slice(0, 5)
+})
 
 // 设置对话框
 const widgetSettingsVisible = ref(false)
@@ -378,7 +425,32 @@ const formatTime = (time: Date) => {
   return `${Math.floor(minutes / 1440)}天前`
 }
 
-const handleNotificationAction = (notification: SmartNotification) => {
+// 获取活动图标
+const getActivityIcon = (type: string) => {
+  const iconMap: Record<string, any> = {
+    payment: Wallet,
+    expense: Document,
+    member: User,
+    setting: Setting,
+    bill: Document
+  }
+  return iconMap[type] || Clock
+}
+
+// 获取活动类型样式
+const getActivityTypeClass = (type: string) => {
+  const classMap: Record<string, string> = {
+    payment: 'payment',
+    expense: 'expense',
+    member: 'member',
+    setting: 'setting',
+    bill: 'bill'
+  }
+  return classMap[type] || ''
+}
+
+// 智能提醒处理方法
+const handleNotificationAction = (notification: any) => {
   console.log('处理智能提醒:', notification)
   
   // 判断提醒类型
@@ -394,12 +466,6 @@ const handleNotificationAction = (notification: SmartNotification) => {
         dangerouslyUseHTMLString: true
       }
     ).then(() => {
-      // 移除已处理的提醒
-      const index = smartNotifications.value.findIndex(n => n.id === notification.id)
-      if (index > -1) {
-        smartNotifications.value.splice(index, 1)
-      }
-      
       // 跳转到相关页面
       router.push(notification.actionPath)
       ElMessage.success('正在跳转到处理页面...')
@@ -417,11 +483,6 @@ const handleNotificationAction = (notification: SmartNotification) => {
         type: notification.priority === 'warning' ? 'warning' : 'info'
       }
     ).then(() => {
-      // 用户确认后移除提醒
-      const index = smartNotifications.value.findIndex(n => n.id === notification.id)
-      if (index > -1) {
-        smartNotifications.value.splice(index, 1)
-      }
       ElMessage.success('提醒已确认')
     })
   }
@@ -455,9 +516,15 @@ const toggleWidget = (widgetType: string) => {
   }
 }
 
-// 生命周期
+// 组件挂载和卸载生命周期
 onMounted(() => {
-  // 组件挂载时的初始化逻辑
+  loading.value = true
+  setTimeout(() => {
+    loading.value = false
+    if (widgetSettings.autoRefresh) {
+      startAutoRefresh()
+    }
+  }, 800)
 })
 
 onUnmounted(() => {
@@ -601,7 +668,91 @@ onUnmounted(() => {
   height: 200px;
 }
 
+.activity-history-card {
+  min-height: 300px;
+}
 
+.activity-history {
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.activity-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  transition: all 0.3s ease;
+}
+
+.activity-item:hover {
+  background-color: #f5f7fa;
+}
+
+.activity-item.payment {
+  border-left: 3px solid #409EFF;
+}
+
+.activity-item.expense {
+  border-left: 3px solid #E6A23C;
+}
+
+.activity-item.member {
+  border-left: 3px solid #67C23A;
+}
+
+.activity-item.setting {
+  border-left: 3px solid #909399;
+}
+
+.activity-item.bill {
+  border-left: 3px solid #F56C6C;
+}
+
+.activity-icon {
+  margin-right: 12px;
+}
+
+.activity-content {
+  flex: 1;
+}
+
+.activity-title {
+  font-weight: bold;
+  margin-bottom: 4px;
+  color: #303133;
+}
+
+.activity-description {
+  font-size: 14px;
+  color: #606266;
+  margin-bottom: 6px;
+}
+
+.activity-meta {
+  font-size: 12px;
+  color: #909399;
+}
+
+.activity-time {
+  margin-right: 8px;
+}
+
+.activity-user {
+  margin-right: 8px;
+}
+
+.activity-amount {
+  font-weight: bold;
+}
+
+.no-activities {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+}
 
 .widget-settings {
   padding: 10px 0;

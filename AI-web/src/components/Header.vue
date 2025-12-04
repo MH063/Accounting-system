@@ -114,9 +114,22 @@
           <span class="nav-text">{{ item.name }}</span>
         </router-link>
         <div class="nav-spacer"></div>
-        <div class="notification-icon" @click="handleNotification">
-          <el-icon :size="18"><Bell /></el-icon>
-          <div class="notification-dot"></div>
+        <div class="notification-wrapper" ref="notificationWrapper">
+          <div class="notification-icon" @click.stop="toggleNotificationPopover">
+            <el-icon :size="18"><Bell /></el-icon>
+            <div class="notification-dot" v-if="hasUnreadNotifications"></div>
+            <el-badge 
+              v-if="unreadCount > 0" 
+              :value="unreadCount" 
+              :max="99" 
+              class="notification-badge"
+              type="danger"
+            />
+          </div>
+          <NotificationPopover 
+            v-model:visible="showNotificationPopover" 
+            @close="showNotificationPopover = false"
+          />
         </div>
         <!-- 用户信息区域 -->
         <div class="user-profile-wrapper">
@@ -135,25 +148,20 @@ import { useRoute, useRouter } from 'vue-router'
 import { Bell, Search, Folder, Document, Star } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import UserProfile from './UserProfile.vue'
+import NotificationPopover from './NotificationPopover.vue'
 import type { SearchResult } from '../services/searchService'
+import { useNotifications } from '../services/notificationService'
 
 // 路由实例
 const route = useRoute()
 const router = useRouter()
 
-// 导航项配置
-const navItems = [
-  { name: '仪表盘', path: '/dashboard' },
-  { name: '寝室管理', path: '/dashboard/dormitory' },
-  { name: '成员管理', path: '/dashboard/members' },
-  { name: '费用管理', path: '/dashboard/expenses' },
-  { name: '账单管理', path: '/dashboard/bills' },
-  { name: '支付功能', path: '/dashboard/payment' },
-  { name: '统计分析', path: '/dashboard/analytics' }
-]
+// 使用通知服务
+const { unreadCount } = useNotifications()
 
 // 组件引用
 const navItemRefs = ref<HTMLElement[]>([])
+const notificationWrapper = ref<HTMLElement | null>(null)
 
 // 滑动指示线状态
 const sliderStyle = ref({
@@ -172,10 +180,32 @@ const searchSuggestions = ref<string[]>([])
 const showSearchResults = ref(false)
 const isSearching = ref(false)
 
+// 通知弹窗相关
+const showNotificationPopover = ref(false)
+const hasUnreadNotifications = computed(() => unreadCount.value > 0)
+
 /**
  * 搜索防抖计时器
  */
 let searchDebounceTimer: NodeJS.Timeout | null = null
+
+// 导航项配置
+const navItems = [
+  { name: '仪表盘', path: '/dashboard' },
+  { name: '寝室管理', path: '/dashboard/dormitory' },
+  { name: '成员管理', path: '/dashboard/members' },
+  { name: '费用管理', path: '/dashboard/expenses' },
+  { name: '账单管理', path: '/dashboard/bills' },
+  { name: '支付功能', path: '/dashboard/payment' },
+  { name: '统计分析', path: '/dashboard/analytics' }
+]
+
+/**
+ * 切换通知弹窗显示状态
+ */
+const toggleNotificationPopover = (): void => {
+  showNotificationPopover.value = !showNotificationPopover.value
+}
 
 /**
  * 获取搜索建议
@@ -417,13 +447,6 @@ const toggleIndicator = () => {
   sliderStyle.value.opacity = showIndicator.value ? '1' : '0'
 }
 
-/**
- * 处理通知图标点击事件
- */
-const handleNotification = (): void => {
-  router.push('/notifications')
-}
-
 // 监听路由变化，更新指示线位置
 watch(() => route.path, () => {
   updateSliderPosition()
@@ -456,31 +479,27 @@ onUnmounted(() => {
 
 <style scoped>
 .header {
-  height: 60px;
-  width: 100%;
-  background: linear-gradient(to right, #ffffff, #f8f9fa);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
   position: sticky;
   top: 0;
   z-index: 1000;
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.8);
+  background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .header-container {
-  display: flex;
-  align-items: center;
-  height: 100%;
-  max-width: 1380px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 0 24px;
+  display: flex;
+  align-items: center;
+  height: 60px;
 }
 
 .logo {
   display: flex;
   align-items: center;
   gap: 12px;
-  position: relative;
   margin-right: 24px;
 }
 
@@ -488,129 +507,109 @@ onUnmounted(() => {
   position: relative;
   width: 40px;
   height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
-.logo img {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.logo:hover img {
-  transform: scale(1.05);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+.logo-container img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
 }
 
 .logo-glow {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  border-radius: 10px;
-  background: linear-gradient(135deg, rgba(64, 158, 255, 0.3), rgba(54, 209, 220, 0.3));
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  pointer-events: none;
-}
-
-.logo:hover .logo-glow {
-  opacity: 1;
+  top: -4px;
+  left: -4px;
+  right: -4px;
+  bottom: -4px;
+  border-radius: 50%;
+  background: linear-gradient(45deg, #409eff, #67c23a);
+  opacity: 0.3;
+  animation: pulse 2s infinite;
+  z-index: -1;
 }
 
 .logo-text {
   font-size: 20px;
-  font-weight: 700;
-  background: linear-gradient(135deg, #409eff, #36d1dc);
+  font-weight: 600;
+  color: #2c3e50;
+  background: linear-gradient(45deg, #409eff, #67c23a);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  text-shadow: 0 0 20px rgba(64, 158, 255, 0.3);
+}
+
+.search-container {
+  flex: 1;
+  max-width: 500px;
+  margin-right: 24px;
+  position: relative;
+}
+
+.header-search {
+  border-radius: 20px;
+  border: 1px solid #dcdfe6;
+  transition: all 0.3s ease;
+}
+
+.header-search:focus-within {
+  border-color: #409eff;
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
 }
 
 .nav {
   display: flex;
   align-items: center;
-  gap: 4px;
-  flex: 1;
+  height: 100%;
   position: relative;
-  padding: 2px 8px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(12px);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .nav-background {
   position: absolute;
-  top: 0;
+  bottom: 0;
   left: 0;
   right: 0;
-  bottom: 0;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(248, 249, 250, 0.1));
-  border-radius: 12px;
-  z-index: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #409eff, #67c23a);
+  opacity: 0.1;
 }
 
 .nav-item {
-  position: relative;
-  padding: 10px 18px;
-  color: #606266;
-  text-decoration: none;
-  font-size: 15px;
-  font-weight: 500;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border-radius: 8px;
-  z-index: 1;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
-.nav-text {
+  height: 100%;
+  padding: 0 16px;
+  text-decoration: none;
+  color: #606266;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.3s ease;
   position: relative;
-  z-index: 2;
-  transition: color 0.3s ease;
+  white-space: nowrap;
 }
 
 .nav-item:hover {
   color: #409eff;
-  transform: translateY(-1px);
+  background: rgba(64, 158, 255, 0.05);
 }
 
 .nav-item.active {
-  color: #ffffff;
+  color: #409eff;
   font-weight: 600;
-  background: linear-gradient(135deg, #409eff, #36d1dc);
-  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.3);
+}
+
+.nav-text {
+  position: relative;
+  z-index: 1;
 }
 
 .nav-spacer {
-  width: 8px;
-  height: 100%;
+  flex: 1;
 }
 
-.user-profile-wrapper {
+.notification-wrapper {
   position: relative;
-  z-index: 1002;
-}
-
-/* 全局滑动指示线 */
-.nav-slider {
-  position: absolute;
-  bottom: 0;
-  height: 2px;
-  background: linear-gradient(90deg, #409eff, #36d1dc);
-  border-radius: 1px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  z-index: 2;
+  margin: 0 16px;
 }
 
 .notification-icon {
@@ -618,105 +617,87 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  margin-right: 8px;
-  color: #606266;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
   cursor: pointer;
-  border-radius: 10px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  background-color: rgba(248, 249, 250, 0.8);
-  backdrop-filter: blur(8px);
-  z-index: 1;
-  flex-shrink: 0;
+  color: #606266;
+  transition: all 0.3s ease;
 }
 
-.search-container {
-  margin-left: 24px;
+.notification-icon:hover {
+  background: #f5f7fa;
+  color: #409eff;
+}
+
+.notification-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  background: #f56c6c;
+  border-radius: 50%;
+  animation: pulse 1.5s infinite;
+}
+
+.notification-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+}
+
+.user-profile-wrapper {
   display: flex;
   align-items: center;
 }
 
-.header-search {
-  width: 200px;
+.nav-slider {
+  position: absolute;
+  bottom: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #409eff, #67c23a);
+  border-radius: 3px 3px 0 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.header-search :deep(.el-input__wrapper) {
-  background-color: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(8px);
-  border-radius: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  border: 1px solid rgba(64, 158, 255, 0.2);
-}
-
-.header-search :deep(.el-input__wrapper):hover {
-  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.2);
-  border-color: rgba(64, 158, 255, 0.4);
-}
-
-.header-search :deep(.el-input__inner) {
-  color: #606266;
-  font-size: 14px;
-}
-
-.header-search :deep(.el-input__inner)::placeholder {
-  color: #a8abb2;
-}
-
-/* 搜索结果面板样式 */
+/* 搜索结果面板 */
 .search-results-panel {
   position: absolute;
   top: 100%;
   left: 0;
   right: 0;
-  margin-top: 8px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(12px);
+  background: white;
   border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  z-index: 2000;
   max-height: 500px;
   overflow-y: auto;
-  z-index: 1000;
-  animation: searchSlideDown 0.2s ease-out;
-}
-
-@keyframes searchSlideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  margin-top: 8px;
 }
 
 .search-section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  padding: 16px;
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .section-title {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
-  color: #303133;
-}
-
-/* 搜索结果样式 */
-.search-results-section {
-  padding: 0;
+  color: #2c3e50;
 }
 
 .search-category-group {
-  margin-bottom: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid #f5f7fa;
 }
 
 .search-category-group:last-child {
-  margin-bottom: 0;
+  border-bottom: none;
 }
 
 .category-header {
@@ -724,41 +705,32 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: #606266;
-  background-color: rgba(248, 249, 250, 0.6);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
-}
-
-.category-header .el-icon {
-  color: #409eff;
+  background: #f5f7fa;
 }
 
 .category-count {
   font-size: 12px;
   color: #909399;
-  margin-left: 4px;
 }
 
 .search-result-list {
-  padding: 4px 0;
+  padding: 8px 0;
 }
 
 .search-result-item {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
   padding: 12px 16px;
   cursor: pointer;
   transition: all 0.2s ease;
-  border-radius: 6px;
-  margin: 0 8px;
 }
 
 .search-result-item:hover {
-  background-color: rgba(64, 158, 255, 0.08);
-  transform: translateX(2px);
+  background: #f5f7fa;
 }
 
 .result-icon {
@@ -767,9 +739,9 @@ onUnmounted(() => {
   justify-content: center;
   width: 32px;
   height: 32px;
-  background-color: rgba(64, 158, 255, 0.1);
   border-radius: 8px;
-  color: #409eff;
+  background: #f5f7fa;
+  color: #909399;
   flex-shrink: 0;
 }
 
@@ -781,192 +753,102 @@ onUnmounted(() => {
 .result-title {
   font-size: 14px;
   font-weight: 600;
-  color: #303133;
+  color: #2c3e50;
   margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .result-description {
   font-size: 12px;
   color: #606266;
-  margin-bottom: 8px;
-  line-height: 1.4;
+  margin-bottom: 6px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .result-keywords {
   display: flex;
+  gap: 4px;
   flex-wrap: wrap;
-  gap: 6px;
 }
 
-.result-keywords .el-tag {
-  font-size: 11px;
-  padding: 0 6px;
-  height: 20px;
-  line-height: 20px;
+.suggestion-tag {
+  cursor: pointer;
 }
 
-.result-priority {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  font-size: 12px;
-  flex-shrink: 0;
+.suggestion-tag:hover {
+  opacity: 0.8;
 }
 
-.result-priority.priority-1 {
-  background-color: rgba(245, 108, 108, 0.1);
-  color: #f56c6c;
+.search-suggestions {
+  padding: 16px;
 }
 
-.result-priority.priority-2 {
-  background-color: rgba(103, 194, 58, 0.1);
-  color: #67c23a;
-}
-
-.result-priority.priority-3 {
-  background-color: rgba(230, 162, 60, 0.1);
-  color: #e6a23c;
-}
-
-/* 无结果提示 */
 .no-results {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 40px 20px;
-  text-align: center;
+  color: #909399;
 }
 
 .no-results .el-icon {
   font-size: 48px;
-  color: #c0c4cc;
   margin-bottom: 16px;
 }
 
-.no-results p {
-  margin: 0;
-  color: #606266;
-  font-size: 14px;
-}
-
-.no-results .suggestion {
-  color: #909399;
+.suggestion {
   font-size: 12px;
   margin-top: 8px;
 }
 
-/* 搜索建议 */
-.search-suggestions {
-  padding: 12px 16px;
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
-}
-
-.suggestion-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.suggestion-tag {
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.suggestion-tag:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.notification-icon:hover {
-  background: linear-gradient(135deg, #409eff, #36d1dc);
-  color: #ffffff;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
-}
-
-.notification-dot {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 8px;
-  height: 8px;
-  background-color: #f56c6c;
-  border-radius: 50%;
-  border: 2px solid #ffffff;
-  animation: pulse 2s infinite;
-}
-
+/* 动画 */
 @keyframes pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(245, 108, 108, 0.7);
+    transform: scale(1);
+    opacity: 1;
   }
-  70% {
-    box-shadow: 0 0 0 10px rgba(245, 108, 108, 0);
+  50% {
+    transform: scale(1.1);
+    opacity: 0.7;
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(245, 108, 108, 0);
+    transform: scale(1);
+    opacity: 1;
   }
 }
 
-@media (max-width: 1200px) {
-  .header-container {
-    max-width: 100%;
-    padding: 0 20px;
-  }
-  
-  .logo {
-    margin-right: 20px;
-  }
-  
-  .nav-item {
-    padding: 10px 14px;
-    font-size: 14px;
-  }
-  
-  .logo-text {
-    font-size: 18px;
-  }
-  
-  .search-container {
-    margin-left: 16px;
-  }
-  
-  .header-search {
-    width: 160px;
-  }
-}
-
-@media (max-width: 900px) {
+/* 响应式设计 */
+@media (max-width: 1024px) {
   .header-container {
     padding: 0 16px;
   }
   
-  .logo {
-    margin-right: 16px;
+  .logo-text {
+    display: none;
   }
   
-  .nav {
-    padding: 2px;
-  }
-  
-  .nav-item {
-    padding: 8px 12px;
-    font-size: 13px;
-  }
-  
-  .notification-icon {
-    width: 36px;
-    height: 36px;
-    margin-right: 8px;
+  .search-container {
+    max-width: 300px;
   }
 }
 
 @media (max-width: 768px) {
+  .nav-item:not(.active) {
+    display: none;
+  }
+  
+  .search-container {
+    max-width: 200px;
+  }
+}
+
+@media (max-width: 480px) {
   .header-container {
     padding: 0 12px;
   }
@@ -975,66 +857,12 @@ onUnmounted(() => {
     margin-right: 12px;
   }
   
-  .logo-text {
+  .search-container {
     display: none;
   }
   
-  .nav {
-    gap: 0;
-    padding: 2px;
-  }
-  
   .nav-item {
-    padding: 8px 8px;
-    font-size: 12px;
-  }
-  
-  .nav-spacer {
-    width: 4px;
-  }
-  
-  .notification-icon {
-    width: 32px;
-    height: 32px;
-    margin-right: 4px;
-  }
-  
-  .notification-dot {
-    width: 6px;
-    height: 6px;
-    top: 6px;
-    right: 6px;
-  }
-  
-  .search-container {
-    margin-left: 8px;
-    margin-right: 8px;
-  }
-  
-  .header-search {
-    width: 120px;
-  }
-  
-  .search-results-panel {
-    max-height: 400px;
-  }
-  
-  .search-result-item {
-    padding: 10px 12px;
-    gap: 8px;
-  }
-  
-  .result-icon {
-    width: 28px;
-    height: 28px;
-  }
-  
-  .result-title {
-    font-size: 13px;
-  }
-  
-  .result-description {
-    font-size: 11px;
+    padding: 0 12px;
   }
 }
 </style>

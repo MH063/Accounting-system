@@ -612,6 +612,27 @@ class DormService {
   }
 
   /**
+   * 获取当前用户的寝室信息
+   * @param userId 用户ID
+   */
+  async getCurrentUserDorm(userId: string): Promise<ApiResponse<DormInfo | null>> {
+    await this.delay()
+    
+    // 在实际应用中，这里应该通过userId查询数据库获取用户所在的寝室
+    // 目前我们通过遍历所有寝室来查找包含该用户的寝室
+    const userDorm = dormList.find(dorm => 
+      dorm.members.some(member => member.id === userId)
+    )
+    
+    console.log('获取用户寝室信息:', userId, userDorm ? userDorm.dormNumber : '未找到')
+    
+    return {
+      success: true,
+      data: userDorm || null
+    }
+  }
+
+  /**
    * 保存寝室设置
    */
   async saveDormSettings(dormId: string, settings: DormSettings): Promise<ApiResponse<boolean>> {

@@ -19,6 +19,27 @@
           返回
         </el-button>
         
+        <!-- 导入导出按钮 -->
+        <el-dropdown @command="handleExportImport">
+          <el-button type="success">
+            导入/导出
+            <el-icon class="el-icon--right">
+              <arrow-down />
+            </el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="export">导出预算数据</el-dropdown-item>
+              <el-dropdown-item command="import">导入预算数据</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        
+        <!-- 测试提醒按钮（仅用于演示） -->
+        <el-button type="warning" @click="testBudgetAlerts" v-if="false">
+          测试提醒
+        </el-button>
+        
         <el-button type="primary" :icon="Plus" @click="handleCreateBudget">
           新建预算
         </el-button>
@@ -304,6 +325,124 @@
       </el-card>
     </div>
 
+    <!-- 预算分类统计 -->
+    <div class="budget-category-section">
+      <el-card class="category-card">
+        <template #header>
+          <div class="card-header">
+            <span class="card-title category">
+              <el-icon><PieChart /></el-icon>
+              预算分类统计
+            </span>
+          </div>
+        </template>
+        
+        <div class="category-content">
+          <div ref="categoryChartRef" class="category-chart"></div>
+        </div>
+      </el-card>
+    </div>
+
+    <!-- 预算使用趋势 -->
+    <div class="budget-trend-section">
+      <el-card class="trend-card">
+        <template #header>
+          <div class="card-header">
+            <span class="card-title trend">
+              <el-icon><DataAnalysis /></el-icon>
+              预算使用趋势
+            </span>
+            <div class="trend-controls">
+              <el-select 
+                v-model="trendPeriod" 
+                placeholder="选择趋势周期" 
+                @change="updateTrendChart"
+                size="small"
+                class="period-selector"
+              >
+                <el-option label="近1个月" value="1m" />
+                <el-option label="近3个月" value="3m" />
+                <el-option label="近6个月" value="6m" />
+                <el-option label="近1年" value="1y" />
+              </el-select>
+            </div>
+          </div>
+        </template>
+        
+        <div class="trend-content">
+          <div ref="trendChartRef" class="trend-chart"></div>
+        </div>
+      </el-card>
+    </div>
+
+    <!-- 预算提醒设置 -->
+    <div class="budget-reminder-section">
+      <el-card class="reminder-card">
+        <template #header>
+          <div class="card-header">
+            <span class="card-title reminder">
+              <el-icon><Bell /></el-icon>
+              预算提醒设置
+            </span>
+          </div>
+        </template>
+        
+        <div class="reminder-content">
+          <el-form :model="reminderSettings" label-width="120px">
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="超支提醒">
+                  <el-switch
+                    v-model="reminderSettings.overBudgetEnabled"
+                    active-text="启用"
+                    inactive-text="禁用"
+                  />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="高使用率提醒">
+                  <el-switch
+                    v-model="reminderSettings.highUsageEnabled"
+                    active-text="启用"
+                    inactive-text="禁用"
+                  />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="提醒阈值">
+                  <el-slider
+                    v-model="reminderSettings.threshold"
+                    :min="50"
+                    :max="100"
+                    :step="5"
+                    show-input
+                    show-stops
+                  />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="提醒方式">
+                  <el-checkbox-group v-model="reminderSettings.methods">
+                    <el-checkbox label="notification">站内通知</el-checkbox>
+                    <el-checkbox label="email">邮件提醒</el-checkbox>
+                  </el-checkbox-group>
+                </el-form-item>
+              </el-col>
+            </el-row>
+            
+            <el-form-item>
+              <el-button type="primary" @click="saveReminderSettings">
+                保存设置
+              </el-button>
+            </el-form-item>
+          </el-form>
+        </div>
+      </el-card>
+    </div>
+
     <!-- 预算设置对话框 -->
     <el-dialog
       v-model="budgetDialogVisible"
@@ -391,7 +530,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed, nextTick } from 'vue'
+import { ref, reactive, onMounted, computed, nextTick, onUnmounted } from 'vue'
 import { 
   Plus, 
   Search, 
@@ -404,7 +543,11 @@ import {
   Warning,
   Lightning,
   DataLine,
-  ArrowLeft
+  ArrowLeft,
+  PieChart,
+  Download,
+  Upload,
+  Bell
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as echarts from 'echarts'
@@ -443,9 +586,18 @@ const total = ref(0)
 const budgetDialogVisible = ref(false)
 const editingBudget = ref<BudgetItem | null>(null)
 
+// 定时检查预算使用情况的定时器
+let budgetCheckInterval: NodeJS.Timeout | null = null;
+
 // 图表引用
 const historyChartRef = ref<HTMLElement | null>(null)
 let historyChart: echarts.ECharts | null = null
+
+const categoryChartRef = ref<HTMLElement | null>(null)
+let categoryChart: echarts.ECharts | null = null
+
+const trendChartRef = ref<HTMLElement | null>(null)
+let trendChart: echarts.ECharts | null = null
 
 // 表单引用
 const budgetFormRef = ref()
@@ -460,6 +612,39 @@ const budgetForm = reactive({
   endDate: '',
   remark: ''
 })
+
+// 趋势分析周期
+const trendPeriod = ref('3m')
+
+// 预算提醒设置
+const reminderSettings = reactive({
+  overBudgetEnabled: true,
+  highUsageEnabled: true,
+  threshold: 80,
+  methods: ['notification', 'email']
+})
+
+// 在组件挂载时从localStorage恢复提醒设置
+const loadReminderSettings = () => {
+  const savedSettings = localStorage.getItem('budgetReminderSettings');
+  if (savedSettings) {
+    try {
+      const parsedSettings = JSON.parse(savedSettings);
+      Object.assign(reminderSettings, parsedSettings);
+    } catch (error) {
+      console.error('解析提醒设置失败:', error);
+    }
+  }
+}
+
+// 保存提醒设置到localStorage
+const saveReminderSettingsToLocal = () => {
+  try {
+    localStorage.setItem('budgetReminderSettings', JSON.stringify(reminderSettings));
+  } catch (error) {
+    console.error('保存提醒设置失败:', error);
+  }
+}
 
 // 表单验证规则
 const budgetRules = {
@@ -617,6 +802,105 @@ const getCategoryText = (category: string): string => {
   return textMap[category] || '未知'
 }
 
+// 检查预算提醒
+const checkBudgetAlerts = (budget: BudgetItem) => {
+  // 检查是否启用超支提醒且预算已超支
+  if (reminderSettings.overBudgetEnabled && budget.utilization > 100) {
+    const overspendAmount = budget.used - budget.amount;
+    showBudgetAlert(`${budget.name}预算超支`, 
+      `您的${budget.name}预算已超支¥${overspendAmount.toFixed(2)}，请尽快调整支出计划。`, 
+      'danger');
+  }
+  // 检查是否启用高使用率提醒且达到阈值
+  else if (reminderSettings.highUsageEnabled && budget.utilization >= reminderSettings.threshold) {
+    showBudgetAlert(`${budget.name}预算使用率提醒`, 
+      `您的${budget.name}预算使用率已达${budget.utilization}%，请控制支出以免超支。`, 
+      'warning');
+  }
+}
+
+// 显示预算提醒
+const showBudgetAlert = (title: string, message: string, type: 'warning' | 'danger' | 'info') => {
+  // 检查提醒方式
+  if (reminderSettings.methods.includes('notification')) {
+    // 站内通知
+    ElMessage({
+      message: `${title}：${message}`,
+      type: type,
+      duration: 5000,
+      showClose: true
+    });
+  }
+  
+  if (reminderSettings.methods.includes('email')) {
+    // 邮件提醒（这里只是模拟，实际项目中需要调用邮件服务）
+    console.log(`[邮件提醒] ${title}: ${message}`);
+  }
+  
+  // 推送提醒到仪表盘（通过localStorage模拟）
+  pushNotificationToDashboard(title, message, type);
+}
+
+// 推送通知到仪表盘
+const pushNotificationToDashboard = (title: string, message: string, priority: 'warning' | 'danger' | 'info') => {
+  try {
+    // 获取现有的仪表盘通知
+    const dashboardNotificationsStr = localStorage.getItem('dashboardNotifications') || '[]';
+    const dashboardNotifications = JSON.parse(dashboardNotificationsStr);
+    
+    // 添加新的通知
+    const newNotification = {
+      id: Date.now(),
+      title,
+      message,
+      priority,
+      type: 'action',
+      actionType: 'budget-management',
+      actionPath: '/dashboard/budget',
+      time: new Date().toISOString()
+    };
+    
+    dashboardNotifications.push(newNotification);
+    
+    // 保存到localStorage
+    localStorage.setItem('dashboardNotifications', JSON.stringify(dashboardNotifications));
+    
+    // 触发自定义事件，通知仪表盘有新提醒
+    window.dispatchEvent(new CustomEvent('dashboard-notification-update'));
+  } catch (error) {
+    console.error('推送通知到仪表盘失败:', error);
+  }
+}
+
+// 启动定时检查预算使用情况
+const startBudgetChecking = () => {
+  // 清除现有的定时器
+  if (budgetCheckInterval) {
+    clearInterval(budgetCheckInterval);
+  }
+  
+  // 每5分钟检查一次预算使用情况
+  budgetCheckInterval = setInterval(() => {
+    checkAllBudgets();
+  }, 5 * 60 * 1000); // 5分钟
+}
+
+// 停止定时检查
+const stopBudgetChecking = () => {
+  if (budgetCheckInterval) {
+    clearInterval(budgetCheckInterval);
+    budgetCheckInterval = null;
+  }
+}
+
+// 检查所有预算
+const checkAllBudgets = () => {
+  budgetList.value.forEach(budget => {
+    // 检查是否需要触发提醒
+    checkBudgetAlerts(budget);
+  });
+}
+
 const handleCreateBudget = () => {
   editingBudget.value = null
   resetBudgetForm()
@@ -649,9 +933,44 @@ const handleDelete = (row: BudgetItem) => {
   ).then(() => {
     budgetList.value = budgetList.value.filter(budget => budget.id !== row.id)
     ElMessage.success('删除成功')
+    
+    // 后续处理
+    postDeleteBudget();
   }).catch(() => {
     // 用户取消删除
   })
+}
+
+// 在预算数据变化时检查提醒
+const checkBudgetAlertsOnUpdate = () => {
+  // 延迟一段时间后检查，确保数据已更新
+  setTimeout(() => {
+    checkAllBudgets();
+  }, 100);
+}
+
+// 保存预算后的处理
+const postSaveBudget = () => {
+  // 更新图表
+  nextTick(() => {
+    updateHistoryChart()
+    updateCategoryChart()
+  })
+  
+  // 检查提醒
+  checkBudgetAlertsOnUpdate();
+}
+
+// 删除预算后的处理
+const postDeleteBudget = () => {
+  // 更新图表
+  nextTick(() => {
+    updateHistoryChart()
+    updateCategoryChart()
+  })
+  
+  // 检查提醒
+  checkBudgetAlertsOnUpdate();
 }
 
 const resetBudgetForm = () => {
@@ -681,11 +1000,13 @@ const saveBudget = async () => {
     // 模拟保存过程
     await new Promise(resolve => setTimeout(resolve, 1000))
     
+    let savedBudget: BudgetItem;
+    
     if (editingBudget.value) {
       // 编辑预算
       const index = budgetList.value.findIndex(budget => budget.id === editingBudget.value!.id)
       if (index !== -1) {
-        budgetList.value[index] = {
+        savedBudget = {
           ...budgetList.value[index],
           name: budgetForm.name,
           category: budgetForm.category,
@@ -697,11 +1018,12 @@ const saveBudget = async () => {
           remaining: budgetForm.amount - budgetList.value[index].used,
           utilization: Math.round((budgetList.value[index].used / budgetForm.amount) * 100)
         }
+        budgetList.value[index] = savedBudget
       }
       ElMessage.success('预算更新成功')
     } else {
       // 新建预算
-      const newBudget: BudgetItem = {
+      savedBudget = {
         id: Date.now(),
         name: budgetForm.name,
         category: budgetForm.category,
@@ -714,11 +1036,17 @@ const saveBudget = async () => {
         endDate: budgetForm.endDate,
         remark: budgetForm.remark
       }
-      budgetList.value.push(newBudget)
+      budgetList.value.push(savedBudget)
       ElMessage.success('预算创建成功')
     }
     
+    // 检查是否需要触发提醒
+    checkBudgetAlerts(savedBudget)
+    
     budgetDialogVisible.value = false
+    
+    // 后续处理
+    postSaveBudget();
   } catch (error) {
     console.error('保存预算失败:', error)
   } finally {
@@ -972,24 +1300,432 @@ const updateHistoryChart = () => {
   historyChart.setOption(option, { notMerge: true })
 }
 
+const initCategoryChart = () => {
+  if (!categoryChartRef.value) return
+  
+  // 如果图表已经存在，先销毁再重新创建
+  if (categoryChart) {
+    categoryChart.dispose()
+  }
+  
+  categoryChart = echarts.init(categoryChartRef.value)
+  updateCategoryChart()
+}
+
+const initTrendChart = () => {
+  if (!trendChartRef.value) return
+  
+  // 如果图表已经存在，先销毁再重新创建
+  if (trendChart) {
+    trendChart.dispose()
+  }
+  
+  trendChart = echarts.init(trendChartRef.value)
+  updateTrendChart()
+}
+
+const updateTrendChart = () => {
+  if (!trendChart) return
+  
+  // 生成模拟的趋势数据
+  const now = new Date()
+  let dates: string[] = []
+  let budgetData: number[] = []
+  let expenseData: number[] = []
+  
+  // 根据选择的时间范围生成数据
+  const period = trendPeriod.value
+  let days = 30
+  
+  switch (period) {
+    case '1m':
+      days = 30
+      break
+    case '3m':
+      days = 90
+      break
+    case '6m':
+      days = 180
+      break
+    case '1y':
+      days = 365
+      break
+  }
+  
+  // 生成日期和数据
+  for (let i = days; i >= 0; i--) {
+    const date = new Date(now)
+    date.setDate(date.getDate() - i)
+    dates.push(`${date.getMonth() + 1}-${date.getDate()}`)
+    
+    // 生成模拟数据（可以根据实际需求调整）
+    const baseBudget = 100 + Math.sin(i / 10) * 20
+    const baseExpense = 80 + Math.cos(i / 8) * 25
+    
+    // 添加一些随机波动
+    const budget = Math.max(50, baseBudget + (Math.random() * 20 - 10))
+    const expense = Math.max(30, baseExpense + (Math.random() * 30 - 15))
+    
+    budgetData.push(parseFloat(budget.toFixed(2)))
+    expenseData.push(parseFloat(expense.toFixed(2)))
+  }
+  
+  const option = {
+    tooltip: {
+      trigger: 'axis',
+      formatter: (params: any) => {
+        const date = params[0].name
+        const budget = params[0].value
+        const expense = params[1].value
+        
+        return `${date}<br/>
+                预算金额: ¥${budget}<br/>
+                实际支出: ¥${expense}<br/>
+                差额: ¥${(budget - expense).toFixed(2)}`
+      }
+    },
+    legend: {
+      data: ['预算金额', '实际支出']
+    },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      boundaryGap: false
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: {
+        formatter: '¥{value}'
+      }
+    },
+    series: [
+      {
+        name: '预算金额',
+        type: 'line',
+        data: budgetData,
+        smooth: true,
+        itemStyle: { color: '#409EFF' },
+        areaStyle: { opacity: 0.3 }
+      },
+      {
+        name: '实际支出',
+        type: 'line',
+        data: expenseData,
+        smooth: true,
+        itemStyle: { color: '#67C23A' },
+        areaStyle: { opacity: 0.3 }
+      }
+    ]
+  }
+  
+  trendChart.setOption(option, { notMerge: true })
+}
+
+const updateCategoryChart = () => {
+  if (!categoryChart) return
+  
+  // 按分类统计预算数据
+  const categoryStats: Record<string, { budget: number; expense: number }> = {}
+  
+  budgetList.value.forEach(budget => {
+    const category = budget.category
+    if (!categoryStats[category]) {
+      categoryStats[category] = { budget: 0, expense: 0 }
+    }
+    categoryStats[category].budget += budget.amount
+    categoryStats[category].expense += budget.used
+  })
+  
+  // 转换为图表数据
+  const categories = Object.keys(categoryStats)
+  const budgetData = categories.map(cat => categoryStats[cat].budget)
+  const expenseData = categories.map(cat => categoryStats[cat].expense)
+  const categoryNames = categories.map(cat => getCategoryText(cat))
+  
+  // 计算总预算和总支出用于百分比计算
+  const totalBudget = budgetData.reduce((sum, val) => sum + val, 0)
+  const totalExpense = expenseData.reduce((sum, val) => sum + val, 0)
+  
+  // 颜色配置
+  const colors = ['#409EFF', '#67C23A', '#E6A23C', '#F56C6C', '#909399', '#34C759', '#FF9F43', '#48C774']
+  
+  const option = {
+    tooltip: {
+      trigger: 'item',
+      formatter: (params: any) => {
+        const { name, value } = params
+        // 计算百分比
+        const percent = totalBudget > 0 ? ((value / totalBudget) * 100).toFixed(1) : '0.0'
+        return `${name}<br/>金额: ¥${value.toLocaleString()}<br/>占比: ${percent}%`
+      }
+    },    legend: {
+      bottom: '5%',
+      left: 'center',
+      data: categoryNames
+    },
+    series: [
+      {
+        name: '预算金额',
+        type: 'pie',
+        radius: ['40%', '70%'],
+        center: ['25%', '50%'],
+        avoidLabelOverlap: false,
+        itemStyle: {
+          borderRadius: 10,
+          borderColor: '#fff',
+          borderWidth: 2
+        },
+        label: {
+          show: false,
+          position: 'center'
+        },
+        emphasis: {
+          label: {
+            show: true,
+            fontSize: '14',
+            fontWeight: 'bold',
+            formatter: (params: any) => {
+              return `{title|预算金额}\n{value|¥${params.value.toLocaleString()}}`
+            },
+            rich: {
+              title: {
+                color: '#666',
+                fontSize: 14,
+                lineHeight: 20
+              },
+              value: {
+                color: '#333',
+                fontSize: 16,
+                fontWeight: 'bold',
+                lineHeight: 30
+              }
+            }
+          }
+        },
+        labelLine: {
+          show: false
+        },
+        data: categories.map((cat, index) => ({
+          name: getCategoryText(cat),
+          value: categoryStats[cat].budget,
+          itemStyle: { color: colors[index % colors.length] }
+        }))
+      },
+      {
+        name: '实际支出',
+        type: 'pie',
+        radius: ['20%', '35%'],
+        center: ['25%', '50%'],
+        avoidLabelOverlap: false,
+        itemStyle: {
+          borderRadius: 5,
+          borderColor: '#fff',
+          borderWidth: 2
+        },
+        label: {
+          show: false,
+          position: 'center'
+        },
+        emphasis: {
+          label: {
+            show: true,
+            fontSize: '14',
+            fontWeight: 'bold',
+            formatter: (params: any) => {
+              return `{title|实际支出}\n{value|¥${params.value.toLocaleString()}}`
+            },
+            rich: {
+              title: {
+                color: '#666',
+                fontSize: 14,
+                lineHeight: 20
+              },
+              value: {
+                color: '#333',
+                fontSize: 16,
+                fontWeight: 'bold',
+                lineHeight: 30
+              }
+            }
+          }
+        },
+        labelLine: {
+          show: false
+        },
+        data: categories.map((cat, index) => ({
+          name: getCategoryText(cat),
+          value: categoryStats[cat].expense,
+          itemStyle: { color: colors[index % colors.length] }
+        }))
+      },
+      {
+        name: '预算使用情况',
+        type: 'bar',
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        barWidth: '40%',
+        itemStyle: {
+          borderRadius: [0, 5, 5, 0],
+          color: (params: any) => {
+            const index = params.dataIndex
+            const budget = categoryStats[categories[index]].budget
+            const expense = categoryStats[categories[index]].expense
+            const utilization = budget > 0 ? (expense / budget) * 100 : 0
+            // 根据使用率设置颜色
+            if (utilization > 100) {
+              return '#F56C6C' // 超支红色
+            } else if (utilization > 80) {
+              return '#E6A23C' // 高使用率橙色
+            } else {
+              return '#67C23A' // 正常绿色
+            }
+          }
+        },
+        label: {
+          show: true,
+          position: 'right',
+          formatter: (params: any) => {
+            const index = params.dataIndex
+            const budget = categoryStats[categories[index]].budget
+            const expense = categoryStats[categories[index]].expense
+            const utilization = budget > 0 ? ((expense / budget) * 100).toFixed(1) : '0'
+            return `${utilization}%`
+          }
+        },
+        data: categories.map(cat => {
+          const budget = categoryStats[cat].budget
+          const expense = categoryStats[cat].expense
+          return {
+            value: expense,
+            budget: budget
+          }
+        })
+      }
+    ],
+    xAxis: {
+      type: 'value',
+      show: false
+    },
+    yAxis: {
+      type: 'category',
+      data: categoryNames,
+      axisTick: { show: false },
+      axisLabel: {
+        margin: 20,
+        fontSize: 12
+      }
+    },
+    grid: {
+      left: '45%',
+      right: '10%',
+      top: '10%',
+      bottom: '15%'
+    }
+  }
+  
+  categoryChart.setOption(option, { notMerge: true })
+}
+
+const handleExportImport = (command: string) => {
+  if (command === 'export') {
+    // 导出预算数据
+    const data = JSON.stringify(budgetList.value, null, 2)
+    const blob = new Blob([data], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'budget_data.json'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    ElMessage.success('预算数据已导出')
+  } else if (command === 'import') {
+    // 导入预算数据
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json'
+    input.onchange = (event: any) => {
+      const file = event.target.files[0]
+      if (file) {
+        const reader = new FileReader()
+        reader.onload = (e: any) => {
+          try {
+            const importedData = JSON.parse(e.target.result)
+            budgetList.value = importedData
+            ElMessage.success('预算数据已导入')
+            
+            // 更新图表
+            nextTick(() => {
+              updateHistoryChart()
+              updateCategoryChart()
+              updateTrendChart()
+            })
+          } catch (error) {
+            ElMessage.error('导入失败，请检查文件格式')
+          }
+        }
+        reader.readAsText(file)
+      }
+    }
+    input.click()
+  }
+}
+
+const saveReminderSettings = () => {
+  // 保存提醒设置
+  ElMessage.success('预算提醒设置已保存')
+  console.log('提醒设置:', reminderSettings)
+  saveReminderSettingsToLocal();
+}
+
 const handleBack = () => {
   router.push('/dashboard/analytics')
 }
 
+// 测试提醒（仅用于演示）
+const testBudgetAlerts = () => {
+  // 测试超支提醒
+  showBudgetAlert('餐饮预算超支', '您的餐饮预算已超支¥300.00，请尽快调整支出计划。', 'danger');
+  
+  // 测试高使用率提醒
+  showBudgetAlert('交通预算使用率提醒', '您的交通预算使用率已达95%，请控制支出以免超支。', 'warning');
+}
+
 // 生命周期
 onMounted(() => {
+  // 加载提醒设置
+  loadReminderSettings();
+  
   loadBudgetList()
   nextTick(() => {
     initHistoryChart()
+    initCategoryChart()
+    initTrendChart()
   })
+  
+  // 启动定时检查预算使用情况
+  startBudgetChecking();
   
   // 监听窗口大小变化
   window.addEventListener('resize', () => {
     if (historyChart) {
       historyChart.resize()
     }
+    if (categoryChart) {
+      categoryChart.resize()
+    }
+    if (trendChart) {
+      trendChart.resize()
+    }
   })
 })
+
+onUnmounted(() => {
+  // 停止定时检查预算使用情况
+  stopBudgetChecking();
+})
+
 </script>
 
 <style scoped>
@@ -1295,6 +2031,76 @@ onMounted(() => {
 .overspend-note {
   margin-top: 15px;
   padding: 0 15px;
+}
+
+/* 预算分类统计 */
+.budget-category-section {
+  margin-bottom: 24px;
+}
+
+.category-card {
+  border-radius: 12px;
+  box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.08);
+}
+
+.card-title.category {
+  color: #67c23a;
+}
+
+.category-content {
+  padding: 20px 0;
+}
+
+.category-chart {
+  width: 100%;
+  height: 300px;
+  padding-top: 10px;
+}
+
+/* 预算使用趋势 */
+.budget-trend-section {
+  margin-bottom: 24px;
+}
+
+.trend-card {
+  border-radius: 12px;
+  box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.08);
+}
+
+.card-title.trend {
+  color: #909399;
+}
+
+.trend-content {
+  padding: 20px 0;
+}
+
+.trend-chart {
+  width: 100%;
+  height: 300px;
+  padding-top: 10px;
+}
+
+.trend-controls {
+  margin-left: auto;
+}
+
+/* 预算提醒设置 */
+.budget-reminder-section {
+  margin-bottom: 24px;
+}
+
+.reminder-card {
+  border-radius: 12px;
+  box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.08);
+}
+
+.card-title.reminder {
+  color: #e6a23c;
+}
+
+.reminder-content {
+  padding: 20px 0;
 }
 
 /* 空状态 */

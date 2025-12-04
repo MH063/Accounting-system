@@ -27,6 +27,59 @@
       </div>
     </div>
 
+    <!-- 待审核成员区域 -->
+    <div class="content-section" v-if="pendingMembers.length > 0">
+      <el-card class="pending-members-card">
+        <template #header>
+          <div class="card-header">
+            <span>待审核成员</span>
+            <el-tag type="warning">{{ pendingMembers.length }} 人待审核</el-tag>
+          </div>
+        </template>
+        
+        <div class="pending-members-list">
+          <div 
+            v-for="member in pendingMembers" 
+            :key="member.id"
+            class="pending-member-item"
+          >
+            <div class="member-info">
+              <el-avatar 
+                :size="40" 
+                :src="member.avatar || 'https://picsum.photos/40/40?random=' + member.id"
+                class="member-avatar"
+              >
+                {{ member.name.charAt(0) }}
+              </el-avatar>
+              <div class="member-details">
+                <div class="member-name">{{ member.name }}</div>
+                <div class="member-student-id">{{ member.studentId }}</div>
+              </div>
+            </div>
+            
+            <div class="member-actions">
+              <el-button 
+                type="success" 
+                size="small" 
+                @click="approveMember(member)"
+              >
+                <el-icon><Check /></el-icon>
+                通过
+              </el-button>
+              <el-button 
+                type="danger" 
+                size="small" 
+                @click="rejectMember(member)"
+              >
+                <el-icon><Close /></el-icon>
+                拒绝
+              </el-button>
+            </div>
+          </div>
+        </div>
+      </el-card>
+    </div>
+
     <!-- 搜索和筛选区域 -->
     <div class="content-section">
       <el-card>
@@ -241,8 +294,12 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { 
   Search, ArrowLeft, Refresh, CircleCheck, Clock, CircleClose, 
-  House, View, ChatDotRound, Delete 
+  House, View, ChatDotRound, Delete, Check, Close
 } from '@element-plus/icons-vue'
+import { getCurrentUser } from '@/services/userService'
+import { dormService } from '@/services/dormService'
+import type { UserInfo } from '@/services/userService'
+import type { DormInfo } from '@/services/dormService'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 // 类型定义
@@ -259,6 +316,10 @@ interface Member {
   onlineStatus: 'online' | 'offline' | 'away'
   lastActive?: string
   lastMessage?: string
+  // 新增字段：是否为待审核成员
+  isPending?: boolean
+  // 新增字段：申请加入的房间
+  appliedRoom?: string
 }
 
 const router = useRouter()
@@ -272,9 +333,39 @@ const roomFilter = ref('')
 const currentPage = ref(1)
 const pageSize = ref(5)
 const currentUserRole = ref<'dorm_leader' | 'admin' | 'member'>('admin')
+const currentUserRoom = ref<string>('') // 当前用户的寝室
 const selectedMember = ref<Member | null>(null)
 const touchStartTime = ref(0)
 const contextmenuRef = ref()
+
+// 获取当前用户和寝室信息
+const loadCurrentUserAndDorm = async () => {
+  try {
+    // 获取当前用户信息
+    const userResponse = await getCurrentUser()
+    if (userResponse.success && userResponse.data) {
+      // 在实际应用中，这里应该根据用户的角色和权限设置 currentUserRole
+      // 目前我们使用默认值
+      
+      // 获取用户所在的寝室
+      // 注意：在实际应用中，我们需要用户ID来查询寝室信息
+      // 这里我们假设用户ID为'1'（来自userService.ts中的模拟数据）
+      const dormResponse = await dormService.getCurrentUserDorm('1')
+      if (dormResponse.success && dormResponse.data) {
+        const dormInfo = dormResponse.data as DormInfo
+        // 设置当前用户的寝室号（格式：楼栋-房间号）
+        currentUserRoom.value = `${dormInfo.building}-${dormInfo.dormNumber}`
+      } else {
+        // 如果找不到寝室信息，使用默认值
+        currentUserRoom.value = 'A-101'
+      }
+    }
+  } catch (error) {
+    console.error('加载用户和寝室信息失败:', error)
+    // 出错时使用默认值
+    currentUserRoom.value = 'A-101'
+  }
+}
 
 // 成员数据 - 增强版
 const members = ref<Member[]>([
@@ -349,12 +440,43 @@ const members = ref<Member[]>([
     phone: '13412345678',
     onlineStatus: 'away',
     lastActive: new Date(Date.now() - 7200000).toISOString()
+  },
+  // 待审核成员示例
+  {
+    id: 7,
+    studentId: '2021010107',
+    name: '周九',
+    room: '', // 待分配
+    appliedRoom: 'A-101', // 申请加入的房间
+    role: 'member',
+    status: 'inactive',
+    joinDate: '',
+    phone: '13312345678',
+    onlineStatus: 'offline',
+    isPending: true // 标记为待审核成员
+  },
+  {
+    id: 8,
+    studentId: '2021010108',
+    name: '吴十',
+    room: '', // 待分配
+    appliedRoom: 'A-102', // 申请加入的房间
+    role: 'member',
+    status: 'inactive',
+    joinDate: '',
+    phone: '13212345678',
+    onlineStatus: 'offline',
+    isPending: true // 标记为待审核成员
   }
 ])
 
 // 计算属性
 const filteredMembers = computed(() => {
+  // 过滤掉待审核成员，只显示正式成员
   return members.value.filter(member => {
+    // 排除待审核成员
+    if (member.isPending) return false
+    
     const matchesSearch = !searchQuery.value || 
       member.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
       member.studentId.toLowerCase().includes(searchQuery.value.toLowerCase())
@@ -365,6 +487,11 @@ const filteredMembers = computed(() => {
     
     return matchesSearch && matchesStatus && matchesRole && matchesRoom
   })
+})
+
+// 待审核成员计算属性 - 只显示与当前寝室有关的申请
+const pendingMembers = computed(() => {
+  return members.value.filter(member => member.isPending && member.appliedRoom === currentUserRoom.value)
 })
 
 const paginatedMembers = computed(() => {
@@ -383,6 +510,7 @@ const canEditMember = computed(() => {
 
 const canDeleteMember = computed(() => {
   return (member: Member) => {
+    if (member.isPending) return false // 待审核成员不能删除
     if (currentUserRole.value === 'admin') return true
     if (currentUserRole.value === 'dorm_leader' && member.role !== 'admin') return true
     return false
@@ -582,6 +710,64 @@ const handleContextDelete = async () => {
   }
 }
 
+// 待审核成员操作方法
+const approveMember = async (member: Member) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要通过 ${member.name} 的加入申请吗？`,
+      '审核通过',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'success',
+      }
+    )
+    
+    // 执行审核通过操作
+    const index = members.value.findIndex(m => m.id === member.id)
+    if (index > -1) {
+      // 更新成员信息
+      members.value[index] = {
+        ...members.value[index],
+        isPending: false,
+        room: member.appliedRoom || 'A-101', // 分配到申请的房间
+        joinDate: new Date().toISOString().split('T')[0], // 设置加入日期
+        status: 'active',
+        onlineStatus: 'online'
+      }
+      
+      ElMessage.success(`${member.name} 已成功加入寝室`)
+      
+      // 可以在这里添加通知或其他后续操作
+    }
+  } catch {
+    // 用户取消
+  }
+}
+
+const rejectMember = async (member: Member) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要拒绝 ${member.name} 的加入申请吗？`,
+      '拒绝申请',
+      {
+        confirmButtonText: '确定拒绝',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
+    
+    // 执行拒绝操作
+    const index = members.value.findIndex(m => m.id === member.id)
+    if (index > -1) {
+      members.value.splice(index, 1)
+      ElMessage.success(`已拒绝 ${member.name} 的加入申请`)
+    }
+  } catch {
+    // 用户取消
+  }
+}
+
 // 状态工具方法
 const getStatusType = (status: string) => {
   switch (status) {
@@ -605,6 +791,9 @@ const getStatusText = (status: string) => {
 
 // 生命周期
 onMounted(() => {
+  // 加载当前用户和寝室信息
+  loadCurrentUserAndDorm()
+  
   loading.value = true
   // 模拟加载
   setTimeout(() => {
@@ -1080,6 +1269,65 @@ onMounted(() => {
   background: #f56c6c;
   color: white;
   transform: translateY(-1px);
+}
+
+/* 待审核成员区域 */
+.pending-members-card {
+  margin-bottom: 24px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pending-members-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pending-member-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  background: #fff;
+  transition: all 0.3s ease;
+}
+
+.pending-member-item:hover {
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+}
+
+.member-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.member-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.member-name {
+  font-weight: 500;
+  color: #303133;
+  margin-bottom: 4px;
+}
+
+.member-student-id {
+  font-size: 12px;
+  color: #909399;
+}
+
+.member-actions {
+  display: flex;
+  gap: 8px;
 }
 
 /* 分页区域 */

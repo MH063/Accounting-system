@@ -1,252 +1,229 @@
 <template>
-  <div class="notification-list">
-    <div class="container">
-      <!-- 页面头部 -->
-      <div class="page-header">
-        <div class="header-content">
-          <h1 class="page-title">
-            <el-icon class="title-icon"><Bell /></el-icon>
-            通知提醒
-          </h1>
-          <p class="page-description">查看和管理您的所有通知消息</p>
+  <div class="container">
+    <div class="page-header">
+      <div class="header-content">
+        <div class="title-with-back">
+          <el-button 
+            class="back-button" 
+            :icon="ArrowLeft" 
+            @click="goToDashboard"
+            circle
+          />
+          <div>
+            <h1 class="page-title">
+              <el-icon class="title-icon"><Bell /></el-icon>
+              通知中心
+            </h1>
+            <p class="page-description">查看和管理系统通知</p>
+          </div>
+        </div>
+      </div>
+      
+      <div class="header-actions">
+        <!-- 批量操作 -->
+        <div v-if="selectedNotifications.length > 0" class="batch-actions">
+          <span class="selected-count">已选择 {{ selectedNotifications.length }} 项</span>
+          <el-button 
+            size="small" 
+            type="primary" 
+            @click="handleBatchMarkAsRead"
+          >
+            标为已读
+          </el-button>
+          <el-button 
+            size="small" 
+            @click="handleBatchMarkAsUnread"
+          >
+            标为未读
+          </el-button>
+          <el-button 
+            size="small" 
+            type="danger" 
+            @click="handleBatchDelete"
+          >
+            删除
+          </el-button>
+          <el-button 
+            size="small" 
+            @click="clearSelection"
+          >
+            取消选择
+          </el-button>
         </div>
         
-        <div class="header-actions">
-          <!-- 批量操作 -->
-          <div v-if="selectedNotifications.length > 0" class="batch-actions">
-            <span class="selected-count">已选择 {{ selectedNotifications.length }} 项</span>
-            <el-button size="small" @click="batchMarkAsRead">
-              批量标为已读
-            </el-button>
-            <el-button size="small" @click="batchMarkAsUnread">
-              批量标为未读
-            </el-button>
-            <el-button size="small" type="warning" @click="batchMarkAsImportant">
-              批量标记重要
-            </el-button>
-            <el-button size="small" type="danger" @click="batchDelete">
-              批量删除
-            </el-button>
-            <el-button size="small" @click="clearSelection">
-              取消选择
-            </el-button>
+        <!-- 操作按钮 -->
+        <el-button 
+          :icon="Setting" 
+          @click="openSettings"
+        >
+          设置
+        </el-button>
+        
+        <el-button 
+          type="primary" 
+          :icon="Check" 
+          @click="handleMarkAllAsRead"
+        >
+          全部标为已读
+        </el-button>
+      </div>
+    </div>
+    
+    <!-- 分类标签 -->
+    <div class="category-tabs">
+      <div class="category-tabs-container">
+        <el-button
+          v-for="category in categories"
+          :key="category.key"
+          :type="selectedCategory === category.key ? 'primary' : 'default'"
+          :class="['category-tab', { active: selectedCategory === category.key }]"
+          @click="selectCategory(category.key)"
+        >
+          <el-icon><component :is="category.icon" /></el-icon>
+          {{ category.name }}
+          <el-badge 
+            :value="getCategoryCount(category.key)" 
+            :max="99" 
+            :type="category.key === 'all' ? 'primary' : 'info'"
+            class="category-badge"
+          />
+        </el-button>
+      </div>
+    </div>
+    
+    <!-- 统计信息 -->
+    <div class="stats-section">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon total">
+            <el-icon><Bell /></el-icon>
           </div>
-          
-          <!-- 筛选和操作按钮 -->
-          <el-button-group v-else>
+          <div class="stat-content">
+            <div class="stat-label">总通知数</div>
+            <div class="stat-number">{{ notifications.length }}</div>
+          </div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-icon unread">
+            <el-icon><Warning /></el-icon>
+          </div>
+          <div class="stat-content">
+            <div class="stat-label">未读通知</div>
+            <div class="stat-number">{{ unreadCount }}</div>
+          </div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-icon important">
+            <el-icon><Star /></el-icon>
+          </div>
+          <div class="stat-content">
+            <div class="stat-label">重要通知</div>
+            <div class="stat-number">{{ todoCount }}</div>
+          </div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-icon today">
+            <el-icon><Document /></el-icon>
+          </div>
+          <div class="stat-content">
+            <div class="stat-label">今日通知</div>
+            <div class="stat-number">{{ todayCount }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 筛选和排序 -->
+    <div class="filters-section">
+      <div class="filters-bar">
+        <div class="filter-group">
+          <el-button-group>
             <el-button 
-              :type="filterType === 'all' ? 'primary' : ''" 
+              :type="filterType === 'all' ? 'primary' : 'default'"
               @click="setFilter('all')"
-              size="small"
             >
               全部
             </el-button>
             <el-button 
-              :type="filterType === 'unread' ? 'primary' : ''" 
+              :type="filterType === 'unread' ? 'primary' : 'default'"
               @click="setFilter('unread')"
-              size="small"
             >
               未读
             </el-button>
             <el-button 
-              :type="filterType === 'important' ? 'primary' : ''" 
+              :type="filterType === 'important' ? 'primary' : 'default'"
               @click="setFilter('important')"
-              size="small"
             >
               重要
             </el-button>
           </el-button-group>
-          
-          <el-button 
-            type="primary" 
-            @click="markAllAsRead"
-            size="small"
-            :disabled="unreadCount === 0"
-          >
-            <el-icon><Check /></el-icon>
-            全部标为已读
-          </el-button>
-          
-          <el-button 
-            @click="openSettings"
+        </div>
+        
+        <div class="sort-group">
+          <el-select 
+            v-model="sortBy" 
+            placeholder="排序方式"
             size="small"
           >
-            <el-icon><Setting /></el-icon>
-            设置
-          </el-button>
+            <el-option label="按时间倒序" value="time-desc" />
+            <el-option label="按时间正序" value="time-asc" />
+            <el-option label="按重要性" value="importance" />
+          </el-select>
         </div>
       </div>
-
-      <!-- 通知分类标签 -->
-      <div class="category-tabs">
-        <div class="category-tabs-container">
-          <el-button 
-            v-for="category in categories"
-            :key="category.key"
-            :type="selectedCategory === category.key ? 'primary' : ''"
-            @click="selectCategory(category.key)"
-            class="category-tab"
-            size="small"
-          >
-            <el-icon><component :is="category.icon" /></el-icon>
-            {{ category.name }}
-            <el-badge 
-              v-if="getCategoryCount(category.key) > 0" 
-              :value="getCategoryCount(category.key)" 
-              class="category-badge"
-              type="primary"
-            />
-          </el-button>
-        </div>
+    </div>
+    
+    <!-- 通知列表 -->
+    <div class="notifications-section">
+      <div v-if="loading" class="loading-container">
+        <el-skeleton animated>
+          <template #template>
+            <div v-for="i in 5" :key="i" class="notification-skeleton">
+              <el-skeleton-item variant="circle" style="width: 40px; height: 40px;" />
+              <div style="flex: 1; margin-left: 16px;">
+                <el-skeleton-item variant="h3" style="width: 50%" />
+                <div style="margin-top: 16px;">
+                  <el-skeleton-item variant="text" style="width: 30%" />
+                </div>
+              </div>
+            </div>
+          </template>
+        </el-skeleton>
       </div>
-
-      <!-- 统计信息 -->
-      <div class="stats-section">
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-icon total">
-              <el-icon><Bell /></el-icon>
-            </div>
-            <div class="stat-content">
-              <div class="stat-number">{{ totalCount }}</div>
-              <div class="stat-label">总通知数</div>
-            </div>
-          </div>
-          
-          <div class="stat-card">
-            <div class="stat-icon unread">
-              <el-icon><Message /></el-icon>
-            </div>
-            <div class="stat-content">
-              <div class="stat-number">{{ unreadCount }}</div>
-              <div class="stat-label">未读通知</div>
-            </div>
-          </div>
-          
-          <div class="stat-card">
-            <div class="stat-icon important">
-              <el-icon><Star /></el-icon>
-            </div>
-            <div class="stat-content">
-              <div class="stat-number">{{ importantCount }}</div>
-              <div class="stat-label">重要通知</div>
-            </div>
-          </div>
-          
-          <div class="stat-card">
-            <div class="stat-icon today">
-              <el-icon><Calendar /></el-icon>
-            </div>
-            <div class="stat-content">
-              <div class="stat-number">{{ todayCount }}</div>
-              <div class="stat-label">今日新增</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 通知列表 -->
-      <div class="notification-section">
-        <div class="section-header">
-          <h3 class="section-title">
-            通知列表
-            <span class="notification-count">({{ filteredList.length }})</span>
-          </h3>
-          
-          <div class="section-actions">
-            <el-select 
-              v-model="sortBy" 
-              placeholder="排序方式" 
-              size="small"
-              style="width: 120px;"
-            >
-              <el-option label="时间倒序" value="time-desc" />
-              <el-option label="时间正序" value="time-asc" />
-              <el-option label="重要性" value="importance" />
-            </el-select>
-          </div>
-        </div>
-
-        <!-- 加载状态 -->
-        <div v-if="loading" class="loading-container">
-          <el-skeleton :rows="5" animated />
-        </div>
-
-        <!-- 空状态 -->
-        <div v-else-if="filteredList.length === 0" class="empty-container">
-          <el-empty description="暂无通知消息">
-            <template #image>
-              <el-icon :size="80" color="#909399">
-                <Bell />
-              </el-icon>
-            </template>
-            <p>您当前没有{{ filterType === 'all' ? '' : filterType === 'unread' ? '未读' : '重要' }}通知消息</p>
+      
+      <div v-else>
+        <div v-if="paginatedNotifications.length === 0" class="empty-state">
+          <el-empty description="暂无通知">
+            <el-button type="primary" @click="goToDashboard">返回仪表盘</el-button>
           </el-empty>
         </div>
-
-        <!-- 通知列表内容 -->
-        <div v-else class="notification-container">
-          <!-- 待办任务提醒 -->
-          <div v-if="hasTodoNotifications" class="todo-reminder">
-            <el-alert
-              title="待办事项提醒"
-              type="warning"
-              :description="`您有 ${todoCount} 项待办任务需要处理`"
-              show-icon
-              :closable="false"
-            >
-              <template #default>
-                <div class="todo-actions">
-                  <el-button size="small" type="primary" @click="viewTodos">
-                    查看待办
-                  </el-button>
-                  <el-button size="small" @click="dismissTodoReminder">
-                    稍后提醒
-                  </el-button>
-                </div>
-              </template>
-            </el-alert>
-          </div>
-
-          <!-- 通知项列表 -->
-          <div class="notification-items">
-            <div 
-              v-for="notification in paginatedNotifications" 
-              :key="notification.id"
-              class="notification-item"
-              :class="{ 
-                'unread': !notification.isRead,
-                'important': notification.isImportant,
-                'has-action': notification.actionText,
-                'selected': selectedNotifications.includes(notification.id)
-              }"
-              @click="handleNotificationClick(notification)"
-            >
-              <!-- 批量选择框 -->
-              <div class="notification-select">
-                <el-checkbox 
-                  :model-value="selectedNotifications.includes(notification.id)"
-                  @change="toggleNotificationSelection(notification.id)"
-                  @click.stop
-                />
-              </div>
-
-              <!-- 未读标识 -->
-              <div v-if="!notification.isRead" class="unread-indicator">
-                <el-icon class="unread-dot"><CircleCheck /></el-icon>
-              </div>
-
-              <!-- 通知图标 -->
-              <div class="notification-icon">
-                <el-icon 
-                  :size="20" 
-                  :color="getNotificationIconColor(notification)"
-                >
-                  <component :is="getNotificationIcon(notification.type)" />
-                </el-icon>
-              </div>
-
-              <!-- 通知内容 -->
+        
+        <div v-else>
+          <div 
+            v-for="notification in paginatedNotifications" 
+            :key="notification.id"
+            class="notification-item"
+            :class="{ 
+              unread: !notification.isRead,
+              important: notification.isImportant,
+              selected: selectedNotifications.includes(notification.id)
+            }"
+            @click="toggleNotificationSelection(notification.id)"
+          >
+            <!-- 选择框 -->
+            <div class="selection-column">
+              <el-checkbox 
+                :model-value="selectedNotifications.includes(notification.id)"
+                @click.stop
+                @change="() => toggleNotificationSelection(notification.id)"
+              />
+            </div>
+            
+            <!-- 通知内容 -->
+            <div class="content-column">
               <div class="notification-content">
                 <div class="notification-header">
                   <h4 class="notification-title">
@@ -266,13 +243,13 @@
                 <p class="notification-message">{{ notification.message }}</p>
                 
                 <!-- 操作按钮 -->
-                <div v-if="notification.actionText" class="notification-actions">
+                <div v-if="notification.actionText || notification.actionPath" class="notification-actions">
                   <el-button 
                     :type="notification.isImportant ? 'primary' : 'default'"
                     size="small"
                     @click.stop="handleNotificationAction(notification)"
                   >
-                    {{ notification.actionText }}
+                    {{ notification.actionText || '处理' }}
                   </el-button>
                 </div>
               </div>
@@ -284,7 +261,7 @@
                   text 
                   type="primary" 
                   size="small"
-                  @click.stop="markAsRead(notification.id)"
+                  @click.stop="handleSingleMarkAsRead(notification.id)"
                 >
                   标为已读
                 </el-button>
@@ -293,25 +270,26 @@
                   text 
                   type="danger" 
                   size="small"
-                  @click.stop="deleteNotification(notification.id)"
+                  @click.stop="handleSingleDelete(notification.id)"
                 >
                   删除
                 </el-button>
               </div>
             </div>
           </div>
-
-          <!-- 分页器 -->
-          <div v-if="filteredList.length > pageSize" class="pagination-container">
-            <el-pagination
-              v-model:current-page="currentPage"
-              v-model:page-size="pageSize"
-              :page-sizes="[5, 8, 12, 20, 50]"
-              :total="filteredList.length"
-              layout="total, sizes, prev, pager, next, jumper"
-              background
-            />
-          </div>
+        </div>
+      </div>
+      
+      <!-- 分页器 -->
+      <div v-if="filteredList.length > pageSize" class="pagination-container">
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :page-sizes="[5, 8, 12, 20, 50]"
+          :total="filteredList.length"
+          layout="total, sizes, prev, pager, next, jumper"
+          background
+        />
       </div>
     </div>
   </div>
@@ -450,65 +428,95 @@
       </div>
     </template>
   </el-dialog>
-</div>
+  
+  <!-- 确认处理对话框 -->
+  <el-dialog
+    v-model="confirmDialogVisible"
+    title="确认操作"
+    width="400px"
+    :before-close="cancelNotificationAction"
+  >
+    <div class="confirm-dialog-content">
+      <el-alert
+        v-if="pendingNotification"
+        :title="`您即将执行操作：${pendingNotification.actionText || '处理'}`
+"
+        type="warning"
+        show-icon
+        :closable="false"
+      />
+      <p class="confirm-message">
+        确定要继续执行此操作吗？
+      </p>
+    </div>
+    
+    <template #footer>
+      <div class="dialog-footer">
+        <el-button @click="cancelNotificationAction">取消</el-button>
+        <el-button 
+          type="primary" 
+          @click="confirmNotificationAction"
+        >
+          确认执行
+        </el-button>
+      </div>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { 
   Bell, 
-  Check, 
-  Message, 
+  Warning, 
+  InfoFilled, 
+  SuccessFilled, 
   Star,
-  Warning,
-  InfoFilled,
-  SuccessFilled,
-  CircleCheck,
-  User,
   Wallet,
   Document,
-  Setting
+  User,
+  Setting,
+  Folder,
+  Search,
+  ArrowLeft,
+  Check,
+  Close
 } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { useNotifications } from '../services/notificationService'
+import type { Notification } from '../services/notificationService'
 
-// 类型定义
-interface Notification {
-  id: number
-  title: string
-  message: string
-  type: string
-  isRead: boolean
-  isImportant: boolean
-  actionText?: string
-  createdAt: string
-}
+// 路由
+const router = useRouter()
 
-// 响应式数据
+// 使用通知服务
+const { 
+  notifications, 
+  markAsRead, 
+  markAsUnread, 
+  deleteNotification, 
+  batchMarkAsRead, 
+  batchMarkAsUnread, 
+  batchDelete, 
+  batchToggleImportance,
+  markAllAsRead
+} = useNotifications()
+
+// 状态管理
 const loading = ref(false)
-const filterType = ref<'all' | 'unread' | 'important'>('all')
-const sortBy = ref<'time-desc' | 'time-asc' | 'importance'>('time-desc')
-const currentPage = ref(1)
-const pageSize = ref(5)
-
-// 分类相关
-const selectedCategory = ref('all')
-const categories = ref([
-  { key: 'all', name: '全部', icon: Bell },
-  { key: 'expense', name: '费用报销', icon: Wallet },
-  { key: 'bill', name: '账单管理', icon: Document },
-  { key: 'member', name: '成员管理', icon: User },
-  { key: 'system', name: '系统通知', icon: Setting },
-  { key: 'warning', name: '警告提醒', icon: Warning }
-])
-
-// 批量操作相关
-const selectedNotifications = ref<number[]>([])
-
-// 设置对话框相关
 const settingsVisible = ref(false)
 const activeSettingsTab = ref('general')
+const selectedCategory = ref('all')
+const filterType = ref<'all' | 'unread' | 'important'>('all')
+const sortBy = ref<'time-desc' | 'time-asc' | 'importance'>('time-desc')
+const selectedNotifications = ref<number[]>([])
+const currentPage = ref(1)
+const pageSize = ref(8)
+const confirmDialogVisible = ref(false)
+const pendingNotification = ref<Notification | null>(null)
 
-// 通知偏好设置
+// 通知设置
 const notificationSettings = ref({
   emailNotifications: true,
   pushNotifications: true,
@@ -524,44 +532,21 @@ const notificationSettings = ref({
   quietHours: { enabled: false, start: '22:00', end: '08:00' }
 })
 
-// 通知数据（占位数据）
-const notifications = ref<Notification[]>([
-  {
-    id: 1,
-    title: '费用报销申请待审批',
-    message: '您的费用报销申请已提交，等待管理员审批处理。',
-    type: 'expense',
-    isRead: false,
-    isImportant: true,
-    actionText: '查看详情',
-    createdAt: '2024-01-15T10:30:00Z'
-  },
-  {
-    id: 2,
-    title: '月度账单生成完成',
-    message: '2024年1月份的集体账单已生成完成，请及时查看。',
-    type: 'bill',
-    isRead: false,
-    isImportant: false,
-    actionText: '查看账单',
-    createdAt: '2024-01-15T09:15:00Z'
-  },
-  {
-    id: 3,
-    title: '新成员加入申请',
-    message: '张三申请加入您的寝室，需要您进行审核。',
-    type: 'member',
-    isRead: false,
-    isImportant: true,
-    actionText: '审核申请',
-    createdAt: '2024-01-15T08:45:00Z'
-  }
-])
+// 分类定义
+const categories = [
+  { key: 'all', name: '全部', icon: Folder },
+  { key: 'expense', name: '费用', icon: Wallet },
+  { key: 'bill', name: '账单', icon: Document },
+  { key: 'member', name: '成员', icon: User },
+  { key: 'system', name: '系统', icon: Setting },
+  { key: 'warning', name: '警告', icon: Warning }
+]
 
 // 计算属性
-const totalCount = computed(() => notifications.value.length)
-const unreadCount = computed(() => notifications.value.filter(n => !n.isRead).length)
-const importantCount = computed(() => notifications.value.filter(n => n.isImportant).length)
+const unreadCount = computed(() => {
+  return notifications.value.filter(n => !n.isRead).length
+})
+
 const todayCount = computed(() => {
   const today = new Date().toDateString()
   return notifications.value.filter(n => 
@@ -653,40 +638,25 @@ const clearSelection = () => {
   selectedNotifications.value = []
 }
 
-const batchMarkAsRead = () => {
-  selectedNotifications.value.forEach(id => {
-    const notification = notifications.value.find(n => n.id === id)
-    if (notification) {
-      notification.isRead = true
-    }
-  })
+const handleBatchMarkAsRead = () => {
+  batchMarkAsRead(selectedNotifications.value)
   ElMessage.success(`已批量标为已读 ${selectedNotifications.value.length} 项`)
   clearSelection()
 }
 
-const batchMarkAsUnread = () => {
-  selectedNotifications.value.forEach(id => {
-    const notification = notifications.value.find(n => n.id === id)
-    if (notification) {
-      notification.isRead = false
-    }
-  })
+const handleBatchMarkAsUnread = () => {
+  batchMarkAsUnread(selectedNotifications.value)
   ElMessage.success(`已批量标为未读 ${selectedNotifications.value.length} 项`)
   clearSelection()
 }
 
-const batchMarkAsImportant = () => {
-  selectedNotifications.value.forEach(id => {
-    const notification = notifications.value.find(n => n.id === id)
-    if (notification) {
-      notification.isImportant = !notification.isImportant
-    }
-  })
+const handleBatchMarkAsImportant = () => {
+  batchToggleImportance(selectedNotifications.value)
   ElMessage.success(`已批量标记重要性 ${selectedNotifications.value.length} 项`)
   clearSelection()
 }
 
-const batchDelete = async () => {
+const handleBatchDelete = async () => {
   try {
     await ElMessageBox.confirm(
       `确定要删除选中的 ${selectedNotifications.value.length} 条通知吗？`,
@@ -698,12 +668,7 @@ const batchDelete = async () => {
       }
     )
     
-    selectedNotifications.value.forEach(id => {
-      const index = notifications.value.findIndex(n => n.id === id)
-      if (index > -1) {
-        notifications.value.splice(index, 1)
-      }
-    })
+    batchDelete(selectedNotifications.value)
     
     ElMessage.success(`已批量删除 ${selectedNotifications.value.length} 条通知`)
     clearSelection()
@@ -778,306 +743,176 @@ const isInQuietHours = () => {
   }
 }
 
-const markAllAsRead = async () => {
+const handleMarkAllAsRead = async () => {
   try {
     await ElMessageBox.confirm('确定要将所有通知标为已读吗？', '提示', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'info'
-    })
-    
-    notifications.value.forEach(notification => {
-      notification.isRead = true
-    })
-    
-    ElMessage.success('已全部标为已读')
-  } catch {
-    // 用户取消操作
-  }
-}
-
-const markAsRead = (id: number) => {
-  const notification = notifications.value.find(n => n.id === id)
-  if (notification) {
-    notification.isRead = true
-    ElMessage.success('已标为已读')
-  }
-}
-
-const deleteNotification = async (id: number) => {
-  try {
-    await ElMessageBox.confirm('确定要删除这条通知吗？', '提示', {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
       type: 'warning'
     })
     
-    const index = notifications.value.findIndex(n => n.id === id)
-    if (index > -1) {
-      notifications.value.splice(index, 1)
-      ElMessage.success('已删除通知')
-    }
+    markAllAsRead()
+    ElMessage.success('已将所有通知标为已读')
   } catch {
     // 用户取消操作
   }
 }
 
-const handleNotificationClick = (notification: Notification) => {
-  if (!notification.isRead) {
-    markAsRead(notification.id)
-  }
-  
-  // TODO: 跳转到相关页面
-  console.log('跳转到通知详情:', notification.id)
+// 单个操作方法
+const handleSingleMarkAsRead = (id: number) => {
+  markAsRead(id)
+  ElMessage.success('已标为已读')
 }
 
+const handleSingleMarkAsUnread = (id: number) => {
+  markAsUnread(id)
+  ElMessage.success('已标为未读')
+}
+
+const handleSingleDelete = async (id: number) => {
+  try {
+    await ElMessageBox.confirm('确定要删除这条通知吗？', '删除确认', {
+      confirmButtonText: '确定删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    
+    deleteNotification(id)
+    ElMessage.success('删除成功')
+  } catch {
+    // 用户取消操作
+  }
+}
+
+// 处理通知操作 - 新增确认对话框功能
 const handleNotificationAction = (notification: Notification) => {
-  // TODO: 处理通知操作
-  console.log('执行通知操作:', notification.actionText, notification.id)
-}
-
-const formatTime = (timeString: string) => {
-  const date = new Date(timeString)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  // 标记为已读
+  markAsRead(notification.id)
   
-  if (diffDays === 0) {
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-    if (diffHours === 0) {
-      const diffMinutes = Math.floor(diffMs / (1000 * 60))
-      return `${diffMinutes}分钟前`
-    }
-    return `${diffHours}小时前`
-  } else if (diffDays === 1) {
-    return '昨天'
-  } else if (diffDays < 7) {
-    return `${diffDays}天前`
+  // 检查是否需要确认对话框
+  // 对于需要用户确认的操作（如审批、审核等），显示确认对话框
+  const needsConfirmation = ['审核申请', '查看详情', '审批'].some(keyword => 
+    notification.actionText?.includes(keyword)
+  )
+  
+  if (needsConfirmation) {
+    // 显示确认对话框
+    pendingNotification.value = notification
+    confirmDialogVisible.value = true
   } else {
-    return date.toLocaleDateString()
+    // 直接执行跳转
+    executeNotificationAction(notification)
   }
 }
 
-const getNotificationIcon = (type: string) => {
-  const iconMap = {
-    expense: Wallet,
-    bill: Document,
-    member: User,
-    system: Setting,
-    warning: Warning,
-    info: InfoFilled,
-    success: SuccessFilled
+// 执行通知操作
+const executeNotificationAction = (notification: Notification) => {
+  // 如果有跳转路径，则跳转
+  if (notification.actionPath) {
+    router.push(notification.actionPath)
+    console.log(`跳转到: ${notification.actionPath}`)
   }
-  return iconMap[type] || Bell
+  
+  // 执行特定操作
+  console.log(`执行通知操作: ${notification.actionText || '处理'}`)
 }
 
-const getNotificationIconColor = (notification: Notification): string => {
-  if (notification.isImportant) return '#f56c6c'
-  if (!notification.isRead) return '#409eff'
-  return '#909399'
+// 确认处理操作
+const confirmNotificationAction = () => {
+  if (pendingNotification.value) {
+    executeNotificationAction(pendingNotification.value)
+    confirmDialogVisible.value = false
+    pendingNotification.value = null
+  }
 }
 
-const viewTodos = () => {
-  // TODO: 跳转到待办页面
-  ElMessage.info('跳转到待办页面')
+// 取消处理操作
+const cancelNotificationAction = () => {
+  confirmDialogVisible.value = false
+  pendingNotification.value = null
 }
 
-const dismissTodoReminder = () => {
-  // TODO: 关闭待办提醒
-  ElMessage.info('将在下次访问时再次提醒')
+// 返回仪表盘
+const goToDashboard = () => {
+  router.push('/dashboard')
+  console.log('返回仪表盘页面')
 }
 
-// 生命周期
+// 格式化时间
+const formatTime = (time: string) => {
+  const date = new Date(time)
+  const now = new Date()
+  const diff = now.getTime() - date.getTime()
+  const minutes = Math.floor(diff / 60000)
+  
+  if (minutes < 1) return '刚刚'
+  if (minutes < 60) return `${minutes}分钟前`
+  if (minutes < 1440) return `${Math.floor(minutes / 60)}小时前`
+  return `${Math.floor(minutes / 1440)}天前`
+}
+
+// 组件挂载时的初始化逻辑
 onMounted(() => {
   // 模拟加载数据
   loading.value = true
   setTimeout(() => {
     loading.value = false
-  }, 1000)
+  }, 500)
+})
+
+// 监听通知变化，更新分页
+watch(notifications, () => {
+  // 如果当前页没有数据，回到第一页
+  if (paginatedNotifications.value.length === 0 && currentPage.value > 1) {
+    currentPage.value = 1
+  }
 })
 </script>
 
 <style scoped>
-.notification-list {
-  min-height: calc(100vh - 60px);
-  background-color: #f5f7fa;
-}
-
 .container {
+  padding: 24px;
   max-width: 1200px;
   margin: 0 auto;
-  padding: 24px;
 }
 
-/* 批量操作区域 */
-.batch-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
-  background: #f0f9ff;
-  border: 1px solid #b3d8ff;
-  border-radius: 6px;
-}
-
-.selected-count {
-  color: #409eff;
-  font-weight: 500;
-  font-size: 14px;
-}
-
-/* 分类标签 */
-.category-tabs {
-  margin-bottom: 24px;
-  padding: 16px 20px;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-
-.category-tabs-container {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.category-tab {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: 20px;
-  transition: all 0.3s ease;
-}
-
-.category-badge {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  min-width: 16px;
-  height: 16px;
-  line-height: 16px;
-  font-size: 10px;
-}
-
-/* 通知项选择和未读标识 */
-.notification-select {
-  margin-right: 12px;
-  flex-shrink: 0;
-}
-
-.unread-indicator {
-  position: absolute;
-  top: 16px;
-  left: 52px;
-  z-index: 2;
-}
-
-.unread-dot {
-  color: #409eff;
-  background: white;
-  border-radius: 50%;
-  box-shadow: 0 0 0 2px white;
-}
-
-.notification-item.selected {
-  background-color: #f0f9ff;
-  border-left: 3px solid #409eff;
-}
-
-/* 设置对话框样式 */
-.settings-section {
-  padding: 8px 0;
-}
-
-.settings-section h4 {
-  margin: 0 0 16px 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: #2c3e50;
-  border-bottom: 1px solid #f0f0f0;
-  padding-bottom: 8px;
-}
-
-.setting-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-  padding: 12px 0;
-}
-
-.category-setting {
-  border: 1px solid #f0f0f0;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 12px;
-}
-
-.category-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-  font-weight: 500;
-  color: #2c3e50;
-}
-
-.category-name {
-  font-size: 14px;
-}
-
-.category-toggles {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.quiet-time-setup {
-  margin-top: 16px;
-}
-
-.time-input-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.time-input-group label {
-  width: 80px;
-  font-weight: 500;
-  color: #2c3e50;
-}
-
-.quiet-time-status {
-  margin-top: 16px;
-}
-
-.dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-/* 页面头部 */
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 24px;
-  padding: 24px;
-  background: white;
+  padding: 20px 24px;
+  background: linear-gradient(120deg, #ecf5ff, #f0f9ff);
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
-.header-content .page-title {
+.header-content {
+  flex: 1;
+}
+
+.title-with-back {
   display: flex;
   align-items: center;
   gap: 12px;
-  font-size: 28px;
+}
+
+.back-button {
+  background: white;
+  border: 1px solid #dcdfe6;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.back-button:hover {
+  background: #f5f7fa;
+  border-color: #409eff;
+}
+
+.page-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 24px;
   font-weight: 600;
   color: #2c3e50;
   margin: 0 0 8px 0;
@@ -1088,25 +923,61 @@ onMounted(() => {
 }
 
 .page-description {
-  color: #606266;
   font-size: 14px;
+  color: #606266;
   margin: 0;
 }
 
 .header-actions {
   display: flex;
-  gap: 12px;
   align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-/* 统计区域 */
+.batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f0f9ff;
+  padding: 8px 16px;
+  border-radius: 20px;
+  border: 1px solid #d0e9ff;
+}
+
+.selected-count {
+  font-size: 12px;
+  color: #409eff;
+  font-weight: 500;
+}
+
+.category-tabs {
+  margin-bottom: 24px;
+}
+
+.category-tabs-container {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.category-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.category-badge {
+  margin-left: 4px;
+}
+
 .stats-section {
   margin-bottom: 24px;
 }
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 16px;
 }
 
@@ -1117,24 +988,39 @@ onMounted(() => {
   background: white;
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid #f0f0f0;
 }
 
 .stat-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
   margin-right: 16px;
-  font-size: 20px;
-  color: white;
+  flex-shrink: 0;
 }
 
-.stat-icon.total { background: linear-gradient(135deg, #667eea, #764ba2); }
-.stat-icon.unread { background: linear-gradient(135deg, #f093fb, #f5576c); }
-.stat-icon.important { background: linear-gradient(135deg, #ffecd2, #fcb69f); }
-.stat-icon.today { background: linear-gradient(135deg, #a8edea, #fed6e3); }
+.stat-icon.total {
+  background: rgba(64, 158, 255, 0.1);
+  color: #409eff;
+}
+
+.stat-icon.unread {
+  background: rgba(245, 108, 108, 0.1);
+  color: #f56c6c;
+}
+
+.stat-icon.important {
+  background: rgba(230, 162, 60, 0.1);
+  color: #e6a23c;
+}
+
+.stat-icon.today {
+  background: rgba(103, 194, 58, 0.1);
+  color: #67c23a;
+}
 
 .stat-content {
   flex: 1;
@@ -1142,18 +1028,16 @@ onMounted(() => {
 
 .stat-number {
   font-size: 24px;
-  font-weight: 700;
+  font-weight: 600;
   color: #2c3e50;
-  line-height: 1;
   margin-bottom: 4px;
 }
 
 .stat-label {
-  color: #909399;
   font-size: 14px;
+  color: #909399;
 }
 
-/* 通知列表区域 */
 .notification-section {
   background: white;
   border-radius: 12px;
@@ -1257,7 +1141,6 @@ onMounted(() => {
   font-weight: 600;
   color: #2c3e50;
   margin: 0;
-  flex: 1;
 }
 
 .notification-time {

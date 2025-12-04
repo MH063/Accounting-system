@@ -109,43 +109,6 @@
         </el-col>
       </el-row>
     </div>
-
-    <!-- 快速操作 -->
-    <div class="quick-actions">
-      <h2 class="section-title">快速操作</h2>
-      <el-row :gutter="20">
-        <el-col :xs="24" :sm="12" :md="6">
-          <el-button class="action-btn" @click="goToExpenseManagement">
-            <el-icon><Plus /></el-icon>
-            记一笔
-          </el-button>
-        </el-col>
-        <el-col :xs="24" :sm="12" :md="6">
-          <el-button class="action-btn" @click="exportData">
-            <el-icon><Download /></el-icon>
-            导出数据
-          </el-button>
-        </el-col>
-        <el-col :xs="24" :sm="12" :md="6">
-          <el-button class="action-btn" @click="goToBudgetManagement">
-            <el-icon><Wallet /></el-icon>
-            预算管理
-          </el-button>
-        </el-col>
-        <el-col :xs="24" :sm="12" :md="6">
-          <el-button class="action-btn" @click="setBudget">
-            <el-icon><Setting /></el-icon>
-            设置预算
-          </el-button>
-        </el-col>
-        <el-col :xs="24" :sm="12" :md="6">
-          <el-button class="action-btn" @click="viewReport">
-            <el-icon><Document /></el-icon>
-            查看报告
-          </el-button>
-        </el-col>
-      </el-row>
-    </div>
   </div>
 </template>
 
@@ -158,11 +121,7 @@ import {
   Wallet,
   TrendCharts,
   User,
-  PieChart,
-  Plus,
-  Download,
-  Setting,
-  Document
+  PieChart
 } from '@element-plus/icons-vue'
 
 // 路由
@@ -180,21 +139,6 @@ const goToBudgetManagement = () => {
   router.push('/dashboard/budget')
 }
 
-const goToExpenseManagement = () => {
-  router.push('/dashboard/expense-management')
-}
-
-const exportData = () => {
-  ElMessage.success('数据导出功能开发中...')
-}
-
-const setBudget = () => {
-  router.push('/dashboard/budget')
-}
-
-const viewReport = () => {
-  ElMessage.success('报告查看功能开发中...')
-}
 </script>
 
 <style scoped>
@@ -359,23 +303,6 @@ const viewReport = () => {
   line-height: 1.6;
 }
 
-.quick-actions {
-  background: white;
-  border-radius: 8px;
-  padding: 24px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.action-btn {
-  width: 100%;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-size: 14px;
-}
-
 @media (max-width: 768px) {
   .statistics {
     padding: 10px;
@@ -387,10 +314,6 @@ const viewReport = () => {
   
   .overview-card,
   .nav-card {
-    padding: 16px;
-  }
-  
-  .quick-actions {
     padding: 16px;
   }
 }
