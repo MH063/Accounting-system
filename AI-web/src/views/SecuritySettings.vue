@@ -750,10 +750,12 @@ import {
 import { 
   enableTwoFactor,
   disableTwoFactor,
+  activateTwoFactor,
   getTwoFactorStatus,
   getTwoFactorConfig,
   saveTwoFactorConfig,
   verifyTwoFactorToken,
+  hexToBase32,
   regenerateBackupCodes as generateNewBackupCodes
 } from '@/services/twoFactorService'
 
@@ -1065,7 +1067,9 @@ const toggleTwoFactor = async (value: boolean): Promise<void> => {
       isTwoFactorCodeValid.value = false
       
       // 生成二维码
-      const totpUrl = `otpauth://totp/AccountingSystem:${twoFactorAccountId.value}?secret=${result.secret}&issuer=AccountingSystem`
+      // 将十六进制密钥转换为Base32编码，这是TOTP标准要求的格式
+      const base32Secret = hexToBase32(result.secret)
+      const totpUrl = `otpauth://totp/AccountingSystem:${twoFactorAccountId.value}?secret=${base32Secret}&issuer=AccountingSystem`
       twoFactorQrCode.value = await QRCode.toDataURL(totpUrl)
       
       // 注意：此时不立即启用两步验证，需要用户完成验证码验证后才真正启用
@@ -1106,21 +1110,13 @@ const verifyTwoFactorCode = async (): Promise<void> => {
     const isValid = await verifyTwoFactorToken(twoFactorAccountId.value, twoFactorCode.value)
     
     if (isValid) {
-      // 验证通过，真正启用两步验证
+      // 验证通过，激活两步验证
+      activateTwoFactor(twoFactorAccountId.value)
+      
+      // 更新状态
       twoFactorStep.value = 1
       twoFactorEnabled.value = true
       intendedTwoFactorState.value = true
-      
-      // 保存设置
-      const twoFactorStatus = getTwoFactorStatus(twoFactorAccountId.value)
-      if (!twoFactorStatus.enabled) {
-        // 如果服务端还没有启用，需要更新状态
-        const config = getTwoFactorConfig(twoFactorAccountId.value)
-        if (config) {
-          config.enabled = true
-          saveTwoFactorConfig(twoFactorAccountId.value, config)
-        }
-      }
     } else {
       ElMessage.error('验证码错误，请重新输入')
     }

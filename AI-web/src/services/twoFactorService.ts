@@ -18,13 +18,63 @@ export interface TwoFactorStatus {
 }
 
 /**
- * 生成密钥密文
- * @returns 32字符的十六进制字符串
+ * 生成符合Base32编码规范的密钥
+ * @returns 32字符的Base32编码字符串
  */
 export const generateSecret = (): string => {
-  const array = new Uint8Array(16);
+  // 生成20字节的随机数据（Base32编码后为32字符）
+  const array = new Uint8Array(20);
   crypto.getRandomValues(array);
-  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+  return bytesToBase32(array);
+};
+
+/**
+ * 将字节数组转换为Base32编码字符串
+ * @param bytes 字节数组
+ * @returns Base32编码字符串
+ */
+const bytesToBase32 = (bytes: Uint8Array): string => {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = 0;
+  let value = 0;
+  let output = '';
+  
+  for (let i = 0; i < bytes.length; i++) {
+    value = (value << 8) | bytes[i]!;
+    bits += 8;
+    
+    while (bits >= 5) {
+      output += alphabet[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+  
+  if (bits > 0) {
+    output += alphabet[(value << (5 - bits)) & 31];
+  }
+  
+  // 补齐等号
+  while (output.length % 8 !== 0) {
+    output += '=';
+  }
+  
+  return output;
+};
+
+/**
+ * 将十六进制字符串转换为Base32编码字符串（为了向后兼容保留此函数）
+ * @param hex 十六进制字符串
+ * @returns Base32编码字符串
+ */
+export const hexToBase32 = (hex: string): string => {
+  try {
+    const bytes = new Uint8Array(hex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+    return bytesToBase32(bytes);
+  } catch (error) {
+    // 如果转换失败，返回原始值（避免破坏现有功能）
+    console.warn('Hex to Base32 conversion failed, returning original value');
+    return hex;
+  }
 };
 
 /**
@@ -53,8 +103,41 @@ const getTimeWindow = (step: number = 30): number => {
 };
 
 /**
+ * 将Base32编码字符串转换为字节数组
+ * @param base32 Base32编码字符串
+ * @returns 字节数组
+ */
+const base32ToBytes = (base32: string): Uint8Array => {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  base32 = base32.replace(/=/g, '').toUpperCase();
+  
+  let bits = 0;
+  let value = 0;
+  const bytes: number[] = [];
+  
+  for (let i = 0; i < base32.length; i++) {
+    const char = base32[i]!;
+    const index = alphabet.indexOf(char);
+    
+    if (index === -1) {
+      throw new Error(`Invalid Base32 character: ${char}`);
+    }
+    
+    value = (value << 5) | index;
+    bits += 5;
+    
+    if (bits >= 8) {
+      bytes.push((value >>> (bits - 8)) & 0xFF);
+      bits -= 8;
+    }
+  }
+  
+  return new Uint8Array(bytes);
+};
+
+/**
  * 生成TOTP验证码
- * @param secret 密钥
+ * @param secret 密钥(Base32编码)
  * @param timeWindow 时间窗口
  * @returns 6位数字验证码
  */
@@ -63,38 +146,43 @@ export const generateTOTP = async (secret: string, timeWindow?: number): Promise
     timeWindow = getTimeWindow();
   }
   
-  // 将密钥从十六进制转换为字节数组
-  const secretBytes = new Uint8Array(secret.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
-  
-  // 将时间窗口转换为字节数组
-  const timeBytes = new ArrayBuffer(8);
-  const timeView = new DataView(timeBytes);
-  timeView.setBigUint64(0, BigInt(timeWindow), false);
-  
-  // 使用Web Crypto API计算HMAC-SHA1
-  const key = await crypto.subtle.importKey(
-    "raw",
-    secretBytes,
-    { name: "HMAC", hash: "SHA-1" },
-    false,
-    ["sign"]
-  );
-  
-  const signature = await crypto.subtle.sign("HMAC", key, timeBytes);
-  const signatureArray = new Uint8Array(signature);
-  
-  // 动态截断
-  const offset = signatureArray[signatureArray.length - 1]! & 0xf;
-  const binary = (
-    ((signatureArray[offset]! & 0x7f) << 24) |
-    ((signatureArray[offset + 1]! & 0xff) << 16) |
-    ((signatureArray[offset + 2]! & 0xff) << 8) |
-    (signatureArray[offset + 3]! & 0xff)
-  );
-  
-  // 取模1000000得到6位数字
-  const otp = binary % 1000000;
-  return otp.toString().padStart(6, '0');
+  try {
+    // 将密钥从Base32编码转换为字节数组
+    const secretBytes = base32ToBytes(secret);
+    
+    // 将时间窗口转换为字节数组
+    const timeBytes = new ArrayBuffer(8);
+    const timeView = new DataView(timeBytes);
+    timeView.setBigUint64(0, BigInt(timeWindow), false);
+    
+    // 使用Web Crypto API计算HMAC-SHA1
+    const key = await crypto.subtle.importKey(
+      "raw",
+      secretBytes,
+      { name: "HMAC", hash: "SHA-1" },
+      false,
+      ["sign"]
+    );
+    
+    const signature = await crypto.subtle.sign("HMAC", key, timeBytes);
+    const signatureArray = new Uint8Array(signature);
+    
+    // 动态截断
+    const offset = signatureArray[signatureArray.length - 1]! & 0xf;
+    const binary = (
+      ((signatureArray[offset]! & 0x7f) << 24) |
+      ((signatureArray[offset + 1]! & 0xff) << 16) |
+      ((signatureArray[offset + 2]! & 0xff) << 8) |
+      (signatureArray[offset + 3]! & 0xff)
+    );
+    
+    // 取模1000000得到6位数字
+    const otp = binary % 1000000;
+    return otp.toString().padStart(6, '0');
+  } catch (error) {
+    console.error('生成TOTP验证码失败:', error);
+    throw new Error('无法生成验证码，请检查密钥格式');
+  }
 };
 
 /**
@@ -105,17 +193,23 @@ export const generateTOTP = async (secret: string, timeWindow?: number): Promise
  * @returns 验证结果
  */
 export const verifyTOTP = async (secret: string, token: string, window: number = 1): Promise<boolean> => {
-  const currentTimeWindow = getTimeWindow();
-  
-  // 检查当前时间窗口及前后几个窗口
-  for (let i = -window; i <= window; i++) {
-    const totp = await generateTOTP(secret, currentTimeWindow + i);
-    if (totp === token) {
-      return true;
+  try {
+    const currentTimeWindow = getTimeWindow();
+    
+    // 检查当前时间窗口及前后几个窗口
+    for (let i = -window; i <= window; i++) {
+      const totp = await generateTOTP(secret, currentTimeWindow + i);
+      if (totp === token) {
+        return true;
+      }
     }
+    
+    return false;
+  } catch (error) {
+    console.error('验证TOTP验证码失败:', error);
+    // 如果验证过程出错，返回false而不是抛出异常
+    return false;
   }
-  
-  return false;
 };
 
 /**
@@ -159,7 +253,7 @@ export const enableTwoFactor = (accountId: string): { secret: string; backupCode
   
   const config: TwoFactorConfig = {
     secret,
-    enabled: true,
+    enabled: false, // 初始时不启用，需要用户验证后才启用
     backupCodes,
     createdAt: Date.now()
   };
@@ -175,6 +269,19 @@ export const enableTwoFactor = (accountId: string): { secret: string; backupCode
  */
 export const disableTwoFactor = (accountId: string): void => {
   localStorage.removeItem(`twoFactor_${accountId}`);
+};
+
+/**
+ * 启用两步验证（在用户完成验证后调用）
+ * @param accountId 账户ID
+ */
+export const activateTwoFactor = (accountId: string): void => {
+  const config = getTwoFactorConfig(accountId);
+  
+  if (config) {
+    config.enabled = true;
+    saveTwoFactorConfig(accountId, config);
+  }
 };
 
 /**
@@ -207,17 +314,19 @@ export const getTwoFactorStatus = (accountId: string): TwoFactorStatus => {
 export const verifyTwoFactorToken = async (accountId: string, token: string): Promise<boolean> => {
   const config = getTwoFactorConfig(accountId);
   
-  if (!config || !config.enabled) {
-    return true; // 如果未启用两步验证，则验证通过
+  if (!config) {
+    return false; // 如果没有配置，则验证失败
   }
   
-  // 首先检查是否为备份验证码
-  const backupCodeIndex = config.backupCodes.indexOf(token.toUpperCase());
-  if (backupCodeIndex !== -1) {
-    // 使用了备份验证码，从列表中移除
-    config.backupCodes.splice(backupCodeIndex, 1);
-    saveTwoFactorConfig(accountId, config);
-    return true;
+  // 如果已启用，检查备份验证码
+  if (config.enabled) {
+    const backupCodeIndex = config.backupCodes.indexOf(token.toUpperCase());
+    if (backupCodeIndex !== -1) {
+      // 使用了备份验证码，从列表中移除
+      config.backupCodes.splice(backupCodeIndex, 1);
+      saveTwoFactorConfig(accountId, config);
+      return true;
+    }
   }
   
   // 验证TOTP验证码
@@ -252,7 +361,9 @@ export default {
   saveTwoFactorConfig,
   enableTwoFactor,
   disableTwoFactor,
+  activateTwoFactor,
   getTwoFactorStatus,
   verifyTwoFactorToken,
-  regenerateBackupCodes
+  regenerateBackupCodes,
+  hexToBase32
 };
