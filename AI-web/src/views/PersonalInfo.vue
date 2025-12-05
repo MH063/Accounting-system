@@ -374,7 +374,8 @@ import {
   Download,
   Clock,
   MoreFilled,
-  Document
+  Document,
+  Delete
 } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules, UploadFile } from 'element-plus'
 

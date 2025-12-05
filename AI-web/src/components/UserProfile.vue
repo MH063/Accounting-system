@@ -38,6 +38,7 @@
           <div class="menu-item" @click="handleCheckUpdate">
             <el-icon><Refresh /></el-icon>
             <span>检查更新</span>
+            <el-tag v-if="hasNewVersion" type="danger" size="small" effect="dark" class="update-badge">新</el-tag>
           </div>
           <div class="menu-divider"></div>
           <div class="menu-item logout" @click="handleLogout">
@@ -56,6 +57,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { User, SwitchButton, ArrowDown, Refresh, QuestionFilled, InfoFilled } from '@element-plus/icons-vue'
 import { getCurrentUser } from '@/services/userService'
+import { checkForUpdates } from '@/services/versionService'
 
 
 // 路由
@@ -79,6 +81,9 @@ const userInfo = reactive<UserInfo>({
 
 // 下拉菜单显示状态
 const dropdownVisible = ref(false)
+
+// 是否有新版本
+const hasNewVersion = ref(false)
 
 // 切换下拉菜单显示状态
 const toggleDropdown = (event?: Event): void => {
@@ -113,37 +118,92 @@ const navigateTo = (path: string): void => {
 const handleCheckUpdate = async (): Promise<void> => {
   closeDropdown()
   
-  // 这里可以调用实际的更新检查API
-  // 例如：检查服务器版本
   try {
-    // 模拟API调用
-    console.log('正在检查更新...')
+    // 显示检查更新提示
+    ElMessage.info('正在检查更新...')
     
-    // 这里可以加入实际的更新检查逻辑
-    // 例如：检查最新版本号、下载链接等
+    // 调用版本检查服务
+    const updateInfo = await checkForUpdates()
     
-    // 模拟检查结果（90%的概率有更新，10%概率无更新）
-    const hasUpdate = Math.random() > 0.1
+    // 更新新版本状态
+    hasNewVersion.value = updateInfo.hasUpdate
     
-    if (hasUpdate) {
-      // 有更新时显示对话框或跳转更新页面
+    if (updateInfo.hasUpdate && updateInfo.latestVersion) {
+      // 有更新时显示详细信息
       ElMessageBox.confirm(
-        '发现新版本，是否立即更新？',
-        '检查更新',
+        `${updateInfo.updateMessage}
+
+最新版本: ${updateInfo.latestVersion.version}
+发布日期: ${updateInfo.latestVersion.releaseDate}
+
+更新内容:
+${updateInfo.latestVersion.releaseNotes}
+
+是否立即更新？`,
+        '发现新版本',
         {
           confirmButtonText: '立即更新',
           cancelButtonText: '稍后再说',
+          distinguishCancelAndClose: true,
           type: 'info',
+          dangerouslyUseHTMLString: true,
+          closeOnClickModal: false,
+          closeOnPressEscape: false,
+          showClose: false,
+          autofocus: false,
+          beforeClose: (action, instance, done) => {
+            if (action === 'cancel') {
+              // 用户点击"稍后再说"
+              ElMessageBox.confirm(
+                '您确定要暂时忽略此更新吗？<br/><br/>您可以选择：<br/>1. 暂时忽略（下次启动时仍会提醒）<br/>2. 永久忽略此版本<br/>3. 立即更新',
+                '暂停更新选项',
+                {
+                  confirmButtonText: '永久忽略',
+                  cancelButtonText: '暂时忽略',
+                  type: 'warning',
+                  dangerouslyUseHTMLString: true,
+                  distinguishCancelAndClose: true
+                }
+              ).then(() => {
+                // 用户选择永久忽略此版本
+                localStorage.setItem('ignoredVersion', updateInfo.latestVersion!.version);
+                ElMessage.info(`已永久忽略版本 ${updateInfo.latestVersion!.version} 的更新提醒`);
+                done();
+              }).catch((action) => {
+                if (action === 'cancel') {
+                  // 用户选择暂时忽略
+                  ElMessage.info('已暂时忽略此次更新提醒，下次启动时仍会检查');
+                  done();
+                }
+              });
+            } else {
+              // 用户选择立即更新或其他操作
+              done();
+            }
+          }
         }
-      ).then(() => {
-        ElMessage.success('正在跳转到更新页面...')
-        // 这里可以跳转到更新页面或打开下载链接
-        // router.push('/update')
-      }).catch(() => {
+      ).then(async () => {
+        try {
+          ElMessage.success('开始下载更新...')
+          // 这里可以调用下载更新功能
+          // await downloadUpdate(updateInfo.latestVersion!)
+          // 模拟下载完成后跳转到更新页面
+          setTimeout(() => {
+            ElMessage.success('更新下载完成，请重启应用以完成更新')
+          }, 2000)
+        } catch (error) {
+          ElMessage.error('下载更新失败')
+        }
+      }).catch((action) => {
+        // 用户关闭对话框或取消操作
+        if (action !== 'close') {
+          // 不是通过关闭按钮关闭的，说明用户已经处理了暂停更新的选择
+          return;
+        }
         ElMessage.info('您稍后可以在设置中手动检查更新')
       })
     } else {
-      ElMessage.success('您当前使用的是最新版本')
+      ElMessage.success(updateInfo.updateMessage || '您当前使用的是最新版本')
     }
   } catch (error) {
     console.error('检查更新失败:', error)
@@ -212,10 +272,13 @@ const fetchUserInfo = async (): Promise<void> => {
   }
 }
 
-// 组件挂载时获取用户信息
+// 组件挂载时获取用户信息和检查更新
 onMounted(() => {
   console.log('UserProfile组件已挂载')
   fetchUserInfo()
+  
+  // 自动检查更新（可选）
+  handleCheckUpdate()
 })
 </script>
 
@@ -305,11 +368,6 @@ onMounted(() => {
   color: #333;
 }
 
-.preview-email {
-  font-size: 14px;
-  color: #666;
-}
-
 .preview-role {
   font-size: 14px;
   color: #666;
@@ -322,9 +380,10 @@ onMounted(() => {
 .menu-item {
   display: flex;
   align-items: center;
-  padding: 10px 16px;
+  padding: 12px 20px;
   cursor: pointer;
   transition: background-color 0.2s;
+  position: relative;
 }
 
 .menu-item:hover {
@@ -332,15 +391,27 @@ onMounted(() => {
 }
 
 .menu-item .el-icon {
-  margin-right: 10px;
+  margin-right: 12px;
   color: #666;
+  font-size: 16px;
 }
 
-.menu-item.logout {
+.menu-item span {
+  flex: 1;
+  color: #333;
+  font-size: 14px;
+}
+
+.update-badge {
+  position: absolute;
+  right: 20px;
+}
+
+.logout {
   color: #f56c6c;
 }
 
-.menu-item.logout .el-icon {
+.logout .el-icon {
   color: #f56c6c;
 }
 
@@ -350,63 +421,13 @@ onMounted(() => {
   margin: 8px 0;
 }
 
-/* 动画效果 */
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.3s, transform 0.3s;
+  transition: opacity 0.2s;
 }
 
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
-  transform: translateY(-10px);
-}
-
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .user-name {
-    display: none;
-  }
-  
-  .dropdown-menu {
-    width: 240px;
-  }
-  
-  .user-preview {
-    padding: 12px;
-  }
-  
-  .preview-avatar {
-    width: 40px;
-    height: 40px;
-  }
-  
-  .preview-name {
-    font-size: 14px;
-  }
-  
-  .preview-email {
-    font-size: 12px;
-  }
-}
-
-@media (max-width: 480px) {
-  .dropdown-menu {
-    width: 200px;
-    right: -10px;
-  }
-  
-  .menu-item {
-    padding: 8px 12px;
-  }
-  
-  .user-info {
-    padding: 6px 8px;
-  }
-  
-  .user-avatar {
-    width: 32px;
-    height: 32px;
-  }
 }
 </style>

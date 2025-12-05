@@ -39,6 +39,17 @@
             <p>登录到您的账户</p>
           </div>
           
+          <!-- 账户锁定警告 -->
+          <div class="lock-warning" v-if="accountLocked">
+            <el-alert
+              :title="`账户已被锁定，剩余时间：${formatRemainingTime(remainingLockTime)}`"
+              type="error"
+              show-icon
+              :closable="false"
+            />
+            <p class="lock-desc">由于多次登录失败，您的账户已被暂时锁定。</p>
+          </div>
+          
           <el-form :model="loginForm" :rules="rules" ref="loginFormRef" class="login-form">
             <div class="form-group">
               <label class="form-label">用户名</label>
@@ -69,12 +80,59 @@
               </el-form-item>
             </div>
             
+            <!-- 验证码 -->
+            <div class="form-group" v-if="showCaptcha">
+              <label class="form-label">验证码</label>
+              <el-form-item prop="captcha">
+                <div class="captcha-container">
+                  <el-input 
+                    v-model="loginForm.captcha" 
+                    placeholder="请输入验证码" 
+                    size="large"
+                    class="captcha-input"
+                  />
+                  <img 
+                    :src="captchaImage" 
+                    alt="验证码" 
+                    class="captcha-image" 
+                    @click="refreshCaptcha"
+                  />
+                </div>
+              </el-form-item>
+            </div>
+            
+            <!-- 两步验证 -->
+            <div class="form-group" v-if="showTwoFactor">
+              <label class="form-label">两步验证码</label>
+              <el-form-item prop="twoFactorCode">
+                <div class="two-factor-container">
+                  <el-input 
+                    v-model="loginForm.twoFactorCode" 
+                    placeholder="请输入6位验证码" 
+                    size="large"
+                    class="two-factor-input"
+                    maxlength="6"
+                  />
+                  <el-button 
+                    type="primary" 
+                    size="large"
+                    @click="sendTwoFactorCode"
+                    :disabled="twoFactorCooldown > 0"
+                  >
+                    {{ twoFactorCooldown > 0 ? `${twoFactorCooldown}秒后重发` : '发送验证码' }}
+                  </el-button>
+                </div>
+                <p class="two-factor-tip">请输入身份验证器应用生成的验证码，或使用备用验证码</p>
+              </el-form-item>
+            </div>
+            
             <div class="form-options">
               <el-checkbox v-model="rememberMe" class="remember-me">记住我</el-checkbox>
             </div>
             
             <el-form-item>
               <el-button 
+                v-if="!accountLocked"
                 type="primary" 
                 size="large" 
                 class="login-button"
@@ -82,6 +140,16 @@
                 @click="handleLogin"
               >
                 登录
+              </el-button>
+              <el-button 
+                v-else
+                type="primary" 
+                size="large" 
+                class="login-button"
+                :loading="loading"
+                @click="handleUnlock"
+              >
+                解锁账户
               </el-button>
             </el-form-item>
             
@@ -135,9 +203,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
+import { 
+  recordLoginAttempt,
+  isRateLimited,
+  getAccountLockStatus,
+  getSecurityConfig,
+  getClientIpAddress,
+  getUserAgent,
+  resetFailedAttempts
+} from '@/services/accountSecurityService'
+import { 
+  getTwoFactorStatus,
+  verifyTwoFactorToken
+} from '@/services/twoFactorService'
 
 // 路由实例
 const router = useRouter()
@@ -148,10 +229,25 @@ const loginFormRef = ref<FormInstance>()
 // 加载状态
 const loading = ref(false)
 
+// 账户锁定状态
+const accountLocked = ref(false)
+const remainingLockTime = ref(0)
+const lockStatusTimer = ref<number | null>(null)
+
+// 验证码相关
+const showCaptcha = ref(false)
+const captchaImage = ref('')
+
+// 两步验证相关
+const showTwoFactor = ref(false)
+const twoFactorCooldown = ref(0)
+
 // 登录表单数据
 const loginForm = reactive({
   username: '',
-  password: ''
+  password: '',
+  captcha: '',
+  twoFactorCode: ''
 })
 
 // 记住我选项
@@ -166,8 +262,165 @@ const rules = reactive<FormRules>({
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
     { min: 6, max: 20, message: '密码长度在 6 到 20 个字符', trigger: 'blur' }
+  ],
+  captcha: [
+    { required: true, message: '请输入验证码', trigger: 'blur' }
+  ],
+  twoFactorCode: [
+    { required: true, message: '请输入两步验证码', trigger: 'blur' },
+    { pattern: /^\d{6}$/, message: '请输入6位数字验证码', trigger: 'blur' }
   ]
 })
+
+/**
+ * 格式化剩余时间
+ */
+const formatRemainingTime = (seconds: number): string => {
+  if (seconds <= 0) return '0秒'
+  
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  
+  if (minutes > 0) {
+    return `${minutes}分${remainingSeconds}秒`
+  } else {
+    return `${remainingSeconds}秒`
+  }
+}
+
+/**
+ * 更新账户锁定状态
+ */
+const updateAccountLockStatus = (accountId: string, config: any): void => {
+  const lockStatus = getAccountLockStatus(accountId, config)
+  accountLocked.value = lockStatus.isLocked
+  remainingLockTime.value = lockStatus.remainingTime || 0
+  
+  // 如果账户被锁定，显示验证码
+  if (lockStatus.isLocked) {
+    showCaptcha.value = true
+    refreshCaptcha()
+  }
+}
+
+/**
+ * 检查账户锁定状态
+ */
+const checkAccountLockStatus = (): void => {
+  try {
+    // 获取当前用户ID（模拟）
+    const accountId = loginForm.username || 'default_user'
+    
+    // 获取安全配置
+    const config = getSecurityConfig()
+    
+    // 获取账户锁定状态
+    const lockStatus = getAccountLockStatus(accountId, config)
+    
+    // 更新本地状态
+    accountLocked.value = lockStatus.isLocked
+    remainingLockTime.value = lockStatus.remainingTime || 0
+    
+    // 如果账户被锁定，显示验证码
+    showCaptcha.value = lockStatus.isLocked
+    if (lockStatus.isLocked) {
+      refreshCaptcha()
+    }
+    
+    // 如果账户已解锁且之前是锁定状态，停止定时器
+    if (!lockStatus.isLocked && accountLocked.value) {
+      accountLocked.value = false
+      remainingLockTime.value = 0
+      showCaptcha.value = false
+    }
+  } catch (error) {
+    console.error('检查账户锁定状态失败:', error)
+  }
+}
+
+/**
+ * 刷新验证码
+ */
+const refreshCaptcha = (): void => {
+  // 模拟生成验证码图片
+  captchaImage.value = `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="40" viewBox="0 0 120 40"><rect width="120" height="40" fill="%23f0f0f0"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="20" fill="%23333">${Math.random().toString(36).substring(2, 8).toUpperCase()}</text></svg>`
+}
+
+/**
+ * 发送两步验证码（通过短信或邮件）
+ */
+const sendTwoFactorCode = (): void => {
+  // 模拟发送两步验证码
+  twoFactorCooldown.value = 60
+  const timer = setInterval(() => {
+    twoFactorCooldown.value--
+    if (twoFactorCooldown.value <= 0) {
+      clearInterval(timer)
+    }
+  }, 1000)
+  ElMessage.success('验证码已发送到您的手机或邮箱')
+}
+
+/**
+ * 启动锁定状态定时检查
+ */
+const startLockStatusCheck = (): void => {
+  // 立即检查一次
+  checkAccountLockStatus()
+  
+  // 每秒检查一次锁定状态
+  lockStatusTimer.value = window.setInterval(() => {
+    checkAccountLockStatus()
+  }, 1000) as unknown as number
+}
+
+/**
+ * 停止锁定状态定时检查
+ */
+const stopLockStatusCheck = (): void => {
+  if (lockStatusTimer.value) {
+    clearInterval(lockStatusTimer.value)
+    lockStatusTimer.value = null
+  }
+}
+
+/**
+ * 处理解锁逻辑
+ */
+const handleUnlock = async () => {
+  if (!loginFormRef.value) return
+  
+  // 验证验证码
+  if (!loginForm.captcha) {
+    ElMessage.error('请输入验证码')
+    return
+  }
+  
+  // 这里应该调用后端API验证验证码
+  // 暂时模拟验证成功
+  const isCaptchaValid = loginForm.captcha.length >= 4 // 简单验证
+  
+  if (!isCaptchaValid) {
+    ElMessage.error('验证码错误')
+    return
+  }
+  
+  // 验证通过，解锁账户
+  const accountId = loginForm.username || 'default_user'
+  
+  // 清除账户锁定状态
+  accountLocked.value = false
+  remainingLockTime.value = 0
+  showCaptcha.value = false
+  
+  // 重置失败尝试计数器
+  resetFailedAttempts(accountId)
+  
+  ElMessage.success('账户解锁成功，请重新登录')
+  
+  // 清空表单
+  loginForm.captcha = ''
+}
 
 /**
  * 处理登录逻辑
@@ -175,28 +428,128 @@ const rules = reactive<FormRules>({
 const handleLogin = async () => {
   if (!loginFormRef.value) return
   
-  await loginFormRef.value.validate((valid) => {
+  await loginFormRef.value.validate(async (valid) => {
     if (valid) {
       loading.value = true
       
-      // 模拟登录请求
-      setTimeout(() => {
-        // 简单的模拟登录验证
-        if (loginForm.username === 'admin' && loginForm.password === '123456') {
-          // 设置登录状态
-          localStorage.setItem('isAuthenticated', 'true')
-          localStorage.setItem('username', loginForm.username)
-          
-          ElMessage.success('登录成功')
-          
-          // 跳转到仪表盘
-          router.push('/dashboard')
-        } else {
-          ElMessage.error('用户名或密码错误')
+      try {
+        // 获取当前用户ID
+        const accountId = loginForm.username || 'default_user'
+        
+        // 获取客户端信息
+        const ipAddress = getClientIpAddress()
+        const userAgent = getUserAgent()
+        
+        // 获取安全配置
+        const config = getSecurityConfig()
+        
+        // 检查是否超出登录频率限制
+        if (isRateLimited(accountId, ipAddress, config)) {
+          ElMessage.error('登录过于频繁，请稍后再试')
+          // 记录失败尝试
+          recordLoginAttempt(accountId, ipAddress, userAgent, false)
+          // 显示验证码
+          showCaptcha.value = true
+          refreshCaptcha()
+          return
         }
         
+        // 检查账户是否被锁定
+        const lockStatus = getAccountLockStatus(accountId, config)
+        if (lockStatus.isLocked) {
+          // 更新本地状态以显示锁定警告
+          accountLocked.value = true
+          remainingLockTime.value = lockStatus.remainingTime || 0
+          // 显示验证码
+          showCaptcha.value = true
+          refreshCaptcha()
+          // 停止加载状态并返回，防止继续执行登录逻辑
+          loading.value = false
+          return
+        }
+        
+        // 模拟登录请求
+        setTimeout(async () => {
+          // 简单的模拟登录验证
+          if (loginForm.username === 'admin' && loginForm.password === '123456') {
+            // 检查是否需要两步验证
+            const twoFactorStatus = getTwoFactorStatus(accountId)
+            
+            // 如果启用了两步验证且尚未验证
+            if (twoFactorStatus.enabled && !showTwoFactor.value) {
+              showTwoFactor.value = true
+              loading.value = false
+              ElMessage.info('请输入两步验证码')
+              return
+            }
+            
+            // 如果需要两步验证，验证两步验证码
+            if (showTwoFactor.value) {
+              if (!loginForm.twoFactorCode) {
+                ElMessage.error('请输入两步验证码')
+                loading.value = false
+                return
+              }
+              
+              // 验证两步验证码
+              const isTwoFactorValid = await verifyTwoFactorToken(accountId, loginForm.twoFactorCode)
+              if (!isTwoFactorValid) {
+                ElMessage.error('两步验证码错误')
+                loading.value = false
+                return
+              }
+            }
+            
+            // 记录成功登录尝试
+            recordLoginAttempt(accountId, ipAddress, userAgent, true)
+            
+            // 设置登录状态
+            localStorage.setItem('isAuthenticated', 'true')
+            localStorage.setItem('username', loginForm.username)
+            localStorage.setItem('userId', accountId)
+            
+            ElMessage.success('登录成功')
+            
+            // 跳转到仪表盘
+            router.push('/dashboard')
+          } else {
+            // 记录失败登录尝试
+            recordLoginAttempt(accountId, ipAddress, userAgent, false)
+            
+            // 再次检查账户锁定状态
+            const updatedLockStatus = getAccountLockStatus(accountId, config)
+            if (updatedLockStatus.isLocked) {
+              ElMessage.error(`登录失败次数过多，账户已被锁定，剩余时间：${formatRemainingTime(updatedLockStatus.remainingTime || 0)}`)
+              // 强制更新账户锁定状态
+              updateAccountLockStatus(accountId, config)
+              // 显示验证码
+              showCaptcha.value = true
+              refreshCaptcha()
+              // 停止加载状态
+              loading.value = false
+              // 不隐藏表单，保持可见以便输入验证码
+            } else {
+              ElMessage.error('用户名或密码错误')
+              // 如果接近锁定阈值，显示警告
+              const attempts = config.lockout.maxFailedAttempts
+              const lockStatus = getAccountLockStatus(accountId, config)
+              // 计算剩余尝试次数（简单模拟）
+              const remainingAttempts = attempts - 1 // 简化处理
+              if (remainingAttempts <= 2) {
+                ElMessage.warning(`登录失败次数过多，再失败${remainingAttempts}次账户将被锁定`)
+              }
+              // 停止加载状态
+              loading.value = false
+            }
+          }
+          
+          loading.value = false
+        }, 1000)
+      } catch (error) {
+        console.error('登录处理失败:', error)
+        ElMessage.error('登录过程中发生错误，请稍后重试')
         loading.value = false
-      }, 1000)
+      }
     }
   })
 }
@@ -222,6 +575,17 @@ const goToForgotPassword = () => {
   // 这里可以添加忘记密码页面的路由，暂时使用提示信息
   ElMessage.info('忘记密码功能正在开发中，请联系管理员重置密码')
 }
+
+// 生命周期
+onMounted(() => {
+  // 启动锁定状态检查
+  startLockStatusCheck()
+})
+
+// 组件卸载时清理定时器
+onUnmounted(() => {
+  stopLockStatusCheck()
+})
 </script>
 
 <style scoped>
@@ -379,6 +743,17 @@ const goToForgotPassword = () => {
   margin: 0;
 }
 
+.lock-warning {
+  margin-bottom: 1.5rem;
+}
+
+.lock-desc {
+  color: #f56c6c;
+  font-size: 14px;
+  margin-top: 8px;
+  text-align: center;
+}
+
 .login-form {
   margin-bottom: 2rem;
 }
@@ -488,6 +863,40 @@ const goToForgotPassword = () => {
   margin-right: 8px;
 }
 
+.captcha-container {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.captcha-input {
+  flex: 1;
+}
+
+.captcha-image {
+  width: 120px;
+  height: 40px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.two-factor-container {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.two-factor-input {
+  flex: 1;
+}
+
+.two-factor-tip {
+  color: #909399;
+  font-size: 12px;
+  margin-top: 5px;
+}
+
 .login-button {
   width: 100%;
   height: 50px;
@@ -503,12 +912,12 @@ const goToForgotPassword = () => {
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
-.login-button:hover {
+.login-button:hover:not(.is-disabled) {
   transform: translateY(-2px);
   box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
 }
 
-.login-button:active {
+.login-button:active:not(.is-disabled) {
   transform: translateY(0);
 }
 
@@ -688,6 +1097,17 @@ const goToForgotPassword = () => {
   .card-header {
     margin-bottom: 2rem;
   }
+  
+  .captcha-container,
+  .two-factor-container {
+    flex-direction: column;
+  }
+  
+  .captcha-image,
+  .two-factor-container .el-button {
+    width: 100%;
+    margin-top: 10px;
+  }
 }
 
 @media (max-width: 480px) {
@@ -719,6 +1139,16 @@ const goToForgotPassword = () => {
   .logo-circle svg {
     width: 30px;
     height: 30px;
+  }
+  
+  .button-row {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .home-button,
+  .forgot-password-button {
+    width: 100% !important;
   }
 }
 </style>

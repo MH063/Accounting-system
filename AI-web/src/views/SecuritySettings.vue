@@ -33,6 +33,22 @@
           <div class="setting-section">
             <h3>两步验证</h3>
             <div class="setting-item">
+              <span class="setting-label">两步验证</span>
+              <div class="setting-control">
+                <span class="setting-desc">{{ twoFactorEnabled ? '已开启' : '未开启' }}</span>
+                <el-switch v-model="intendedTwoFactorState" @change="(val: boolean) => toggleTwoFactor(val)" size="default" :loading="twoFactorLoading" />
+              </div>
+            </div>
+            
+            <div class="setting-item" v-if="twoFactorEnabled">
+              <span class="setting-label">备用验证码</span>
+              <div class="setting-control">
+                <span class="setting-desc">{{ backupCodesCount }}个备用验证码可用</span>
+                <el-button @click="showBackupCodesDialog = true" size="default">查看</el-button>
+              </div>
+            </div>
+            
+            <div class="setting-item">
               <span class="setting-label">手机验证</span>
               <div class="setting-control">
                 <span class="setting-desc">{{ phoneVerified ? '已绑定手机：' + maskedPhone : '未绑定手机' }}</span>
@@ -51,20 +67,43 @@
                 </el-button>
               </div>
             </div>
-            
+          </div>
+          
+          <!-- 生物识别认证 -->
+          <div class="setting-section">
+            <h3>生物识别认证</h3>
             <div class="setting-item">
-              <span class="setting-label">两步验证</span>
+              <span class="setting-label">指纹识别</span>
               <div class="setting-control">
-                <span class="setting-desc">{{ twoFactorEnabled ? '已开启' : '未开启' }}</span>
-                <el-switch v-model="twoFactorEnabled" @change="toggleTwoFactor" size="default" />
+                <span class="setting-desc">{{ fingerprintEnabled ? '已启用' : '未启用' }}</span>
+                <el-switch 
+                  v-model="fingerprintEnabled" 
+                  @change="(val: boolean) => toggleBiometric('fingerprint', val)" 
+                  size="default" 
+                  :loading="biometricLoading.fingerprint"
+                  :disabled="!biometricAvailable"
+                />
               </div>
             </div>
             
-            <div class="setting-item" v-if="twoFactorEnabled">
-              <span class="setting-label">备用验证码</span>
+            <div class="setting-item">
+              <span class="setting-label">面部识别</span>
               <div class="setting-control">
-                <span class="setting-desc">{{ backupCodesCount }}个备用验证码可用</span>
-                <el-button @click="showBackupCodesDialog = true" size="default">查看</el-button>
+                <span class="setting-desc">{{ faceRecognitionEnabled ? '已启用' : '未启用' }}</span>
+                <el-switch 
+                  v-model="faceRecognitionEnabled" 
+                  @change="(val: boolean) => toggleBiometric('face', val)" 
+                  size="default" 
+                  :loading="biometricLoading.face"
+                  :disabled="!biometricAvailable"
+                />
+              </div>
+            </div>
+            
+            <div class="setting-item" v-if="!biometricAvailable">
+              <span class="setting-label">设备支持</span>
+              <div class="setting-control">
+                <span class="setting-desc" style="color: #f56c6c;">当前设备不支持生物识别功能</span>
               </div>
             </div>
           </div>
@@ -101,6 +140,50 @@
               </div>
             </div>
           </div>
+          
+          <!-- 登录安全 -->
+          <div class="setting-section">
+            <h3>登录安全</h3>
+            <div class="setting-item">
+              <span class="setting-label">登录频率限制</span>
+              <div class="setting-control">
+                <span class="setting-desc">防止暴力破解攻击</span>
+                <el-switch 
+                  v-model="loginRateLimit" 
+                  @change="(val: boolean) => toggleLoginRateLimit(val)" 
+                  size="default" 
+                  :loading="rateLimitLoading"
+                />
+              </div>
+            </div>
+            
+            <div class="setting-item">
+              <span class="setting-label">失败尝试锁定</span>
+              <div class="setting-control">
+                <span class="setting-desc">连续失败{{ maxFailedAttempts }}次后锁定账户</span>
+                <el-button @click="showLockoutSettings = true" size="default">设置</el-button>
+              </div>
+            </div>
+            
+            <!-- 新增：账户状态 -->
+            <div class="setting-item">
+              <span class="setting-label">账户状态</span>
+              <div class="setting-control">
+                <span class="setting-desc" :style="{ color: accountLocked ? '#f56c6c' : '#67c23a' }">
+                  {{ accountLocked ? `已锁定 (${formatRemainingTime(remainingLockTime)})` : '正常' }}
+                </span>
+                <el-button 
+                  v-if="accountLocked" 
+                  @click="unlockCurrentUserAccount" 
+                  type="danger" 
+                  size="default"
+                  :loading="unlockLoading"
+                >
+                  解锁账户
+                </el-button>
+              </div>
+            </div>
+          </div>
         </el-tab-pane>
         
         <!-- 账号保护 -->
@@ -122,6 +205,15 @@
                 <el-switch v-model="abnormalLoginAlert" @change="toggleAbnormalLoginAlert" size="default" />
               </div>
             </div>
+            
+            <!-- 会话管理 -->
+            <div class="setting-item">
+              <span class="setting-label">自动登出</span>
+              <div class="setting-control">
+                <span class="setting-desc">无操作{{ sessionTimeout }}分钟后自动登出</span>
+                <el-button @click="showSessionTimeoutDialog = true" size="default">设置</el-button>
+              </div>
+            </div>
           </div>
           
           <div class="setting-section">
@@ -141,6 +233,15 @@
                 <el-button @click="showSecurityQuestionDialog = true" size="default">设置</el-button>
               </div>
             </div>
+            
+            <!-- 数据加密 -->
+            <div class="setting-item">
+              <span class="setting-label">数据加密</span>
+              <div class="setting-control">
+                <span class="setting-desc">{{ dataEncryptionEnabled ? '已启用端到端加密' : '未启用端到端加密' }}</span>
+                <el-switch v-model="dataEncryptionEnabled" @change="toggleDataEncryption" size="default" />
+              </div>
+            </div>
           </div>
         </el-tab-pane>
         
@@ -153,6 +254,35 @@
               <div class="setting-control">
                 <span class="setting-desc">查看最近的安全相关操作</span>
                 <el-button @click="showSecurityLog = true" size="default">查看日志</el-button>
+              </div>
+            </div>
+            
+            <!-- 导出日志 -->
+            <div class="setting-item">
+              <span class="setting-label">导出日志</span>
+              <div class="setting-control">
+                <span class="setting-desc">导出安全日志用于审计</span>
+                <el-button @click="exportSecurityLog" size="default">导出</el-button>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 安全评估 -->
+            <div class="setting-section">
+            <h3>安全评估</h3>
+            <div class="setting-item">
+              <span class="setting-label">安全评分</span>
+              <div class="setting-control">
+                <span class="setting-desc">您的账户安全评分为 {{ securityScore }} 分</span>
+                <el-button @click="performSecurityCheck" size="default">安全检查</el-button>
+              </div>
+            </div>
+            
+            <div class="setting-item">
+              <span class="setting-label">风险提醒</span>
+              <div class="setting-control">
+                <span class="setting-desc">{{ securityRiskLevel }}</span>
+                <el-button type="warning" @click="showRiskDetails = true" size="default" v-if="securityRiskLevel !== '低风险'">查看详情</el-button>
               </div>
             </div>
           </div>
@@ -399,12 +529,233 @@
         </div>
       </div>
     </el-dialog>
+    
+    <!-- 锁定设置对话框 -->
+    <el-dialog
+      v-model="showLockoutSettings"
+      title="账户锁定设置"
+      width="500px"
+    >
+      <el-form :model="lockoutSettings" label-width="120px">
+        <el-form-item label="最大失败次数">
+          <el-input-number 
+            v-model="lockoutSettings.maxFailedAttempts" 
+            :min="1" 
+            :max="10"
+            controls-position="right"
+          />
+          <span class="form-desc">连续失败多少次后锁定账户</span>
+        </el-form-item>
+        <el-form-item label="锁定时长">
+          <el-input-number 
+            v-model="lockoutSettings.lockoutDuration" 
+            :min="1" 
+            :max="1440"
+            controls-position="right"
+          />
+          <span class="form-desc">锁定时长（分钟）</span>
+        </el-form-item>
+        <el-form-item label="重置计数器">
+          <el-switch v-model="lockoutSettings.resetCounter" />
+          <span class="form-desc">成功登录后重置失败计数器</span>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="showLockoutSettings = false">取消</el-button>
+          <el-button type="primary" @click="saveLockoutSettings">保存</el-button>
+        </span>
+      </template>
+    </el-dialog>
+    
+    <!-- 会话超时对话框 -->
+    <el-dialog
+      v-model="showSessionTimeoutDialog"
+      title="会话超时设置"
+      width="500px"
+    >
+      <el-form :model="sessionTimeoutForm" label-width="120px">
+        <el-form-item label="超时时长">
+          <el-slider 
+            v-model="sessionTimeoutForm.timeout" 
+            :min="1" 
+            :max="120" 
+            show-input 
+            :show-input-controls="false"
+          />
+          <span class="form-desc">无操作多少分钟后自动登出（1-120分钟）</span>
+        </el-form-item>
+        <el-form-item label="提醒时间">
+          <el-input-number 
+            v-model="sessionTimeoutForm.warningTime" 
+            :min="1" 
+            :max="10"
+            controls-position="right"
+          />
+          <span class="form-desc">登出前提前多少分钟提醒（1-10分钟）</span>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="showSessionTimeoutDialog = false">取消</el-button>
+          <el-button type="primary" @click="saveSessionTimeout">保存</el-button>
+        </span>
+      </template>
+    </el-dialog>
+    
+    <!-- 风险详情对话框 -->
+    <el-dialog
+      v-model="showRiskDetails"
+      title="安全风险详情"
+      width="600px"
+    >
+      <div class="risk-details">
+        <el-alert 
+          :title="securityRiskLevel" 
+          :type="securityRiskLevel === '高风险' ? 'error' : securityRiskLevel === '中风险' ? 'warning' : 'info'" 
+          show-icon
+          :closable="false"
+        />
+        
+        <div class="risk-item" v-for="(risk, index) in securityRisks" :key="index">
+          <div class="risk-title">{{ risk.title }}</div>
+          <div class="risk-desc">{{ risk.description }}</div>
+          <div class="risk-solution">
+            <strong>建议:</strong> {{ risk.solution }}
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+    
+    <!-- 两步验证设置对话框 -->
+    <el-dialog
+      v-model="showTwoFactorSetupDialog"
+      title="设置两步验证"
+      width="500px"
+      @close="handleTwoFactorDialogClose"
+    >
+      <div class="two-factor-setup">
+        <el-steps :active="twoFactorStep" finish-status="success" simple>
+          <el-step title="启用两步验证" />
+          <el-step title="备份验证码" />
+        </el-steps>
+        
+        <div v-if="twoFactorStep === 0" class="setup-step">
+          <p class="setup-desc">请使用身份验证器应用扫描下方二维码或手动输入密钥：</p>
+          
+          <div class="qr-code-container">
+            <img 
+              :src="twoFactorQrCode" 
+              alt="两步验证二维码" 
+              class="qr-code-image"
+              v-if="twoFactorQrCode"
+            />
+            <div v-else class="qr-placeholder">
+              <div class="qr-content">
+                <div class="qr-logo">🔒</div>
+                <div class="qr-text">生成中...</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="secret-key">
+            <span class="key-label">密钥：</span>
+            <span class="key-value">{{ twoFactorSecret }}</span>
+            <el-button 
+              size="small" 
+              @click="copySecretKey"
+              class="copy-button"
+            >
+              复制
+            </el-button>
+          </div>
+          
+          <div class="verification-input">
+            <el-input 
+              v-model="twoFactorCode" 
+              placeholder="请输入6位验证码" 
+              maxlength="6"
+              @input="validateTwoFactorCode"
+            />
+            <p class="verification-tip">请输入身份验证器应用生成的6位验证码以完成设置</p>
+          </div>
+        </div>
+        
+        <div v-if="twoFactorStep === 1" class="setup-step">
+          <p class="setup-desc">请妥善保存以下备用验证码，当您无法使用身份验证器时可以使用它们登录：</p>
+          
+          <div class="backup-codes-display">
+            <div 
+              class="backup-code-item" 
+              v-for="(code, index) in newBackupCodes" 
+              :key="index"
+            >
+              <span class="code-number">{{ index + 1 }}.</span>
+              <span class="code-text">{{ code }}</span>
+            </div>
+          </div>
+          
+          <el-alert 
+            title="重要提醒" 
+            type="warning" 
+            description="请立即保存这些备用验证码，一旦离开此页面将无法再次查看。" 
+            show-icon
+            :closable="false"
+          />
+        </div>
+      </div>
+      
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="cancelTwoFactorSetup">取消</el-button>
+          <el-button 
+            v-if="twoFactorStep === 0" 
+            type="primary" 
+            @click="verifyTwoFactorCode"
+            :disabled="!isTwoFactorCodeValid"
+          >
+            验证并继续
+          </el-button>
+          <el-button 
+            v-if="twoFactorStep === 1" 
+            type="primary" 
+            @click="completeTwoFactorSetup"
+          >
+            完成设置
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import QRCode from 'qrcode'
+import { 
+  checkBiometricSupport,
+  enableBiometric,
+  disableBiometric,
+  isBiometricEnabled,
+  type BiometricType
+} from '@/services/biometricService'
+import { 
+  getSecurityConfig,
+  saveSecurityConfig,
+  getAccountLockStatus,
+  unlockAccount,
+  type SecurityConfig
+} from '@/services/accountSecurityService'
+import { 
+  enableTwoFactor,
+  disableTwoFactor,
+  getTwoFactorStatus,
+  getTwoFactorConfig,
+  saveTwoFactorConfig,
+  verifyTwoFactorToken,
+  regenerateBackupCodes as generateNewBackupCodes
+} from '@/services/twoFactorService'
 
 // 当前激活的标签页
 const activeTab = ref('account')
@@ -416,6 +767,41 @@ const twoFactorEnabled = ref(false)
 const passwordStrength = ref('强')
 const loginProtection = ref(false)
 const abnormalLoginAlert = ref(true)
+const fingerprintEnabled = ref(false)
+const faceRecognitionEnabled = ref(false)
+const loginRateLimit = ref(true)
+const dataEncryptionEnabled = ref(false)
+const securityScore = ref(85)
+const securityRiskLevel = ref('低风险')
+const biometricAvailable = ref(false)
+const accountLocked = ref(false)
+const remainingLockTime = ref(0)
+
+// 加载状态
+const biometricLoading = reactive({
+  fingerprint: false,
+  face: false
+})
+const rateLimitLoading = ref(false)
+const unlockLoading = ref(false)
+const twoFactorLoading = ref(false)
+
+// 两步验证相关状态
+const showTwoFactorSetupDialog = ref(false)
+const twoFactorStep = ref(0)
+const twoFactorSecret = ref('')
+const twoFactorQrCode = ref('')
+const twoFactorCode = ref('')
+const isTwoFactorCodeValid = ref(false)
+const newBackupCodes = ref<string[]>([])
+const twoFactorAccountId = ref('default_user') // 实际应用中应从用户信息获取
+// 用于跟踪用户真实意图的临时变量
+const intendedTwoFactorState = ref(false)
+// 保存原始状态，用于在取消操作时恢复
+const originalTwoFactorState = ref(false)
+
+// 定时器
+const lockStatusTimer = ref<number | null>(null)
 
 // 对话框显示状态
 const showPasswordDialog = ref(false)
@@ -428,6 +814,9 @@ const showBackupCodesDialog = ref(false)
 const showLoginLimitDialog = ref(false)
 const showSecurityQuestionDialog = ref(false)
 const showDetailedLoginHistory = ref(false)
+const showLockoutSettings = ref(false)
+const showSessionTimeoutDialog = ref(false)
+const showRiskDetails = ref(false)
 
 // 表单数据
 const passwordForm = reactive({
@@ -458,6 +847,17 @@ const securityQuestionForm = reactive({
   answer2: '',
   question3: '',
   answer3: ''
+})
+
+const lockoutSettings = reactive({
+  maxFailedAttempts: 5,
+  lockoutDuration: 30,
+  resetCounter: true
+})
+
+const sessionTimeoutForm = reactive({
+  timeout: 30,
+  warningTime: 5
 })
 
 // 密码验证规则
@@ -508,6 +908,14 @@ const strengthClass = computed(() => {
 
 const backupCodesCount = computed(() => {
   return backupCodes.value.length
+})
+
+const maxFailedAttempts = computed(() => {
+  return lockoutSettings.maxFailedAttempts
+})
+
+const sessionTimeout = computed(() => {
+  return sessionTimeoutForm.timeout
 })
 
 // 模拟数据
@@ -612,6 +1020,19 @@ const detailedLoginHistory = ref([
   }
 ])
 
+const securityRisks = ref([
+  {
+    title: '密码强度不足',
+    description: '您的密码强度为中等，建议使用更复杂的密码',
+    solution: '使用包含大小写字母、数字和特殊字符的密码，长度不少于12位'
+  },
+  {
+    title: '未启用数据加密',
+    description: '您的敏感数据未启用端到端加密',
+    solution: '在账号保护设置中启用数据加密功能'
+  }
+])
+
 // 倒计时
 const smsCooldown = ref(0)
 const emailCooldown = ref(0)
@@ -627,11 +1048,157 @@ const changePassword = (): void => {
   passwordForm.confirmPassword = ''
 }
 
-const toggleTwoFactor = (value: boolean): void => {
-  if (value) {
-    ElMessage.success('两步验证已开启')
+const toggleTwoFactor = async (value: boolean): Promise<void> => {
+  try {
+    twoFactorLoading.value = true
+    
+    if (value) {
+      // 保存原始状态
+      originalTwoFactorState.value = twoFactorEnabled.value
+      
+      // 初始化两步验证设置（不立即启用）
+      const result = enableTwoFactor(twoFactorAccountId.value)
+      twoFactorSecret.value = result.secret
+      newBackupCodes.value = result.backupCodes
+      twoFactorStep.value = 0
+      twoFactorCode.value = ''
+      isTwoFactorCodeValid.value = false
+      
+      // 生成二维码
+      const totpUrl = `otpauth://totp/AccountingSystem:${twoFactorAccountId.value}?secret=${result.secret}&issuer=AccountingSystem`
+      twoFactorQrCode.value = await QRCode.toDataURL(totpUrl)
+      
+      // 注意：此时不立即启用两步验证，需要用户完成验证码验证后才真正启用
+      // 先将开关状态设为false，等用户完成设置后再设为true
+      twoFactorEnabled.value = false
+      showTwoFactorSetupDialog.value = true
+    } else {
+      // 禁用两步验证
+      disableTwoFactor(twoFactorAccountId.value)
+      twoFactorEnabled.value = false
+      intendedTwoFactorState.value = false
+      ElMessage.success('两步验证已关闭')
+    }
+  } catch (error) {
+    console.error('切换两步验证失败:', error)
+    ElMessage.error('操作失败，请稍后重试')
+    // 回滚状态
+    twoFactorEnabled.value = !value
+    intendedTwoFactorState.value = !value
+  } finally {
+    twoFactorLoading.value = false
+  }
+}
+
+const validateTwoFactorCode = (): void => {
+  // 简单验证6位数字
+  isTwoFactorCodeValid.value = /^\d{6}$/.test(twoFactorCode.value)
+}
+
+const verifyTwoFactorCode = async (): Promise<void> => {
+  if (!isTwoFactorCodeValid.value) {
+    ElMessage.error('请输入有效的6位验证码')
+    return
+  }
+  
+  try {
+    // 验证TOTP代码
+    const isValid = await verifyTwoFactorToken(twoFactorAccountId.value, twoFactorCode.value)
+    
+    if (isValid) {
+      // 验证通过，真正启用两步验证
+      twoFactorStep.value = 1
+      twoFactorEnabled.value = true
+      intendedTwoFactorState.value = true
+      
+      // 保存设置
+      const twoFactorStatus = getTwoFactorStatus(twoFactorAccountId.value)
+      if (!twoFactorStatus.enabled) {
+        // 如果服务端还没有启用，需要更新状态
+        const config = getTwoFactorConfig(twoFactorAccountId.value)
+        if (config) {
+          config.enabled = true
+          saveTwoFactorConfig(twoFactorAccountId.value, config)
+        }
+      }
+    } else {
+      ElMessage.error('验证码错误，请重新输入')
+    }
+  } catch (error) {
+    console.error('验证两步验证码失败:', error)
+    ElMessage.error('验证失败，请稍后重试')
+  }
+}
+
+const completeTwoFactorSetup = (): void => {
+  // 真正启用两步验证
+  const twoFactorStatus = getTwoFactorStatus(twoFactorAccountId.value)
+  if (twoFactorStatus.enabled) {
+    twoFactorEnabled.value = true
+    intendedTwoFactorState.value = true
+    showTwoFactorSetupDialog.value = false
+    twoFactorStep.value = 0
+    ElMessage.success('两步验证已成功启用')
   } else {
-    ElMessage.warning('两步验证已关闭')
+    ElMessage.error('两步验证设置未完成，请先验证验证码')
+  }
+}
+
+const cancelTwoFactorSetup = (): void => {
+  showTwoFactorSetupDialog.value = false
+  twoFactorStep.value = 0
+  
+  // 检查用户是否已完成两步验证设置
+  const twoFactorStatus = getTwoFactorStatus(twoFactorAccountId.value)
+  
+  // 只有在真正完成设置的情况下才保持开启状态
+  if (twoFactorStatus.enabled && twoFactorStep.value === 1) {
+    // 已完成设置，保持开关开启状态
+    twoFactorEnabled.value = true
+    intendedTwoFactorState.value = true
+  } else {
+    // 未完成设置，回滚到原始状态
+    twoFactorEnabled.value = originalTwoFactorState.value
+    intendedTwoFactorState.value = originalTwoFactorState.value
+    // 清理可能的部分设置
+    disableTwoFactor(twoFactorAccountId.value)
+  }
+}
+
+const handleTwoFactorDialogClose = (): void => {
+  // 检查用户是否已完成两步验证设置
+  const twoFactorStatus = getTwoFactorStatus(twoFactorAccountId.value)
+  
+  // 只有在真正完成设置的情况下才保持开启状态
+  if (twoFactorStatus.enabled && twoFactorStep.value === 1) {
+    // 已完成设置，保持开关开启状态
+    twoFactorEnabled.value = true
+    intendedTwoFactorState.value = true
+  } else {
+    // 未完成设置，回滚到原始状态
+    twoFactorEnabled.value = originalTwoFactorState.value
+    intendedTwoFactorState.value = originalTwoFactorState.value
+    // 清理可能的部分设置
+    disableTwoFactor(twoFactorAccountId.value)
+  }
+  
+  // 重置步骤
+  twoFactorStep.value = 0
+}
+
+const copySecretKey = async (): Promise<void> => {
+  try {
+    await navigator.clipboard.writeText(twoFactorSecret.value)
+    ElMessage.success('密钥已复制到剪贴板')
+  } catch (err) {
+    // 降级方案
+    const textArea = document.createElement('textarea')
+    textArea.value = twoFactorSecret.value
+    document.body.appendChild(textArea)
+    textArea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textArea)
+    ElMessage.success('密钥已复制到剪贴板')
   }
 }
 
@@ -648,6 +1215,43 @@ const toggleAbnormalLoginAlert = (value: boolean): void => {
     ElMessage.success('异常登录提醒已开启')
   } else {
     ElMessage.warning('异常登录提醒已关闭')
+  }
+}
+
+const toggleLoginRateLimit = async (value: boolean): Promise<void> => {
+  try {
+    rateLimitLoading.value = true
+    
+    // 获取当前配置
+    const config = getSecurityConfig()
+    config.rateLimit.enabled = value
+    
+    // 保存配置
+    saveSecurityConfig(config)
+    
+    // 更新本地状态
+    loginRateLimit.value = value
+    
+    if (value) {
+      ElMessage.success('登录频率限制已启用')
+    } else {
+      ElMessage.warning('登录频率限制已禁用')
+    }
+  } catch (error) {
+    console.error('切换登录频率限制失败:', error)
+    ElMessage.error('操作失败，请稍后重试')
+    // 回滚状态
+    loginRateLimit.value = !value
+  } finally {
+    rateLimitLoading.value = false
+  }
+}
+
+const toggleDataEncryption = (value: boolean): void => {
+  if (value) {
+    ElMessage.success('数据加密已启用')
+  } else {
+    ElMessage.warning('数据加密已禁用')
   }
 }
 
@@ -733,11 +1337,15 @@ const regenerateBackupCodes = (): void => {
     cancelButtonText: '取消',
     type: 'warning'
   }).then(() => {
-    // 模拟重新生成验证码
-    backupCodes.value = Array.from({ length: 12 }, (_i) => 
-      Math.floor(100000 + Math.random() * 900000).toString()
-    )
-    ElMessage.success('备用验证码已重新生成')
+    // 重新生成备份验证码
+    try {
+      const newCodes = generateNewBackupCodes(twoFactorAccountId.value)
+      backupCodes.value = newCodes
+      ElMessage.success('备用验证码已重新生成')
+    } catch (error) {
+      console.error('重新生成备份验证码失败:', error)
+      ElMessage.error('重新生成失败，请稍后重试')
+    }
   }).catch(() => {
     // 取消操作
   })
@@ -759,10 +1367,230 @@ const saveSecurityQuestions = (): void => {
   showSecurityQuestionDialog.value = false
 }
 
+const saveLockoutSettings = (): void => {
+  try {
+    // 获取当前配置
+    const config = getSecurityConfig()
+    config.lockout = { ...lockoutSettings }
+    
+    // 保存配置
+    saveSecurityConfig(config)
+    
+    ElMessage.success('账户锁定设置已保存')
+    showLockoutSettings.value = false
+  } catch (error) {
+    console.error('保存账户锁定设置失败:', error)
+    ElMessage.error('保存失败，请稍后重试')
+  }
+}
+
+const saveSessionTimeout = (): void => {
+  ElMessage.success('会话超时设置已保存')
+  showSessionTimeoutDialog.value = false
+}
+
+const exportSecurityLog = (): void => {
+  ElMessage.success('安全日志导出成功')
+}
+
+const performSecurityCheck = (): void => {
+  ElMessage.info('正在进行安全检查...')
+  // 模拟安全检查过程
+  setTimeout(() => {
+    securityScore.value = Math.floor(80 + Math.random() * 20)
+    securityRiskLevel.value = securityScore.value > 90 ? '低风险' : securityScore.value > 70 ? '中风险' : '高风险'
+    ElMessage.success('安全检查完成')
+  }, 1500)
+}
+
+// 生物识别功能切换
+const toggleBiometric = async (type: BiometricType, enabled: boolean): Promise<void> => {
+  try {
+    biometricLoading[type] = true
+    
+    if (enabled) {
+      // 启用生物识别
+      const result = await enableBiometric(type)
+      
+      if (result.success) {
+        ElMessage.success(result.message)
+        // 更新本地状态
+        if (type === 'fingerprint') {
+          fingerprintEnabled.value = true
+        } else {
+          faceRecognitionEnabled.value = true
+        }
+      } else {
+        // 启用失败，回滚开关状态
+        ElMessage.error(result.message)
+        if (type === 'fingerprint') {
+          fingerprintEnabled.value = false
+        } else {
+          faceRecognitionEnabled.value = false
+        }
+      }
+    } else {
+      // 禁用生物识别
+      const result = disableBiometric(type)
+      
+      if (result.success) {
+        ElMessage.success(result.message)
+        // 更新本地状态
+        if (type === 'fingerprint') {
+          fingerprintEnabled.value = false
+        } else {
+          faceRecognitionEnabled.value = false
+        }
+      } else {
+        // 禁用失败，回滚开关状态
+        ElMessage.error(result.message)
+        if (type === 'fingerprint') {
+          fingerprintEnabled.value = true
+        } else {
+          faceRecognitionEnabled.value = true
+        }
+      }
+    }
+  } catch (error) {
+    console.error('生物识别切换错误:', error)
+    ElMessage.error('操作失败，请稍后重试')
+    // 回滚开关状态
+    if (type === 'fingerprint') {
+      fingerprintEnabled.value = !enabled
+    } else {
+      faceRecognitionEnabled.value = !enabled
+    }
+  } finally {
+    biometricLoading[type] = false
+  }
+}
+
+// 解锁当前用户账户
+const unlockCurrentUserAccount = async (): Promise<void> => {
+  try {
+    unlockLoading.value = true
+    
+    // 获取当前用户ID（模拟）
+    const accountId = 'default_user'
+    
+    // 解锁账户
+    unlockAccount(accountId)
+    
+    // 更新本地状态
+    accountLocked.value = false
+    remainingLockTime.value = 0
+    
+    ElMessage.success('账户已解锁')
+  } catch (error) {
+    console.error('解锁账户失败:', error)
+    ElMessage.error('解锁失败，请稍后重试')
+  } finally {
+    unlockLoading.value = false
+  }
+}
+
+// 格式化剩余时间
+const formatRemainingTime = (seconds: number): string => {
+  if (seconds <= 0) return '0秒'
+  
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  
+  if (minutes > 0) {
+    return `${minutes}分${remainingSeconds}秒`
+  } else {
+    return `${remainingSeconds}秒`
+  }
+}
+
+// 检查账户锁定状态
+const checkAccountLockStatus = (): void => {
+  try {
+    // 获取当前用户ID（模拟）
+    const accountId = 'default_user'
+    
+    // 获取安全配置
+    const config = getSecurityConfig()
+    
+    // 获取账户锁定状态
+    const lockStatus = getAccountLockStatus(accountId, config)
+    
+    // 更新本地状态
+    accountLocked.value = lockStatus.isLocked
+    remainingLockTime.value = lockStatus.remainingTime || 0
+  } catch (error) {
+    console.error('检查账户锁定状态失败:', error)
+  }
+}
+
+// 初始化生物识别支持检查
+const initializeBiometricSupport = async (): Promise<void> => {
+  try {
+    const support = await checkBiometricSupport()
+    biometricAvailable.value = support.biometricAvailable
+    fingerprintEnabled.value = support.fingerprintEnabled
+    faceRecognitionEnabled.value = support.faceRecognitionEnabled
+  } catch (error) {
+    console.error('初始化生物识别支持检查失败:', error)
+    biometricAvailable.value = false
+    fingerprintEnabled.value = false
+    faceRecognitionEnabled.value = false
+  }
+}
+
+// 初始化安全配置
+const initializeSecurityConfig = (): void => {
+  try {
+    // 获取安全配置
+    const config = getSecurityConfig()
+    
+    // 更新本地状态
+    loginRateLimit.value = config.rateLimit.enabled
+    Object.assign(lockoutSettings, config.lockout)
+    
+    // 初始化两步验证状态为关闭（系统默认要求）
+    twoFactorEnabled.value = false
+    // 同步设置意图状态
+    intendedTwoFactorState.value = false
+  } catch (error) {
+    console.error('初始化安全配置失败:', error)
+  }
+}
+
+// 启动锁定状态定时检查
+const startLockStatusCheck = (): void => {
+  // 立即检查一次
+  checkAccountLockStatus()
+  
+  // 每秒检查一次锁定状态
+  lockStatusTimer.value = window.setInterval(() => {
+    checkAccountLockStatus()
+  }, 1000) as unknown as number
+}
+
+// 停止锁定状态定时检查
+const stopLockStatusCheck = (): void => {
+  if (lockStatusTimer.value) {
+    clearInterval(lockStatusTimer.value)
+    lockStatusTimer.value = null
+  }
+}
+
 // 生命周期
 onMounted(() => {
   // 模拟加载数据
   console.log('安全设置页面加载完成')
+  // 初始化生物识别支持
+  initializeBiometricSupport()
+  // 初始化安全配置
+  initializeSecurityConfig()
+  // 启动锁定状态检查
+  startLockStatusCheck()
+})
+
+// 组件卸载时清理定时器
+onUnmounted(() => {
+  stopLockStatusCheck()
 })
 </script>
 
@@ -1123,6 +1951,156 @@ onMounted(() => {
   margin-left: 16px;
 }
 
+.risk-details {
+  padding: 20px 0;
+}
+
+.risk-item {
+  padding: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.risk-item:last-child {
+  border-bottom: none;
+}
+
+.risk-title {
+  font-weight: 500;
+  color: #303133;
+  margin-bottom: 8px;
+}
+
+.risk-desc {
+  color: #606266;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.risk-solution {
+  color: #409eff;
+  font-size: 13px;
+}
+
+/* 两步验证设置样式 */
+.two-factor-setup {
+  padding: 20px 0;
+}
+
+.setup-desc {
+  color: #606266;
+  font-size: 14px;
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+.qr-code-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.qr-code-image {
+  width: 200px;
+  height: 200px;
+  margin: 0 auto;
+  display: block;
+}
+
+.qr-placeholder {
+  width: 150px;
+  height: 150px;
+  border: 2px dashed #dcdfe6;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-content {
+  text-align: center;
+}
+
+.qr-logo {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.qr-text {
+  color: #909399;
+  font-size: 14px;
+}
+
+.secret-key {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 12px;
+  background: #f5f7fa;
+  border-radius: 4px;
+}
+
+.key-label {
+  font-weight: 500;
+  color: #606266;
+  margin-right: 8px;
+}
+
+.key-value {
+  flex: 1;
+  font-family: monospace;
+  font-size: 16px;
+  color: #303133;
+  word-break: break-all;
+}
+
+.copy-button {
+  margin-left: 8px;
+}
+
+.verification-input {
+  margin-top: 20px;
+}
+
+.verification-tip {
+  color: #909399;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.backup-codes-display {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.backup-codes-display .backup-code-item {
+  padding: 8px 12px;
+  background: #f5f7fa;
+  border-radius: 4px;
+}
+
+.backup-codes-display .code-number {
+  color: #909399;
+  font-size: 12px;
+  margin-right: 8px;
+  min-width: 20px;
+}
+
+.backup-codes-display .code-text {
+  flex: 1;
+  font-family: monospace;
+  font-size: 14px;
+  color: #303133;
+  font-weight: 500;
+}
+
+.setup-step {
+  min-height: 300px;
+}
+
 /* 响应式布局 */
 @media (max-width: 768px) {
   .security-settings {
@@ -1175,6 +2153,10 @@ onMounted(() => {
   .device-actions {
     margin-left: 0;
     margin-top: 8px;
+  }
+  
+  .backup-codes-display {
+    grid-template-columns: 1fr;
   }
 }
 </style>

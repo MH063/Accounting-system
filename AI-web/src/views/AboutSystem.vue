@@ -24,20 +24,12 @@
               <el-descriptions-item label="系统状态">
                 <el-tag :type="systemStatus.type">{{ systemStatus.text }}</el-tag>
                 <el-tag type="info" style="margin-left: 8px;">版本: v1.0.0</el-tag>
-                <el-button 
-                  :icon="Refresh" 
-                  size="small" 
-                  style="margin-left: 8px;"
-                  @click="checkSystemStatus"
-                  :loading="checkingStatus"
-                >
-                  刷新
-                </el-button>
+                <!-- 移除了手动刷新按钮 -->
               </el-descriptions-item>
               <el-descriptions-item label="最后检查时间">
                 {{ formatTime(systemStatus.lastCheckTime) }}
               </el-descriptions-item>
-              <el-descriptions-item v-if="systemStatus.uptime" label="运行时间">
+              <el-descriptions-item v-if="systemStatus.uptime !== undefined" label="运行时间">
                 {{ formatUptime(systemStatus.uptime) }}
               </el-descriptions-item>
               <el-descriptions-item v-if="systemStatus.cpuUsage !== undefined" label="CPU使用率">
@@ -176,23 +168,24 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { InfoFilled, Setting, House, User, Wallet, Document, CreditCard, DataAnalysis, Lock, ArrowRight, Reading, Refresh } from '@element-plus/icons-vue'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { InfoFilled, Setting, House, User, Wallet, Document, CreditCard, DataAnalysis, Lock, ArrowRight, Reading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { getSystemStatus, formatUptime, formatPercentage } from '@/services/systemStatusService'
+import type { SystemStatus } from '@/services/systemStatusService'
 
 const router = useRouter()
 
 // 系统状态
-const systemStatus = ref({
-  type: 'success' as 'success' | 'warning' | 'danger' | 'info',
+const systemStatus = ref<SystemStatus>({
+  type: 'success',
   text: '运行中',
   lastCheckTime: new Date()
 })
 
-// 检查状态的加载状态
-const checkingStatus = ref(false)
+// 自动刷新定时器
+let refreshTimer: number | null = null
 
 // 跳转到用户协议页面
 const goToUserAgreement = () => {
@@ -211,23 +204,33 @@ const goToTermsOfService = () => {
 
 // 检查系统状态
 const checkSystemStatus = async () => {
-  checkingStatus.value = true
-  
   try {
     const status = await getSystemStatus()
     systemStatus.value = status
-    
-    ElMessage.success('系统状态检查完成')
   } catch (error) {
-    ElMessage.error('检查系统状态时发生错误')
+    console.error('检查系统状态时发生错误:', error)
     // 出错时默认显示运行中状态
     systemStatus.value = { 
       type: 'danger', 
       text: '检查失败', 
       lastCheckTime: new Date() 
-    }
-  } finally {
-    checkingStatus.value = false
+    } as SystemStatus
+  }
+}
+
+// 开始自动刷新
+const startAutoRefresh = () => {
+  // 每30秒自动刷新一次系统状态
+  refreshTimer = window.setInterval(() => {
+    checkSystemStatus()
+  }, 30000)
+}
+
+// 停止自动刷新
+const stopAutoRefresh = () => {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
   }
 }
 
@@ -246,9 +249,15 @@ const formatPercentageDisplay = (value: number): string => {
   return formatPercentage(value)
 }
 
-// 组件挂载时检查一次系统状态
+// 组件挂载时检查一次系统状态并启动自动刷新
 onMounted(() => {
   checkSystemStatus()
+  startAutoRefresh()
+})
+
+// 组件卸载时停止自动刷新
+onUnmounted(() => {
+  stopAutoRefresh()
 })
 </script>
 
