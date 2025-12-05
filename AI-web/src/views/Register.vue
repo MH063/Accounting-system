@@ -86,7 +86,53 @@
                 size="large"
                 show-password
                 clearable
+                @input="updatePasswordStrength"
               />
+              <div class="password-strength-indicator" v-if="registerForm.password">
+                <div class="strength-label">密码强度：</div>
+                <div class="strength-bar-container">
+                  <div 
+                    class="strength-bar" 
+                    :class="{
+                      'strength-weak': calculatedStrength.level === '弱',
+                      'strength-medium': calculatedStrength.level === '中',
+                      'strength-strong': calculatedStrength.level === '强'
+                    }"
+                    :style="{ width: calculatedStrength.score * 33.33 + '%' }"
+                  ></div>
+                </div>
+                <div class="strength-text" :class="'text-' + calculatedStrength.level.toLowerCase()">
+                  {{ calculatedStrength.level }}
+                </div>
+              </div>
+              
+              <!-- 密码要求检查 -->
+              <div class="password-requirements" v-if="registerForm.password">
+                <div class="requirement-item" :class="{ 'met': calculatedStrength.requirements.minLength }">
+                  <span class="requirement-icon">{{ calculatedStrength.requirements.minLength ? '✓' : '○' }}</span>
+                  <span class="requirement-text">至少8个字符</span>
+                </div>
+                <div class="requirement-item" :class="{ 'met': calculatedStrength.requirements.lowercase }">
+                  <span class="requirement-icon">{{ calculatedStrength.requirements.lowercase ? '✓' : '○' }}</span>
+                  <span class="requirement-text">小写字母（a-z）</span>
+                </div>
+                <div class="requirement-item" :class="{ 'met': calculatedStrength.requirements.uppercase }">
+                  <span class="requirement-icon">{{ calculatedStrength.requirements.uppercase ? '✓' : '○' }}</span>
+                  <span class="requirement-text">大写字母（A-Z）</span>
+                </div>
+                <div class="requirement-item" :class="{ 'met': calculatedStrength.requirements.number }">
+                  <span class="requirement-icon">{{ calculatedStrength.requirements.number ? '✓' : '○' }}</span>
+                  <span class="requirement-text">数字（0-9）</span>
+                </div>
+                <div class="requirement-item" :class="{ 'met': calculatedStrength.requirements.special }">
+                  <span class="requirement-icon">{{ calculatedStrength.requirements.special ? '✓' : '○' }}</span>
+                  <span class="requirement-text">特殊字符（例如 !@#$%^&*）</span>
+                </div>
+                <div class="requirement-item" :class="{ 'met': calculatedStrength.requirements.noConsecutive }">
+                  <span class="requirement-icon">{{ calculatedStrength.requirements.noConsecutive ? '✓' : '○' }}</span>
+                  <span class="requirement-text">连续出现的字符不超过两个</span>
+                </div>
+              </div>
             </el-form-item>
 
             <el-form-item label="确认密码" prop="confirmPassword">
@@ -141,7 +187,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 
@@ -172,10 +218,41 @@ const registerForm = reactive({
   confirmPassword: ''
 })
 
+// 密码强度计算函数
+const calculatePasswordStrength = (password: string): { level: string; score: number; requirements: Record<string, boolean> } => {
+  const requirements = {
+    minLength: password.length >= 8,  // 至少8个字符
+    lowercase: /[a-z]/.test(password),  // 小写字母
+    uppercase: /[A-Z]/.test(password),  // 大写字母
+    number: /\d/.test(password),       // 数字
+    special: /[^A-Za-z0-9]/.test(password),  // 特殊字符
+    noConsecutive: !/(.)\1{2,}/.test(password)  // 不超过两个连续相同字符
+  };
+  
+  // 计算满足的条件数量
+  const satisfiedCount = Object.values(requirements).filter(Boolean).length;
+  
+  // 根据满足的条件数量确定强度等级
+  let level = '弱';
+  let score = 0;
+  
+  if (satisfiedCount >= 5) {
+    level = '强';
+    score = 3;
+  } else if (satisfiedCount >= 3) {
+    level = '中';
+    score = 2;
+  } else {
+    score = 1;
+  }
+  
+  return { level, score, requirements };
+};
+
 /**
  * 自定义验证规则：确认密码验证
  */
-const validateConfirmPassword: ValidatorFn = (_rule, value: string, callback): void => {
+const validateConfirmPassword = (_rule: any, value: string, callback: (error?: Error) => void): void => {
   if (value === '') {
     callback(new Error('请再次输入密码'))
   } else if (value !== registerForm.password) {
@@ -183,6 +260,16 @@ const validateConfirmPassword: ValidatorFn = (_rule, value: string, callback): v
   } else {
     callback()
   }
+}
+
+// 计算属性
+const calculatedStrength = computed(() => {
+  return calculatePasswordStrength(registerForm.password)
+})
+
+// 方法
+const updatePasswordStrength = (): void => {
+  // 实时更新密码强度，这里不需要做任何事情，因为computed属性会自动更新
 }
 
 // 表单验证规则
@@ -198,8 +285,21 @@ const rules = reactive<FormRules>({
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, max: 20, message: '密码长度在 6 到 20 个字符', trigger: 'blur' },
-    { pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{6,}$/, message: '密码必须包含大小写字母和数字', trigger: 'blur' }
+    { min: 8, message: '密码长度至少8位', trigger: 'blur' },
+    {
+      validator: (_rule: any, value: string, callback: (error?: Error) => void) => {
+        // 检查密码强度
+        const strength = calculatePasswordStrength(value);
+        const satisfiedCount = Object.values(strength.requirements).filter(Boolean).length;
+        
+        if (satisfiedCount < 3) {
+          callback(new Error('密码必须满足至少3项要求'));
+        } else {
+          callback();
+        }
+      },
+      trigger: 'blur'
+    }
   ],
   confirmPassword: [
     { required: true, message: '请再次输入密码', trigger: 'blur' },
@@ -397,6 +497,102 @@ const goToHome = (): void => {
   width: 100%;
   max-width: 400px;
   margin: 0 auto;
+}
+
+/* 密码强度指示器 */
+.password-strength-indicator {
+  display: flex;
+  align-items: center;
+  margin-top: 8px;
+  gap: 12px;
+}
+
+.strength-label {
+  font-size: 12px;
+  color: #606266;
+  white-space: nowrap;
+}
+
+.strength-bar-container {
+  flex: 1;
+  height: 6px;
+  background-color: #e4e7ed;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.strength-bar {
+  height: 100%;
+  transition: all 0.3s ease;
+  border-radius: 3px;
+}
+
+.strength-bar.strength-weak {
+  background-color: #f56c6c;
+}
+
+.strength-bar.strength-medium {
+  background-color: #e6a23c;
+}
+
+.strength-bar.strength-strong {
+  background-color: #67c23a;
+}
+
+.strength-text {
+  font-size: 12px;
+  font-weight: 500;
+  min-width: 24px;
+  text-align: right;
+}
+
+.strength-text.text-弱 {
+  color: #f56c6c;
+}
+
+.strength-text.text-中 {
+  color: #e6a23c;
+}
+
+.strength-text.text-强 {
+  color: #67c23a;
+}
+
+/* 密码要求检查 */
+.password-requirements {
+  margin-top: 12px;
+  padding: 12px;
+  background-color: #f5f7fa;
+  border-radius: 4px;
+}
+
+.requirement-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.requirement-item:last-child {
+  margin-bottom: 0;
+}
+
+.requirement-item.met {
+  color: #67c23a;
+}
+
+.requirement-icon {
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  margin-right: 8px;
+  font-weight: bold;
+}
+
+.requirement-text {
+  flex: 1;
 }
 
 .register-header {

@@ -29,7 +29,7 @@ export const generateSecret = (): string => {
 };
 
 /**
- * 将字节数组转换为Base32编码字符串
+ * 将字节数组转换为Base32编码字符串（RFC 4648标准）
  * @param bytes 字节数组
  * @returns Base32编码字符串
  */
@@ -103,12 +103,13 @@ const getTimeWindow = (step: number = 30): number => {
 };
 
 /**
- * 将Base32编码字符串转换为字节数组
+ * 将Base32编码字符串转换为字节数组（RFC 4648标准）
  * @param base32 Base32编码字符串
  * @returns 字节数组
  */
 const base32ToBytes = (base32: string): Uint8Array => {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  // RFC 4648标准：去除填充字符并转为大写
   base32 = base32.replace(/=/g, '').toUpperCase();
   
   let bits = 0;
@@ -119,6 +120,7 @@ const base32ToBytes = (base32: string): Uint8Array => {
     const char = base32[i]!;
     const index = alphabet.indexOf(char);
     
+    // RFC 4648标准：只允许特定字符
     if (index === -1) {
       throw new Error(`Invalid Base32 character: ${char}`);
     }

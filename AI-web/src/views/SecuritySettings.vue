@@ -297,7 +297,52 @@
           <el-input v-model="passwordForm.currentPassword" type="password" show-password />
         </el-form-item>
         <el-form-item label="新密码" prop="newPassword">
-          <el-input v-model="passwordForm.newPassword" type="password" show-password />
+          <el-input v-model="passwordForm.newPassword" type="password" show-password @input="updatePasswordStrength" />
+          <div class="password-strength-indicator" v-if="passwordForm.newPassword">
+            <div class="strength-label">密码强度：</div>
+            <div class="strength-bar-container">
+              <div 
+                class="strength-bar" 
+                :class="{
+                  'strength-weak': calculatedStrength.level === '弱',
+                  'strength-medium': calculatedStrength.level === '中',
+                  'strength-strong': calculatedStrength.level === '强'
+                }"
+                :style="{ width: calculatedStrength.score * 33.33 + '%' }"
+              ></div>
+            </div>
+            <div class="strength-text" :class="'text-' + calculatedStrength.level.toLowerCase()">
+              {{ calculatedStrength.level }}
+            </div>
+          </div>
+          
+          <!-- 密码要求检查 -->
+          <div class="password-requirements" v-if="passwordForm.newPassword">
+            <div class="requirement-item" :class="{ 'met': calculatedStrength.requirements.minLength }">
+              <span class="requirement-icon">{{ calculatedStrength.requirements.minLength ? '✓' : '○' }}</span>
+              <span class="requirement-text">至少8个字符</span>
+            </div>
+            <div class="requirement-item" :class="{ 'met': calculatedStrength.requirements.lowercase }">
+              <span class="requirement-icon">{{ calculatedStrength.requirements.lowercase ? '✓' : '○' }}</span>
+              <span class="requirement-text">小写字母（a-z）</span>
+            </div>
+            <div class="requirement-item" :class="{ 'met': calculatedStrength.requirements.uppercase }">
+              <span class="requirement-icon">{{ calculatedStrength.requirements.uppercase ? '✓' : '○' }}</span>
+              <span class="requirement-text">大写字母（A-Z）</span>
+            </div>
+            <div class="requirement-item" :class="{ 'met': calculatedStrength.requirements.number }">
+              <span class="requirement-icon">{{ calculatedStrength.requirements.number ? '✓' : '○' }}</span>
+              <span class="requirement-text">数字（0-9）</span>
+            </div>
+            <div class="requirement-item" :class="{ 'met': calculatedStrength.requirements.special }">
+              <span class="requirement-icon">{{ calculatedStrength.requirements.special ? '✓' : '○' }}</span>
+              <span class="requirement-text">特殊字符（例如 !@#$%^&*）</span>
+            </div>
+            <div class="requirement-item" :class="{ 'met': calculatedStrength.requirements.noConsecutive }">
+              <span class="requirement-icon">{{ calculatedStrength.requirements.noConsecutive ? '✓' : '○' }}</span>
+              <span class="requirement-text">连续出现的字符不超过两个</span>
+            </div>
+          </div>
         </el-form-item>
         <el-form-item label="确认密码" prop="confirmPassword">
           <el-input v-model="passwordForm.confirmPassword" type="password" show-password />
@@ -352,29 +397,67 @@
     </el-dialog>
     
     <!-- 设备管理对话框 -->
-    <el-dialog v-model="showDeviceDialog" title="设备管理" width="600px">
+    <el-dialog v-model="showDeviceDialog" title="设备管理" width="700px">
+      <div class="device-management-header">
+        <el-button type="primary" @click="refreshDeviceList" size="small">刷新列表</el-button>
+        <el-button type="danger" @click="removeAllDevices" size="small">移除所有设备</el-button>
+      </div>
       <div class="device-list">
         <div class="device-item" v-for="device in loginDevices" :key="device.id">
           <div class="device-info">
             <div class="device-name">{{ device.name }}</div>
-            <div class="device-time">{{ device.lastLogin }}</div>
-            <div class="device-location">{{ device.location }}</div>
+            <div class="device-time">最后登录: {{ device.lastLogin }}</div>
+            <div class="device-location">位置: {{ device.location }}</div>
+            <div class="device-ip" v-if="device.ip">IP: {{ device.ip }}</div>
+            <div class="device-status" :class="device.current ? 'current' : 'other'">
+              {{ device.current ? '当前设备' : '其他设备' }}
+            </div>
           </div>
           <div class="device-actions">
-            <el-button type="danger" size="small" @click="removeDevice(device.id)">移除</el-button>
+            <el-button 
+              v-if="!device.current" 
+              type="danger" 
+              size="small" 
+              @click="removeDevice(device.id)"
+            >
+              移除
+            </el-button>
+            <el-button 
+              v-else 
+              type="success" 
+              size="small" 
+              disabled
+            >
+              当前使用
+            </el-button>
           </div>
         </div>
+      </div>
+      <div class="device-summary">
+        <span>共 {{ loginDevices.length }} 个设备，其中 {{ currentDeviceCount }} 个当前设备</span>
       </div>
     </el-dialog>
     
     <!-- 登录历史对话框 -->
-    <el-dialog v-model="showLoginHistory" title="登录历史" width="600px">
+    <el-dialog v-model="showLoginHistory" title="登录历史" width="700px">
+      <div class="login-history-header">
+        <div class="login-history-controls">
+          <el-button type="primary" @click="exportLoginHistory" size="small">导出记录</el-button>
+          <el-button @click="clearLoginHistory" size="small">清空记录</el-button>
+        </div>
+        <div class="login-history-stats">
+          <span>总计 {{ loginHistory.length }} 条记录</span>
+        </div>
+      </div>
       <div class="login-history">
         <div class="login-item" v-for="record in loginHistory" :key="record.id">
           <div class="login-time">{{ record.time }}</div>
           <div class="login-device">{{ record.device }}</div>
           <div class="login-ip">IP: {{ record.ip }}</div>
           <div class="login-location">{{ record.location }}</div>
+          <div class="login-actions">
+            <el-button type="danger" size="small" @click="deleteLoginRecord(record.id)">删除</el-button>
+          </div>
         </div>
       </div>
     </el-dialog>
@@ -508,8 +591,17 @@
     <el-dialog
       v-model="showDetailedLoginHistory"
       title="详细登录历史"
-      width="700px"
+      width="800px"
     >
+      <div class="detailed-login-history-header">
+        <div class="detailed-login-controls">
+          <el-button type="primary" @click="exportDetailedLoginHistory" size="small">导出详细记录</el-button>
+          <el-button @click="clearDetailedLoginHistory" size="small">清空详细记录</el-button>
+        </div>
+        <div class="detailed-login-stats">
+          <span>总计 {{ detailedLoginHistory.length }} 条详细记录</span>
+        </div>
+      </div>
       <div class="detailed-login-history">
         <div class="login-history-item" v-for="history in detailedLoginHistory" :key="history.id">
           <div class="login-info">
@@ -525,6 +617,9 @@
             <el-tag :type="history.status === '成功' ? 'success' : 'danger'">
               {{ history.status }}
             </el-tag>
+          </div>
+          <div class="login-actions">
+            <el-button type="danger" size="small" @click="deleteDetailedLoginRecord(history.id)">删除</el-button>
           </div>
         </div>
       </div>
@@ -648,7 +743,7 @@
               :src="twoFactorQrCode" 
               alt="两步验证二维码" 
               class="qr-code-image"
-              v-if="twoFactorQrCode"
+              v-if="twoFactorQrCode && twoFactorQrCode.startsWith('data:image')"
             />
             <div v-else class="qr-placeholder">
               <div class="qr-content">
@@ -869,7 +964,21 @@ const passwordRules = {
   ],
   newPassword: [
     { required: true, message: '请输入新密码', trigger: 'blur' },
-    { min: 6, message: '密码长度至少6位', trigger: 'blur' }
+    { min: 8, message: '密码长度至少8位', trigger: 'blur' },
+    {
+      validator: (_rule: Record<string, unknown>, value: string, callback: (error?: string | Error) => void) => {
+        // 检查密码强度
+        const strength = calculatePasswordStrength(value);
+        const satisfiedCount = Object.values(strength.requirements).filter(Boolean).length;
+        
+        if (satisfiedCount < 3) {
+          callback(new Error('密码必须满足至少3项要求'));
+        } else {
+          callback();
+        }
+      },
+      trigger: 'blur'
+    }
   ],
   confirmPassword: [
     { required: true, message: '请确认新密码', trigger: 'blur' },
@@ -893,6 +1002,41 @@ const maskedPhone = computed(() => {
 
 const maskedEmail = computed(() => {
   return emailVerified.value ? 'user@***.com' : ''
+})
+
+// 计算密码强度
+const calculatePasswordStrength = (password: string): { level: string; score: number; requirements: Record<string, boolean> } => {
+  const requirements = {
+    minLength: password.length >= 8,  // 至少8个字符
+    lowercase: /[a-z]/.test(password),  // 小写字母
+    uppercase: /[A-Z]/.test(password),  // 大写字母
+    number: /\d/.test(password),       // 数字
+    special: /[^A-Za-z0-9]/.test(password),  // 特殊字符
+    noConsecutive: !/(.)\1{2,}/.test(password)  // 不超过两个连续相同字符
+  };
+  
+  // 计算满足的条件数量
+  const satisfiedCount = Object.values(requirements).filter(Boolean).length;
+  
+  // 根据满足的条件数量确定强度等级
+  let level = '弱';
+  let score = 0;
+  
+  if (satisfiedCount >= 5) {
+    level = '强';
+    score = 3;
+  } else if (satisfiedCount >= 3) {
+    level = '中';
+    score = 2;
+  } else {
+    score = 1;
+  }
+  
+  return { level, score, requirements };
+}
+
+const calculatedStrength = computed(() => {
+  return calculatePasswordStrength(passwordForm.newPassword)
 })
 
 const strengthClass = computed(() => {
@@ -931,19 +1075,25 @@ const loginDevices = ref([
     id: 1,
     name: 'Chrome - Windows 10',
     lastLogin: '2024-01-15 14:30:25',
-    location: '北京市'
+    location: '北京市',
+    ip: '192.168.1.100',
+    current: true
   },
   {
     id: 2,
     name: 'Safari - iPhone',
     lastLogin: '2024-01-15 10:15:30',
-    location: '上海市'
+    location: '上海市',
+    ip: '192.168.1.101',
+    current: false
   },
   {
     id: 3,
     name: 'Firefox - macOS',
     lastLogin: '2024-01-14 18:45:12',
-    location: '广州市'
+    location: '广州市',
+    ip: '192.168.1.102',
+    current: false
   }
 ])
 
@@ -1040,9 +1190,18 @@ const smsCooldown = ref(0)
 const emailCooldown = ref(0)
 
 // 方法
+const updatePasswordStrength = (): void => {
+  // 实时更新密码强度，这里不需要做任何事情，因为computed属性会自动更新
+}
+
 const changePassword = (): void => {
   // 模拟密码修改
   ElMessage.success('密码修改成功')
+  
+  // 更新密码强度
+  const strength = calculatePasswordStrength(passwordForm.newPassword)
+  passwordStrength.value = strength.level
+  
   showPasswordDialog.value = false
   // 重置表单
   passwordForm.currentPassword = ''
@@ -1058,24 +1217,57 @@ const toggleTwoFactor = async (value: boolean): Promise<void> => {
       // 保存原始状态
       originalTwoFactorState.value = twoFactorEnabled.value
       
-      // 初始化两步验证设置（不立即启用）
-      const result = enableTwoFactor(twoFactorAccountId.value)
-      twoFactorSecret.value = result.secret
-      newBackupCodes.value = result.backupCodes
-      twoFactorStep.value = 0
-      twoFactorCode.value = ''
-      isTwoFactorCodeValid.value = false
+      // 检查是否已有有效的两步验证配置
+      const twoFactorStatus = getTwoFactorStatus(twoFactorAccountId.value)
       
-      // 生成二维码
-      // 将十六进制密钥转换为Base32编码，这是TOTP标准要求的格式
-      const base32Secret = hexToBase32(result.secret)
-      const totpUrl = `otpauth://totp/AccountingSystem:${twoFactorAccountId.value}?secret=${base32Secret}&issuer=AccountingSystem`
-      twoFactorQrCode.value = await QRCode.toDataURL(totpUrl)
-      
-      // 注意：此时不立即启用两步验证，需要用户完成验证码验证后才真正启用
-      // 先将开关状态设为false，等用户完成设置后再设为true
-      twoFactorEnabled.value = false
-      showTwoFactorSetupDialog.value = true
+      if (twoFactorStatus.enabled) {
+        // 如果已有有效的两步验证配置，直接进入验证码验证步骤
+        const config = getTwoFactorConfig(twoFactorAccountId.value)
+        if (config) {
+          twoFactorSecret.value = config.secret
+          newBackupCodes.value = config.backupCodes
+          twoFactorStep.value = 0
+          twoFactorCode.value = ''
+          isTwoFactorCodeValid.value = false
+          
+          // 不需要生成二维码，直接显示验证码输入界面
+          twoFactorQrCode.value = '' // 清空二维码
+          twoFactorEnabled.value = false // 临时设为false，验证通过后再设为true
+          showTwoFactorSetupDialog.value = true
+        }
+      } else {
+        // 如果没有有效的两步验证配置，初始化新的设置
+        const result = enableTwoFactor(twoFactorAccountId.value)
+        twoFactorSecret.value = result.secret
+        newBackupCodes.value = result.backupCodes
+        twoFactorStep.value = 0
+        twoFactorCode.value = ''
+        isTwoFactorCodeValid.value = false
+        twoFactorQrCode.value = '' // 先清空，避免显示旧数据
+        
+        // 生成二维码
+        // 密钥已经是Base32格式，直接使用
+        const totpUrl = `otpauth://totp/AccountingSystem:${twoFactorAccountId.value}?secret=${result.secret}&issuer=AccountingSystem`
+        
+        // 使用Promise确保异步操作正确完成
+        QRCode.toDataURL(totpUrl, {
+          errorCorrectionLevel: 'M',
+          margin: 1,
+          width: 256
+        }).then((url: string) => {
+          twoFactorQrCode.value = url
+          console.log('二维码生成成功')
+        }).catch((error: Error) => {
+          console.error('生成二维码失败:', error)
+          ElMessage.warning('二维码生成失败，请使用密钥手动添加')
+          twoFactorQrCode.value = ''
+        })
+        
+        // 注意：此时不立即启用两步验证，需要用户完成验证码验证后才真正启用
+        // 先将开关状态设为false，等用户完成设置后再设为true
+        twoFactorEnabled.value = false
+        showTwoFactorSetupDialog.value = true
+      }
     } else {
       // 禁用两步验证
       disableTwoFactor(twoFactorAccountId.value)
@@ -1117,6 +1309,7 @@ const verifyTwoFactorCode = async (): Promise<void> => {
       twoFactorStep.value = 1
       twoFactorEnabled.value = true
       intendedTwoFactorState.value = true
+      ElMessage.success('验证通过')
     } else {
       ElMessage.error('验证码错误，请重新输入')
     }
@@ -1148,7 +1341,7 @@ const cancelTwoFactorSetup = (): void => {
   const twoFactorStatus = getTwoFactorStatus(twoFactorAccountId.value)
   
   // 只有在真正完成设置的情况下才保持开启状态
-  if (twoFactorStatus.enabled && twoFactorStep.value === 1) {
+  if (twoFactorStatus.enabled) {
     // 已完成设置，保持开关开启状态
     twoFactorEnabled.value = true
     intendedTwoFactorState.value = true
@@ -1156,8 +1349,7 @@ const cancelTwoFactorSetup = (): void => {
     // 未完成设置，回滚到原始状态
     twoFactorEnabled.value = originalTwoFactorState.value
     intendedTwoFactorState.value = originalTwoFactorState.value
-    // 清理可能的部分设置
-    disableTwoFactor(twoFactorAccountId.value)
+    // 不再清理配置，保留已有的配置以便下次使用
   }
 }
 
@@ -1166,7 +1358,7 @@ const handleTwoFactorDialogClose = (): void => {
   const twoFactorStatus = getTwoFactorStatus(twoFactorAccountId.value)
   
   // 只有在真正完成设置的情况下才保持开启状态
-  if (twoFactorStatus.enabled && twoFactorStep.value === 1) {
+  if (twoFactorStatus.enabled) {
     // 已完成设置，保持开关开启状态
     twoFactorEnabled.value = true
     intendedTwoFactorState.value = true
@@ -1174,8 +1366,7 @@ const handleTwoFactorDialogClose = (): void => {
     // 未完成设置，回滚到原始状态
     twoFactorEnabled.value = originalTwoFactorState.value
     intendedTwoFactorState.value = originalTwoFactorState.value
-    // 清理可能的部分设置
-    disableTwoFactor(twoFactorAccountId.value)
+    // 不再清理配置，保留已有的配置以便下次使用
   }
   
   // 重置步骤
@@ -1293,6 +1484,97 @@ const bindEmail = (): void => {
   emailVerified.value = true
   ElMessage.success('邮箱绑定成功')
   showEmailDialog.value = false
+}
+
+const exportLoginHistory = (): void => {
+  // 模拟导出登录历史
+  ElMessage.success('登录历史已导出')
+}
+
+const clearLoginHistory = (): void => {
+  ElMessageBox.confirm('确定要清空所有登录历史记录吗？', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(() => {
+    loginHistory.value = []
+    ElMessage.success('登录历史已清空')
+  }).catch(() => {
+    // 取消操作
+  })
+}
+
+const deleteLoginRecord = (recordId: number): void => {
+  ElMessageBox.confirm('确定要删除这条登录记录吗？', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(() => {
+    const index = loginHistory.value.findIndex(record => record.id === recordId)
+    if (index > -1) {
+      loginHistory.value.splice(index, 1)
+    }
+    ElMessage.success('登录记录已删除')
+  }).catch(() => {
+    // 取消操作
+  })
+}
+
+const exportDetailedLoginHistory = (): void => {
+  // 模拟导出详细登录历史
+  ElMessage.success('详细登录历史已导出')
+}
+
+const clearDetailedLoginHistory = (): void => {
+  ElMessageBox.confirm('确定要清空所有详细登录历史记录吗？', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(() => {
+    detailedLoginHistory.value = []
+    ElMessage.success('详细登录历史已清空')
+  }).catch(() => {
+    // 取消操作
+  })
+}
+
+const deleteDetailedLoginRecord = (recordId: number): void => {
+  ElMessageBox.confirm('确定要删除这条详细登录记录吗？', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(() => {
+    const index = detailedLoginHistory.value.findIndex(record => record.id === recordId)
+    if (index > -1) {
+      detailedLoginHistory.value.splice(index, 1)
+    }
+    ElMessage.success('详细登录记录已删除')
+  }).catch(() => {
+    // 取消操作
+  })
+}
+
+const currentDeviceCount = computed(() => {
+  return loginDevices.value.filter(device => device.current).length
+})
+
+const refreshDeviceList = (): void => {
+  // 模拟刷新设备列表
+  ElMessage.info('设备列表已刷新')
+}
+
+const removeAllDevices = (): void => {
+  ElMessageBox.confirm('确定要移除所有非当前设备吗？', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(() => {
+    // 只移除非当前设备
+    loginDevices.value = loginDevices.value.filter(device => device.current)
+    ElMessage.success('非当前设备已移除')
+  }).catch(() => {
+    // 取消操作
+  })
 }
 
 const removeDevice = (deviceId: number): void => {
@@ -1748,6 +2030,49 @@ onUnmounted(() => {
 .device-location {
   color: #909399;
   font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.device-ip {
+  color: #909399;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.device-status {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.device-status.current {
+  background-color: #f0f9ff;
+  color: #409eff;
+  border: 1px solid #409eff;
+}
+
+.device-status.other {
+  background-color: #f4f4f5;
+  color: #909399;
+  border: 1px solid #dcdfe6;
+}
+
+.device-management-header {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.device-summary {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+  text-align: center;
+  color: #909399;
+  font-size: 14px;
 }
 
 .device-actions {
@@ -1762,6 +2087,26 @@ onUnmounted(() => {
 .login-item {
   padding: 16px;
   border-bottom: 1px solid #f0f0f0;
+  position: relative;
+}
+
+.login-history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.login-history-controls {
+  display: flex;
+  gap: 12px;
+}
+
+.login-history-stats {
+  color: #909399;
+  font-size: 14px;
 }
 
 .login-item:last-child {
@@ -1788,6 +2133,11 @@ onUnmounted(() => {
 .login-location {
   color: #909399;
   font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.login-actions {
+  margin-top: 8px;
 }
 
 .log-container {
@@ -1891,6 +2241,25 @@ onUnmounted(() => {
   margin-left: 8px;
 }
 
+.detailed-login-history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.detailed-login-controls {
+  display: flex;
+  gap: 12px;
+}
+
+.detailed-login-stats {
+  color: #909399;
+  font-size: 14px;
+}
+
 .detailed-login-history {
   max-height: 500px;
   overflow-y: auto;
@@ -1902,6 +2271,7 @@ onUnmounted(() => {
   align-items: center;
   padding: 16px;
   border-bottom: 1px solid #f0f0f0;
+  position: relative;
 }
 
 .login-history-item:last-child {
@@ -2095,6 +2465,102 @@ onUnmounted(() => {
 
 .setup-step {
   min-height: 300px;
+}
+
+/* 密码强度指示器 */
+.password-strength-indicator {
+  display: flex;
+  align-items: center;
+  margin-top: 8px;
+  gap: 12px;
+}
+
+.strength-label {
+  font-size: 12px;
+  color: #606266;
+  white-space: nowrap;
+}
+
+.strength-bar-container {
+  flex: 1;
+  height: 6px;
+  background-color: #e4e7ed;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.strength-bar {
+  height: 100%;
+  transition: all 0.3s ease;
+  border-radius: 3px;
+}
+
+.strength-bar.strength-weak {
+  background-color: #f56c6c;
+}
+
+.strength-bar.strength-medium {
+  background-color: #e6a23c;
+}
+
+.strength-bar.strength-strong {
+  background-color: #67c23a;
+}
+
+.strength-text {
+  font-size: 12px;
+  font-weight: 500;
+  min-width: 24px;
+  text-align: right;
+}
+
+.strength-text.text-弱 {
+  color: #f56c6c;
+}
+
+.strength-text.text-中 {
+  color: #e6a23c;
+}
+
+.strength-text.text-强 {
+  color: #67c23a;
+}
+
+/* 密码要求检查 */
+.password-requirements {
+  margin-top: 12px;
+  padding: 12px;
+  background-color: #f5f7fa;
+  border-radius: 4px;
+}
+
+.requirement-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.requirement-item:last-child {
+  margin-bottom: 0;
+}
+
+.requirement-item.met {
+  color: #67c23a;
+}
+
+.requirement-icon {
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  margin-right: 8px;
+  font-weight: bold;
+}
+
+.requirement-text {
+  flex: 1;
 }
 
 /* 响应式布局 */
