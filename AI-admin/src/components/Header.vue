@@ -2,7 +2,7 @@
   <header class="header">
     <div class="header-left">
       <div class="logo-container">
-        <img src="https://picsum.photos/seed/admin-logo/40/40.jpg" alt="Logo" class="logo" />
+        <img src="../assets/admin-avatar.png" alt="Logo" class="logo" />
         <span class="title">AI管理系统</span>
       </div>
     </div>
@@ -62,7 +62,7 @@ import { ArrowDown } from '@element-plus/icons-vue'
   width: 40px;
   height: 40px;
   margin-right: 10px;
-  border-radius: 4px;
+  border-radius: 50%;
 }
 
 .title {

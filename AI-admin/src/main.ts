@@ -1,4 +1,4 @@
-﻿import { createApp } from 'vue'
+import { createApp } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import ElementPlus from 'element-plus'
@@ -27,9 +27,114 @@ const routes: RouteRecordRaw[] = [
         component: () => import('./views/Users.vue')
       },
       {
+        path: '/user-detail',
+        name: 'UserDetail',
+        component: () => import('./views/UserDetail.vue')
+      },
+      {
+        path: '/batch-operation',
+        name: 'BatchOperation',
+        component: () => import('./views/BatchOperation.vue')
+      },
+      {
         path: '/roles',
         name: 'Roles',
         component: () => import('./views/Roles.vue')
+      },
+      {
+        path: '/dormitory-list',
+        name: 'DormitoryList',
+        component: () => import('./views/DormitoryList.vue')
+      },
+      {
+        path: '/dormitory-detail',
+        name: 'DormitoryDetail',
+        component: () => import('./views/DormitoryDetail.vue')
+      },
+      {
+        path: '/fee-record-list',
+        name: 'FeeRecordList',
+        component: () => import('./views/FeeRecordList.vue')
+      },
+      {
+        path: '/fee-detail',
+        name: 'FeeDetail',
+        component: () => import('./views/FeeDetail.vue')
+      },
+      {
+        path: '/payment-record-monitor',
+        name: 'PaymentRecordMonitor',
+        component: () => import('./views/PaymentRecordMonitor.vue')
+      },
+      {
+        path: '/payment-code-management',
+        name: 'PaymentCodeManagement',
+        component: () => import('./views/PaymentCodeManagement.vue')
+      },
+      {
+        path: '/system-settings',
+        name: 'SystemSettings',
+        component: () => import('./views/SystemSettings.vue')
+      },
+      {
+        path: '/fee-type-management',
+        name: 'FeeTypeManagement',
+        component: () => import('./views/FeeTypeManagement.vue')
+      },
+      {
+        path: '/feature-control',
+        name: 'FeatureControl',
+        component: () => import('./views/FeatureControl.vue')
+      },
+      {
+        path: '/new-feature-release',
+        name: 'NewFeatureRelease',
+        component: () => import('./views/NewFeatureRelease.vue')
+      },
+      {
+        path: '/gray-release-control',
+        name: 'GrayReleaseControl',
+        component: () => import('./views/GrayReleaseControl.vue')
+      },
+      {
+        path: '/realtime-dashboard',
+        name: 'RealtimeDashboard',
+        component: () => import('./views/RealtimeDashboard.vue')
+      },
+      {
+        path: '/exception-alert',
+        name: 'ExceptionAlert',
+        component: () => import('./views/ExceptionAlert.vue')
+      },
+      {
+        path: '/operation-audit',
+        name: 'OperationAudit',
+        component: () => import('./views/OperationAudit.vue')
+      },
+      {
+        path: '/data-report',
+        name: 'DataReport',
+        component: () => import('./views/DataReport.vue')
+      },
+      {
+        path: '/dispute-acceptance',
+        name: 'DisputeAcceptance',
+        component: () => import('./views/DisputeAcceptance.vue')
+      },
+      {
+        path: '/arbitration-decision',
+        name: 'ArbitrationDecision',
+        component: () => import('./views/ArbitrationDecision.vue')
+      },
+      {
+        path: '/admin-behavior-supervision',
+        name: 'AdminBehaviorSupervision',
+        component: () => import('./views/AdminBehaviorSupervision.vue')
+      },
+      {
+        path: '/admin-permission-management',
+        name: 'AdminPermissionManagement',
+        component: () => import('./views/AdminPermissionManagement.vue')
       },
       {
         path: '/articles',
@@ -60,6 +165,16 @@ const routes: RouteRecordRaw[] = [
         path: '/logs',
         name: 'Logs',
         component: () => import('./views/Logs.vue')
+      },
+      {
+        path: '/notification',
+        name: 'NotificationManagement',
+        component: () => import('./views/NotificationManagement.vue')
+      },
+      {
+        path: '/maintenance',
+        name: 'Maintenance',
+        component: () => import('./views/Maintenance.vue')
       }
     ]
   },

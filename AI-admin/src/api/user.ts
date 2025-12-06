@@ -1,4 +1,4 @@
-﻿import api from './index'
+import api from './index'
 
 // 用户相关API
 export const userApi = {
