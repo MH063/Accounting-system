@@ -279,6 +279,107 @@ export const resetFailedAttempts = (accountId: string): void => {
 };
 
 /**
+ * 设备信息
+ */
+export interface DeviceInfo {
+  id: string;
+  userAgent: string;
+  ipAddress: string;
+  firstLoginTime: number;
+  lastLoginTime: number;
+}
+
+/**
+ * 生成设备指纹
+ * @param userAgent 用户代理字符串
+ * @param ipAddress IP地址
+ * @returns 设备指纹
+ */
+export const generateDeviceFingerprint = (userAgent: string, ipAddress: string): string => {
+  // 简单的设备指纹生成，实际应用中应该使用更复杂的方法
+  return btoa(userAgent + ipAddress).slice(0, 32);
+};
+
+/**
+ * 获取账户的已知设备列表
+ * @param accountId 账户ID
+ * @returns 设备列表
+ */
+export const getKnownDevices = (accountId: string): DeviceInfo[] => {
+  try {
+    const devicesStr = localStorage.getItem(`knownDevices_${accountId}`);
+    if (devicesStr) {
+      return JSON.parse(devicesStr);
+    }
+  } catch (error) {
+    console.warn('解析已知设备列表失败:', error);
+  }
+  return [];
+};
+
+/**
+ * 保存账户的已知设备列表
+ * @param accountId 账户ID
+ * @param devices 设备列表
+ */
+export const saveKnownDevices = (accountId: string, devices: DeviceInfo[]): void => {
+  try {
+    localStorage.setItem(`knownDevices_${accountId}`, JSON.stringify(devices));
+  } catch (error) {
+    console.error('保存已知设备列表失败:', error);
+  }
+};
+
+/**
+ * 检查是否是新设备
+ * @param accountId 账户ID
+ * @param userAgent 用户代理
+ * @param ipAddress IP地址
+ * @returns 是否是新设备
+ */
+export const isNewDevice = (accountId: string, userAgent: string, ipAddress: string): boolean => {
+  const devices = getKnownDevices(accountId);
+  const fingerprint = generateDeviceFingerprint(userAgent, ipAddress);
+  
+  // 检查设备指纹是否存在
+  return !devices.some(device => device.id === fingerprint);
+};
+
+/**
+ * 记录新设备
+ * @param accountId 账户ID
+ * @param userAgent 用户代理
+ * @param ipAddress IP地址
+ */
+export const recordNewDevice = (accountId: string, userAgent: string, ipAddress: string): void => {
+  const devices = getKnownDevices(accountId);
+  const fingerprint = generateDeviceFingerprint(userAgent, ipAddress);
+  const now = Date.now();
+  
+  // 检查设备是否已存在
+  const existingDeviceIndex = devices.findIndex(device => device.id === fingerprint);
+  
+  if (existingDeviceIndex >= 0) {
+    // 更新现有设备的最后登录时间
+    if (devices[existingDeviceIndex]) {
+      devices[existingDeviceIndex].lastLoginTime = now;
+    }
+  } else {
+    // 添加新设备
+    devices.push({
+      id: fingerprint,
+      userAgent,
+      ipAddress,
+      firstLoginTime: now,
+      lastLoginTime: now
+    });
+  }
+  
+  // 保存设备列表
+  saveKnownDevices(accountId, devices);
+};
+
+/**
  * 获取客户端IP地址（模拟）
  * 在实际应用中，应该从服务器获取真实IP
  */

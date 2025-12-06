@@ -4,11 +4,11 @@
 export const userApi = {
   // 获取用户列表
   getUsers: (params?: { page?: number; pageSize?: number; keyword?: string }) => 
-    api.get('/users', params),
+    api.get('/users', { params }),
   
   // 获取用户详情
   getUserById: (id: number) => 
-    api.get(/users/),
+    api.get(`/users/${id}`),
   
   // 创建用户
   createUser: (data: any) => 
@@ -16,11 +16,11 @@ export const userApi = {
   
   // 更新用户
   updateUser: (id: number, data: any) => 
-    api.put(/users/, data),
+    api.put(`/users/${id}`, data),
   
   // 删除用户
   deleteUser: (id: number) => 
-    api.delete(/users/),
+    api.delete(`/users/${id}`),
   
   // 用户登录验证（如果需要）
   login: (data: { username: string; password: string }) => 
@@ -39,7 +39,7 @@ export const systemApi = {
   
   // 获取系统日志
   getLogs: (params?: { page?: number; pageSize?: number; level?: string }) => 
-    api.get('/logs', params),
+    api.get('/logs', { params }),
   
   // 获取数据库表信息
   getTables: () => 

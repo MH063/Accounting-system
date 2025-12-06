@@ -19,62 +19,35 @@
                 <el-radio label="auto">跟随系统</el-radio>
               </el-radio-group>
             </div>
-            
-            <div class="setting-item">
-              <span class="setting-label">主色调</span>
-              <el-color-picker v-model="interfaceSettings.primaryColor" />
-            </div>
           </div>
           
           <div class="setting-section">
             <h3>布局设置</h3>
+            
             <div class="setting-item">
-              <span class="setting-label">侧边栏折叠</span>
-              <el-switch v-model="interfaceSettings.sidebarCollapsed" />
+              <span class="setting-label">页面密度</span>
+              <el-radio-group v-model="interfaceSettings.pageDensity">
+                <el-radio label="compact">紧凑型</el-radio>
+                <el-radio label="comfort">舒适型</el-radio>
+                <el-radio label="loose">宽松型</el-radio>
+              </el-radio-group>
             </div>
             
             <div class="setting-item">
-              <span class="setting-label">显示面包屑</span>
-              <el-switch v-model="interfaceSettings.showBreadcrumb" />
+              <span class="setting-label">内容排列</span>
+              <el-radio-group v-model="interfaceSettings.contentArrangement">
+                <el-radio label="grid">网格排列</el-radio>
+                <el-radio label="list">列表排列</el-radio>
+              </el-radio-group>
             </div>
             
             <div class="setting-item">
-              <span class="setting-label">标签页模式</span>
-              <el-switch v-model="interfaceSettings.tabMode" />
-            </div>
-          </div>
-        </el-tab-pane>
-        
-        <!-- 通知设置 -->
-        <el-tab-pane label="通知设置" name="notification">
-          <div class="setting-section">
-            <h3>消息通知</h3>
-            <div class="setting-item">
-              <span class="setting-label">系统通知</span>
-              <el-switch v-model="notificationSettings.systemNotification" />
-            </div>
-            
-            <div class="setting-item">
-              <span class="setting-label">邮件通知</span>
-              <el-switch v-model="notificationSettings.emailNotification" />
-            </div>
-            
-            <div class="setting-item">
-              <span class="setting-label">短信通知</span>
-              <el-switch v-model="notificationSettings.smsNotification" />
-            </div>
-          </div>
-          
-          <div class="setting-section">
-            <h3>提醒设置</h3>
-            <div class="setting-item">
-              <span class="setting-label">账单提醒</span>
-              <el-switch v-model="notificationSettings.billReminder" />
-            </div>
-            
-            <div class="setting-item" v-if="notificationSettings.billReminder">
-              <span class="setting-label">提醒时间</span>
-              <el-time-picker v-model="notificationSettings.reminderTime" format="HH:mm" />
+              <span class="setting-label">主区域宽度</span>
+              <el-radio-group v-model="interfaceSettings.mainAreaWidth">
+                <el-radio label="narrow">窄版</el-radio>
+                <el-radio label="standard">标准</el-radio>
+                <el-radio label="wide">宽版</el-radio>
+              </el-radio-group>
             </div>
           </div>
         </el-tab-pane>
@@ -264,18 +237,6 @@
           </div>
           
           <div class="setting-section">
-            <h3>自动保存</h3>
-            <div class="setting-item">
-              <span class="setting-label">启用自动保存</span>
-              <el-switch 
-                v-model="enableAutoSave" 
-                @change="toggleAutoSave"
-                active-text="开启后将每隔30秒自动保存设置"
-              />
-            </div>
-          </div>
-          
-          <div class="setting-section">
             <h3>重置选项</h3>
             <div class="setting-item">
               <span class="setting-label">重置所有设置</span>
@@ -327,19 +288,10 @@ const uploadRef = ref<UploadInstance>()
 // 界面设置
 const interfaceSettings = reactive({
   theme: 'light',
-  primaryColor: '#409EFF',
-  sidebarCollapsed: false,
-  showBreadcrumb: true,
-  tabMode: false
-})
-
-// 通知设置
-const notificationSettings = reactive({
-  systemNotification: true,
-  emailNotification: true,
-  smsNotification: false,
-  billReminder: true,
-  reminderTime: new Date(2023, 0, 1, 9, 0, 0) // 默认早上9点
+  // 新增的布局设置选项
+  pageDensity: 'comfort', // 页面密度: compact(紧凑型), comfort(舒适型), loose(宽松型)
+  contentArrangement: 'grid', // 内容排列: grid(网格排列), list(列表排列)
+  mainAreaWidth: 'standard' // 主区域宽度: narrow(窄版), standard(标准), wide(宽版)
 })
 
 // 隐私设置
@@ -381,7 +333,6 @@ const saveSettings = () => {
     // 保存到 localStorage
     const settings = {
       interface: interfaceSettings,
-      notification: notificationSettings,
       privacy: privacySettings,
       locale: localeSettings,
       shortcut: shortcutSettings,
@@ -406,14 +357,15 @@ const applySettings = () => {
   // 应用主题设置
   document.documentElement.setAttribute('data-theme', interfaceSettings.theme)
   
-  // 应用主色调
-  document.documentElement.style.setProperty('--primary-color', interfaceSettings.primaryColor)
+  // 应用布局设置
+  document.documentElement.setAttribute('data-page-density', interfaceSettings.pageDensity)
+  document.documentElement.setAttribute('data-content-arrangement', interfaceSettings.contentArrangement)
+  document.documentElement.setAttribute('data-main-area-width', interfaceSettings.mainAreaWidth)
   
   // 触发自定义事件，通知其他组件设置已更新
   window.dispatchEvent(new CustomEvent('preferences-updated', {
     detail: {
       interface: interfaceSettings,
-      notification: notificationSettings,
       privacy: privacySettings,
       locale: localeSettings,
       shortcut: shortcutSettings
@@ -434,16 +386,9 @@ const resetSettings = () => {
   ).then(() => {
     // 重置为默认值
     interfaceSettings.theme = 'light'
-    interfaceSettings.primaryColor = '#409EFF'
-    interfaceSettings.sidebarCollapsed = false
-    interfaceSettings.showBreadcrumb = true
-    interfaceSettings.tabMode = false
-    
-    notificationSettings.systemNotification = true
-    notificationSettings.emailNotification = true
-    notificationSettings.smsNotification = false
-    notificationSettings.billReminder = true
-    notificationSettings.reminderTime = new Date(2023, 0, 1, 9, 0, 0)
+    interfaceSettings.pageDensity = 'comfort'
+    interfaceSettings.contentArrangement = 'grid'
+    interfaceSettings.mainAreaWidth = 'standard'
     
     privacySettings.publicProfile = false
     privacySettings.allowSearch = true
@@ -473,7 +418,6 @@ const exportSettings = () => {
   try {
     const settings = {
       interface: interfaceSettings,
-      notification: notificationSettings,
       privacy: privacySettings,
       locale: localeSettings,
       shortcut: shortcutSettings,
@@ -508,7 +452,6 @@ const handleImportSettings = (file: any) => {
     try {
       const settings = JSON.parse(e.target?.result as string) as {
         interface?: Partial<typeof interfaceSettings>
-        notification?: Partial<typeof notificationSettings>
         privacy?: Partial<typeof privacySettings>
         locale?: Partial<typeof localeSettings>
         shortcut?: Partial<typeof shortcutSettings>
@@ -527,11 +470,6 @@ const handleImportSettings = (file: any) => {
         // 导入界面设置
         if (settings.interface) {
           Object.assign(interfaceSettings, settings.interface)
-        }
-        
-        // 导入通知设置
-        if (settings.notification) {
-          Object.assign(notificationSettings, settings.notification)
         }
         
         // 导入隐私设置
@@ -584,7 +522,6 @@ const savePreset = () => {
     name: newPresetName.value.trim(),
     settings: {
       interface: { ...interfaceSettings },
-      notification: { ...notificationSettings },
       privacy: { ...privacySettings },
       locale: { ...localeSettings },
       shortcut: { ...shortcutSettings }
@@ -623,10 +560,6 @@ const loadPreset = (presetId: string) => {
     // 加载预设设置
     if (preset.settings.interface) {
       Object.assign(interfaceSettings, preset.settings.interface)
-    }
-    
-    if (preset.settings.notification) {
-      Object.assign(notificationSettings, preset.settings.notification)
     }
     
     if (preset.settings.privacy) {
@@ -743,11 +676,6 @@ const loadSettings = () => {
       // 恢复界面设置
       if (savedSettings.interface) {
         Object.assign(interfaceSettings, savedSettings.interface)
-      }
-      
-      // 恢复通知设置
-      if (savedSettings.notification) {
-        Object.assign(notificationSettings, savedSettings.notification)
       }
       
       // 恢复隐私设置
@@ -914,5 +842,53 @@ onUnmounted(() => {
   .settings-actions .el-button {
     margin-bottom: 10px;
   }
+}
+
+/* 页面密度样式 */
+[data-page-density="compact"] {
+  --page-padding: 10px;
+  --element-spacing: 8px;
+  --font-size-base: 12px;
+}
+
+[data-page-density="comfort"] {
+  --page-padding: 15px;
+  --element-spacing: 12px;
+  --font-size-base: 14px;
+}
+
+[data-page-density="loose"] {
+  --page-padding: 20px;
+  --element-spacing: 16px;
+  --font-size-base: 16px;
+}
+
+/* 内容排列样式 */
+[data-content-arrangement="grid"] .content-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: var(--element-spacing);
+}
+
+[data-content-arrangement="list"] .content-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--element-spacing);
+}
+
+/* 主区域宽度样式 */
+[data-main-area-width="narrow"] {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+[data-main-area-width="standard"] {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+[data-main-area-width="wide"] {
+  max-width: 100%;
+  margin: 0;
 }
 </style>

@@ -42,12 +42,13 @@
           <!-- 账户锁定警告 -->
           <div class="lock-warning" v-if="accountLocked">
             <el-alert
-              :title="`账户已被锁定，剩余时间：${formatRemainingTime(remainingLockTime)}`"
+              :title="'账户已被锁定，剩余时间：' + formatRemainingTime(remainingLockTime)"
               type="error"
               show-icon
               :closable="false"
             />
             <p class="lock-desc">由于多次登录失败，您的账户已被暂时锁定。</p>
+            <p class="lock-desc">影响范围：无法登录系统，当前账户相关操作受限，包括但不限于：无法访问个人资料、无法进行费用管理、无法查看账单等所有需要认证的操作。</p>
           </div>
           
           <el-form :model="loginForm" :rules="rules" ref="loginFormRef" class="login-form">
@@ -119,7 +120,7 @@
                     @click="sendTwoFactorCode"
                     :disabled="twoFactorCooldown > 0"
                   >
-                    {{ twoFactorCooldown > 0 ? `${twoFactorCooldown}秒后重发` : '发送验证码' }}
+                    {{ twoFactorCooldown > 0 ? (twoFactorCooldown + '秒后重发') : '发送验证码' }}
                   </el-button>
                 </div>
                 <p class="two-factor-tip">请输入身份验证器应用生成的验证码，或使用备用验证码</p>
@@ -132,7 +133,7 @@
             
             <el-form-item>
               <el-button 
-                v-if="!accountLocked"
+                v-if="!accountLocked && !showCaptcha"
                 type="primary" 
                 size="large" 
                 class="login-button"
@@ -142,7 +143,7 @@
                 登录
               </el-button>
               <el-button 
-                v-else
+                v-else-if="accountLocked"
                 type="primary" 
                 size="large" 
                 class="login-button"
@@ -150,6 +151,16 @@
                 @click="handleUnlock"
               >
                 解锁账户
+              </el-button>
+              <el-button 
+                v-else
+                type="primary" 
+                size="large" 
+                class="login-button"
+                :loading="loading"
+                @click="handleNewDeviceLogin"
+              >
+                验证并登录
               </el-button>
             </el-form-item>
             
@@ -199,6 +210,101 @@
         </div>
       </div>
     </div>
+    
+    <!-- 忘记密码对话框 -->
+    <el-dialog
+      v-model="showForgotPasswordDialog"
+      title="找回密码"
+      width="400px"
+    >
+      <el-form 
+        :model="forgotPasswordForm" 
+        label-width="80px" 
+        :rules="forgotPasswordRules" 
+        ref="forgotPasswordFormRef"
+      >
+        <el-form-item label="用户名" prop="username">
+          <el-input 
+            v-model="forgotPasswordForm.username" 
+            placeholder="请输入用户名" 
+            size="large"
+          />
+        </el-form-item>
+        
+        <el-form-item label="邮箱" prop="email">
+          <el-input 
+            v-model="forgotPasswordForm.email" 
+            placeholder="请输入注册邮箱" 
+            size="large"
+          />
+        </el-form-item>
+      </el-form>
+      
+      <template #footer>
+        <el-button @click="showForgotPasswordDialog = false">取消</el-button>
+        <el-button 
+          type="primary" 
+          @click="handleForgotPassword"
+          :loading="forgotPasswordLoading"
+        >
+          下一步
+        </el-button>
+      </template>
+    </el-dialog>
+    
+    <!-- 安全问题验证对话框 -->
+    <SecurityVerificationModal
+      v-model="showSecurityVerification"
+      :on-verification-success="handleVerificationSuccess"
+      :on-verification-cancel="handleVerificationCancel"
+      verification-reason="找回密码"
+    />
+    
+    <!-- 重置密码对话框 -->
+    <el-dialog
+      v-model="showResetPasswordDialog"
+      title="重置密码"
+      width="400px"
+    >
+      <el-form 
+        :model="resetPasswordForm" 
+        label-width="80px" 
+        :rules="resetPasswordRules" 
+        ref="resetPasswordFormRef"
+      >
+        <el-form-item label="新密码" prop="newPassword">
+          <el-input 
+            v-model="resetPasswordForm.newPassword" 
+            type="password"
+            placeholder="请输入新密码" 
+            size="large"
+            show-password
+          />
+        </el-form-item>
+        
+        <el-form-item label="确认密码" prop="confirmPassword">
+          <el-input 
+            v-model="resetPasswordForm.confirmPassword" 
+            type="password"
+            placeholder="请再次输入新密码" 
+            size="large"
+            show-password
+          />
+        </el-form-item>
+      </el-form>
+      
+      <template #footer>
+        <el-button @click="showResetPasswordDialog = false">取消</el-button>
+        <el-button 
+          type="primary" 
+          @click="handleResetPassword"
+          :loading="resetPasswordLoading"
+        >
+          确认重置
+        </el-button>
+      </template>
+    </el-dialog>
+    
   </div>
 </template>
 
@@ -213,12 +319,27 @@ import {
   getSecurityConfig,
   getClientIpAddress,
   getUserAgent,
-  resetFailedAttempts
+  resetFailedAttempts,
+  isNewDevice,
+  recordNewDevice
 } from '@/services/accountSecurityService'
+import { sendAbnormalLoginAlert } from '@/services/abnormalLoginAlertService'
 import { 
   getTwoFactorStatus,
   verifyTwoFactorToken
 } from '@/services/twoFactorService'
+import {
+  getLoginDeviceLimitConfig,
+  recordNewDeviceSession,
+  isDeviceAllowedToLogin,
+  logoutDevice,
+  isSessionValid,
+  enforceDeviceLimit
+} from '@/services/loginDeviceLimitService'
+import SecurityVerificationModal from '@/components/SecurityVerificationModal.vue'
+import { checkSecurityQuestionsSetup, isSecurityVerificationRequired, requireSecurityVerification } from '@/services/securityVerificationService'
+import { hasSecurityQuestions } from '@/services/securityQuestionService'
+import { getUserInfo, sendResetCode, verifyResetCode, resetPassword, sendResetNotification } from '@/services/passwordResetService'
 
 // 路由实例
 const router = useRouter()
@@ -253,6 +374,79 @@ const loginForm = reactive({
 // 记住我选项
 const rememberMe = ref(false)
 
+// 忘记密码对话框显示状态
+const showForgotPasswordDialog = ref(false)
+const showSecurityVerification = ref(false)
+const showResetPasswordDialog = ref(false)
+const showVerifyCodeDialog = ref(false)
+
+// 忘记密码表单引用
+const forgotPasswordFormRef = ref<FormInstance>()
+const resetPasswordFormRef = ref<FormInstance>()
+const verifyCodeFormRef = ref<FormInstance>()
+
+// 忘记密码加载状态
+const forgotPasswordLoading = ref(false)
+const resetPasswordLoading = ref(false)
+const verifyCodeLoading = ref(false)
+
+// 忘记密码表单数据
+const forgotPasswordForm = reactive({
+  username: '',
+  email: ''
+})
+
+// 验证码表单数据
+const verifyCodeForm = reactive({
+  code: ''
+})
+
+// 重置密码表单数据
+const resetPasswordForm = reactive({
+  newPassword: '',
+  confirmPassword: ''
+})
+
+// 忘记密码验证规则
+const forgotPasswordRules = reactive<FormRules>({
+  username: [
+    { required: true, message: '请输入用户名', trigger: 'blur' }
+  ],
+  email: [
+    { required: true, message: '请输入邮箱', trigger: 'blur' },
+    { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }
+  ]
+})
+
+// 验证码验证规则
+const verifyCodeRules = reactive<FormRules>({
+  code: [
+    { required: true, message: '请输入验证码', trigger: 'blur' },
+    { pattern: /^\d{6}$/, message: '请输入6位数字验证码', trigger: 'blur' }
+  ]
+})
+
+// 重置密码验证规则
+const resetPasswordRules = reactive<FormRules>({
+  newPassword: [
+    { required: true, message: '请输入新密码', trigger: 'blur' },
+    { min: 6, message: '密码长度不能少于6位', trigger: 'blur' }
+  ],
+  confirmPassword: [
+    { required: true, message: '请确认新密码', trigger: 'blur' },
+    { 
+      validator: (rule, value, callback) => {
+        if (value !== resetPasswordForm.newPassword) {
+          callback(new Error('两次输入的密码不一致'))
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur'
+    }
+  ]
+})
+
 // 表单验证规则
 const rules = reactive<FormRules>({
   username: [
@@ -271,6 +465,9 @@ const rules = reactive<FormRules>({
     { pattern: /^\d{6}$/, message: '请输入6位数字验证码', trigger: 'blur' }
   ]
 })
+
+// 当前用户信息（用于密码重置流程）
+const currentUserInfo = ref<any>(null)
 
 /**
  * 格式化剩余时间
@@ -423,6 +620,127 @@ const handleUnlock = async () => {
 }
 
 /**
+ * 处理新设备额外验证后的登录
+ */
+const handleNewDeviceLogin = async () => {
+  if (!loginFormRef.value) return
+  
+  // 验证验证码
+  if (!loginForm.captcha) {
+    ElMessage.error('请输入验证码')
+    return
+  }
+  
+  // 简单验证验证码（实际应用中应该调用后端API验证）
+  const isCaptchaValid = loginForm.captcha.length >= 4
+  if (!isCaptchaValid) {
+    ElMessage.error('验证码错误')
+    return
+  }
+  
+  // 获取保存的登录信息
+  const pendingUsername = localStorage.getItem('pendingLoginUsername') || ''
+  const pendingPassword = localStorage.getItem('pendingLoginPassword') || ''
+  const userAgent = localStorage.getItem('pendingLoginUserAgent') || ''
+  const ipAddress = localStorage.getItem('pendingLoginIpAddress') || ''
+  
+  // 清除临时存储的信息
+  localStorage.removeItem('pendingLoginUsername')
+  localStorage.removeItem('pendingLoginPassword')
+  localStorage.removeItem('pendingLoginUserAgent')
+  localStorage.removeItem('pendingLoginIpAddress')
+  
+  loading.value = true
+  
+  try {
+    // 获取当前用户ID
+    const accountId = pendingUsername || 'default_user'
+    
+    // 获取安全配置
+    const config = getSecurityConfig()
+    
+    // 模拟登录请求
+    setTimeout(async () => {
+      // 简单的模拟登录验证
+      if (pendingUsername === 'admin' && pendingPassword === '123456') {
+        // 检查是否需要两步验证
+        const twoFactorStatus = getTwoFactorStatus(accountId)
+        
+        // 如果启用了两步验证且尚未验证
+        if (twoFactorStatus.enabled && !showTwoFactor.value) {
+          showTwoFactor.value = true
+          loading.value = false
+          ElMessage.info('请输入两步验证码')
+          // 保存用户信息以便后续验证
+          loginForm.username = pendingUsername
+          loginForm.password = pendingPassword
+          return
+        }
+        
+        // 如果需要两步验证，验证两步验证码
+        if (showTwoFactor.value) {
+          if (!loginForm.twoFactorCode) {
+            ElMessage.error('请输入两步验证码')
+            loading.value = false
+            return
+          }
+          
+          // 验证两步验证码
+          const isTwoFactorValid = await verifyTwoFactorToken(accountId, loginForm.twoFactorCode)
+          if (!isTwoFactorValid) {
+            ElMessage.error('两步验证码错误')
+            loading.value = false
+            return
+          }
+        }
+        
+        // 记录成功登录尝试
+        recordLoginAttempt(accountId, ipAddress, userAgent, true)
+        
+        // 记录新设备
+        recordNewDevice(accountId, userAgent, ipAddress)
+        
+        // 设置登录状态
+        localStorage.setItem('isAuthenticated', 'true')
+        localStorage.setItem('username', pendingUsername)
+        localStorage.setItem('userId', accountId)
+        
+        ElMessage.success('登录成功')
+        
+        // 跳转到仪表盘
+        router.push('/dashboard')
+      } else {
+        // 记录失败登录尝试
+        recordLoginAttempt(accountId, ipAddress, userAgent, false)
+        
+        // 再次检查账户锁定状态
+        const updatedLockStatus = getAccountLockStatus(accountId, config)
+        if (updatedLockStatus.isLocked) {
+          ElMessage.error(`登录失败次数过多，账户已被锁定，剩余时间：${formatRemainingTime(updatedLockStatus.remainingTime || 0)}，无法登录系统`)
+          // 强制更新账户锁定状态
+          updateAccountLockStatus(accountId, config)
+          // 显示验证码
+          showCaptcha.value = true
+          refreshCaptcha()
+          // 停止加载状态
+          loading.value = false
+        } else {
+          ElMessage.error('用户名或密码错误')
+          // 停止加载状态
+          loading.value = false
+        }
+      }
+      
+      loading.value = false
+    }, 1000)
+  } catch (error) {
+    console.error('登录处理失败:', error)
+    ElMessage.error('登录过程中发生错误，请稍后重试')
+    loading.value = false
+  }
+}
+
+/**
  * 处理登录逻辑
  */
 const handleLogin = async () => {
@@ -443,6 +761,21 @@ const handleLogin = async () => {
         // 获取安全配置
         const config = getSecurityConfig()
         
+        // 检查账户是否被锁定（在任何其他检查之前）
+        const lockStatus = getAccountLockStatus(accountId, config)
+        if (lockStatus.isLocked) {
+          ElMessage.error(`账户已被锁定，剩余时间：${formatRemainingTime(lockStatus.remainingTime || 0)}，无法登录系统`)
+          // 更新本地状态以显示锁定警告
+          accountLocked.value = true
+          remainingLockTime.value = lockStatus.remainingTime || 0
+          // 显示验证码
+          showCaptcha.value = true
+          refreshCaptcha()
+          // 停止加载状态并返回，防止继续执行登录逻辑
+          loading.value = false
+          return
+        }
+        
         // 检查是否超出登录频率限制
         if (isRateLimited(accountId, ipAddress, config)) {
           ElMessage.error('登录过于频繁，请稍后再试')
@@ -454,15 +787,19 @@ const handleLogin = async () => {
           return
         }
         
-        // 检查账户是否被锁定
-        const lockStatus = getAccountLockStatus(accountId, config)
-        if (lockStatus.isLocked) {
-          // 更新本地状态以显示锁定警告
-          accountLocked.value = true
-          remainingLockTime.value = lockStatus.remainingTime || 0
-          // 显示验证码
+        // 检查是否启用登录保护并且是新设备
+        const loginProtectionEnabled = localStorage.getItem('loginProtectionEnabled') === 'true';
+        if (loginProtectionEnabled && isNewDevice(accountId, userAgent, ipAddress)) {
+          // 是新设备且启用了登录保护，需要额外验证
+          ElMessage.info('检测到新设备登录，需要进行额外验证')
+          // 显示验证码进行额外验证
           showCaptcha.value = true
           refreshCaptcha()
+          // 保存用户信息以便后续验证
+          localStorage.setItem('pendingLoginUsername', loginForm.username)
+          localStorage.setItem('pendingLoginPassword', loginForm.password)
+          localStorage.setItem('pendingLoginUserAgent', userAgent)
+          localStorage.setItem('pendingLoginIpAddress', ipAddress)
           // 停止加载状态并返回，防止继续执行登录逻辑
           loading.value = false
           return
@@ -503,6 +840,42 @@ const handleLogin = async () => {
             // 记录成功登录尝试
             recordLoginAttempt(accountId, ipAddress, userAgent, true)
             
+            // 检查是否是新设备
+            const isNewDeviceFlag = isNewDevice(accountId, userAgent, ipAddress);
+            
+            // 记录新设备（如果不是新设备，这将更新最后登录时间）
+            recordNewDevice(accountId, userAgent, ipAddress)
+            
+            // 如果是新设备且启用了异常登录提醒，则发送提醒
+            const abnormalLoginAlertEnabled = localStorage.getItem('abnormalLoginAlert') === 'true' || localStorage.getItem('abnormalLoginAlert') === null;
+            if (isNewDeviceFlag && abnormalLoginAlertEnabled) {
+              // 发送异常登录提醒
+              sendAbnormalLoginAlert(accountId, ipAddress, userAgent, Date.now());
+            }
+            
+            // 检查登录设备限制
+            const deviceLimitConfig = getLoginDeviceLimitConfig(accountId)
+            if (deviceLimitConfig.enabled) {
+              // 检查当前设备是否被允许登录
+              const deviceCheck = isDeviceAllowedToLogin(accountId, userAgent, ipAddress)
+              if (!deviceCheck.allowed) {
+                ElMessage.warning(deviceCheck.message || '登录设备数量已达上限，请先登出其他设备')
+                loading.value = false
+                return
+              }
+              
+              // 记录当前设备会话
+              const session = recordNewDeviceSession(accountId, userAgent, ipAddress)
+              
+              // 强制执行设备限制（登出最早的设备以确保不超过限制）
+              if (deviceLimitConfig.autoLogout) {
+                enforceDeviceLimit(accountId, deviceLimitConfig.maxDevices)
+              }
+              
+              // 保存当前会话ID用于后续验证
+              localStorage.setItem('sessionId', session.id)
+            }
+            
             // 设置登录状态
             localStorage.setItem('isAuthenticated', 'true')
             localStorage.setItem('username', loginForm.username)
@@ -519,7 +892,7 @@ const handleLogin = async () => {
             // 再次检查账户锁定状态
             const updatedLockStatus = getAccountLockStatus(accountId, config)
             if (updatedLockStatus.isLocked) {
-              ElMessage.error(`登录失败次数过多，账户已被锁定，剩余时间：${formatRemainingTime(updatedLockStatus.remainingTime || 0)}`)
+              ElMessage.error(`登录失败次数过多，账户已被锁定，剩余时间：${formatRemainingTime(updatedLockStatus.remainingTime || 0)}，无法登录系统`)
               // 强制更新账户锁定状态
               updateAccountLockStatus(accountId, config)
               // 显示验证码
@@ -569,17 +942,146 @@ const goToHome = () => {
 }
 
 /**
+ * 处理忘记密码
+ */
+const handleForgotPassword = async () => {
+  if (!forgotPasswordFormRef.value) return
+  
+  // 验证表单
+  try {
+    await forgotPasswordFormRef.value.validate()
+    
+    // 模拟验证用户信息
+    forgotPasswordLoading.value = true
+    
+    // 获取用户信息
+    const userInfo = await getUserInfo(forgotPasswordForm.username, forgotPasswordForm.email)
+    
+    if (!userInfo) {
+      ElMessage.error('用户名或邮箱不正确')
+      forgotPasswordLoading.value = false
+      return
+    }
+    
+    // 保存当前用户信息
+    currentUserInfo.value = userInfo
+    
+    // 检查用户是否设置了安全问题
+    const hasSecurityQ = hasSecurityQuestions(forgotPasswordForm.username)
+    
+    if (!hasSecurityQ) {
+      ElMessage.warning('您尚未设置安全问题，请先登录系统设置安全问题')
+      showForgotPasswordDialog.value = false
+      forgotPasswordLoading.value = false
+      return
+    }
+    
+    // 显示安全验证对话框
+    showForgotPasswordDialog.value = false
+    showSecurityVerification.value = true
+    forgotPasswordLoading.value = false
+  } catch (error) {
+    console.error('表单验证失败:', error)
+    forgotPasswordLoading.value = false
+  }
+}
+
+/**
+ * 处理验证成功
+ */
+const handleVerificationSuccess = (result: boolean) => {
+  if (result) {
+    ElMessage.success('身份验证成功，请设置新密码')
+    // 关闭安全验证对话框
+    showSecurityVerification.value = false
+    // 显示重置密码对话框
+    showResetPasswordDialog.value = true
+  } else {
+    ElMessage.error('身份验证失败，请重新输入')
+  }
+}
+
+/**
+ * 处理验证取消
+ */
+const handleVerificationCancel = () => {
+  showSecurityVerification.value = false
+  ElMessage.info('已取消找回密码操作')
+}
+
+/**
  * 跳转到忘记密码页面
  */
 const goToForgotPassword = () => {
-  // 这里可以添加忘记密码页面的路由，暂时使用提示信息
-  ElMessage.info('忘记密码功能正在开发中，请联系管理员重置密码')
+  // 显示忘记密码对话框
+  showForgotPasswordDialog.value = true
+}
+
+/**
+ * 处理密码重置
+ */
+const handleResetPassword = async () => {
+  if (!resetPasswordFormRef.value || !currentUserInfo.value) return
+  
+  // 验证表单
+  try {
+    await resetPasswordFormRef.value.validate()
+    
+    resetPasswordLoading.value = true
+    
+    // 重置密码
+    const success = await resetPassword(currentUserInfo.value, resetPasswordForm.newPassword)
+    
+    if (success) {
+      // 发送重置通知
+      await sendResetNotification(currentUserInfo.value, 'email')
+      
+      // 关闭重置密码对话框
+      showResetPasswordDialog.value = false
+      
+      // 重置表单
+      resetPasswordForm.newPassword = ''
+      resetPasswordForm.confirmPassword = ''
+      
+      // 显示成功消息
+      ElMessage.success('密码重置成功，请使用新密码登录')
+      
+      // 可选：自动跳转到登录页面
+      // setTimeout(() => {
+      //   showLoginSection.value = true
+      // }, 2000)
+    }
+    
+    resetPasswordLoading.value = false
+  } catch (error) {
+    console.error('密码重置失败:', error)
+    ElMessage.error('密码重置失败，请稍后重试')
+    resetPasswordLoading.value = false
+  }
 }
 
 // 生命周期
 onMounted(() => {
   // 启动锁定状态检查
   startLockStatusCheck()
+  
+  // 检查是否有账户锁定消息
+  const lockMessage = localStorage.getItem('accountLockMessage')
+  if (lockMessage) {
+    ElMessage.error(lockMessage)
+    // 清除消息避免重复显示
+    localStorage.removeItem('accountLockMessage')
+  }
+  
+  // 初始化登录保护状态（如果未设置则默认启用）
+  if (localStorage.getItem('loginProtectionEnabled') === null) {
+    localStorage.setItem('loginProtectionEnabled', 'true');
+  }
+  
+  // 初始化异常登录提醒状态（如果未设置则默认启用）
+  if (localStorage.getItem('abnormalLoginAlert') === null) {
+    localStorage.setItem('abnormalLoginAlert', 'true');
+  }
 })
 
 // 组件卸载时清理定时器

@@ -330,6 +330,42 @@
               active-text="振动提醒"
             />
           </div>
+          <div class="setting-item">
+            <el-switch 
+              v-model="notificationSettings.smsNotifications"
+              active-text="短信通知"
+            />
+          </div>
+          <div class="setting-item">
+            <el-switch 
+              v-model="notificationSettings.systemNotifications"
+              active-text="系统通知"
+              @change="saveNotificationPreferences"
+            />
+          </div>
+        </div>
+      </el-tab-pane>
+      
+      <!-- 提醒设置 -->
+      <el-tab-pane label="提醒设置" name="reminders">
+        <div class="settings-section">
+          <h4>提醒偏好</h4>
+          <div class="setting-item">
+            <el-switch 
+              v-model="notificationSettings.billReminder"
+              active-text="账单提醒"
+              @change="saveNotificationPreferences"
+            />
+          </div>
+          
+          <div class="setting-item" v-if="notificationSettings.billReminder">
+            <span class="setting-label">提醒时间</span>
+            <el-time-picker 
+              v-model="notificationSettings.reminderTime" 
+              format="HH:mm" 
+              @change="saveNotificationPreferences"
+            />
+          </div>
         </div>
       </el-tab-pane>
       
@@ -348,18 +384,18 @@
             </div>
             <div class="category-toggles">
               <el-switch 
-                :model-value="notificationSettings.categories[category.key].enabled"
-                @change="(val) => updateCategorySetting(category.key, 'enabled', val)"
+                :model-value="getCategorySetting(category.key, 'enabled')"
+                @change="(val: boolean) => updateCategorySetting(category.key, 'enabled', val)"
                 active-text="启用"
               />
               <el-switch 
-                :model-value="notificationSettings.categories[category.key].email"
-                @change="(val) => updateCategorySetting(category.key, 'email', val)"
+                :model-value="getCategorySetting(category.key, 'email')"
+                @change="(val: boolean) => updateCategorySetting(category.key, 'email', val)"
                 active-text="邮件"
               />
               <el-switch 
-                :model-value="notificationSettings.categories[category.key].push"
-                @change="(val) => updateCategorySetting(category.key, 'push', val)"
+                :model-value="getCategorySetting(category.key, 'push')"
+                @change="(val: boolean) => updateCategorySetting(category.key, 'push', val)"
                 active-text="推送"
               />
             </div>
@@ -516,12 +552,40 @@ const pageSize = ref(8)
 const confirmDialogVisible = ref(false)
 const pendingNotification = ref<Notification | null>(null)
 
+// 定义通知分类类型
+interface NotificationCategory {
+  enabled: boolean
+  email: boolean
+  push: boolean
+}
+
+interface NotificationSettings {
+  emailNotifications: boolean
+  pushNotifications: boolean
+  soundEnabled: boolean
+  vibrationEnabled: boolean
+  smsNotifications: boolean
+  systemNotifications: boolean
+  billReminder: boolean
+  reminderTime: Date
+  categories: Record<string, NotificationCategory>
+  quietHours: {
+    enabled: boolean
+    start: string
+    end: string
+  }
+}
+
 // 通知设置
-const notificationSettings = ref({
+const notificationSettings = ref<NotificationSettings>({
   emailNotifications: true,
   pushNotifications: true,
   soundEnabled: true,
   vibrationEnabled: true,
+  smsNotifications: false,
+  systemNotifications: true,
+  billReminder: true,
+  reminderTime: new Date(2023, 0, 1, 9, 0, 0), // 默认早上9点
   categories: {
     expense: { enabled: true, email: true, push: true },
     bill: { enabled: true, email: true, push: true },
@@ -624,6 +688,21 @@ const getCategoryCount = (categoryKey: string) => {
   return notifications.value.filter(n => n.type === categoryKey).length
 }
 
+// 获取分类设置
+const getCategorySetting = (categoryKey: string, settingKey: string): boolean => {
+  if (notificationSettings.value.categories[categoryKey]) {
+    return notificationSettings.value.categories[categoryKey][settingKey as keyof NotificationCategory]
+  }
+  return false
+}
+
+// 更新分类设置
+const updateCategorySetting = (categoryKey: string, settingKey: string, value: boolean) => {
+  if (notificationSettings.value.categories[categoryKey]) {
+    notificationSettings.value.categories[categoryKey][settingKey as keyof NotificationCategory] = value
+  }
+}
+
 // 批量操作方法
 const toggleNotificationSelection = (id: number) => {
   const index = selectedNotifications.value.indexOf(id)
@@ -682,13 +761,51 @@ const openSettings = () => {
   settingsVisible.value = true
 }
 
-const updateCategorySetting = (categoryKey: string, settingKey: string, value: boolean) => {
-  notificationSettings.value.categories[categoryKey][settingKey] = value
-}
-
 const handleSettingsClose = (done: () => void) => {
   // 可以在这里添加确认逻辑
   done()
+}
+
+// 保存通知偏好设置到localStorage
+const saveNotificationPreferences = () => {
+  try {
+    const preferences = {
+      systemNotifications: notificationSettings.value.systemNotifications,
+      emailNotifications: notificationSettings.value.emailNotifications,
+      smsNotifications: notificationSettings.value.smsNotifications,
+      billReminder: notificationSettings.value.billReminder,
+      reminderTime: notificationSettings.value.reminderTime.toISOString()
+    }
+    
+    localStorage.setItem('notification-preferences', JSON.stringify(preferences))
+    ElMessage.success('通知设置已保存')
+  } catch (error) {
+    console.error('保存通知设置失败:', error)
+    ElMessage.error('保存通知设置失败')
+  }
+}
+
+// 从localStorage加载通知偏好设置
+const loadNotificationPreferences = () => {
+  try {
+    const preferencesStr = localStorage.getItem('notification-preferences')
+    if (preferencesStr) {
+      const preferences = JSON.parse(preferencesStr)
+      
+      // 更新通知设置
+      notificationSettings.value.systemNotifications = preferences.systemNotifications ?? true
+      notificationSettings.value.emailNotifications = preferences.emailNotifications ?? true
+      notificationSettings.value.smsNotifications = preferences.smsNotifications ?? false
+      notificationSettings.value.billReminder = preferences.billReminder ?? true
+      
+      // 解析提醒时间
+      if (preferences.reminderTime) {
+        notificationSettings.value.reminderTime = new Date(preferences.reminderTime)
+      }
+    }
+  } catch (error) {
+    console.error('加载通知设置失败:', error)
+  }
 }
 
 const resetSettings = () => {
@@ -698,20 +815,25 @@ const resetSettings = () => {
     type: 'warning'
   }).then(() => {
     // 重置为默认值
-    notificationSettings.value = {
-      emailNotifications: true,
-      pushNotifications: true,
-      soundEnabled: true,
-      vibrationEnabled: true,
-      categories: {
-        expense: { enabled: true, email: true, push: true },
-        bill: { enabled: true, email: true, push: true },
-        member: { enabled: true, email: true, push: true },
-        system: { enabled: true, email: true, push: true },
-        warning: { enabled: true, email: true, push: true }
-      },
-      quietHours: { enabled: false, start: '22:00', end: '08:00' }
+    notificationSettings.value.emailNotifications = true
+    notificationSettings.value.pushNotifications = true
+    notificationSettings.value.soundEnabled = true
+    notificationSettings.value.vibrationEnabled = true
+    notificationSettings.value.smsNotifications = false
+    notificationSettings.value.systemNotifications = true
+    notificationSettings.value.billReminder = true
+    notificationSettings.value.reminderTime = new Date(2023, 0, 1, 9, 0, 0)
+    notificationSettings.value.categories = {
+      expense: { enabled: true, email: true, push: true },
+      bill: { enabled: true, email: true, push: true },
+      member: { enabled: true, email: true, push: true },
+      system: { enabled: true, email: true, push: true },
+      warning: { enabled: true, email: true, push: true }
     }
+    notificationSettings.value.quietHours = { enabled: false, start: '22:00', end: '08:00' }
+    
+    // 保存重置后的设置
+    saveNotificationPreferences()
     ElMessage.success('设置已重置')
   }).catch(() => {
     // 用户取消
@@ -719,6 +841,9 @@ const resetSettings = () => {
 }
 
 const saveSettings = () => {
+  // 保存通知偏好设置
+  saveNotificationPreferences()
+  
   // TODO: 这里可以调用API保存设置到后端
   ElMessage.success('设置已保存')
   settingsVisible.value = false
@@ -858,6 +983,8 @@ onMounted(() => {
   setTimeout(() => {
     loading.value = false
   }, 500)
+  
+  loadNotificationPreferences()
 })
 
 // 监听通知变化，更新分页

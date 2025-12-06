@@ -3,6 +3,8 @@
  * 统一管理所有支付相关的API调用
  */
 
+import dataEncryptionManager from './dataEncryptionManager'
+
 // 支付相关类型定义
 interface ApiResponse<T = unknown> {
   success: boolean
@@ -203,11 +205,56 @@ export const getPaymentRecords = async (filter: PaymentFilter = {}) => {
  */
 export const getPaymentRecordDetail = async (orderId: string) => {
   try {
-    const response = await request(`/payments/records/${orderId}`, {
-      method: 'GET'
-    })
+    // 模拟API调用
+    await new Promise(resolve => setTimeout(resolve, 600))
     
-    return response
+    // 生成模拟支付记录详情
+    const mockRecord: PaymentRecord = {
+      id: parseInt(orderId.replace('ORDER_', '')),
+      orderId: orderId,
+      transactionId: `TXN_${Date.now()}`,
+      transactionType: Math.random() > 0.5 ? 'income' : 'expense',
+      paymentMethod: ['wechat', 'alipay', 'bank', 'cash'][Math.floor(Math.random() * 4)] as 'wechat' | 'alipay' | 'bank' | 'cash',
+      amount: parseFloat((Math.random() * 10000).toFixed(2)),
+      feeAmount: parseFloat((Math.random() * 100).toFixed(2)),
+      status: 'success',
+      description: `支付订单 #${orderId}`,
+      remark: '测试支付备注信息',
+      createdAt: new Date(Date.now() - Math.random() * 86400000).toISOString(), // 随机过去24小时内的创建时间
+      completedAt: new Date().toISOString(),
+      ipAddress: '192.168.1.100',
+      recipientName: '收款人姓名',
+      recipientAccount: '收款账户信息',
+      discountCode: 'DISCOUNT123',
+      discountAmount: parseFloat((Math.random() * 100).toFixed(2))
+    }
+    
+    // 获取当前用户ID
+    const userId = typeof localStorage !== 'undefined' ? localStorage.getItem('userId') || 'default_user' : 'default_user'
+    
+    // 如果启用了数据加密，尝试解密敏感信息
+    if (dataEncryptionManager.isEncryptionEnabled() && mockRecord.recipientName) {
+      // 检查是否已有主密钥，如果没有则从存储中加载
+      if (!dataEncryptionManager.hasMasterKey()) {
+        // 设置主密钥（实际应用中应从安全存储获取）
+        const masterKey = localStorage.getItem('master_encryption_key') || 'default_master_key'
+        dataEncryptionManager.setMasterKey(masterKey)
+      }
+      
+      // 解密敏感字段
+      try {
+        mockRecord.recipientName = dataEncryptionManager.decryptField(mockRecord.recipientName)
+        mockRecord.recipientAccount = dataEncryptionManager.decryptField(mockRecord.recipientAccount || '')
+      } catch (error) {
+        console.warn('解密支付记录敏感信息失败:', error)
+        // 如果解密失败，保持加密状态或使用默认值
+      }
+    }
+    
+    return {
+      success: true,
+      data: mockRecord
+    }
   } catch (error) {
     console.error('获取支付记录详情失败:', error)
     throw new Error('获取支付记录详情失败')
@@ -560,8 +607,8 @@ export const generateQRCodeImage = async (_id: number, options: {
     return {
       success: true,
       data: {
-        imageUrl: `https://api.qrserver.com/v1/create-qr-code/?size=${options.size || 200}x${options.size || 200}&data=PAY_${id}_${Date.now()}`,
-        downloadUrl: `https://api.qrserver.com/v1/create-qr-code/?size=${options.size || 200}x${options.size || 200}&data=PAY_${id}_${Date.now()}&format=${options.format || 'png'}`
+        imageUrl: `https://api.qrserver.com/v1/create-qr-code/?size=${options.size || 200}x${options.size || 200}&data=PAY_${_id}_${Date.now()}`,
+        downloadUrl: `https://api.qrserver.com/v1/create-qr-code/?size=${options.size || 200}x${options.size || 200}&data=PAY_${_id}_${Date.now()}&format=${options.format || 'png'}`
       }
     }
   } catch (error) {
@@ -871,19 +918,19 @@ function generateMockPaymentRecords(): PaymentRecord[] {
     records.push({
       id: i + 1,
       orderId: `PAY${Date.now()}${i.toString().padStart(3, '0')}`,
-      transactionType,
-      paymentMethod,
+      transactionType: transactionType as 'income' | 'expense',
+      paymentMethod: paymentMethod as 'wechat' | 'alipay' | 'bank' | 'cash',
       amount: transactionType === 'income' ? amount : -amount,
-      status: status,
+      status: status as 'success' | 'failed' | 'processing' | 'pending' | 'refunded',
       createdAt: createdAt.toISOString(),
-      completedAt: status === 'success' ? new Date(createdAt.getTime() + Math.random() * 60000).toISOString() : null,
-      description: descriptions[Math.floor(Math.random() * descriptions.length)],
+      completedAt: status === 'success' ? new Date(createdAt.getTime() + Math.random() * 60000).toISOString() : undefined,
+      description: descriptions[Math.floor(Math.random() * descriptions.length)] || '默认描述',
       remark: Math.random() > 0.7 ? '特殊备注信息' : '',
       feeAmount: Math.random() * 2,
       transactionId: `TXN${Date.now()}${i.toString().padStart(3, '0')}`,
       ipAddress: `192.168.1.${Math.floor(Math.random() * 255)}`,
-      recipientName: transactionType === 'income' ? name : '',
-      recipientAccount: transactionType === 'income' ? `${paymentMethod}_${name.toLowerCase()}` : ''
+      recipientName: transactionType === 'income' ? (name || '未知') : '',
+      recipientAccount: transactionType === 'income' ? `${paymentMethod}_${(name || 'unknown').toLowerCase()}` : ''
     })
   }
   
@@ -924,7 +971,7 @@ function generateMockQRCodes(): QRCode[] {
       currency: 'CNY',
       description: '月度房租收款',
       status: 'active',
-      usageLimit: null,
+      usageLimit: undefined,
       usageCount: 15,
       createdAt: '2024-11-01T08:00:00.000Z',
       updatedAt: '2024-11-23T14:30:00.000Z',
@@ -946,7 +993,7 @@ function generateMockQRCodes(): QRCode[] {
       currency: 'CNY',
       description: '水电费灵活收款',
       status: 'active',
-      usageLimit: null,
+      usageLimit: undefined,
       usageCount: 8,
       createdAt: '2024-11-10T10:15:00.000Z',
       updatedAt: '2024-11-22T16:45:00.000Z',
@@ -1147,6 +1194,76 @@ export const getSecurityCheckHistory = async (days: number = 30) => {
   } catch (error) {
     console.error('获取安全检测历史失败:', error)
     throw new Error('获取安全检测历史失败')
+  }
+}
+
+/**
+ * 创建支付订单
+ * @param paymentRequest 支付请求参数
+ * @returns 支付响应结果
+ */
+export const createPaymentOrder = async (paymentRequest: PaymentRequest): Promise<PaymentResponse> => {
+  try {
+    // 模拟API调用延迟
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    
+    // 获取当前用户ID
+    const userId = typeof localStorage !== 'undefined' ? localStorage.getItem('userId') || 'default_user' : 'default_user'
+    
+    // 加密敏感支付信息（如果启用加密）
+    let encryptedMetadata = paymentRequest.metadata
+    if (dataEncryptionManager.isEncryptionEnabled() && paymentRequest.metadata) {
+      // 检查是否已有主密钥，如果没有则从存储中加载
+      if (!dataEncryptionManager.hasMasterKey()) {
+        // 设置主密钥（实际应用中应从安全存储获取）
+        const masterKey = localStorage.getItem('master_encryption_key') || 'default_master_key'
+        dataEncryptionManager.setMasterKey(masterKey)
+      }
+      
+      // 加密元数据
+      const sensitiveData = {
+        type: 'payment_metadata' as any,
+        payload: paymentRequest.metadata,
+        userId,
+        createdAt: new Date().toISOString(),
+        version: 1
+      }
+      
+      try {
+        const encryptedData = dataEncryptionManager.encryptSensitiveData(sensitiveData)
+        encryptedMetadata = { encrypted: encryptedData }
+      } catch (error) {
+        console.warn('加密支付元数据失败:', error)
+        // 如果加密失败，仍然使用原始数据
+      }
+    }
+    
+    // 构造模拟响应数据
+    const mockResponse: PaymentResponse = {
+      success: true,
+      orderId: `ORDER_${Date.now()}`,
+      transactionId: `TXN_${Date.now()}`,
+      status: 'success',
+      paymentUrl: 'https://payment.example.com/pay/12345',
+      qrCodeUrl: 'https://payment.example.com/qrcode/12345.png',
+      message: '支付订单创建成功',
+      data: {
+        ...paymentRequest,
+        metadata: encryptedMetadata,
+        createdAt: new Date().toISOString()
+      }
+    }
+    
+    return mockResponse
+  } catch (error) {
+    console.error('创建支付订单失败:', error)
+    return {
+      success: false,
+      orderId: '',
+      status: 'failed',
+      message: '创建支付订单失败',
+      data: {}
+    }
   }
 }
 

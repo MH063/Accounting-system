@@ -1,4 +1,5 @@
 import type { ApiResponse } from '@/types'
+import dataEncryptionManager from './dataEncryptionManager'
 
 // 用户信息接口
 export interface UserInfo {
@@ -30,8 +31,10 @@ export const getCurrentUser = async (): Promise<ApiResponse<UserInfo>> => {
       username = window.localStorage.getItem('username') || '管理员'
     }
     
-    const mockUserInfo: UserInfo = {
-      id: '1',
+    // 检查是否启用了数据加密
+    const userId = '1'
+    let mockUserInfo: UserInfo = {
+      id: userId,
       name: username,
       email: 'admin@example.com',
       avatar: 'https://picsum.photos/200/200?random=1',
@@ -39,6 +42,33 @@ export const getCurrentUser = async (): Promise<ApiResponse<UserInfo>> => {
       permissions: ['read', 'write', 'delete'],
       createdAt: '2024-01-01T00:00:00Z',
       updatedAt: '2024-01-01T00:00:00Z'
+    }
+    
+    // 如果启用了数据加密，尝试解密敏感信息
+    if (dataEncryptionManager.isEncryptionEnabled()) {
+      // 检查是否已有主密钥，如果没有则从存储中加载
+      if (!dataEncryptionManager.hasMasterKey()) {
+        // 设置主密钥（实际应用中应从安全存储获取）
+        const masterKey = localStorage.getItem('master_encryption_key') || 'default_master_key'
+        dataEncryptionManager.setMasterKey(masterKey)
+      }
+      
+      try {
+        // 解密用户姓名和邮箱（如果它们是加密的）
+        const encryptedName = localStorage.getItem(`encrypted_user_name_${userId}`)
+        const encryptedEmail = localStorage.getItem(`encrypted_user_email_${userId}`)
+        
+        if (encryptedName) {
+          mockUserInfo.name = dataEncryptionManager.decryptField(encryptedName)
+        }
+        
+        if (encryptedEmail) {
+          mockUserInfo.email = dataEncryptionManager.decryptField(encryptedEmail)
+        }
+      } catch (error) {
+        console.warn('解密用户信息失败:', error)
+        // 如果解密失败，使用原始值
+      }
     }
     
     return {
@@ -69,9 +99,38 @@ export const updateUser = async (userData: Partial<UserInfo>): Promise<ApiRespon
     // 模拟网络延迟
     await new Promise(resolve => setTimeout(resolve, 500))
     
+    // 获取当前用户ID
+    const userId = '1'
+    
+    // 如果启用了数据加密，加密敏感信息
+    if (dataEncryptionManager.isEncryptionEnabled() && (userData.name || userData.email)) {
+      // 检查是否已有主密钥，如果没有则从存储中加载
+      if (!dataEncryptionManager.hasMasterKey()) {
+        // 设置主密钥（实际应用中应从安全存储获取）
+        const masterKey = localStorage.getItem('master_encryption_key') || 'default_master_key'
+        dataEncryptionManager.setMasterKey(masterKey)
+      }
+      
+      try {
+        // 加密用户姓名和邮箱
+        if (userData.name) {
+          const encryptedName = dataEncryptionManager.encryptField(userData.name)
+          localStorage.setItem(`encrypted_user_name_${userId}`, encryptedName)
+        }
+        
+        if (userData.email) {
+          const encryptedEmail = dataEncryptionManager.encryptField(userData.email)
+          localStorage.setItem(`encrypted_user_email_${userId}`, encryptedEmail)
+        }
+      } catch (error) {
+        console.warn('加密用户信息失败:', error)
+        // 如果加密失败，仍然使用原始值
+      }
+    }
+    
     // 模拟更新成功
     const updatedUser: UserInfo = {
-      id: '1',
+      id: userId,
       name: userData.name || '管理员',
       email: userData.email || 'admin@example.com',
       avatar: userData.avatar || 'https://picsum.photos/200/200?random=1',

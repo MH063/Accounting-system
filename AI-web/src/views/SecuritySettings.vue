@@ -147,13 +147,20 @@
             <div class="setting-item">
               <span class="setting-label">登录频率限制</span>
               <div class="setting-control">
-                <span class="setting-desc">防止暴力破解攻击</span>
+                <span class="setting-desc">防止暴力破解攻击 {{ rateLimitStatus }}</span>
                 <el-switch 
                   v-model="loginRateLimit" 
                   @change="(val: boolean) => toggleLoginRateLimit(val)" 
                   size="default" 
                   :loading="rateLimitLoading"
                 />
+              </div>
+            </div>
+            <div class="setting-item" v-if="loginRateLimit">
+              <span class="setting-label">频率限制详情</span>
+              <div class="setting-control">
+                <span class="setting-desc">{{ rateLimitDetails }}</span>
+                <el-button @click="resetRateLimitCounter" size="default" type="warning">重置计数器</el-button>
               </div>
             </div>
             
@@ -169,15 +176,98 @@
             <div class="setting-item">
               <span class="setting-label">账户状态</span>
               <div class="setting-control">
-                <span class="setting-desc" :style="{ color: accountLocked ? '#f56c6c' : '#67c23a' }">
-                  {{ accountLocked ? `已锁定 (${formatRemainingTime(remainingLockTime)})` : '正常' }}
-                </span>
+                <div class="account-status">
+                  <el-tag :type="accountLocked ? 'danger' : 'success'" size="default">
+                    {{ accountLocked ? '已锁定' : '正常' }}
+                  </el-tag>
+                  <span v-if="accountLocked" class="status-normal">账户因安全原因被锁定</span>
+                  <span v-else class="status-normal">账户可正常使用</span>
+                </div>
                 <el-button 
                   v-if="accountLocked" 
                   @click="unlockCurrentUserAccount" 
                   type="danger" 
                   size="default"
                   :loading="unlockLoading"
+                >
+                  解锁账户
+                </el-button>
+              </div>
+            </div>
+            
+            <!-- 锁定状态 -->
+            <div class="setting-item">
+              <span class="setting-label">锁定状态</span>
+              <div class="setting-control">
+                <div class="lock-status-info">
+                  <div class="lock-status-row">
+                    <span class="lock-status-label">状态:</span>
+                    <el-tag :type="accountLocked ? 'danger' : 'success'" size="small">
+                      {{ accountLocked ? '已锁定' : '正常' }}
+                    </el-tag>
+                  </div>
+                  <div v-if="accountLocked" class="lock-status-row">
+                    <span class="lock-status-label">剩余时间:</span>
+                    <span class="lock-timer">{{ formatRemainingTime(remainingLockTime) }}</span>
+                  </div>
+                  <div class="lock-status-row">
+                    <span class="lock-status-label">锁定规则:</span>
+                    <span>连续失败{{ maxFailedAttempts }}次后锁定{{ lockoutSettings.lockoutDuration }}分钟</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 锁定详情 -->
+            <div class="setting-item" v-if="accountLocked">
+              <span class="setting-label">锁定详情</span>
+              <div class="setting-control">
+                <div class="lock-details-info">
+                  <div class="lock-detail-row">
+                    <span class="lock-detail-label">锁定原因:</span>
+                    <span>{{ lockReason !== '账户正常' ? lockReason : '安全策略锁定' }}</span>
+                  </div>
+                  <div class="lock-detail-row">
+                    <span class="lock-detail-label">影响范围:</span>
+                    <span>无法登录系统，当前账户相关操作受限，包括但不限于：无法访问个人资料、无法进行费用管理、无法查看账单等所有需要认证的操作</span>
+                  </div>
+                  <div class="lock-detail-row">
+                    <span class="lock-detail-label">解除方式:</span>
+                    <span>等待锁定时间结束或管理员手动解锁</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 账户状态说明 -->
+            <div class="setting-item" v-else>
+              <span class="setting-label">账户状态</span>
+              <div class="setting-control">
+                <div class="account-status-info">
+                  <span class="status-text">账户当前可正常使用，未受到任何安全限制</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 手动操作 -->
+            <div class="setting-item">
+              <span class="setting-label">手动操作</span>
+              <div class="setting-control">
+                <el-button 
+                  v-if="!accountLocked" 
+                  type="warning" 
+                  @click="manuallyLockAccount"
+                  :loading="lockOperationLoading"
+                  size="default"
+                >
+                  手动锁定
+                </el-button>
+                <el-button 
+                  v-else 
+                  type="success" 
+                  @click="unlockCurrentUserAccount"
+                  :loading="unlockLoading"
+                  size="default"
                 >
                   解锁账户
                 </el-button>
@@ -253,7 +343,7 @@
               <span class="setting-label">最近操作</span>
               <div class="setting-control">
                 <span class="setting-desc">查看最近的安全相关操作</span>
-                <el-button @click="showSecurityLog = true" size="default">查看日志</el-button>
+                <el-button @click="openSecurityLog" size="default">查看日志</el-button>
               </div>
             </div>
             
@@ -283,6 +373,14 @@
               <div class="setting-control">
                 <span class="setting-desc">{{ securityRiskLevel }}</span>
                 <el-button type="warning" @click="showRiskDetails = true" size="default" v-if="securityRiskLevel !== '低风险'">查看详情</el-button>
+              </div>
+            </div>
+            
+            <div class="setting-item">
+              <span class="setting-label">历史记录</span>
+              <div class="setting-control">
+                <span class="setting-desc">查看安全评估历史记录</span>
+                <el-button @click="showSecurityAssessmentHistory = true" size="default">查看历史</el-button>
               </div>
             </div>
           </div>
@@ -439,26 +537,75 @@
     </el-dialog>
     
     <!-- 登录历史对话框 -->
-    <el-dialog v-model="showLoginHistory" title="登录历史" width="700px">
+    <el-dialog v-model="showLoginHistory" title="登录历史" width="800px">
+      <div class="login-history-filters">
+        <el-form :inline="true" :model="loginHistoryFilter" class="login-history-filter-form">
+          <el-form-item label="搜索">
+            <el-input 
+              v-model="loginHistoryFilter.keyword" 
+              placeholder="设备名/IP/位置" 
+              size="small" 
+              clearable
+              @keyup.enter="filterLoginHistory"
+            />
+          </el-form-item>
+          <el-form-item label="时间范围">
+            <el-date-picker
+              v-model="loginHistoryFilter.dateRange"
+              type="daterange"
+              range-separator="至"
+              start-placeholder="开始日期"
+              end-placeholder="结束日期"
+              size="small"
+              value-format="YYYY-MM-DD"
+            />
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" @click="filterLoginHistory" size="small">搜索</el-button>
+            <el-button @click="resetLoginHistoryFilter" size="small">重置</el-button>
+          </el-form-item>
+        </el-form>
+      </div>
       <div class="login-history-header">
         <div class="login-history-controls">
           <el-button type="primary" @click="exportLoginHistory" size="small">导出记录</el-button>
           <el-button @click="clearLoginHistory" size="small">清空记录</el-button>
+          <el-button v-if="hasLoginHistoryFilters || hasLoginHistorySort" @click="clearAllLoginHistoryFilters" size="small" type="warning">清除筛选和排序</el-button>
         </div>
         <div class="login-history-stats">
-          <span>总计 {{ loginHistory.length }} 条记录</span>
+          <span>总计 {{ filteredLoginHistory.length }} 条记录</span>
+          <span v-if="hasLoginHistoryFilters" class="active-filter">已筛选</span>
+          <span v-if="hasLoginHistorySort" class="active-filter">已排序</span>
         </div>
       </div>
-      <div class="login-history">
-        <div class="login-item" v-for="record in loginHistory" :key="record.id">
-          <div class="login-time">{{ record.time }}</div>
-          <div class="login-device">{{ record.device }}</div>
-          <div class="login-ip">IP: {{ record.ip }}</div>
-          <div class="login-location">{{ record.location }}</div>
-          <div class="login-actions">
-            <el-button type="danger" size="small" @click="deleteLoginRecord(record.id)">删除</el-button>
-          </div>
-        </div>
+      <div class="login-history-table">
+        <el-table :data="filteredLoginHistory" style="width: 100%" max-height="400" @sort-change="(sort: { prop: string; order: string }) => handleLoginHistorySort(sort)">
+          <el-table-column prop="time" label="登录时间" width="180" sortable>
+            <template #default="scope">
+              <span class="login-time">{{ scope.row.time }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="device" label="设备信息" width="180" sortable>
+            <template #default="scope">
+              <span class="login-device">{{ scope.row.device }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="ip" label="IP地址" width="150" sortable>
+            <template #default="scope">
+              <span class="login-ip">{{ scope.row.ip }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="location" label="位置" sortable>
+            <template #default="scope">
+              <span class="login-location">{{ scope.row.location }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="100" fixed="right">
+            <template #default="scope">
+              <el-button type="danger" size="small" @click="deleteLoginRecord(scope.row.id)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
       </div>
     </el-dialog>
     
@@ -469,7 +616,10 @@
       width="600px"
     >
       <div class="log-container">
-        <div class="log-item" v-for="log in securityLogs" :key="log.id">
+        <div v-if="securityLogs.length === 0" class="no-logs">
+          暂无安全日志
+        </div>
+        <div class="log-item" v-for="log in securityLogs" :key="log.id" v-else>
           <div class="log-time">{{ log.time }}</div>
           <div class="log-action">{{ log.action }}</div>
           <div class="log-ip">IP: {{ log.ip }}</div>
@@ -508,10 +658,14 @@
     <el-dialog
       v-model="showLoginLimitDialog"
       title="登录限制设置"
-      width="500px"
+      width="600px"
     >
       <el-form :model="loginLimitForm" label-width="120px">
-        <el-form-item label="最大设备数">
+        <el-form-item label="启用设备限制">
+          <el-switch v-model="loginLimitForm.enabled" />
+          <span class="form-desc">启用后可以限制同时登录的设备数量</span>
+        </el-form-item>
+        <el-form-item label="最大设备数" v-if="loginLimitForm.enabled">
           <el-input-number 
             v-model="loginLimitForm.maxDevices" 
             :min="1" 
@@ -520,10 +674,56 @@
           />
           <span class="form-desc">同时在线的最大设备数量</span>
         </el-form-item>
-        <el-form-item label="自动登出">
+        <el-form-item label="自动登出" v-if="loginLimitForm.enabled">
           <el-switch v-model="loginLimitForm.autoLogout" />
           <span class="form-desc">超过设备限制时自动登出最早登录的设备</span>
         </el-form-item>
+        
+        <el-divider v-if="loginLimitForm.enabled" />
+        
+        <!-- 当前登录设备信息 -->
+        <div v-if="loginLimitForm.enabled" class="current-devices-info">
+          <h4>当前登录设备</h4>
+          <p>当前活跃设备数量：{{ activeDeviceCount }} / {{ loginLimitForm.maxDevices }}</p>
+          
+          <el-table :data="currentDeviceSessions" style="width: 100%" size="small">
+            <el-table-column prop="userAgent" label="设备信息" show-overflow-tooltip>
+              <template #default="scope">
+                {{ getDeviceDisplayName(scope.row.userAgent) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="ipAddress" label="IP地址" width="120" />
+            <el-table-column prop="loginTime" label="登录时间" width="160">
+              <template #default="scope">
+                {{ formatDateTime(scope.row.loginTime) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="isActive" label="状态" width="80">
+              <template #default="scope">
+                <el-tag :type="scope.row.isActive ? 'success' : 'danger'" size="small">
+                  {{ scope.row.isActive ? '活跃' : '已登出' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="80">
+              <template #default="scope">
+                <el-button 
+                  v-if="scope.row.isActive && scope.row.id !== currentDeviceId" 
+                  type="danger" 
+                  size="small" 
+                  @click="handleLogoutDevice(scope.row.id)"
+                >
+                  登出
+                </el-button>
+                <el-tag v-else-if="scope.row.id === currentDeviceId" type="info" size="small">当前设备</el-tag>
+              </template>
+            </el-table-column>
+          </el-table>
+          
+          <div class="device-actions" v-if="currentDeviceSessions.length > 0">
+            <el-button type="danger" size="small" @click="handleLogoutAllDevices">登出所有设备</el-button>
+          </div>
+        </div>
       </el-form>
       <template #footer>
         <span class="dialog-footer">
@@ -591,37 +791,95 @@
     <el-dialog
       v-model="showDetailedLoginHistory"
       title="详细登录历史"
-      width="800px"
+      width="900px"
     >
+      <div class="detailed-login-history-filters">
+        <el-form :inline="true" :model="detailedLoginHistoryFilter" class="detailed-login-history-filter-form">
+          <el-form-item label="搜索">
+            <el-input 
+              v-model="detailedLoginHistoryFilter.keyword" 
+              placeholder="设备名/IP/位置/浏览器" 
+              size="small" 
+              clearable
+              @keyup.enter="filterDetailedLoginHistory"
+            />
+          </el-form-item>
+          <el-form-item label="时间范围">
+            <el-date-picker
+              v-model="detailedLoginHistoryFilter.dateRange"
+              type="daterange"
+              range-separator="至"
+              start-placeholder="开始日期"
+              end-placeholder="结束日期"
+              size="small"
+              value-format="YYYY-MM-DD"
+            />
+          </el-form-item>
+          <el-form-item label="状态">
+            <el-select v-model="detailedLoginHistoryFilter.status" size="small" clearable placeholder="请选择">
+              <el-option label="全部" value=""></el-option>
+              <el-option label="成功" value="成功"></el-option>
+              <el-option label="失败" value="失败"></el-option>
+            </el-select>
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" @click="filterDetailedLoginHistory" size="small">搜索</el-button>
+            <el-button @click="resetDetailedLoginHistoryFilter" size="small">重置</el-button>
+          </el-form-item>
+        </el-form>
+      </div>
       <div class="detailed-login-history-header">
         <div class="detailed-login-controls">
           <el-button type="primary" @click="exportDetailedLoginHistory" size="small">导出详细记录</el-button>
           <el-button @click="clearDetailedLoginHistory" size="small">清空详细记录</el-button>
+          <el-button v-if="hasDetailedLoginHistoryFilters || hasDetailedLoginHistorySort" @click="clearAllDetailedLoginHistoryFilters" size="small" type="warning">清除筛选和排序</el-button>
         </div>
         <div class="detailed-login-stats">
-          <span>总计 {{ detailedLoginHistory.length }} 条详细记录</span>
+          <span>总计 {{ filteredDetailedLoginHistory.length }} 条详细记录</span>
+          <span v-if="hasDetailedLoginHistoryFilters" class="active-filter">已筛选</span>
+          <span v-if="hasDetailedLoginHistorySort" class="active-filter">已排序</span>
         </div>
       </div>
-      <div class="detailed-login-history">
-        <div class="login-history-item" v-for="history in detailedLoginHistory" :key="history.id">
-          <div class="login-info">
-            <div class="login-time">{{ history.time }}</div>
-            <div class="login-device">{{ history.device }}</div>
-            <div class="login-browser">{{ history.browser }}</div>
-          </div>
-          <div class="login-location">
-            <div class="login-ip">IP: {{ history.ip }}</div>
-            <div class="login-address">{{ history.location }}</div>
-          </div>
-          <div class="login-status">
-            <el-tag :type="history.status === '成功' ? 'success' : 'danger'">
-              {{ history.status }}
-            </el-tag>
-          </div>
-          <div class="login-actions">
-            <el-button type="danger" size="small" @click="deleteDetailedLoginRecord(history.id)">删除</el-button>
-          </div>
-        </div>
+      <div class="detailed-login-history-table">
+        <el-table :data="filteredDetailedLoginHistory" style="width: 100%" max-height="400" @sort-change="(sort: { prop: string; order: string }) => handleDetailedLoginHistorySort(sort)">
+          <el-table-column prop="time" label="登录时间" width="180" sortable>
+            <template #default="scope">
+              <span class="login-time">{{ scope.row.time }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="device" label="设备信息" width="150" sortable>
+            <template #default="scope">
+              <span class="login-device">{{ scope.row.device }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="browser" label="浏览器" width="150" sortable>
+            <template #default="scope">
+              <span class="login-browser">{{ scope.row.browser }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="ip" label="IP地址" width="150" sortable>
+            <template #default="scope">
+              <span class="login-ip">{{ scope.row.ip }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="location" label="位置" width="120" sortable>
+            <template #default="scope">
+              <span class="login-address">{{ scope.row.location }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="status" label="状态" width="80" sortable>
+            <template #default="scope">
+              <el-tag :type="scope.row.status === '成功' ? 'success' : 'danger'">
+                {{ scope.row.status }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="100" fixed="right">
+            <template #default="scope">
+              <el-button type="danger" size="small" @click="deleteDetailedLoginRecord(scope.row.id)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
       </div>
     </el-dialog>
     
@@ -657,7 +915,7 @@
       </el-form>
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="showLockoutSettings = false">取消</el-button>
+          <el-button @click="cancelLockoutSettings">取消</el-button>
           <el-button type="primary" @click="saveLockoutSettings">保存</el-button>
         </span>
       </template>
@@ -668,6 +926,7 @@
       v-model="showSessionTimeoutDialog"
       title="会话超时设置"
       width="500px"
+      @close="cancelSessionTimeout"
     >
       <el-form :model="sessionTimeoutForm" label-width="120px">
         <el-form-item label="超时时长">
@@ -692,7 +951,7 @@
       </el-form>
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="showSessionTimeoutDialog = false">取消</el-button>
+          <el-button @click="cancelSessionTimeout">取消</el-button>
           <el-button type="primary" @click="saveSessionTimeout">保存</el-button>
         </span>
       </template>
@@ -718,6 +977,56 @@
           <div class="risk-solution">
             <strong>建议:</strong> {{ risk.solution }}
           </div>
+        </div>
+      </div>
+    </el-dialog>
+    
+    <!-- 安全评估历史记录对话框 -->
+    <el-dialog
+      v-model="showSecurityAssessmentHistory"
+      title="安全评估历史记录"
+      width="800px"
+    >
+      <div class="security-assessment-history">
+        <el-table :data="securityAssessmentHistory" style="width: 100%" max-height="400">
+          <el-table-column prop="timestamp" label="评估时间" width="180">
+            <template #default="scope">
+              <span>{{ new Date(scope.row.timestamp).toLocaleString() }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="overallScore" label="评分" width="80" sortable>
+            <template #default="scope">
+              <el-tag :type="getScoreTagType(scope.row.overallScore)">
+                {{ scope.row.overallScore }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="riskLevel" label="风险等级" width="100" sortable>
+            <template #default="scope">
+              <el-tag :type="getRiskLevelTagType(scope.row.riskLevel)">
+                {{ getRiskLevelText(scope.row.riskLevel) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="关键因素" show-overflow-tooltip>
+            <template #default="scope">
+              <div class="factors-list">
+                <div
+                  v-for="(factor, index) in getLowScoreFactors(scope.row.factors)" 
+                  :key="index" 
+                  :class="['factor-item', factor.score < 60 ? 'factor-danger' : 'factor-warning']"
+                >
+                  <span class="factor-name">{{ factor.name }}:</span>
+                  <span class="factor-score">{{ factor.score }}</span>
+                </div>
+              </div>
+            </template>
+          </el-table-column>        </el-table>
+        <div class="history-summary" v-if="securityAssessmentHistory.length > 0">
+          <p>共 {{ securityAssessmentHistory.length }} 条评估记录</p>
+        </div>
+        <div class="no-history" v-else>
+          <p>暂无安全评估历史记录</p>
         </div>
       </div>
     </el-dialog>
@@ -825,9 +1134,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import QRCode from 'qrcode'
+import dataEncryptionManager from '@/services/dataEncryptionManager'
 import { 
   checkBiometricSupport,
   enableBiometric,
@@ -840,8 +1150,27 @@ import {
   saveSecurityConfig,
   getAccountLockStatus,
   unlockAccount,
+  getLoginAttempts,
+  resetFailedAttempts,
+  manuallyLockAccount as serviceManuallyLockAccount,
   type SecurityConfig
 } from '@/services/accountSecurityService'
+import {
+  getLoginDeviceLimitConfig,
+  saveLoginDeviceLimitConfig,
+  getActiveDeviceSessions,
+  saveActiveDeviceSessions,
+  recordNewDeviceSession,
+  logoutDevice,
+  logoutAllDevices,
+  getCurrentDeviceSession,
+  isDeviceAllowedToLogin,
+  getActiveDeviceCount,
+  cleanupExpiredSessions,
+  getUserAgent,
+  getClientIpAddress,
+  type ActiveDeviceSession
+} from '@/services/loginDeviceLimitService'
 import { 
   enableTwoFactor,
   disableTwoFactor,
@@ -853,6 +1182,23 @@ import {
   hexToBase32,
   regenerateBackupCodes as generateNewBackupCodes
 } from '@/services/twoFactorService'
+import {
+  getSecurityQuestionConfig,
+  saveSecurityQuestionConfig,
+  hasSecurityQuestions
+} from '@/services/securityQuestionService'
+import { 
+  getSecurityOperationLogs, 
+  logSecurityOperation,
+  exportSecurityOperationLogs
+} from '@/services/securityOperationLogService'
+import { 
+  performSecurityAssessment 
+} from '@/services/securityAssessmentService'
+import { 
+  getSecurityAssessmentHistory,
+  clearSecurityAssessmentHistory
+} from '@/services/securityAssessmentHistoryService'
 
 // 当前激活的标签页
 const activeTab = ref('account')
@@ -862,17 +1208,125 @@ const phoneVerified = ref(true)
 const emailVerified = ref(true)
 const twoFactorEnabled = ref(false)
 const passwordStrength = ref('强')
-const loginProtection = ref(false)
-const abnormalLoginAlert = ref(true)
+const loginProtection = ref(false) // 登录保护状态将通过初始化函数设置
+const abnormalLoginAlert = ref(false) // 异常登录提醒状态将通过初始化函数设置
 const fingerprintEnabled = ref(false)
 const faceRecognitionEnabled = ref(false)
 const loginRateLimit = ref(true)
-const dataEncryptionEnabled = ref(false)
+const dataEncryptionEnabled = ref(true) // 默认启用数据加密
 const securityScore = ref(85)
 const securityRiskLevel = ref('低风险')
 const biometricAvailable = ref(false)
 const accountLocked = ref(false)
 const remainingLockTime = ref(0)
+const lockReason = ref('安全策略锁定')
+
+// 初始化数据加密状态
+const initializeDataEncryptionStatus = (): void => {
+  try {
+    // 获取当前用户ID
+    const userId = localStorage.getItem('userId') || 'default_user'
+    
+    // 检查是否启用了数据加密，如果没有设置则默认启用
+    const encryptionEnabled = localStorage.getItem(`dataEncryptionEnabled_${userId}`) === 'true' || 
+                          localStorage.getItem(`dataEncryptionEnabled_${userId}`) === null;
+    
+    // 如果是第一次运行或者没有明确禁用，则默认启用
+    if (localStorage.getItem(`dataEncryptionEnabled_${userId}`) === null) {
+      dataEncryptionEnabled.value = true;
+      // 保存默认启用状态到localStorage
+      localStorage.setItem(`dataEncryptionEnabled_${userId}`, 'true');
+      
+      // 启用数据加密管理器
+      dataEncryptionManager.enableEncryption();
+      
+      // 如果还没有主密钥，则生成一个
+      let masterKey = localStorage.getItem('master_encryption_key');
+      if (!masterKey) {
+        masterKey = 'user_master_key_' + userId + '_' + Date.now();
+        localStorage.setItem('master_encryption_key', masterKey);
+      }
+      dataEncryptionManager.setMasterKey(masterKey);
+    } else {
+      dataEncryptionEnabled.value = encryptionEnabled;
+      
+      // 如果启用了加密，初始化数据加密管理器
+      if (encryptionEnabled) {
+        dataEncryptionManager.enableEncryption();
+        
+        // 加载主密钥
+        const masterKey = localStorage.getItem('master_encryption_key');
+        if (masterKey) {
+          dataEncryptionManager.setMasterKey(masterKey);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('初始化数据加密状态失败:', error);
+    // 出错时默认启用数据加密
+    dataEncryptionEnabled.value = true;
+  }
+}
+
+// 初始化登录保护和异常登录提醒状态
+const initializeLoginProtectionStatus = (): void => {
+  try {
+    // 检查是否设置了登录保护，如果没有设置则默认启用
+    const loginProtectionSetting = localStorage.getItem('loginProtectionEnabled');
+    const abnormalLoginAlertSetting = localStorage.getItem('abnormalLoginAlert');
+    
+    // 如果是第一次运行或者没有明确设置，则默认启用
+    if (loginProtectionSetting === null) {
+      loginProtection.value = true;
+      // 保存默认启用状态到localStorage
+      localStorage.setItem('loginProtectionEnabled', 'true');
+    } else {
+      loginProtection.value = loginProtectionSetting === 'true';
+    }
+    
+    // 异常登录提醒默认始终启用，如果未设置则默认启用
+    if (abnormalLoginAlertSetting === null) {
+      abnormalLoginAlert.value = true;
+      // 保存默认启用状态到localStorage
+      localStorage.setItem('abnormalLoginAlert', 'true');
+    } else {
+      abnormalLoginAlert.value = abnormalLoginAlertSetting === 'true';
+    }
+    
+    // 注意：不要强制设置为true，应尊重用户的选择
+    // 只有在初始化时（localStorage中没有设置）才使用默认值
+  } catch (error) {
+    console.error('初始化登录保护状态失败:', error);
+    // 出错时默认启用登录保护和异常登录提醒
+    loginProtection.value = true;
+    abnormalLoginAlert.value = true;
+  }
+}
+
+// 登录历史筛选
+const loginHistoryFilter = reactive({
+  keyword: '',
+  dateRange: []
+})
+
+// 登录历史排序
+const loginHistorySort = reactive({
+  prop: '',
+  order: ''
+})
+
+// 详细登录历史筛选
+const detailedLoginHistoryFilter = reactive({
+  keyword: '',
+  dateRange: [],
+  status: ''
+})
+
+// 详细登录历史排序
+const detailedLoginHistorySort = reactive({
+  prop: '',
+  order: ''
+})
 
 // 加载状态
 const biometricLoading = reactive({
@@ -882,6 +1336,7 @@ const biometricLoading = reactive({
 const rateLimitLoading = ref(false)
 const unlockLoading = ref(false)
 const twoFactorLoading = ref(false)
+const lockOperationLoading = ref(false)
 
 // 两步验证相关状态
 const showTwoFactorSetupDialog = ref(false)
@@ -912,8 +1367,65 @@ const showLoginLimitDialog = ref(false)
 const showSecurityQuestionDialog = ref(false)
 const showDetailedLoginHistory = ref(false)
 const showLockoutSettings = ref(false)
+const showSecurityAssessmentHistory = ref(false)
+
+// 监听锁定设置对话框的显示状态
+watch(showLockoutSettings, (newVal: boolean) => {
+  if (newVal) {
+    // 打开对话框时，加载最新的配置
+    const config = getSecurityConfig()
+    Object.assign(lockoutSettings, config.lockout)
+    // 保存原始设置用于取消操作
+    Object.assign(originalLockoutSettings, config.lockout)
+  }
+})
 const showSessionTimeoutDialog = ref(false)
+
+// 监听会话超时设置对话框的显示状态
+watch(showSessionTimeoutDialog, (newVal: boolean) => {
+  if (newVal) {
+    // 打开对话框时，加载当前设置作为原始设置用于取消操作
+    Object.assign(originalSessionTimeoutSettings, sessionTimeoutForm)
+  }
+})
+
+// 监听登录限制对话框的显示状态
+watch(showLoginLimitDialog, (newVal: boolean) => {
+  if (newVal) {
+    // 打开对话框时，加载最新的配置和设备信息
+    initializeLoginDeviceLimitConfig()
+    loadCurrentDeviceSessions()
+  }
+})
+
+// 监听安全问题对话框的显示状态
+watch(showSecurityQuestionDialog, (newVal: boolean) => {
+  if (newVal) {
+    // 打开对话框时，加载已保存的安全问题
+    loadSecurityQuestions()
+  }
+})
+
 const showRiskDetails = ref(false)
+
+// 加载安全问题
+const loadSecurityQuestions = (): void => {
+  try {
+    const userId = currentUserId.value
+    const config = getSecurityQuestionConfig(userId)
+    
+    // 更新表单数据
+    securityQuestionForm.question1 = config.question1
+    securityQuestionForm.answer1 = config.answer1
+    securityQuestionForm.question2 = config.question2
+    securityQuestionForm.answer2 = config.answer2
+    securityQuestionForm.question3 = config.question3
+    securityQuestionForm.answer3 = config.answer3
+  } catch (error) {
+    console.error('加载安全问题失败:', error)
+    ElMessage.error('加载安全问题失败')
+  }
+}
 
 // 表单数据
 const passwordForm = reactive({
@@ -934,8 +1446,17 @@ const emailForm = reactive({
 
 const loginLimitForm = reactive({
   maxDevices: 3,
-  autoLogout: true
+  autoLogout: true,
+  enabled: true
 })
+
+// 当前登录设备信息
+const currentDeviceSessions = ref<ActiveDeviceSession[]>([])
+const activeDeviceCount = ref(0)
+const currentDeviceId = ref('')
+
+// 当前用户ID
+const currentUserId = ref('default_user') // 实际应用中应从用户信息获取
 
 const securityQuestionForm = reactive({
   question1: '',
@@ -952,7 +1473,20 @@ const lockoutSettings = reactive({
   resetCounter: true
 })
 
+// 用于存储原始锁定设置，用于取消操作时恢复
+const originalLockoutSettings = reactive({
+  maxFailedAttempts: 5,
+  lockoutDuration: 30,
+  resetCounter: true
+})
+
 const sessionTimeoutForm = reactive({
+  timeout: 30,
+  warningTime: 5
+})
+
+// 用于存储原始会话超时设置，用于取消操作时恢复
+const originalSessionTimeoutSettings = reactive({
   timeout: 30,
   warningTime: 5
 })
@@ -1061,7 +1595,43 @@ const maxFailedAttempts = computed(() => {
 })
 
 const sessionTimeout = computed(() => {
-  return sessionTimeoutForm.timeout
+  return originalSessionTimeoutSettings.timeout
+})
+
+// 登录频率限制状态
+const rateLimitStatus = computed(() => {
+  if (!loginRateLimit.value) {
+    return '(已禁用)'
+  }
+  
+  // 获取当前账户的登录尝试记录
+  const accountId = 'default_user' // 实际应用中应从用户信息获取
+  const attempts = getLoginAttempts(accountId)
+  const config = getSecurityConfig()
+  
+  if (config.rateLimit.enabled) {
+    const timeWindow = config.rateLimit.timeWindow * 60 * 1000 // 转换为毫秒
+    const cutoffTime = Date.now() - timeWindow
+    
+    // 计算时间窗口内的失败尝试次数
+    const recentFailures = attempts.filter((attempt: any) => 
+      !attempt.success && 
+      attempt.timestamp > cutoffTime
+    )
+    
+    return `(当前失败次数: ${recentFailures.length}/${config.rateLimit.maxAttempts})`
+  }
+  
+  return ''
+})
+
+// 登录频率限制详情
+const rateLimitDetails = computed(() => {
+  const config = getSecurityConfig()
+  if (config.rateLimit.enabled) {
+    return `最多允许${config.rateLimit.maxAttempts}次失败尝试，时间窗口${config.rateLimit.timeWindow}分钟`
+  }
+  return '频率限制已禁用'
 })
 
 // 模拟数据
@@ -1121,26 +1691,52 @@ const loginHistory = ref([
   }
 ])
 
-const securityLogs = ref([
-  {
-    id: 1,
-    time: '2024-01-15 14:30:25',
-    action: '登录成功',
-    ip: '192.168.1.100'
-  },
-  {
-    id: 2,
-    time: '2024-01-15 10:15:30',
-    action: '修改密码',
-    ip: '192.168.1.101'
-  },
-  {
-    id: 3,
-    time: '2024-01-14 18:45:12',
-    action: '绑定手机',
-    ip: '192.168.1.102'
+// 安全日志接口
+interface SecurityLog {
+  id: string;
+  time: string;
+  action: string;
+  ip: string;
+}
+
+const securityLogs = ref<SecurityLog[]>([])
+
+// 初始化安全日志
+const initializeSecurityLogs = (): void => {
+  try {
+    const userId = localStorage.getItem('userId') || 'default_user'
+    const logs = getSecurityOperationLogs(userId, 50)
+    
+    // 转换日志格式以适应现有UI
+    securityLogs.value = logs.map(log => ({
+      id: log.id,
+      time: new Date(log.timestamp).toLocaleString(),
+      action: log.description,
+      ip: log.ip
+    }))
+  } catch (error) {
+    console.error('初始化安全日志失败:', error)
   }
-])
+}
+
+// 初始化安全评估历史记录
+const initializeSecurityAssessmentHistory = (): void => {
+  try {
+    const userId = localStorage.getItem('userId') || 'default_user'
+    const history = getSecurityAssessmentHistory(userId, 20)
+    
+    // 转换历史记录格式以适应现有UI
+    securityAssessmentHistory.value = history.map(record => ({
+      id: record.id,
+      timestamp: record.timestamp,
+      overallScore: record.overallScore,
+      riskLevel: record.riskLevel,
+      factors: record.factors
+    }))
+  } catch (error) {
+    console.error('初始化安全评估历史记录失败:', error)
+  }
+}
 
 const detailedLoginHistory = ref([
   {
@@ -1172,18 +1768,130 @@ const detailedLoginHistory = ref([
   }
 ])
 
-const securityRisks = ref([
-  {
-    title: '密码强度不足',
-    description: '您的密码强度为中等，建议使用更复杂的密码',
-    solution: '使用包含大小写字母、数字和特殊字符的密码，长度不少于12位'
-  },
-  {
-    title: '未启用数据加密',
-    description: '您的敏感数据未启用端到端加密',
-    solution: '在账号保护设置中启用数据加密功能'
+// 安全风险项接口
+interface SecurityRisk {
+  title: string;
+  description: string;
+  solution: string;
+}
+
+// 安全风险评估
+const securityRisks = ref<SecurityRisk[]>([])
+
+// 安全评估历史记录接口
+interface SecurityAssessmentHistory {
+  id: string;
+  timestamp: number;
+  overallScore: number;
+  riskLevel: 'low' | 'medium' | 'high';
+  factors: {
+    name: string;
+    score: number;
+    description: string;
+  }[];
+}
+
+// 安全评估历史记录
+const securityAssessmentHistory = ref<SecurityAssessmentHistory[]>([])
+
+// 获取评分标签类型
+const getScoreTagType = (score: number): 'success' | 'warning' | 'danger' | '' => {
+  if (score >= 90) return 'success'
+  if (score >= 70) return 'warning'
+  return 'danger'
+}
+
+// 获取风险等级标签类型
+const getRiskLevelTagType = (riskLevel: 'low' | 'medium' | 'high'): 'success' | 'warning' | 'danger' | '' => {
+  switch (riskLevel) {
+    case 'low': return 'success'
+    case 'medium': return 'warning'
+    case 'high': return 'danger'
+    default: return ''
   }
-])
+}
+
+// 获取风险等级文本
+const getRiskLevelText = (riskLevel: 'low' | 'medium' | 'high'): string => {
+  switch (riskLevel) {
+    case 'low': return '低风险'
+    case 'medium': return '中风险'
+    case 'high': return '高风险'
+    default: return '未知'
+  }
+}
+
+// 获取低分因素
+const getLowScoreFactors = (factors: { name: string; score: number; description: string }[]): { name: string; score: number; description: string }[] => {
+  return factors.filter(factor => factor.score < 80)
+}
+
+// 执行安全评估
+const performSecurityCheck = async (): Promise<void> => {  try {
+    ElMessage.info('正在进行安全检查...')
+    
+    // 获取当前用户ID
+    const userId = localStorage.getItem('userId') || 'default_user'
+    
+    // 执行安全评估
+    const assessment = performSecurityAssessment(userId)
+    
+    // 更新安全评分和风险等级
+    securityScore.value = assessment.overallScore
+    securityRiskLevel.value = assessment.riskLevel === 'high' ? '高风险' : 
+                            assessment.riskLevel === 'medium' ? '中风险' : '低风险'
+    
+    // 更新安全风险详情，只显示异常项目（评分低于80的因素）
+    securityRisks.value = assessment.factors
+      .filter(factor => factor.score < 80)
+      .map(factor => ({
+        title: factor.name,
+        description: factor.description,
+        solution: factor.recommendation
+      }))    
+    // 根据评估结果给出不同的提示
+    if (assessment.riskLevel === 'high') {
+      ElMessage.error(`安全检查完成，您的账户存在高风险，评分为 ${assessment.overallScore} 分，请立即处理安全隐患`)
+    } else if (assessment.riskLevel === 'medium') {
+      ElMessage.warning(`安全检查完成，您的账户存在中等风险，评分为 ${assessment.overallScore} 分，建议加强安全措施`)
+    } else {
+      ElMessage.success(`安全检查完成，您的账户很安全，评分为 ${assessment.overallScore} 分`)
+    }
+    
+    // 记录安全操作日志
+    logSecurityOperation({
+      userId,
+      operation: 'perform_security_check',
+      description: `执行安全检查，评分: ${assessment.overallScore}，风险等级: ${assessment.riskLevel}`,
+      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      userAgent: navigator.userAgent,
+      status: 'success'
+    });
+    
+    // 重新加载安全日志
+    initializeSecurityLogs();
+    
+    // 根据项目规范，安全检查按钮仅触发检查任务启动，不应直接展示安全风险详情窗口
+    // 详情查看应通过独立入口或后续操作实现，确保功能触发与结果展示分离
+  } catch (error) {    console.error('安全检查失败:', error)
+    ElMessage.error('安全检查失败，请稍后重试')
+    
+    // 记录安全操作日志
+    const userId = localStorage.getItem('userId') || 'default_user';
+    logSecurityOperation({
+      userId,
+      operation: 'perform_security_check_failed',
+      description: '执行安全检查失败',
+      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      userAgent: navigator.userAgent,
+      status: 'failed',
+      details: { error: (error as Error).message }
+    });
+    
+    // 重新加载安全日志
+    initializeSecurityLogs();
+  }
+}
 
 // 倒计时
 const smsCooldown = ref(0)
@@ -1192,6 +1900,14 @@ const emailCooldown = ref(0)
 // 方法
 const updatePasswordStrength = (): void => {
   // 实时更新密码强度，这里不需要做任何事情，因为computed属性会自动更新
+}
+
+// 打开安全日志对话框
+const openSecurityLog = (): void => {
+  // 初始化安全日志
+  initializeSecurityLogs()
+  // 显示对话框
+  showSecurityLog.value = true
 }
 
 const changePassword = (): void => {
@@ -1207,6 +1923,20 @@ const changePassword = (): void => {
   passwordForm.currentPassword = ''
   passwordForm.newPassword = ''
   passwordForm.confirmPassword = ''
+  
+  // 记录安全操作日志
+  const userId = localStorage.getItem('userId') || 'default_user'
+  logSecurityOperation({
+    userId,
+    operation: 'change_password',
+    description: '修改登录密码',
+    ip: '127.0.0.1', // 实际应用中应获取真实IP
+    userAgent: navigator.userAgent,
+    status: 'success'
+  })
+  
+  // 重新加载安全日志
+  initializeSecurityLogs()
 }
 
 const toggleTwoFactor = async (value: boolean): Promise<void> => {
@@ -1274,6 +2004,20 @@ const toggleTwoFactor = async (value: boolean): Promise<void> => {
       twoFactorEnabled.value = false
       intendedTwoFactorState.value = false
       ElMessage.success('两步验证已关闭')
+      
+      // 记录安全操作日志
+      const userId = localStorage.getItem('userId') || 'default_user'
+      logSecurityOperation({
+        userId,
+        operation: 'disable_two_factor',
+        description: '关闭两步验证',
+        ip: '127.0.0.1', // 实际应用中应获取真实IP
+        userAgent: navigator.userAgent,
+        status: 'success'
+      })
+      
+      // 重新加载安全日志
+      initializeSecurityLogs()
     }
   } catch (error) {
     console.error('切换两步验证失败:', error)
@@ -1310,12 +2054,55 @@ const verifyTwoFactorCode = async (): Promise<void> => {
       twoFactorEnabled.value = true
       intendedTwoFactorState.value = true
       ElMessage.success('验证通过')
+      
+      // 记录安全操作日志
+      const userId = localStorage.getItem('userId') || 'default_user';
+      logSecurityOperation({
+        userId,
+        operation: 'verify_two_factor_code_success',
+        description: '两步验证验证码验证通过',
+        ip: '127.0.0.1', // 实际应用中应获取真实IP
+        userAgent: navigator.userAgent,
+        status: 'success'
+      });
+      
+      // 重新加载安全日志
+      initializeSecurityLogs();
     } else {
       ElMessage.error('验证码错误，请重新输入')
+      
+      // 记录安全操作日志
+      const userId = localStorage.getItem('userId') || 'default_user';
+      logSecurityOperation({
+        userId,
+        operation: 'verify_two_factor_code_failed',
+        description: '两步验证验证码验证失败',
+        ip: '127.0.0.1', // 实际应用中应获取真实IP
+        userAgent: navigator.userAgent,
+        status: 'failed'
+      });
+      
+      // 重新加载安全日志
+      initializeSecurityLogs();
     }
   } catch (error) {
     console.error('验证两步验证码失败:', error)
     ElMessage.error('验证失败，请稍后重试')
+    
+    // 记录安全操作日志
+    const userId = localStorage.getItem('userId') || 'default_user';
+    logSecurityOperation({
+      userId,
+      operation: 'verify_two_factor_code_error',
+      description: '两步验证验证码验证出现错误',
+      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      userAgent: navigator.userAgent,
+      status: 'failed',
+      details: { error: (error as Error).message }
+    });
+    
+    // 重新加载安全日志
+    initializeSecurityLogs();
   }
 }
 
@@ -1328,6 +2115,20 @@ const completeTwoFactorSetup = (): void => {
     showTwoFactorSetupDialog.value = false
     twoFactorStep.value = 0
     ElMessage.success('两步验证已成功启用')
+    
+    // 记录安全操作日志
+    const userId = localStorage.getItem('userId') || 'default_user'
+    logSecurityOperation({
+      userId,
+      operation: 'enable_two_factor',
+      description: '启用两步验证',
+      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      userAgent: navigator.userAgent,
+      status: 'success'
+    })
+    
+    // 重新加载安全日志
+    initializeSecurityLogs()
   } else {
     ElMessage.error('两步验证设置未完成，请先验证验证码')
   }
@@ -1351,6 +2152,20 @@ const cancelTwoFactorSetup = (): void => {
     intendedTwoFactorState.value = originalTwoFactorState.value
     // 不再清理配置，保留已有的配置以便下次使用
   }
+  
+  // 记录安全操作日志
+  const userId = localStorage.getItem('userId') || 'default_user';
+  logSecurityOperation({
+    userId,
+    operation: 'cancel_two_factor_setup',
+    description: '取消两步验证设置',
+    ip: '127.0.0.1', // 实际应用中应获取真实IP
+    userAgent: navigator.userAgent,
+    status: 'success'
+  });
+  
+  // 重新加载安全日志
+  initializeSecurityLogs();
 }
 
 const handleTwoFactorDialogClose = (): void => {
@@ -1371,12 +2186,40 @@ const handleTwoFactorDialogClose = (): void => {
   
   // 重置步骤
   twoFactorStep.value = 0
+  
+  // 记录安全操作日志
+  const userId = localStorage.getItem('userId') || 'default_user';
+  logSecurityOperation({
+    userId,
+    operation: 'handle_two_factor_dialog_close',
+    description: '关闭两步验证对话框',
+    ip: '127.0.0.1', // 实际应用中应获取真实IP
+    userAgent: navigator.userAgent,
+    status: 'success'
+  });
+  
+  // 重新加载安全日志
+  initializeSecurityLogs();
 }
 
 const copySecretKey = async (): Promise<void> => {
   try {
     await navigator.clipboard.writeText(twoFactorSecret.value)
     ElMessage.success('密钥已复制到剪贴板')
+    
+    // 记录安全操作日志
+    const userId = localStorage.getItem('userId') || 'default_user';
+    logSecurityOperation({
+      userId,
+      operation: 'copy_secret_key',
+      description: '复制两步验证密钥',
+      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      userAgent: navigator.userAgent,
+      status: 'success'
+    });
+    
+    // 重新加载安全日志
+    initializeSecurityLogs();
   } catch (err) {
     // 降级方案
     const textArea = document.createElement('textarea')
@@ -1386,6 +2229,20 @@ const copySecretKey = async (): Promise<void> => {
     document.execCommand('copy')
     document.body.removeChild(textArea)
     ElMessage.success('密钥已复制到剪贴板')
+    
+    // 记录安全操作日志
+    const userId = localStorage.getItem('userId') || 'default_user';
+    logSecurityOperation({
+      userId,
+      operation: 'copy_secret_key_fallback',
+      description: '复制两步验证密钥（降级方案）',
+      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      userAgent: navigator.userAgent,
+      status: 'success'
+    });
+    
+    // 重新加载安全日志
+    initializeSecurityLogs();
   }
 }
 
@@ -1395,6 +2252,23 @@ const toggleLoginProtection = (value: boolean): void => {
   } else {
     ElMessage.warning('登录保护已关闭')
   }
+  
+  // 保存登录保护设置到localStorage
+  localStorage.setItem('loginProtectionEnabled', value.toString());
+  
+  // 记录安全操作日志
+  const userId = localStorage.getItem('userId') || 'default_user';
+  logSecurityOperation({
+    userId,
+    operation: 'toggle_login_protection',
+    description: value ? '启用登录保护' : '禁用登录保护',
+    ip: '127.0.0.1', // 实际应用中应获取真实IP
+    userAgent: navigator.userAgent,
+    status: 'success'
+  });
+  
+  // 重新加载安全日志
+  initializeSecurityLogs();
 }
 
 const toggleAbnormalLoginAlert = (value: boolean): void => {
@@ -1403,6 +2277,23 @@ const toggleAbnormalLoginAlert = (value: boolean): void => {
   } else {
     ElMessage.warning('异常登录提醒已关闭')
   }
+  
+  // 保存异常登录提醒设置到localStorage
+  localStorage.setItem('abnormalLoginAlert', value.toString());
+  
+  // 记录安全操作日志
+  const userId = localStorage.getItem('userId') || 'default_user';
+  logSecurityOperation({
+    userId,
+    operation: 'toggle_abnormal_login_alert',
+    description: value ? '启用异常登录提醒' : '禁用异常登录提醒',
+    ip: '127.0.0.1', // 实际应用中应获取真实IP
+    userAgent: navigator.userAgent,
+    status: 'success'
+  });
+  
+  // 重新加载安全日志
+  initializeSecurityLogs();
 }
 
 const toggleLoginRateLimit = async (value: boolean): Promise<void> => {
@@ -1421,8 +2312,36 @@ const toggleLoginRateLimit = async (value: boolean): Promise<void> => {
     
     if (value) {
       ElMessage.success('登录频率限制已启用')
+      
+      // 记录安全操作日志
+      const userId = localStorage.getItem('userId') || 'default_user';
+      logSecurityOperation({
+        userId,
+        operation: 'enable_login_rate_limit',
+        description: '启用登录频率限制',
+        ip: '127.0.0.1', // 实际应用中应获取真实IP
+        userAgent: navigator.userAgent,
+        status: 'success'
+      });
+      
+      // 重新加载安全日志
+      initializeSecurityLogs();
     } else {
       ElMessage.warning('登录频率限制已禁用')
+      
+      // 记录安全操作日志
+      const userId = localStorage.getItem('userId') || 'default_user';
+      logSecurityOperation({
+        userId,
+        operation: 'disable_login_rate_limit',
+        description: '禁用登录频率限制',
+        ip: '127.0.0.1', // 实际应用中应获取真实IP
+        userAgent: navigator.userAgent,
+        status: 'success'
+      });
+      
+      // 重新加载安全日志
+      initializeSecurityLogs();
     }
   } catch (error) {
     console.error('切换登录频率限制失败:', error)
@@ -1434,11 +2353,128 @@ const toggleLoginRateLimit = async (value: boolean): Promise<void> => {
   }
 }
 
-const toggleDataEncryption = (value: boolean): void => {
-  if (value) {
-    ElMessage.success('数据加密已启用')
-  } else {
-    ElMessage.warning('数据加密已禁用')
+const toggleDataEncryption = async (value: boolean): Promise<void> => {
+  try {
+    // 获取当前用户ID
+    const userId = localStorage.getItem('userId') || 'default_user';
+    
+    if (value) {
+      // 启用数据加密 - 默认状态，无需确认
+      // 显示加载状态
+      const loadingInstance = ElLoading.service({
+        lock: true,
+        text: '正在启用数据加密...',
+        background: 'rgba(0, 0, 0, 0.7)'
+      });
+      
+      try {
+        // 实际应用中，这里应该调用后端API来启用数据加密
+        // 模拟API调用
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // 保存加密状态到localStorage
+        localStorage.setItem(`dataEncryptionEnabled_${userId}`, 'true');
+        
+        // 启用数据加密管理器
+        dataEncryptionManager.enableEncryption();
+        
+        // 生成并保存主密钥（实际应用中应在后端生成并安全存储）
+        const masterKey = 'user_master_key_' + userId + '_' + Date.now();
+        localStorage.setItem('master_encryption_key', masterKey);
+        dataEncryptionManager.setMasterKey(masterKey);
+        
+        // 更新本地状态
+        dataEncryptionEnabled.value = true;
+        
+        ElMessage.success('数据加密已启用');
+        
+        // 记录安全操作日志
+        logSecurityOperation({
+          userId,
+          operation: 'enable_data_encryption',
+          description: '启用数据加密',
+          ip: '127.0.0.1', // 实际应用中应获取真实IP
+          userAgent: navigator.userAgent,
+          status: 'success'
+        });
+        
+        // 重新加载安全日志
+        initializeSecurityLogs();
+      } catch (error) {
+        console.error('启用数据加密失败:', error);
+        ElMessage.error('启用数据加密失败，请稍后重试');
+        // 回滚状态
+        dataEncryptionEnabled.value = false;
+      } finally {
+        loadingInstance.close();
+      }
+    } else {
+      // 禁用数据加密 - 需要用户确认
+      ElMessageBox.confirm(
+        '禁用端到端加密后，您的敏感数据将以明文形式存储，这会显著降低安全性。强烈建议保持启用状态。确定要禁用吗？',
+        '确认禁用数据加密',
+        {
+          confirmButtonText: '确定禁用',
+          cancelButtonText: '保持启用',
+          type: 'warning'
+        }
+      ).then(async () => {
+        // 显示加载状态
+        const loadingInstance = ElLoading.service({
+          lock: true,
+          text: '正在禁用数据加密...',
+          background: 'rgba(0, 0, 0, 0.7)'
+        });
+        
+        try {
+          // 实际应用中，这里应该调用后端API来禁用数据加密
+          // 模拟API调用
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          // 删除加密状态
+          localStorage.removeItem(`dataEncryptionEnabled_${userId}`);
+          
+          // 禁用数据加密管理器
+          dataEncryptionManager.disableEncryption();
+          
+          // 删除主密钥
+          localStorage.removeItem('master_encryption_key');
+          
+          // 更新本地状态
+          dataEncryptionEnabled.value = false;
+          
+          ElMessage.warning('数据加密已禁用');
+          
+          // 记录安全操作日志
+          logSecurityOperation({
+            userId,
+            operation: 'disable_data_encryption',
+            description: '禁用数据加密',
+            ip: '127.0.0.1', // 实际应用中应获取真实IP
+            userAgent: navigator.userAgent,
+            status: 'success'
+          });
+          
+          // 重新加载安全日志
+          initializeSecurityLogs();
+        } catch (error) {
+          console.error('禁用数据加密失败:', error);
+          ElMessage.error('禁用数据加密失败，请稍后重试');
+          // 回滚状态
+          dataEncryptionEnabled.value = true;
+        } finally {
+          loadingInstance.close();
+        }
+      }).catch(() => {
+        // 用户取消操作，保持启用状态
+        dataEncryptionEnabled.value = true;
+      });
+    }
+  } catch (error) {
+    console.error('切换数据加密设置失败:', error);
+    ElMessage.error('操作失败，请稍后重试');
+    // 回滚状态
+    dataEncryptionEnabled.value = !value;
   }
 }
 
@@ -1452,6 +2488,20 @@ const sendPhoneCode = (): void => {
     }
   }, 1000)
   ElMessage.success('验证码已发送到您的手机')
+  
+  // 记录安全操作日志
+  const userId = localStorage.getItem('userId') || 'default_user';
+  logSecurityOperation({
+    userId,
+    operation: 'send_phone_code',
+    description: '发送手机验证码',
+    ip: '127.0.0.1', // 实际应用中应获取真实IP
+    userAgent: navigator.userAgent,
+    status: 'success'
+  });
+  
+  // 重新加载安全日志
+  initializeSecurityLogs();
 }
 
 const sendEmailCode = (): void => {
@@ -1464,6 +2514,20 @@ const sendEmailCode = (): void => {
     }
   }, 1000)
   ElMessage.success('验证码已发送到您的邮箱')
+  
+  // 记录安全操作日志
+  const userId = localStorage.getItem('userId') || 'default_user';
+  logSecurityOperation({
+    userId,
+    operation: 'send_email_code',
+    description: '发送邮箱验证码',
+    ip: '127.0.0.1', // 实际应用中应获取真实IP
+    userAgent: navigator.userAgent,
+    status: 'success'
+  });
+  
+  // 重新加载安全日志
+  initializeSecurityLogs();
 }
 
 const bindPhone = (): void => {
@@ -1474,6 +2538,20 @@ const bindPhone = (): void => {
   phoneVerified.value = true
   ElMessage.success('手机绑定成功')
   showPhoneDialog.value = false
+  
+  // 记录安全操作日志
+  const userId = localStorage.getItem('userId') || 'default_user';
+  logSecurityOperation({
+    userId,
+    operation: 'bind_phone',
+    description: '绑定手机号码',
+    ip: '127.0.0.1', // 实际应用中应获取真实IP
+    userAgent: navigator.userAgent,
+    status: 'success'
+  });
+  
+  // 重新加载安全日志
+  initializeSecurityLogs();
 }
 
 const bindEmail = (): void => {
@@ -1484,21 +2562,94 @@ const bindEmail = (): void => {
   emailVerified.value = true
   ElMessage.success('邮箱绑定成功')
   showEmailDialog.value = false
+  
+  // 记录安全操作日志
+  const userId = localStorage.getItem('userId') || 'default_user';
+  logSecurityOperation({
+    userId,
+    operation: 'bind_email',
+    description: '绑定邮箱地址',
+    ip: '127.0.0.1', // 实际应用中应获取真实IP
+    userAgent: navigator.userAgent,
+    status: 'success'
+  });
+  
+  // 重新加载安全日志
+  initializeSecurityLogs();
 }
 
 const exportLoginHistory = (): void => {
-  // 模拟导出登录历史
-  ElMessage.success('登录历史已导出')
+  try {
+    // 准备CSV数据
+    // 添加BOM以支持UTF-8编码，解决Excel打开乱码问题
+    const csvHeader = '\uFEFF';
+    const csvContent = [
+      ['登录时间', '设备信息', 'IP地址', '地理位置'],
+      ...loginHistory.value.map(record => [
+        record.time,
+        record.device,
+        record.ip,
+        record.location
+      ])
+    ]
+      .map(row => row.map(field => `"${String(field).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+
+    // 创建Blob对象
+    const blob = new Blob([csvHeader + csvContent], { type: 'text/csv;charset=utf-8;' });
+
+    // 创建下载链接
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `login-history-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+
+    ElMessage.success('登录历史已导出');
+
+    // 记录安全操作日志
+    const userId = localStorage.getItem('userId') || 'default_user';
+    logSecurityOperation({
+      userId,
+      operation: 'export_login_history',
+      description: '导出登录历史记录',
+      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      userAgent: navigator.userAgent,
+      status: 'success'
+    });
+
+    // 重新加载安全日志
+    initializeSecurityLogs();
+  } catch (error) {
+    console.error('导出登录历史失败:', error);
+    ElMessage.error('导出失败，请稍后重试');
+  }
 }
 
 const clearLoginHistory = (): void => {
-  ElMessageBox.confirm('确定要清空所有登录历史记录吗？', '提示', {
-    confirmButtonText: '确定',
+  ElMessageBox.confirm('确定要清空所有登录历史记录吗？', '提示', {    confirmButtonText: '确定',
     cancelButtonText: '取消',
     type: 'warning'
   }).then(() => {
     loginHistory.value = []
     ElMessage.success('登录历史已清空')
+    
+    // 记录安全操作日志
+    const userId = localStorage.getItem('userId') || 'default_user';
+    logSecurityOperation({
+      userId,
+      operation: 'clear_login_history',
+      description: '清空登录历史记录',
+      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      userAgent: navigator.userAgent,
+      status: 'success'
+    });
+    
+    // 重新加载安全日志
+    initializeSecurityLogs();
   }).catch(() => {
     // 取消操作
   })
@@ -1515,16 +2666,77 @@ const deleteLoginRecord = (recordId: number): void => {
       loginHistory.value.splice(index, 1)
     }
     ElMessage.success('登录记录已删除')
+    
+    // 记录安全操作日志
+    const userId = localStorage.getItem('userId') || 'default_user';
+    logSecurityOperation({
+      userId,
+      operation: 'delete_login_record',
+      description: `删除登录记录 ID: ${recordId}`,
+      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      userAgent: navigator.userAgent,
+      status: 'success'
+    });
+    
+    // 重新加载安全日志
+    initializeSecurityLogs();
   }).catch(() => {
     // 取消操作
   })
 }
 
 const exportDetailedLoginHistory = (): void => {
-  // 模拟导出详细登录历史
-  ElMessage.success('详细登录历史已导出')
-}
+  try {
+    // 准备CSV数据
+    // 添加BOM以支持UTF-8编码，解决Excel打开乱码问题
+    const csvHeader = '\uFEFF';
+    const csvContent = [
+      ['登录时间', '设备信息', '浏览器', 'IP地址', '地理位置', '登录状态'],
+      ...detailedLoginHistory.value.map(record => [
+        record.time,
+        record.device,
+        record.browser,
+        record.ip,
+        record.location,
+        record.status
+      ])
+    ]
+      .map(row => row.map(field => `"${String(field).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
 
+    // 创建Blob对象
+    const blob = new Blob([csvHeader + csvContent], { type: 'text/csv;charset=utf-8;' });
+
+    // 创建下载链接
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `detailed-login-history-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+
+    ElMessage.success('详细登录历史已导出');
+
+    // 记录安全操作日志
+    const userId = localStorage.getItem('userId') || 'default_user';
+    logSecurityOperation({
+      userId,
+      operation: 'export_detailed_login_history',
+      description: '导出详细登录历史记录',
+      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      userAgent: navigator.userAgent,
+      status: 'success'
+    });
+
+    // 重新加载安全日志
+    initializeSecurityLogs();
+  } catch (error) {
+    console.error('导出详细登录历史失败:', error);
+    ElMessage.error('导出失败，请稍后重试');
+  }
+}
 const clearDetailedLoginHistory = (): void => {
   ElMessageBox.confirm('确定要清空所有详细登录历史记录吗？', '提示', {
     confirmButtonText: '确定',
@@ -1533,6 +2745,20 @@ const clearDetailedLoginHistory = (): void => {
   }).then(() => {
     detailedLoginHistory.value = []
     ElMessage.success('详细登录历史已清空')
+    
+    // 记录安全操作日志
+    const userId = localStorage.getItem('userId') || 'default_user';
+    logSecurityOperation({
+      userId,
+      operation: 'clear_detailed_login_history',
+      description: '清空详细登录历史记录',
+      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      userAgent: navigator.userAgent,
+      status: 'success'
+    });
+    
+    // 重新加载安全日志
+    initializeSecurityLogs();
   }).catch(() => {
     // 取消操作
   })
@@ -1549,6 +2775,20 @@ const deleteDetailedLoginRecord = (recordId: number): void => {
       detailedLoginHistory.value.splice(index, 1)
     }
     ElMessage.success('详细登录记录已删除')
+    
+    // 记录安全操作日志
+    const userId = localStorage.getItem('userId') || 'default_user';
+    logSecurityOperation({
+      userId,
+      operation: 'delete_detailed_login_record',
+      description: `删除详细登录记录 ID: ${recordId}`,
+      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      userAgent: navigator.userAgent,
+      status: 'success'
+    });
+    
+    // 重新加载安全日志
+    initializeSecurityLogs();
   }).catch(() => {
     // 取消操作
   })
@@ -1558,9 +2798,197 @@ const currentDeviceCount = computed(() => {
   return loginDevices.value.filter(device => device.current).length
 })
 
+const filteredLoginHistory = computed(() => {
+  let filtered = [...loginHistory.value]
+  
+  // 关键词筛选
+  if (loginHistoryFilter.keyword) {
+    const keyword = loginHistoryFilter.keyword.toLowerCase()
+    filtered = filtered.filter(record => 
+      record.device.toLowerCase().includes(keyword) ||
+      record.ip.toLowerCase().includes(keyword) ||
+      record.location.toLowerCase().includes(keyword)
+    )
+  }
+  
+  // 日期范围筛选
+  if (loginHistoryFilter.dateRange && loginHistoryFilter.dateRange.length === 2) {
+    const startDate = loginHistoryFilter.dateRange[0] as unknown as string
+    const endDate = loginHistoryFilter.dateRange[1] as unknown as string
+    if (startDate && endDate) {
+      filtered = filtered.filter(record => {
+        const recordDate = record.time.split(' ')[0] // 提取日期部分
+        if (recordDate) {
+          return recordDate >= startDate && recordDate <= endDate
+        }
+        return false
+      })
+    }
+  }
+  
+  // 排序
+  if (loginHistorySort.prop && loginHistorySort.order) {
+    filtered.sort((a, b) => {
+      const prop = loginHistorySort.prop as keyof typeof a
+      const order = loginHistorySort.order === 'ascending' ? 1 : -1
+      
+      // 处理时间字段的特殊排序
+      if (prop === 'time') {
+        return (new Date(a[prop]).getTime() - new Date(b[prop]).getTime()) * order
+      }
+      
+      // 处理字符串字段的排序
+      if (typeof a[prop] === 'string' && typeof b[prop] === 'string') {
+        return a[prop].localeCompare(b[prop]) * order
+      }
+      
+      // 默认排序
+      return 0
+    })
+  }
+  
+  return filtered
+})
+
+const filterLoginHistory = (): void => {
+  // 筛选逻辑已在computed属性中实现
+  ElMessage.info('筛选条件已应用')
+}
+
+const resetLoginHistoryFilter = (): void => {
+  loginHistoryFilter.keyword = ''
+  loginHistoryFilter.dateRange = []
+}
+
+const hasLoginHistoryFilters = computed(() => {
+  return loginHistoryFilter.keyword !== '' || 
+         (loginHistoryFilter.dateRange && loginHistoryFilter.dateRange.length > 0)
+})
+
+const hasLoginHistorySort = computed(() => {
+  return loginHistorySort.prop !== '' && loginHistorySort.order !== ''
+})
+
+const clearAllLoginHistoryFilters = (): void => {
+  resetLoginHistoryFilter()
+  loginHistorySort.prop = ''
+  loginHistorySort.order = ''
+  ElMessage.info('已清除所有筛选和排序')
+}
+
+const handleLoginHistorySort = (sort: { prop: string; order: string }): void => {
+  loginHistorySort.prop = sort.prop
+  loginHistorySort.order = sort.order
+}
+
+const filteredDetailedLoginHistory = computed(() => {
+  let filtered = [...detailedLoginHistory.value]
+  
+  // 关键词筛选
+  if (detailedLoginHistoryFilter.keyword) {
+    const keyword = detailedLoginHistoryFilter.keyword.toLowerCase()
+    filtered = filtered.filter(record => 
+      record.device.toLowerCase().includes(keyword) ||
+      record.ip.toLowerCase().includes(keyword) ||
+      record.location.toLowerCase().includes(keyword) ||
+      record.browser.toLowerCase().includes(keyword)
+    )
+  }
+  
+  // 日期范围筛选
+  if (detailedLoginHistoryFilter.dateRange && detailedLoginHistoryFilter.dateRange.length === 2) {
+    const startDate = detailedLoginHistoryFilter.dateRange[0] as unknown as string
+    const endDate = detailedLoginHistoryFilter.dateRange[1] as unknown as string
+    if (startDate && endDate) {
+      filtered = filtered.filter(record => {
+        const recordDate = record.time.split(' ')[0] // 提取日期部分
+        if (recordDate) {
+          return recordDate >= startDate && recordDate <= endDate
+        }
+        return false
+      })
+    }
+  }
+  
+  // 状态筛选
+  if (detailedLoginHistoryFilter.status) {
+    filtered = filtered.filter(record => record.status === detailedLoginHistoryFilter.status)
+  }
+  
+  // 排序
+  if (detailedLoginHistorySort.prop && detailedLoginHistorySort.order) {
+    filtered.sort((a, b) => {
+      const prop = detailedLoginHistorySort.prop as keyof typeof a
+      const order = detailedLoginHistorySort.order === 'ascending' ? 1 : -1
+      
+      // 处理时间字段的特殊排序
+      if (prop === 'time') {
+        return (new Date(a[prop]).getTime() - new Date(b[prop]).getTime()) * order
+      }
+      
+      // 处理字符串字段的排序
+      if (typeof a[prop] === 'string' && typeof b[prop] === 'string') {
+        return a[prop].localeCompare(b[prop]) * order
+      }
+      
+      // 默认排序
+      return 0
+    })
+  }
+  
+  return filtered
+})
+
+const filterDetailedLoginHistory = (): void => {
+  // 筛选逻辑已在computed属性中实现
+  ElMessage.info('筛选条件已应用')
+}
+
+const resetDetailedLoginHistoryFilter = (): void => {
+  detailedLoginHistoryFilter.keyword = ''
+  detailedLoginHistoryFilter.dateRange = []
+  detailedLoginHistoryFilter.status = ''
+}
+
+const hasDetailedLoginHistoryFilters = computed(() => {
+  return detailedLoginHistoryFilter.keyword !== '' || 
+         (detailedLoginHistoryFilter.dateRange && detailedLoginHistoryFilter.dateRange.length > 0) ||
+         detailedLoginHistoryFilter.status !== ''
+})
+
+const hasDetailedLoginHistorySort = computed(() => {
+  return detailedLoginHistorySort.prop !== '' && detailedLoginHistorySort.order !== ''
+})
+
+const clearAllDetailedLoginHistoryFilters = (): void => {
+  resetDetailedLoginHistoryFilter()
+  detailedLoginHistorySort.prop = ''
+  detailedLoginHistorySort.order = ''
+  ElMessage.info('已清除所有筛选和排序')
+}
+
+const handleDetailedLoginHistorySort = (sort: { prop: string; order: string }): void => {
+  detailedLoginHistorySort.prop = sort.prop
+  detailedLoginHistorySort.order = sort.order
+}
+
 const refreshDeviceList = (): void => {
   // 模拟刷新设备列表
   ElMessage.info('设备列表已刷新')
+  
+  // 记录安全操作日志
+  const userId = localStorage.getItem('userId') || 'default_user';
+  logSecurityOperation({
+    userId,
+    operation: 'refresh_device_list',
+    description: '刷新设备列表',
+    ip: '127.0.0.1', // 实际应用中应获取真实IP
+    userAgent: navigator.userAgent,
+    status: 'success'
+  });
+  
+  // 重新加载安全日志
+  initializeSecurityLogs();
 }
 
 const removeAllDevices = (): void => {
@@ -1572,6 +3000,20 @@ const removeAllDevices = (): void => {
     // 只移除非当前设备
     loginDevices.value = loginDevices.value.filter(device => device.current)
     ElMessage.success('非当前设备已移除')
+    
+    // 记录安全操作日志
+    const userId = localStorage.getItem('userId') || 'default_user';
+    logSecurityOperation({
+      userId,
+      operation: 'remove_all_devices',
+      description: '移除所有非当前设备',
+      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      userAgent: navigator.userAgent,
+      status: 'success'
+    });
+    
+    // 重新加载安全日志
+    initializeSecurityLogs();
   }).catch(() => {
     // 取消操作
   })
@@ -1588,6 +3030,20 @@ const removeDevice = (deviceId: number): void => {
       loginDevices.value.splice(index, 1)
     }
     ElMessage.success('设备移除成功')
+    
+    // 记录安全操作日志
+    const userId = localStorage.getItem('userId') || 'default_user';
+    logSecurityOperation({
+      userId,
+      operation: 'remove_device',
+      description: `移除设备 ID: ${deviceId}`,
+      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      userAgent: navigator.userAgent,
+      status: 'success'
+    });
+    
+    // 重新加载安全日志
+    initializeSecurityLogs();
   }).catch(() => {
     // 取消操作
   })
@@ -1597,6 +3053,20 @@ const copyBackupCode = async (code: string): Promise<void> => {
   try {
     await navigator.clipboard.writeText(code)
     ElMessage.success('验证码已复制到剪贴板')
+    
+    // 记录安全操作日志
+    const userId = localStorage.getItem('userId') || 'default_user';
+    logSecurityOperation({
+      userId,
+      operation: 'copy_backup_code',
+      description: '复制备用验证码',
+      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      userAgent: navigator.userAgent,
+      status: 'success'
+    });
+    
+    // 重新加载安全日志
+    initializeSecurityLogs();
   } catch (err) {
     // 降级方案
     const textArea = document.createElement('textarea')
@@ -1606,6 +3076,20 @@ const copyBackupCode = async (code: string): Promise<void> => {
     document.execCommand('copy')
     document.body.removeChild(textArea)
     ElMessage.success('验证码已复制到剪贴板')
+    
+    // 记录安全操作日志
+    const userId = localStorage.getItem('userId') || 'default_user';
+    logSecurityOperation({
+      userId,
+      operation: 'copy_backup_code_fallback',
+      description: '复制备用验证码（降级方案）',
+      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      userAgent: navigator.userAgent,
+      status: 'success'
+    });
+    
+    // 重新加载安全日志
+    initializeSecurityLogs();
   }
 }
 
@@ -1620,9 +3104,38 @@ const regenerateBackupCodes = (): void => {
       const newCodes = generateNewBackupCodes(twoFactorAccountId.value)
       backupCodes.value = newCodes
       ElMessage.success('备用验证码已重新生成')
+      
+      // 记录安全操作日志
+      const userId = localStorage.getItem('userId') || 'default_user';
+      logSecurityOperation({
+        userId,
+        operation: 'regenerate_backup_codes',
+        description: '重新生成备用验证码',
+        ip: '127.0.0.1', // 实际应用中应获取真实IP
+        userAgent: navigator.userAgent,
+        status: 'success'
+      });
+      
+      // 重新加载安全日志
+      initializeSecurityLogs();
     } catch (error) {
       console.error('重新生成备份验证码失败:', error)
       ElMessage.error('重新生成失败，请稍后重试')
+      
+      // 记录安全操作日志
+      const userId = localStorage.getItem('userId') || 'default_user';
+      logSecurityOperation({
+        userId,
+        operation: 'regenerate_backup_codes_failed',
+        description: '重新生成备用验证码失败',
+        ip: '127.0.0.1', // 实际应用中应获取真实IP
+        userAgent: navigator.userAgent,
+        status: 'failed',
+        details: { error: (error as Error).message }
+      });
+      
+      // 重新加载安全日志
+      initializeSecurityLogs();
     }
   }).catch(() => {
     // 取消操作
@@ -1630,8 +3143,72 @@ const regenerateBackupCodes = (): void => {
 }
 
 const saveLoginLimit = (): void => {
-  ElMessage.success('登录限制设置已保存')
-  showLoginLimitDialog.value = false
+  try {
+    // 获取当前用户ID（实际应用中应从用户信息获取）
+    const userId = 'current_user_id';
+    
+    // 保存登录限制配置
+    const config = {
+      maxDevices: loginLimitForm.maxDevices,
+      autoLogout: loginLimitForm.autoLogout,
+      enabled: loginLimitForm.enabled
+    };
+    
+    saveLoginDeviceLimitConfig(userId, config);
+    
+    // 如果启用了设备限制，检查当前设备数量
+    if (config.enabled) {
+      // 更新设备列表
+      loadCurrentDeviceSessions();
+      
+      // 如果当前活跃设备数量超过限制，执行自动登出逻辑
+      if (config.autoLogout) {
+        const sessions = getActiveDeviceSessions(userId);
+        const activeSessions = sessions.filter(session => session.isActive);
+        
+        if (activeSessions.length > config.maxDevices) {
+          // 按登录时间排序，最早的在前
+          const sortedSessions = [...activeSessions].sort((a, b) => a.loginTime - b.loginTime);
+          
+          // 标记最早的设备为非活跃（模拟登出）
+          const sessionToLogout = sortedSessions[0];
+          if (sessionToLogout) {
+            sessionToLogout.isActive = false;
+            
+            // 更新sessions数组中的对应项
+            const indexToLogout = sessions.findIndex(s => s.id === sessionToLogout.id);
+            if (indexToLogout >= 0) {
+              sessions[indexToLogout] = sessionToLogout;
+            }
+            
+            // 保存更新后的会话列表
+            saveActiveDeviceSessions(userId, sessions);
+            
+            ElMessage.warning(`已自动登出最早登录的设备，因为超过最大设备数量限制(${config.maxDevices}台)`);
+          }
+        }
+      }
+    }
+    
+    ElMessage.success(`登录限制设置已保存：${config.enabled ? '已启用' : '已禁用'}设备限制，${config.enabled ? `最大设备数 ${config.maxDevices}，${config.autoLogout ? '启用' : '禁用'}自动登出` : ''}`);
+    showLoginLimitDialog.value = false;
+    
+    // 记录安全操作日志
+    logSecurityOperation({
+      userId,
+      operation: 'save_login_device_limit',
+      description: `保存登录设备限制设置：${config.enabled ? '已启用' : '已禁用'}设备限制，${config.enabled ? `最大设备数 ${config.maxDevices}，${config.autoLogout ? '启用' : '禁用'}自动登出` : ''}`,
+      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      userAgent: navigator.userAgent,
+      status: 'success'
+    });
+    
+    // 重新加载安全日志
+    initializeSecurityLogs();
+  } catch (error) {
+    console.error('保存登录限制设置失败:', error);
+    ElMessage.error('保存失败，请稍后重试');
+  }
 }
 
 const saveSecurityQuestions = (): void => {
@@ -1641,8 +3218,29 @@ const saveSecurityQuestions = (): void => {
     ElMessage.error('请填写所有安全问题和答案')
     return
   }
-  ElMessage.success('安全问题设置成功')
-  showSecurityQuestionDialog.value = false
+  
+  try {
+    const userId = currentUserId.value
+    saveSecurityQuestionConfig(userId, {...securityQuestionForm})
+    ElMessage.success('安全问题设置成功')
+    showSecurityQuestionDialog.value = false
+      
+    // 记录安全操作日志
+    logSecurityOperation({
+      userId,
+      operation: 'set_security_questions',
+      description: '设置安全问题',
+      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      userAgent: navigator.userAgent,
+      status: 'success'
+    });
+      
+    // 重新加载安全日志
+    initializeSecurityLogs();
+  } catch (error) {
+    console.error('保存安全问题失败:', error)
+    ElMessage.error('保存安全问题失败')
+  }
 }
 
 const saveLockoutSettings = (): void => {
@@ -1656,30 +3254,224 @@ const saveLockoutSettings = (): void => {
     
     ElMessage.success('账户锁定设置已保存')
     showLockoutSettings.value = false
+    
+    // 重新检查账户锁定状态以应用新设置
+    checkAccountLockStatus()
+    
+    // 记录安全操作日志
+    const userId = localStorage.getItem('userId') || 'default_user';
+    logSecurityOperation({
+      userId,
+      operation: 'save_lockout_settings',
+      description: '保存账户锁定设置',
+      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      userAgent: navigator.userAgent,
+      status: 'success'
+    });
+    
+    // 重新加载安全日志
+    initializeSecurityLogs();
   } catch (error) {
     console.error('保存账户锁定设置失败:', error)
     ElMessage.error('保存失败，请稍后重试')
   }
 }
 
-const saveSessionTimeout = (): void => {
-  ElMessage.success('会话超时设置已保存')
+const cancelLockoutSettings = (): void => {
+  // 恢复原始设置
+  Object.assign(lockoutSettings, originalLockoutSettings)
+  showLockoutSettings.value = false
+  ElMessage.info('已取消修改')
+  
+  // 记录安全操作日志
+  const userId = localStorage.getItem('userId') || 'default_user';
+  logSecurityOperation({
+    userId,
+    operation: 'cancel_lockout_settings',
+    description: '取消账户锁定设置修改',
+    ip: '127.0.0.1', // 实际应用中应获取真实IP
+    userAgent: navigator.userAgent,
+    status: 'success'
+  });
+  
+  // 重新加载安全日志
+  initializeSecurityLogs();
+}
+
+// 取消会话超时设置
+const cancelSessionTimeout = (): void => {
+  // 恢复原始设置
+  Object.assign(sessionTimeoutForm, originalSessionTimeoutSettings)
   showSessionTimeoutDialog.value = false
+  ElMessage.info('已取消修改')
+  
+  // 记录安全操作日志
+  const userId = localStorage.getItem('userId') || 'default_user';
+  logSecurityOperation({
+    userId,
+    operation: 'cancel_session_timeout',
+    description: '取消会话超时设置修改',
+    ip: '127.0.0.1', // 实际应用中应获取真实IP
+    userAgent: navigator.userAgent,
+    status: 'success'
+  });
+  
+  // 重新加载安全日志
+  initializeSecurityLogs();
+}
+
+const saveSessionTimeout = (): void => {
+  // 保存会话超时设置
+  ElMessage.success(`会话超时设置已保存：超时时长 ${sessionTimeoutForm.timeout} 分钟，提醒时间 ${sessionTimeoutForm.warningTime} 分钟`)
+  showSessionTimeoutDialog.value = false
+  
+  // 更新原始设置为当前设置
+  Object.assign(originalSessionTimeoutSettings, sessionTimeoutForm)
+  
+  // 实际应用中，这里应该调用后端API来保存会话超时设置
+  // 例如：
+  // api.updateSessionTimeoutSetting({
+  //   timeout: sessionTimeoutForm.timeout,
+  //   warningTime: sessionTimeoutForm.warningTime
+  // })
+  //   .then(() => {
+  //     ElMessage.success('会话超时设置已保存')
+  //   })
+  //   .catch(error => {
+  //     ElMessage.error('保存失败，请稍后重试')
+  //   })
+  
+  // 记录安全操作日志
+  const userId = localStorage.getItem('userId') || 'default_user';
+  logSecurityOperation({
+    userId,
+    operation: 'save_session_timeout',
+    description: `保存会话超时设置：超时时长 ${sessionTimeoutForm.timeout} 分钟，提醒时间 ${sessionTimeoutForm.warningTime} 分钟`,
+    ip: '127.0.0.1', // 实际应用中应获取真实IP
+    userAgent: navigator.userAgent,
+    status: 'success'
+  });
+  
+  // 重新加载安全日志
+  initializeSecurityLogs();
+}
+
+const resetRateLimitCounter = (): void => {
+  try {
+    // 获取当前用户ID（模拟）
+    const accountId = 'default_user'
+    
+    // 重置失败尝试计数器
+    resetFailedAttempts(accountId)
+    
+    ElMessage.success('频率限制计数器已重置')
+    
+    // 记录安全操作日志
+    const userId = localStorage.getItem('userId') || 'default_user';
+    logSecurityOperation({
+      userId,
+      operation: 'reset_rate_limit_counter',
+      description: '重置登录频率限制计数器',
+      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      userAgent: navigator.userAgent,
+      status: 'success'
+    });
+    
+    // 重新加载安全日志
+    initializeSecurityLogs();
+  } catch (error) {
+    console.error('重置频率限制计数器失败:', error)
+    ElMessage.error('重置失败，请稍后重试')
+  }
+}
+
+const manuallyLockAccount = async (): Promise<void> => {
+  try {
+    lockOperationLoading.value = true
+    
+    // 获取当前用户ID（模拟）
+    const accountId = 'default_user'
+    
+    // 获取锁定时长配置
+    const config = getSecurityConfig()
+    const lockoutDuration = config.lockout.lockoutDuration
+    
+    // 手动锁定账户，使用配置的锁定时长
+    serviceManuallyLockAccount(accountId, lockoutDuration)
+    
+    // 更新本地状态
+    accountLocked.value = true
+    remainingLockTime.value = lockoutDuration * 60 // 转换为秒
+    
+    ElMessage.success(`账户已手动锁定，锁定时长${lockoutDuration}分钟`)
+    
+    // 开始倒计时
+    startLockCountdown()
+    
+    // 记录安全操作日志
+    const userId = localStorage.getItem('userId') || 'default_user';
+    logSecurityOperation({
+      userId,
+      operation: 'manually_lock_account',
+      description: `手动锁定账户，锁定时长${lockoutDuration}分钟`,
+      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      userAgent: navigator.userAgent,
+      status: 'success'
+    });
+    
+    // 重新加载安全日志
+    initializeSecurityLogs();
+  } catch (error) {
+    console.error('手动锁定账户失败:', error)
+    ElMessage.error('锁定失败，请稍后重试')
+  } finally {
+    lockOperationLoading.value = false
+  }
+}
+
+// 开始锁定倒计时
+const startLockCountdown = (): void => {
+  if (lockStatusTimer.value) {
+    clearInterval(lockStatusTimer.value)
+  }
+  
+  lockStatusTimer.value = window.setInterval(() => {
+    if (remainingLockTime.value > 0) {
+      remainingLockTime.value--
+    } else {
+      // 锁定时间结束
+      accountLocked.value = false
+      if (lockStatusTimer.value) {
+        clearInterval(lockStatusTimer.value)
+        lockStatusTimer.value = null
+      }
+    }
+  }, 1000)
 }
 
 const exportSecurityLog = (): void => {
-  ElMessage.success('安全日志导出成功')
+  try {
+    const userId = localStorage.getItem('userId') || 'default_user'
+    const blob = exportSecurityOperationLogs(userId)
+    
+    // 创建下载链接
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `security-log-${new Date().toISOString().split('T')[0]}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    
+    ElMessage.success('安全日志导出成功')
+  } catch (error) {
+    console.error('导出安全日志失败:', error)
+    ElMessage.error('导出失败，请稍后重试')
+  }
 }
 
-const performSecurityCheck = (): void => {
-  ElMessage.info('正在进行安全检查...')
-  // 模拟安全检查过程
-  setTimeout(() => {
-    securityScore.value = Math.floor(80 + Math.random() * 20)
-    securityRiskLevel.value = securityScore.value > 90 ? '低风险' : securityScore.value > 70 ? '中风险' : '高风险'
-    ElMessage.success('安全检查完成')
-  }, 1500)
-}
+// 删除旧的performSecurityCheck函数，将在上面定义新的实现
 
 // 生物识别功能切换
 const toggleBiometric = async (type: BiometricType, enabled: boolean): Promise<void> => {
@@ -1698,6 +3490,20 @@ const toggleBiometric = async (type: BiometricType, enabled: boolean): Promise<v
         } else {
           faceRecognitionEnabled.value = true
         }
+        
+        // 记录安全操作日志
+        const userId = localStorage.getItem('userId') || 'default_user';
+        logSecurityOperation({
+          userId,
+          operation: 'enable_biometric',
+          description: type === 'fingerprint' ? '启用指纹识别' : '启用人脸识别',
+          ip: '127.0.0.1', // 实际应用中应获取真实IP
+          userAgent: navigator.userAgent,
+          status: 'success'
+        });
+        
+        // 重新加载安全日志
+        initializeSecurityLogs();
       } else {
         // 启用失败，回滚开关状态
         ElMessage.error(result.message)
@@ -1719,6 +3525,20 @@ const toggleBiometric = async (type: BiometricType, enabled: boolean): Promise<v
         } else {
           faceRecognitionEnabled.value = false
         }
+        
+        // 记录安全操作日志
+        const userId = localStorage.getItem('userId') || 'default_user';
+        logSecurityOperation({
+          userId,
+          operation: 'disable_biometric',
+          description: type === 'fingerprint' ? '禁用指纹识别' : '禁用人脸识别',
+          ip: '127.0.0.1', // 实际应用中应获取真实IP
+          userAgent: navigator.userAgent,
+          status: 'success'
+        });
+        
+        // 重新加载安全日志
+        initializeSecurityLogs();
       } else {
         // 禁用失败，回滚开关状态
         ElMessage.error(result.message)
@@ -1759,6 +3579,20 @@ const unlockCurrentUserAccount = async (): Promise<void> => {
     remainingLockTime.value = 0
     
     ElMessage.success('账户已解锁')
+    
+    // 记录安全操作日志
+    const userId = localStorage.getItem('userId') || 'default_user';
+    logSecurityOperation({
+      userId,
+      operation: 'unlock_account',
+      description: '解锁账户',
+      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      userAgent: navigator.userAgent,
+      status: 'success'
+    });
+    
+    // 重新加载安全日志
+    initializeSecurityLogs();
   } catch (error) {
     console.error('解锁账户失败:', error)
     ElMessage.error('解锁失败，请稍后重试')
@@ -1796,6 +3630,39 @@ const checkAccountLockStatus = (): void => {
     // 更新本地状态
     accountLocked.value = lockStatus.isLocked
     remainingLockTime.value = lockStatus.remainingTime || 0
+    
+    // 更新锁定原因
+    if (lockStatus.isLocked) {
+      // 检查是否是手动锁定
+      const manualLockStr = localStorage.getItem(`manualLock_${accountId}`)
+      if (manualLockStr) {
+        lockReason.value = '管理员手动锁定'
+      } else {
+        // 检查是否是失败尝试过多导致的锁定
+        const attempts = getLoginAttempts(accountId)
+        if (config.lockout.maxFailedAttempts > 0) {
+          const recentAttempts = [...attempts].reverse()
+          let consecutiveFailures = 0
+          
+          for (const attempt of recentAttempts) {
+            if (attempt.success) {
+              break
+            }
+            consecutiveFailures++
+          }
+          
+          if (consecutiveFailures >= config.lockout.maxFailedAttempts) {
+            lockReason.value = `连续${consecutiveFailures}次登录失败`
+          } else {
+            lockReason.value = '安全策略锁定'
+          }
+        } else {
+          lockReason.value = '安全策略锁定'
+        }
+      }
+    } else {
+      lockReason.value = '账户正常'
+    }
   } catch (error) {
     console.error('检查账户锁定状态失败:', error)
   }
@@ -1858,13 +3725,211 @@ const stopLockStatusCheck = (): void => {
 onMounted(() => {
   // 模拟加载数据
   console.log('安全设置页面加载完成')
+  
+  // 记录页面访问日志
+  const userId = localStorage.getItem('userId') || 'default_user';
+  logSecurityOperation({
+    userId,
+    operation: 'page_view',
+    description: '访问安全设置页面',
+    ip: '127.0.0.1', // 实际应用中应获取真实IP
+    userAgent: navigator.userAgent,
+    status: 'success'
+  });
+  
   // 初始化生物识别支持
   initializeBiometricSupport()
   // 初始化安全配置
   initializeSecurityConfig()
   // 启动锁定状态检查
   startLockStatusCheck()
+  // 初始化登录设备限制配置
+  initializeLoginDeviceLimitConfig()
+  // 加载当前设备会话
+  loadCurrentDeviceSessions()
+  // 初始化数据加密状态
+  initializeDataEncryptionStatus()
+  // 初始化登录保护和异常登录提醒状态
+  initializeLoginProtectionStatus()
+  // 初始化安全日志
+  initializeSecurityLogs()
+  // 初始化安全评估历史记录
+  initializeSecurityAssessmentHistory()
 })
+
+// 初始化登录设备限制配置
+const initializeLoginDeviceLimitConfig = (): void => {
+  try {
+    // 获取当前用户ID（实际应用中应从用户信息获取）
+    const userId = currentUserId.value;
+    const config = getLoginDeviceLimitConfig(userId);
+    
+    // 更新表单数据
+    loginLimitForm.maxDevices = config.maxDevices;
+    loginLimitForm.autoLogout = config.autoLogout;
+    loginLimitForm.enabled = config.enabled;
+  } catch (error) {
+    console.error('初始化登录设备限制配置失败:', error);
+  }
+}
+
+// 加载当前设备会话
+const loadCurrentDeviceSessions = (): void => {
+  try {
+    // 获取当前用户ID（实际应用中应从用户信息获取）
+    const userId = currentUserId.value;
+    
+    // 清理过期会话
+    cleanupExpiredSessions(userId);
+    
+    // 获取当前设备信息
+    const userAgent = getUserAgent();
+    const ipAddress = getClientIpAddress();
+    
+    // 记录当前设备会话（如果不存在）
+    const currentSession = recordNewDeviceSession(userId, userAgent, ipAddress);
+    currentDeviceId.value = currentSession.id;
+    
+    // 获取所有设备会话
+    const sessions = getActiveDeviceSessions(userId);
+    currentDeviceSessions.value = [...sessions];
+    
+    // 计算活跃设备数量
+    activeDeviceCount.value = sessions.filter(session => session.isActive).length;
+  } catch (error) {
+    console.error('加载当前设备会话失败:', error);
+  }
+}
+
+// 格式化日期时间
+const formatDateTime = (timestamp: number): string => {
+  const date = new Date(timestamp);
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+}
+
+// 获取设备显示名称
+const getDeviceDisplayName = (userAgent: string): string => {
+  // 简单解析用户代理字符串，提取浏览器和操作系统信息
+  let browserName = '未知浏览器';
+  let osName = '未知系统';
+  
+  // 检测浏览器
+  if (userAgent.includes('Chrome') && !userAgent.includes('Edg')) {
+    browserName = 'Chrome';
+  } else if (userAgent.includes('Firefox')) {
+    browserName = 'Firefox';
+  } else if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) {
+    browserName = 'Safari';
+  } else if (userAgent.includes('Edg')) {
+    browserName = 'Edge';
+  } else if (userAgent.includes('Opera') || userAgent.includes('OPR')) {
+    browserName = 'Opera';
+  }
+  
+  // 检测操作系统
+  if (userAgent.includes('Windows')) {
+    osName = 'Windows';
+  } else if (userAgent.includes('Mac')) {
+    osName = 'macOS';
+  } else if (userAgent.includes('Linux')) {
+    osName = 'Linux';
+  } else if (userAgent.includes('Android')) {
+    osName = 'Android';
+  } else if (userAgent.includes('iOS') || userAgent.includes('iPhone') || userAgent.includes('iPad')) {
+    osName = 'iOS';
+  }
+  
+  return `${browserName} / ${osName}`;
+}
+
+// 处理登出指定设备
+const handleLogoutDevice = (deviceId: string): void => {
+  ElMessageBox.confirm('确定要登出此设备吗？', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(() => {
+    try {
+      // 获取当前用户ID（实际应用中应从用户信息获取）
+      const userId = 'current_user_id';
+      
+      // 登出指定设备
+      const success = logoutDevice(userId, deviceId);
+      
+      if (success) {
+        ElMessage.success('设备已登出');
+        // 重新加载设备列表
+        loadCurrentDeviceSessions();
+        
+        // 记录安全操作日志
+        logSecurityOperation({
+          userId,
+          operation: 'logout_device',
+          description: '登出指定设备',
+          ip: '127.0.0.1', // 实际应用中应获取真实IP
+          userAgent: navigator.userAgent,
+          status: 'success'
+        });
+        
+        // 重新加载安全日志
+        initializeSecurityLogs();
+      } else {
+        ElMessage.error('登出设备失败');
+      }
+    } catch (error) {
+      console.error('登出设备失败:', error);
+      ElMessage.error('登出设备失败');
+    }
+  }).catch(() => {
+    // 取消操作
+  });
+}
+
+// 处理登出所有设备
+const handleLogoutAllDevices = (): void => {
+  ElMessageBox.confirm('确定要登出所有设备吗？此操作将使您在所有设备上都需要重新登录。', '警告', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(() => {
+    try {
+      // 获取当前用户ID（实际应用中应从用户信息获取）
+      const userId = 'current_user_id';
+      
+      // 登出所有设备
+      logoutAllDevices(userId);
+      
+      ElMessage.success('所有设备已登出');
+      // 重新加载设备列表
+      loadCurrentDeviceSessions();
+      
+      // 记录安全操作日志
+      logSecurityOperation({
+        userId,
+        operation: 'logout_all_devices',
+        description: '登出所有设备',
+        ip: '127.0.0.1', // 实际应用中应获取真实IP
+        userAgent: navigator.userAgent,
+        status: 'success'
+      });
+      
+      // 重新加载安全日志
+      initializeSecurityLogs();
+    } catch (error) {
+      console.error('登出所有设备失败:', error);
+      ElMessage.error('登出所有设备失败');
+    }
+  }).catch(() => {
+    // 取消操作
+  });
+}
 
 // 组件卸载时清理定时器
 onUnmounted(() => {
@@ -2079,6 +4144,57 @@ onUnmounted(() => {
   margin-left: 16px;
 }
 
+.login-history-filters {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.login-history-filters .el-form-item {
+  margin-bottom: 12px;
+}
+
+.login-history-filter-form .el-form-item {
+  margin-right: 12px;
+  margin-bottom: 0;
+}
+
+.login-history-filter-form .el-form-item__label {
+  font-size: 14px;
+}
+
+.login-history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.login-history-header .active-filter {
+  background-color: #ecf5ff;
+  color: #409eff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-left: 8px;
+}
+
+.login-history-controls {
+  display: flex;
+  gap: 12px;
+}
+
+.login-history-stats {
+  color: #909399;
+  font-size: 14px;
+}
+
+.login-history-table {
+  margin-top: 16px;
+}
+
 .login-history {
   max-height: 400px;
   overflow-y: auto;
@@ -2248,6 +4364,15 @@ onUnmounted(() => {
   margin-bottom: 16px;
   padding-bottom: 16px;
   border-bottom: 1px solid #f0f0f0;
+}
+
+.detailed-login-history-header .active-filter {
+  background-color: #ecf5ff;
+  color: #409eff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-left: 8px;
 }
 
 .detailed-login-controls {
@@ -2534,6 +4659,99 @@ onUnmounted(() => {
   border-radius: 4px;
 }
 
+/* 账户状态 */
+.account-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.lock-timer {
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.status-normal {
+  color: #67c23a;
+  font-size: 14px;
+}
+
+/* 锁定状态信息 */
+.lock-status-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lock-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lock-status-label {
+  font-weight: 500;
+  color: #606266;
+  min-width: 60px;
+}
+
+.lock-status-info .el-tag {
+  align-self: flex-start;
+}
+
+.lock-status-info .lock-timer {
+  font-size: 12px;
+  color: #f56c6c;
+  font-weight: 500;
+}
+
+/* 锁定详情信息 */
+.lock-details-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lock-detail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.lock-detail-label {
+  font-weight: 500;
+  color: #606266;
+  min-width: 70px;
+  font-size: 13px;
+}
+
+/* 账户状态信息 */
+.account-status-info {
+  display: flex;
+  align-items: center;
+}
+
+.status-text {
+  color: #67c23a;
+  font-size: 13px;
+}
+
+/* 锁定状态信息 */
+.lock-status-info {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #606266;
+}
+
+.lock-status-info span {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.lock-status-info span:last-child {
+  margin-bottom: 0;
+}
+
 .requirement-item {
   display: flex;
   align-items: center;
@@ -2621,4 +4839,76 @@ onUnmounted(() => {
     grid-template-columns: 1fr;
   }
 }
-</style>
+
+/* 登录设备限制相关样式 */
+.current-devices-info {
+  margin-top: 16px;
+}
+
+.current-devices-info h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #303133;
+}
+
+.current-devices-info p {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  color: #606266;
+}
+
+.device-actions {
+  margin-top: 12px;
+  text-align: right;
+}
+
+.form-desc {
+  font-size: 12px;
+  color: #909399;
+  margin-left: 8px;
+}
+
+/* 安全评估历史记录样式 */
+.factors-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}.factor-item {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.factor-danger {
+  background-color: #fef0f0;
+  color: #f56c6c;
+  border: 1px solid #fbc4c4;
+}
+
+.factor-warning {
+  background-color: #fdf6ec;
+  color: #e6a23c;
+  border: 1px solid #f5dab1;
+}
+
+.factor-name {
+  margin-right: 4px;
+  font-weight: 500;
+}
+
+.factor-score {
+  font-weight: bold;
+}
+/* 响应式安全评估历史记录 */
+@media (max-width: 768px) {
+  .factors-list {
+    gap: 4px;
+  }
+  
+  .factor-item {
+    font-size: 11px;
+    padding: 1px 4px;
+  }}</style>

@@ -5,6 +5,8 @@ import Login from '@/views/Login.vue'
 import Register from '@/views/Register.vue'
 import NotFound from '@/views/NotFound.vue'
 import SecuritySettings from '@/views/SecuritySettings.vue'
+import SecurityQuestionVerification from '@/views/SecurityQuestionVerification.vue'
+import SecurityQuestionDemo from '@/views/SecurityQuestionDemo.vue'
 import NotificationList from '@/views/NotificationList.vue'
 
 // 路由配置
@@ -349,6 +351,24 @@ const routes: Array<RouteRecordRaw> = [
     }
   },
   {
+    path: '/security-question-verification',
+    name: 'SecurityQuestionVerification',
+    component: SecurityQuestionVerification,
+    meta: { 
+      requiresAuth: true,
+      title: '安全问题验证'
+    }
+  },
+  {
+    path: '/security-question-demo',
+    name: 'SecurityQuestionDemo',
+    component: SecurityQuestionDemo,
+    meta: { 
+      requiresAuth: true,
+      title: '安全问题演示'
+    }
+  },
+  {
     path: '/notifications',
     name: 'NotificationList',
     component: NotificationList,
@@ -411,6 +431,36 @@ router.beforeEach(async (to, from, next) => {
       console.log('User not authenticated, redirecting to login');
       next('/login');
       return;
+    }
+    
+    // 检查账户是否被锁定
+    const accountId = localStorage.getItem('userId') || 'default_user';
+    const { getSecurityConfig, getAccountLockStatus } = await import('@/services/accountSecurityService');
+    const config = getSecurityConfig();
+    const lockStatus = getAccountLockStatus(accountId, config);
+    
+    if (lockStatus.isLocked) {
+      // 如果账户被锁定，重定向到登录页面并显示锁定信息
+      // 在localStorage中设置锁定提示信息
+      const remainingMinutes = lockStatus.lockedUntil ? Math.ceil((lockStatus.lockedUntil - Date.now()) / 1000 / 60) : 0;
+      localStorage.setItem('accountLockMessage', `账户已被锁定，剩余时间：${remainingMinutes}分钟，无法访问个人资料、费用管理、账单等所有需要认证的操作`);
+      next('/login');
+      return;
+    }
+    
+    // 检查会话是否仍然有效（设备限制可能导致会话被登出）
+    const sessionId = localStorage.getItem('sessionId');
+    if (sessionId) {
+      const { isSessionValid } = await import('@/services/loginDeviceLimitService');
+      if (!isSessionValid(accountId, sessionId)) {
+        // 会话无效，清除登录状态并重定向到登录页面
+        localStorage.removeItem('isAuthenticated');
+        localStorage.removeItem('username');
+        localStorage.removeItem('userId');
+        localStorage.removeItem('sessionId');
+        next('/login');
+        return;
+      }
     }
   }
 

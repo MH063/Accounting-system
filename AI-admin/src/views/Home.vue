@@ -56,30 +56,30 @@
         </el-col>
       </el-row>
       
-      <el-row :gutter=\"20\" style=\"margin-top: 20px;\">
-        <el-col :span=\"12\">
+      <el-row :gutter="20" style="margin-top: 20px;">
+        <el-col :span="12">
           <el-card>
             <template #header>
-              <div class=\"card-header\">
+              <div class="card-header">
                 <span>数据统计</span>
               </div>
             </template>
-            <div id=\"chart\" style=\"height: 300px;\"></div>
+            <div id="chart" style="height: 300px;"></div>
           </el-card>
         </el-col>
-        <el-col :span=\"12\">
+        <el-col :span="12">
           <el-card>
             <template #header>
-              <div class=\"card-header\">
+              <div class="card-header">
                 <span>系统日志</span>
-                <el-button size=\"small\" @click=\"refreshLogs\">刷新</el-button>
+                <el-button size="small" @click="refreshLogs">刷新</el-button>
               </div>
             </template>
             <el-timeline>
               <el-timeline-item
-                v-for=\"(activity, index) in activities\"
-                :key=\"index\"
-                :timestamp=\"activity.timestamp\"
+                v-for="(activity, index) in activities"
+                :key="index"
+                :timestamp="activity.timestamp"
               >
                 {{ activity.content }}
               </el-timeline-item>
@@ -91,7 +91,7 @@
   </div>
 </template>
 
-<script setup lang=\"ts\">
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { User, Document, View, ChatLineSquare } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
@@ -135,10 +135,10 @@ const loadLogs = async () => {
     const logsData = await systemApi.getLogs({ pageSize: 5 })
     console.log('✅ 日志数据:', logsData)
     
-    activities.value = (logsData || []).map((log: any) => ({
+    activities.value = Array.isArray(logsData) ? logsData.map((log: any) => ({
       content: log.message || log.content || '系统日志',
       timestamp: log.createdAt || log.timestamp || new Date().toLocaleString()
-    }))
+    })) : [];
     
   } catch (error: any) {
     console.error('❌ 加载日志失败:', error)
