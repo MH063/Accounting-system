@@ -147,14 +147,16 @@ const activeMenu = computed(() => route.path)
 <style scoped>
 .left-menu {
   width: 220px;
-  height: calc(100vh - 60px);
+  /* 移除固定高度，让菜单栏可以根据内容自适应高度 */
+  min-height: calc(100vh - 60px);
   background-color: #304156;
   overflow-y: auto;
 }
 
 .menu {
   border-right: none;
-  height: 100%;
+  /* 移除固定高度，让菜单可以根据内容自适应 */
+  min-height: 100%;
 }
 
 .menu:not(.el-menu--collapse) {
