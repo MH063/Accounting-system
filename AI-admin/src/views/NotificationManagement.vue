@@ -166,7 +166,7 @@
               <el-pagination
                 v-model:current-page="notificationCurrentPage"
                 v-model:page-size="notificationPageSize"
-                :page-sizes="[10, 15, 20, 30, 50]"
+                :page-sizes="[10, 20, 50, 100]"
                 layout="total, sizes, prev, pager, next, jumper"
                 :total="notificationTotal"
                 @size-change="handleNotificationSizeChange"
@@ -253,7 +253,7 @@
               <el-pagination
                 v-model:current-page="templateCurrentPage"
                 v-model:page-size="templatePageSize"
-                :page-sizes="[10, 15, 20, 30, 50]"
+                :page-sizes="[10, 20, 50, 100]"
                 layout="total, sizes, prev, pager, next, jumper"
                 :total="templateTotal"
                 @size-change="handleTemplateSizeChange"
@@ -361,7 +361,7 @@
               <el-pagination
                 v-model:current-page="historyCurrentPage"
                 v-model:page-size="historyPageSize"
-                :page-sizes="[10, 15, 20, 30, 50]"
+                :page-sizes="[10, 20, 50, 100]"
                 layout="total, sizes, prev, pager, next, jumper"
                 :total="historyTotal"
                 @size-change="handleHistorySizeChange"
@@ -554,7 +554,7 @@
               <el-pagination
                 v-model:current-page="userGroupCurrentPage"
                 v-model:page-size="userGroupPageSize"
-                :page-sizes="[10, 15, 20, 30, 50]"
+                :page-sizes="[10, 20, 50, 100]"
                 layout="total, sizes, prev, pager, next, jumper"
                 :total="userGroupTotal"
                 @size-change="handleUserGroupSizeChange"
@@ -655,7 +655,7 @@
               <el-pagination
                 v-model:current-page="taskCurrentPage"
                 v-model:page-size="taskPageSize"
-                :page-sizes="[10, 15, 20, 30, 50]"
+                :page-sizes="[10, 20, 50, 100]"
                 layout="total, sizes, prev, pager, next, jumper"
                 :total="taskTotal"
                 @size-change="handleTaskSizeChange"
@@ -1013,7 +1013,7 @@
         <el-pagination
           v-model:current-page="userPreviewCurrentPage"
           v-model:page-size="userPreviewPageSize"
-          :page-sizes="[10, 15, 20, 30, 50]"
+          :page-sizes="[10, 20, 50, 100]"
           layout="total, sizes, prev, pager, next, jumper"
           :total="userPreviewTotal"
           @size-change="handleUserPreviewSizeChange"
@@ -1155,7 +1155,7 @@ const notificationSearchForm = reactive({
   priority: ''
 })
 const notificationCurrentPage = ref(1)
-const notificationPageSize = ref(15)
+const notificationPageSize = ref(20)
 const notificationTotal = ref(0)
 
 // 通知模板相关
@@ -1167,7 +1167,7 @@ const templateSearchForm = reactive({
   isActive: undefined as boolean | undefined
 })
 const templateCurrentPage = ref(1)
-const templatePageSize = ref(15)
+const templatePageSize = ref(20)
 const templateTotal = ref(0)
 
 // 发送历史相关
@@ -1181,7 +1181,7 @@ const historySearchForm = reactive({
   dateRange: []
 })
 const historyCurrentPage = ref(1)
-const historyPageSize = ref(15)
+const historyPageSize = ref(20)
 const historyTotal = ref(0)
 
 // 统计数据相关
@@ -1210,7 +1210,7 @@ const userGroupSearchForm = reactive({
   isActive: undefined as boolean | undefined
 })
 const userGroupCurrentPage = ref(1)
-const userGroupPageSize = ref(15)
+const userGroupPageSize = ref(20)
 const userGroupTotal = ref(0)
 
 // 定时任务相关
@@ -1222,7 +1222,7 @@ const taskSearchForm = reactive({
   dateRange: []
 })
 const taskCurrentPage = ref(1)
-const taskPageSize = ref(15)
+const taskPageSize = ref(20)
 const taskTotal = ref(0)
 
 // 对话框相关
@@ -1328,7 +1328,7 @@ const userPreviewDialogVisible = ref(false)
 const userPreviewLoading = ref(false)
 const userPreviewList = ref([])
 const userPreviewCurrentPage = ref(1)
-const userPreviewPageSize = ref(15)
+const userPreviewPageSize = ref(20)
 const userPreviewTotal = ref(0)
 
 // 通知选项

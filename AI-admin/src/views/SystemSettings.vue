@@ -537,16 +537,16 @@ const paymentForm = ref({
   defaultPayment: 'alipay',
   config: {
     alipay: {
-      appId: '2021000000000000',
-      merchantId: '2088000000000000',
-      apiKey: 'sk_live_xxxxxxxxxxxxxxxx',
-      enabled: true
+      appId: 'your-alipay-appid-here',
+      merchantId: 'your-alipay-merchant-id-here',
+      apiKey: 'your-alipay-api-key-here',
+      enabled: false
     },
     wechat: {
-      appId: 'wx1234567890abcdef',
-      merchantId: '1234567890',
-      apiKey: 'sk_live_yyyyyyyyyyyyyyyy',
-      enabled: true
+      appId: 'your-wechat-appid-here',
+      merchantId: 'your-merchant-id-here',
+      apiKey: 'your-wechat-api-key-here',
+      enabled: false
     },
     unionpay: {
       appId: '',
