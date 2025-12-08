@@ -4,7 +4,17 @@
       <template #header>
         <div class="card-header">
           <span>管理员权限管理</span>
-          <el-button type="primary" @click="handleCreateRole">新建角色</el-button>
+          <div class="header-actions">
+            <el-button type="success" @click="handleExport" :loading="exportLoading">
+              <el-icon><Download /></el-icon>导出记录
+            </el-button>
+            <el-button type="primary" @click="handleCreateAdmin" :loading="loading">
+              <el-icon><Plus /></el-icon>创建管理员
+            </el-button>
+            <el-button @click="handleRefresh" :loading="refreshLoading">
+              <el-icon><Refresh /></el-icon>刷新
+            </el-button>
+          </div>
         </div>
       </template>
       
@@ -15,20 +25,6 @@
             <div class="stat-item">
               <div class="stat-icon bg-primary">
                 <el-icon size="24"><User /></el-icon>
-              </div>
-              <div class="stat-content">
-                <div class="stat-title">角色总数</div>
-                <div class="stat-value">{{ stats.totalRoles }}</div>
-              </div>
-            </div>
-          </el-card>
-        </el-col>
-        
-        <el-col :span="6">
-          <el-card class="stat-card">
-            <div class="stat-item">
-              <div class="stat-icon bg-warning">
-                <el-icon size="24"><Warning /></el-icon>
               </div>
               <div class="stat-content">
                 <div class="stat-title">管理员总数</div>
@@ -55,60 +51,48 @@
         <el-col :span="6">
           <el-card class="stat-card">
             <div class="stat-item">
+              <div class="stat-icon bg-warning">
+                <el-icon size="24"><Warning /></el-icon>
+              </div>
+              <div class="stat-content">
+                <div class="stat-title">待审批申请</div>
+                <div class="stat-value">{{ stats.pendingApprovals }}</div>
+              </div>
+            </div>
+          </el-card>
+        </el-col>
+        
+        <el-col :span="6">
+          <el-card class="stat-card">
+            <div class="stat-item">
               <div class="stat-icon bg-info">
                 <el-icon size="24"><DataLine /></el-icon>
               </div>
               <div class="stat-content">
-                <div class="stat-title">权限分配数</div>
-                <div class="stat-value">{{ stats.assignedPermissions }}</div>
+                <div class="stat-title">权限变更次数</div>
+                <div class="stat-value">{{ stats.permissionChanges }}</div>
               </div>
             </div>
           </el-card>
         </el-col>
       </el-row>
       
-      <!-- 角色列表 -->
+      <!-- 功能标签页 -->
       <el-tabs v-model="activeTab" @tab-change="handleTabChange">
-        <el-tab-pane label="角色管理" name="roles">
-          <el-table :data="roleList" style="width: 100%" v-loading="loading">
-            <el-table-column prop="id" label="ID" width="80" />
-            <el-table-column prop="name" label="角色名称" />
-            <el-table-column prop="description" label="角色描述" />
-            <el-table-column prop="adminCount" label="管理员数" width="100" />
-            <el-table-column prop="permissionCount" label="权限数" width="100" />
-            <el-table-column prop="createTime" label="创建时间" width="160" />
-            <el-table-column label="操作" width="250">
-              <template #default="scope">
-                <el-button size="small" @click="handleViewRole(scope.row)">查看详情</el-button>
-                <el-button size="small" @click="handleEditRole(scope.row)">编辑</el-button>
-                <el-button size="small" type="danger" @click="handleDeleteRole(scope.row)">删除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-tab-pane>
-        
-        <el-tab-pane label="管理员管理" name="admins">
+        <!-- 管理员账户管理 -->
+        <el-tab-pane label="管理员账户" name="admins">
           <div class="search-bar">
             <el-form :model="adminSearchForm" label-width="80px" inline>
-              <el-form-item label="管理员">
-                <el-input v-model="adminSearchForm.keyword" placeholder="请输入管理员姓名或账号" clearable />
-              </el-form-item>
-              
-              <el-form-item label="角色">
-                <el-select v-model="adminSearchForm.roleId" placeholder="请选择角色" clearable>
-                  <el-option 
-                    v-for="role in roleList" 
-                    :key="role.id" 
-                    :label="role.name" 
-                    :value="role.id" 
-                  />
-                </el-select>
+              <el-form-item label="关键字">
+                <el-input v-model="adminSearchForm.keyword" placeholder="用户名/姓名/邮箱" clearable />
               </el-form-item>
               
               <el-form-item label="状态">
                 <el-select v-model="adminSearchForm.status" placeholder="请选择状态" clearable>
-                  <el-option label="启用" value="enabled" />
-                  <el-option label="禁用" value="disabled" />
+                  <el-option label="活跃" value="active" />
+                  <el-option label="未激活" value="inactive" />
+                  <el-option label="锁定" value="locked" />
+                  <el-option label="待审核" value="pending" />
                 </el-select>
               </el-form-item>
               
@@ -121,8 +105,10 @@
           
           <el-table :data="adminList" style="width: 100%" v-loading="loading">
             <el-table-column prop="id" label="ID" width="80" />
-            <el-table-column prop="name" label="管理员姓名" />
-            <el-table-column prop="account" label="账号" />
+            <el-table-column prop="username" label="用户名" />
+            <el-table-column prop="realName" label="真实姓名" />
+            <el-table-column prop="email" label="邮箱" />
+            <el-table-column prop="phone" label="手机号" />
             <el-table-column prop="roleNames" label="角色" width="200">
               <template #default="scope">
                 <el-tag 
@@ -134,24 +120,33 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="lastLoginTime" label="最后登录时间" width="160" />
             <el-table-column prop="status" label="状态" width="100">
               <template #default="scope">
-                <el-switch
-                  v-model="scope.row.status"
-                  active-value="enabled"
-                  inactive-value="disabled"
-                  @change="handleAdminStatusChange(scope.row)"
-                />
-                <el-tag :type="scope.row.status === 'enabled' ? 'success' : 'danger'" style="margin-left: 10px;">
-                  {{ scope.row.status === 'enabled' ? '启用' : '禁用' }}
+                <el-tag 
+                  :type="getStatusType(scope.row.status)"
+                >
+                  {{ getStatusText(scope.row.status) }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="200">
+            <el-table-column prop="lastLoginTime" label="最后登录" width="160" />
+            <el-table-column label="操作" width="300">
               <template #default="scope">
-                <el-button size="small" @click="handleViewAdmin(scope.row)">查看详情</el-button>
+                <el-button size="small" @click="handleViewAdmin(scope.row)">查看</el-button>
                 <el-button size="small" @click="handleEditAdmin(scope.row)">编辑</el-button>
+                <el-button size="small" type="warning" @click="handleResetPassword(scope.row)">重置密码</el-button>
+                <el-dropdown @command="(command) => handleStatusCommand(command, scope.row)">
+                  <el-button size="small" type="info">
+                    状态<el-icon class="el-icon--right"><arrow-down /></el-icon>
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="active">激活</el-dropdown-item>
+                      <el-dropdown-item command="inactive">禁用</el-dropdown-item>
+                      <el-dropdown-item command="locked">锁定</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
               </template>
             </el-table-column>
           </el-table>
@@ -168,52 +163,507 @@
             />
           </div>
         </el-tab-pane>
+        
+        <!-- 权限角色管理 -->
+        <el-tab-pane label="权限角色" name="roles">
+          <div class="search-bar">
+            <el-form :model="roleSearchForm" label-width="80px" inline>
+              <el-form-item label="关键字">
+                <el-input v-model="roleSearchForm.keyword" placeholder="角色名称/描述" clearable />
+              </el-form-item>
+              
+              <el-form-item label="状态">
+                <el-select v-model="roleSearchForm.status" placeholder="请选择状态" clearable>
+                  <el-option label="启用" value="active" />
+                  <el-option label="禁用" value="inactive" />
+                </el-select>
+              </el-form-item>
+              
+              <el-form-item>
+                <el-button type="primary" @click="handleRoleSearch">查询</el-button>
+                <el-button @click="handleRoleReset">重置</el-button>
+                <el-button type="success" @click="handleCreateRole">新建角色</el-button>
+              </el-form-item>
+            </el-form>
+          </div>
+          
+          <el-table :data="roleList" style="width: 100%" v-loading="loading">
+            <el-table-column prop="id" label="ID" width="80" />
+            <el-table-column prop="name" label="角色名称" />
+            <el-table-column prop="code" label="角色代码" />
+            <el-table-column prop="description" label="描述" />
+            <el-table-column prop="status" label="状态" width="100">
+              <template #default="scope">
+                <el-tag 
+                  :type="scope.row.status === 'active' ? 'success' : 'danger'"
+                >
+                  {{ scope.row.status === 'active' ? '启用' : '禁用' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="createTime" label="创建时间" width="160" />
+            <el-table-column label="操作" width="250">
+              <template #default="scope">
+                <el-button size="small" @click="handleViewRole(scope.row)">查看</el-button>
+                <el-button size="small" @click="handleEditRole(scope.row)">编辑</el-button>
+                <el-button size="small" type="danger" @click="handleDeleteRole(scope.row)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+        
+        <!-- 权限变更历史 -->
+        <el-tab-pane label="权限变更历史" name="history">
+          <div class="search-bar">
+            <el-form :model="historySearchForm" label-width="80px" inline>
+              <el-form-item label="管理员">
+                <el-select v-model="historySearchForm.adminId" placeholder="请选择管理员" clearable filterable>
+                  <el-option 
+                    v-for="admin in adminList" 
+                    :key="admin.id" 
+                    :label="admin.realName" 
+                    :value="admin.id" 
+                  />
+                </el-select>
+              </el-form-item>
+              
+              <el-form-item label="变更类型">
+                <el-select v-model="historySearchForm.changeType" placeholder="请选择变更类型" clearable>
+                  <el-option label="创建管理员" value="create" />
+                  <el-option label="更新管理员" value="update" />
+                  <el-option label="删除管理员" value="delete" />
+                  <el-option label="状态变更" value="status_change" />
+                  <el-option label="密码重置" value="password_reset" />
+                  <el-option label="权限变更" value="permission_change" />
+                </el-select>
+              </el-form-item>
+              
+              <el-form-item label="时间范围">
+                <el-date-picker
+                  v-model="historySearchForm.dateRange"
+                  type="daterange"
+                  range-separator="至"
+                  start-placeholder="开始日期"
+                  end-placeholder="结束日期"
+                  format="YYYY-MM-DD"
+                  value-format="YYYY-MM-DD"
+                />
+              </el-form-item>
+              
+              <el-form-item>
+                <el-button type="primary" @click="handleHistorySearch">查询</el-button>
+                <el-button @click="handleHistoryReset">重置</el-button>
+              </el-form-item>
+            </el-form>
+          </div>
+          
+          <el-table :data="historyList" style="width: 100%" v-loading="loading">
+            <el-table-column prop="id" label="ID" width="80" />
+            <el-table-column prop="adminName" label="管理员" />
+            <el-table-column prop="changeType" label="变更类型" width="120">
+              <template #default="scope">
+                <el-tag :type="getChangeTypeTag(scope.row.changeType)">
+                  {{ getChangeTypeText(scope.row.changeType) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="changeDescription" label="变更描述" />
+            <el-table-column prop="operatorName" label="操作人" />
+            <el-table-column prop="ipAddress" label="IP地址" />
+            <el-table-column prop="changeTime" label="变更时间" width="160" />
+            <el-table-column prop="approved" label="审批状态" width="100">
+              <template #default="scope">
+                <el-tag :type="scope.row.approved ? 'success' : 'warning'">
+                  {{ scope.row.approved ? '已审批' : '待审批' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="120">
+              <template #default="scope">
+                <el-button size="small" @click="handleViewHistory(scope.row)">查看</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          
+          <div class="pagination-container">
+            <el-pagination
+              v-model:current-page="historyCurrentPage"
+              v-model:page-size="historyPageSize"
+              :page-sizes="[5, 10, 15, 20, 50]"
+              layout="total, sizes, prev, pager, next, jumper"
+              :total="historyTotal"
+              @size-change="handleHistorySizeChange"
+              @current-change="handleHistoryCurrentChange"
+            />
+          </div>
+        </el-tab-pane>
+        
+        <!-- 权限审批流程 -->
+        <el-tab-pane label="权限审批流程" name="approvals">
+          <div class="search-bar">
+            <el-form :model="approvalSearchForm" label-width="80px" inline>
+              <el-form-item label="申请类型">
+                <el-select v-model="approvalSearchForm.type" placeholder="请选择申请类型" clearable>
+                  <el-option label="创建管理员" value="create_admin" />
+                  <el-option label="修改权限" value="modify_permission" />
+                  <el-option label="重置密码" value="reset_password" />
+                  <el-option label="更改状态" value="change_status" />
+                  <el-option label="删除管理员" value="delete_admin" />
+                </el-select>
+              </el-form-item>
+              
+              <el-form-item label="状态">
+                <el-select v-model="approvalSearchForm.status" placeholder="请选择状态" clearable>
+                  <el-option label="待审批" value="pending" />
+                  <el-option label="已审批" value="approved" />
+                  <el-option label="已拒绝" value="rejected" />
+                  <el-option label="已取消" value="cancelled" />
+                </el-select>
+              </el-form-item>
+              
+              <el-form-item label="申请人">
+                <el-select v-model="approvalSearchForm.applicantId" placeholder="请选择申请人" clearable filterable>
+                  <el-option 
+                    v-for="admin in adminList" 
+                    :key="admin.id" 
+                    :label="admin.realName" 
+                    :value="admin.id" 
+                  />
+                </el-select>
+              </el-form-item>
+              
+              <el-form-item>
+                <el-button type="primary" @click="handleApprovalSearch">查询</el-button>
+                <el-button @click="handleApprovalReset">重置</el-button>
+              </el-form-item>
+            </el-form>
+          </div>
+          
+          <el-table :data="approvalList" style="width: 100%" v-loading="loading">
+            <el-table-column prop="id" label="ID" width="80" />
+            <el-table-column prop="title" label="申请标题" />
+            <el-table-column prop="type" label="申请类型" width="120">
+              <template #default="scope">
+                <el-tag :type="getApprovalTypeTag(scope.row.type)">
+                  {{ getApprovalTypeText(scope.row.type) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="applicantName" label="申请人" />
+            <el-table-column prop="targetAdminName" label="目标管理员" />
+            <el-table-column prop="status" label="状态" width="100">
+              <template #default="scope">
+                <el-tag :type="getApprovalStatusTag(scope.row.status)">
+                  {{ getApprovalStatusText(scope.row.status) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="applyTime" label="申请时间" width="160" />
+            <el-table-column label="操作" width="200">
+              <template #default="scope">
+                <el-button size="small" @click="handleViewApproval(scope.row)">查看</el-button>
+                <el-button 
+                  v-if="scope.row.status === 'pending'" 
+                  size="small" 
+                  type="success" 
+                  @click="handleApprove(scope.row)"
+                >
+                  审批
+                </el-button>
+                <el-button 
+                  v-if="scope.row.status === 'pending'" 
+                  size="small" 
+                  type="danger" 
+                  @click="handleReject(scope.row)"
+                >
+                  拒绝
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          
+          <div class="pagination-container">
+            <el-pagination
+              v-model:current-page="approvalCurrentPage"
+              v-model:page-size="approvalPageSize"
+              :page-sizes="[5, 10, 15, 20, 50]"
+              layout="total, sizes, prev, pager, next, jumper"
+              :total="approvalTotal"
+              @size-change="handleApprovalSizeChange"
+              @current-change="handleApprovalCurrentChange"
+            />
+          </div>
+        </el-tab-pane>
       </el-tabs>
     </el-card>
     
-    <!-- 角色详情对话框 -->
-    <el-dialog v-model="roleDetailDialogVisible" title="角色详情" width="700px">
-      <el-descriptions :column="2" border>
-        <el-descriptions-item label="角色ID">{{ roleDetailData.id }}</el-descriptions-item>
-        <el-descriptions-item label="角色名称">{{ roleDetailData.name }}</el-descriptions-item>
-        <el-descriptions-item label="角色描述" :span="2">{{ roleDetailData.description }}</el-descriptions-item>
-        <el-descriptions-item label="创建时间">{{ roleDetailData.createTime }}</el-descriptions-item>
-        <el-descriptions-item label="更新时间">{{ roleDetailData.updateTime }}</el-descriptions-item>
-        <el-descriptions-item label="管理员数">{{ roleDetailData.adminCount }}</el-descriptions-item>
-        <el-descriptions-item label="权限数">{{ roleDetailData.permissionCount }}</el-descriptions-item>
-      </el-descriptions>
-      
-      <el-divider />
-      
-      <div class="permission-tree-container">
-        <div class="permission-tree-header">
-          <span>权限列表</span>
-          <el-button size="small" @click="handleExpandAll">展开/折叠</el-button>
+    <!-- 查看管理员详情对话框 -->
+    <el-dialog 
+      v-model="viewAdminDialogVisible" 
+      title="管理员详情" 
+      width="800px"
+    >
+      <div class="admin-detail-container">
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">用户名:</label>
+              <span class="detail-value">{{ currentViewAdmin.username }}</span>
+            </div>
+          </el-col>
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">真实姓名:</label>
+              <span class="detail-value">{{ currentViewAdmin.realName }}</span>
+            </div>
+          </el-col>
+        </el-row>
+        
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">邮箱:</label>
+              <span class="detail-value">{{ currentViewAdmin.email }}</span>
+            </div>
+          </el-col>
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">手机号:</label>
+              <span class="detail-value">{{ currentViewAdmin.phone }}</span>
+            </div>
+          </el-col>
+        </el-row>
+        
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">状态:</label>
+              <el-tag :type="getStatusType(currentViewAdmin.status)">
+                {{ getStatusText(currentViewAdmin.status) }}
+              </el-tag>
+            </div>
+          </el-col>
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">最后登录:</label>
+              <span class="detail-value">{{ currentViewAdmin.lastLoginTime || '从未登录' }}</span>
+            </div>
+          </el-col>
+        </el-row>
+        
+        <div class="detail-item">
+          <label class="detail-label">分配角色:</label>
+          <div class="role-tags">
+            <el-tag 
+              v-for="roleName in currentViewAdmin.roleNames" 
+              :key="roleName" 
+              style="margin-right: 5px; margin-bottom: 5px;"
+            >
+              {{ roleName }}
+            </el-tag>
+            <span v-if="!currentViewAdmin.roleNames || currentViewAdmin.roleNames.length === 0" class="no-data">
+              暂无分配角色
+            </span>
+          </div>
         </div>
-        <el-tree
-          ref="permissionTreeRef"
-          :data="permissionTreeData"
-          show-checkbox
-          node-key="id"
-          :props="treeProps"
-          :default-expanded-keys="defaultExpandedKeys"
-          :default-checked-keys="roleDetailData.permissions"
-        />
+        
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">创建时间:</label>
+              <span class="detail-value">{{ currentViewAdmin.createTime || '-' }}</span>
+            </div>
+          </el-col>
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">更新时间:</label>
+              <span class="detail-value">{{ currentViewAdmin.updateTime || '-' }}</span>
+            </div>
+          </el-col>
+        </el-row>
+        
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">创建人:</label>
+              <span class="detail-value">{{ currentViewAdmin.createdByName || '-' }}</span>
+            </div>
+          </el-col>
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">更新人:</label>
+              <span class="detail-value">{{ currentViewAdmin.updatedByName || '-' }}</span>
+            </div>
+          </el-col>
+        </el-row>
+        
+        <div class="detail-item">
+          <label class="detail-label">登录记录:</label>
+          <div class="login-history">
+            <el-timeline v-if="loginHistory.length > 0">
+              <el-timeline-item
+                v-for="(login, index) in loginHistory"
+                :key="index"
+                :timestamp="login.loginTime"
+                :type="login.success ? 'success' : 'danger'"
+              >
+                <div class="login-record">
+                  <span class="login-time">{{ login.loginTime }}</span>
+                  <span class="login-ip">IP: {{ login.ipAddress }}</span>
+                  <span class="login-browser">{{ login.browser }}</span>
+                  <el-tag 
+                    :type="login.success ? 'success' : 'danger'" 
+                    size="small"
+                    style="margin-left: 10px;"
+                  >
+                    {{ login.success ? '成功' : '失败' }}
+                  </el-tag>
+                </div>
+              </el-timeline-item>
+            </el-timeline>
+            <span v-else class="no-data">暂无登录记录</span>
+          </div>
+        </div>
       </div>
       
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="roleDetailDialogVisible = false">关闭</el-button>
-          <el-button type="primary" @click="handleSaveRolePermissions">保存权限</el-button>
+          <el-button @click="viewAdminDialogVisible = false">关闭</el-button>
+          <el-button type="primary" @click="handleEditFromView">编辑</el-button>
         </span>
       </template>
     </el-dialog>
     
-    <!-- 新建/编辑角色对话框 -->
-    <el-dialog v-model="roleDialogVisible" :title="roleDialogTitle" width="600px">
-      <el-form :model="roleFormData" :rules="roleFormRules" ref="roleFormRef" label-width="100px">
+    <!-- 创建/编辑管理员对话框 -->
+    <el-dialog 
+      v-model="adminDialogVisible" 
+      :title="adminDialogTitle" 
+      width="700px"
+      :close-on-click-modal="false"
+    >
+      <el-form 
+        :model="adminFormData" 
+        :rules="adminFormRules" 
+        ref="adminFormRef" 
+        label-width="100px"
+      >
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="用户名" prop="username">
+              <el-input v-model="adminFormData.username" placeholder="请输入用户名" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="真实姓名" prop="realName">
+              <el-input v-model="adminFormData.realName" placeholder="请输入真实姓名" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="邮箱" prop="email">
+              <el-input v-model="adminFormData.email" placeholder="请输入邮箱" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="手机号" prop="phone">
+              <el-input v-model="adminFormData.phone" placeholder="请输入手机号" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        
+        <el-form-item label="密码" prop="password" v-if="!isEditAdmin">
+          <el-input v-model="adminFormData.password" type="password" placeholder="请输入密码" show-password />
+        </el-form-item>
+        
+        <el-form-item label="确认密码" prop="confirmPassword" v-if="!isEditAdmin">
+          <el-input v-model="adminFormData.confirmPassword" type="password" placeholder="请确认密码" show-password />
+        </el-form-item>
+        
+        <el-form-item label="角色分配" prop="roleIds">
+          <el-checkbox-group v-model="adminFormData.roleIds">
+            <el-checkbox 
+              v-for="role in roleList" 
+              :key="role.id" 
+              :label="role.id"
+              :disabled="role.status !== 'active'"
+            >
+              {{ role.name }}
+            </el-checkbox>
+          </el-checkbox-group>
+        </el-form-item>
+        
+        <el-form-item label="状态" prop="status">
+          <el-radio-group v-model="adminFormData.status">
+            <el-radio label="active">活跃</el-radio>
+            <el-radio label="inactive">未激活</el-radio>
+            <el-radio label="pending">待审核</el-radio>
+          </el-radio-group>
+        </el-form-item>
+      </el-form>
+      
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="adminDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitAdminForm" :loading="submitLoading">确定</el-button>
+        </span>
+      </template>
+    </el-dialog>
+    
+    <!-- 重置密码对话框 -->
+    <el-dialog 
+      v-model="passwordDialogVisible" 
+      title="重置密码" 
+      width="500px"
+      :close-on-click-modal="false"
+    >
+      <el-form 
+        :model="passwordFormData" 
+        :rules="passwordFormRules" 
+        ref="passwordFormRef" 
+        label-width="100px"
+      >
+        <el-form-item label="管理员">
+          <el-input v-model="passwordFormData.adminName" disabled />
+        </el-form-item>
+        
+        <el-form-item label="新密码" prop="newPassword">
+          <el-input v-model="passwordFormData.newPassword" type="password" placeholder="请输入新密码" show-password />
+        </el-form-item>
+        
+        <el-form-item label="确认密码" prop="confirmPassword">
+          <el-input v-model="passwordFormData.confirmPassword" type="password" placeholder="请确认密码" show-password />
+        </el-form-item>
+      </el-form>
+      
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="passwordDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitPasswordForm" :loading="submitLoading">确定</el-button>
+        </span>
+      </template>
+    </el-dialog>
+    
+    <!-- 创建/编辑角色对话框 -->
+    <el-dialog 
+      v-model="roleDialogVisible" 
+      :title="roleDialogTitle" 
+      width="600px"
+      :close-on-click-modal="false"
+    >
+      <el-form 
+        :model="roleFormData" 
+        :rules="roleFormRules" 
+        ref="roleFormRef" 
+        label-width="100px"
+      >
         <el-form-item label="角色名称" prop="name">
           <el-input v-model="roleFormData.name" placeholder="请输入角色名称" />
+        </el-form-item>
+        
+        <el-form-item label="角色代码" prop="code">
+          <el-input v-model="roleFormData.code" placeholder="请输入角色代码" />
         </el-form-item>
         
         <el-form-item label="角色描述" prop="description">
@@ -224,63 +674,402 @@
             placeholder="请输入角色描述" 
           />
         </el-form-item>
+        
+        <el-form-item label="权限设置" prop="permissions">
+          <el-tree
+            ref="permissionTreeRef"
+            :data="permissionTreeData"
+            show-checkbox
+            node-key="id"
+            :props="treeProps"
+            :default-checked-keys="roleFormData.permissions"
+          />
+        </el-form-item>
+        
+        <el-form-item label="状态" prop="status">
+          <el-radio-group v-model="roleFormData.status">
+            <el-radio label="active">启用</el-radio>
+            <el-radio label="inactive">禁用</el-radio>
+          </el-radio-group>
+        </el-form-item>
       </el-form>
       
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="roleDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="submitRoleForm">确定</el-button>
+          <el-button type="primary" @click="submitRoleForm" :loading="submitLoading">确定</el-button>
         </span>
       </template>
     </el-dialog>
     
-    <!-- 管理员详情对话框 -->
-    <el-dialog v-model="adminDetailDialogVisible" title="管理员详情" width="700px">
+    <!-- 审批对话框 -->
+    <el-dialog 
+      v-model="approvalDialogVisible" 
+      title="权限审批" 
+      width="600px"
+      :close-on-click-modal="false"
+    >
       <el-descriptions :column="2" border>
-        <el-descriptions-item label="管理员ID">{{ adminDetailData.id }}</el-descriptions-item>
-        <el-descriptions-item label="管理员姓名">{{ adminDetailData.name }}</el-descriptions-item>
-        <el-descriptions-item label="账号">{{ adminDetailData.account }}</el-descriptions-item>
-        <el-descriptions-item label="邮箱">{{ adminDetailData.email }}</el-descriptions-item>
-        <el-descriptions-item label="手机号">{{ adminDetailData.phone }}</el-descriptions-item>
-        <el-descriptions-item label="角色">
-          <el-tag 
-            v-for="roleName in adminDetailData.roleNames" 
-            :key="roleName" 
-            style="margin-right: 5px;"
-          >
-            {{ roleName }}
+        <el-descriptions-item label="申请ID">{{ currentApproval.id }}</el-descriptions-item>
+        <el-descriptions-item label="申请类型">
+          <el-tag :type="getApprovalTypeTag(currentApproval.type)">
+            {{ getApprovalTypeText(currentApproval.type) }}
           </el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="创建时间">{{ adminDetailData.createTime }}</el-descriptions-item>
-        <el-descriptions-item label="最后登录时间">{{ adminDetailData.lastLoginTime }}</el-descriptions-item>
-        <el-descriptions-item label="状态">
-          <el-tag :type="adminDetailData.status === 'enabled' ? 'success' : 'danger'">
-            {{ adminDetailData.status === 'enabled' ? '启用' : '禁用' }}
-          </el-tag>
-        </el-descriptions-item>
+        <el-descriptions-item label="申请人">{{ currentApproval.applicantName }}</el-descriptions-item>
+        <el-descriptions-item label="目标管理员">{{ currentApproval.targetAdminName || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="申请时间" :span="2">{{ currentApproval.applyTime }}</el-descriptions-item>
+        <el-descriptions-item label="申请内容" :span="2">{{ currentApproval.content }}</el-descriptions-item>
       </el-descriptions>
       
-      <el-divider />
+      <el-form 
+        :model="approvalFormData" 
+        ref="approvalFormRef" 
+        label-width="100px"
+        style="margin-top: 20px;"
+      >
+        <el-form-item label="审批结果">
+          <el-radio-group v-model="approvalFormData.approved">
+            <el-radio :label="true">通过</el-radio>
+            <el-radio :label="false">拒绝</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        
+        <el-form-item label="审批意见">
+          <el-input 
+            v-model="approvalFormData.remark" 
+            type="textarea" 
+            :rows="3" 
+            placeholder="请输入审批意见" 
+          />
+        </el-form-item>
+      </el-form>
       
-      <div class="role-assignment-container">
-        <div class="role-assignment-header">
-          <span>角色分配</span>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="approvalDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitApprovalForm" :loading="submitLoading">确定</el-button>
+        </span>
+      </template>
+    </el-dialog>
+    
+    <!-- 查看权限角色详情对话框 -->
+    <el-dialog 
+      v-model="viewRoleDialogVisible" 
+      title="角色详情" 
+      width="700px"
+    >
+      <div class="role-detail-container">
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">角色名称:</label>
+              <span class="detail-value">{{ currentViewRole.name }}</span>
+            </div>
+          </el-col>
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">角色代码:</label>
+              <span class="detail-value">{{ currentViewRole.code }}</span>
+            </div>
+          </el-col>
+        </el-row>
+        
+        <el-row :gutter="20">
+          <el-col :span="24">
+            <div class="detail-item">
+              <label class="detail-label">角色描述:</label>
+              <span class="detail-value">{{ currentViewRole.description || '无描述' }}</span>
+            </div>
+          </el-col>
+        </el-row>
+        
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">状态:</label>
+              <el-tag :type="currentViewRole.status === 'active' ? 'success' : 'danger'">
+                {{ currentViewRole.status === 'active' ? '启用' : '禁用' }}
+              </el-tag>
+            </div>
+          </el-col>
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">创建时间:</label>
+              <span class="detail-value">{{ currentViewRole.createTime || '-' }}</span>
+            </div>
+          </el-col>
+        </el-row>
+        
+        <div class="detail-item">
+          <label class="detail-label">权限列表:</label>
+          <div class="permission-list">
+            <el-tag 
+              v-for="(permission, index) in currentViewRole.permissions" 
+              :key="index" 
+              type="info" 
+              style="margin: 2px;"
+            >
+              {{ permission }}
+            </el-tag>
+            <span v-if="currentViewRole.permissions.length === 0" class="no-data">暂无权限</span>
+          </div>
         </div>
-        <el-checkbox-group v-model="adminDetailData.roleIds">
-          <el-checkbox 
-            v-for="role in roleList" 
-            :key="role.id" 
-            :label="role.id"
-          >
-            {{ role.name }}
-          </el-checkbox>
-        </el-checkbox-group>
       </div>
       
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="adminDetailDialogVisible = false">关闭</el-button>
-          <el-button type="primary" @click="handleSaveAdminRoles">保存角色</el-button>
+          <el-button @click="viewRoleDialogVisible = false">关闭</el-button>
+          <el-button type="primary" @click="handleEditRoleFromView">编辑</el-button>
+        </span>
+      </template>
+    </el-dialog>
+    
+    <!-- 查看权限变更历史对话框 -->
+    <el-dialog 
+      v-model="viewHistoryDialogVisible" 
+      title="变更历史详情" 
+      width="800px"
+    >
+      <div class="history-detail-container">
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">变更类型:</label>
+              <el-tag :type="getChangeTypeTag(currentViewHistory.changeType)">
+                {{ getChangeTypeText(currentViewHistory.changeType) }}
+              </el-tag>
+            </div>
+          </el-col>
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">变更时间:</label>
+              <span class="detail-value">{{ currentViewHistory.changeTime }}</span>
+            </div>
+          </el-col>
+        </el-row>
+        
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">操作人:</label>
+              <span class="detail-value">{{ currentViewHistory.operatorName }}</span>
+            </div>
+          </el-col>
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">IP地址:</label>
+              <span class="detail-value">{{ currentViewHistory.ipAddress }}</span>
+            </div>
+          </el-col>
+        </el-row>
+        
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">管理员:</label>
+              <span class="detail-value">{{ currentViewHistory.adminName }}</span>
+            </div>
+          </el-col>
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">审批状态:</label>
+              <el-tag :type="currentViewHistory.approved ? 'success' : 'warning'">
+                {{ currentViewHistory.approved ? '已审批' : '待审批' }}
+              </el-tag>
+            </div>
+          </el-col>
+        </el-row>
+        
+        <div class="detail-item">
+          <label class="detail-label">变更描述:</label>
+          <div class="detail-value">{{ currentViewHistory.changeDescription }}</div>
+        </div>
+        
+        <el-row :gutter="20" v-if="currentViewHistory.oldValue || currentViewHistory.newValue">
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">变更前:</label>
+              <div class="detail-value">{{ currentViewHistory.oldValue || '-' }}</div>
+            </div>
+          </el-col>
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">变更后:</label>
+              <div class="detail-value">{{ currentViewHistory.newValue || '-' }}</div>
+            </div>
+          </el-col>
+        </el-row>
+        
+        <el-row :gutter="20" v-if="currentViewHistory.approved && currentViewHistory.approvedByName">
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">审批人:</label>
+              <span class="detail-value">{{ currentViewHistory.approvedByName }}</span>
+            </div>
+          </el-col>
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">审批时间:</label>
+              <span class="detail-value">{{ currentViewHistory.approvedTime || '-' }}</span>
+            </div>
+          </el-col>
+        </el-row>
+        
+        <div class="detail-item" v-if="currentViewHistory.remark">
+          <label class="detail-label">备注:</label>
+          <div class="detail-value">{{ currentViewHistory.remark }}</div>
+        </div>
+      </div>
+      
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="viewHistoryDialogVisible = false">关闭</el-button>
+        </span>
+      </template>
+    </el-dialog>
+    
+    <!-- 查看权限审批流程对话框 -->
+    <el-dialog 
+      v-model="viewApprovalDialogVisible" 
+      title="审批流程详情" 
+      width="800px"
+    >
+      <div class="approval-detail-container">
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">申请标题:</label>
+              <span class="detail-value">{{ currentViewApproval.title }}</span>
+            </div>
+          </el-col>
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">申请类型:</label>
+              <el-tag :type="getApprovalTypeTag(currentViewApproval.type)">
+                {{ getApprovalTypeText(currentViewApproval.type) }}
+              </el-tag>
+            </div>
+          </el-col>
+        </el-row>
+        
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">申请人:</label>
+              <span class="detail-value">{{ currentViewApproval.applicantName }}</span>
+            </div>
+          </el-col>
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">申请时间:</label>
+              <span class="detail-value">{{ currentViewApproval.applyTime }}</span>
+            </div>
+          </el-col>
+        </el-row>
+        
+        <el-row :gutter="20">
+          <el-col :span="12" v-if="currentViewApproval.targetAdminName">
+            <div class="detail-item">
+              <label class="detail-label">目标管理员:</label>
+              <span class="detail-value">{{ currentViewApproval.targetAdminName }}</span>
+            </div>
+          </el-col>
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">当前状态:</label>
+              <el-tag :type="getApprovalStatusTag(currentViewApproval.status)">
+                {{ getApprovalStatusText(currentViewApproval.status) }}
+              </el-tag>
+            </div>
+          </el-col>
+        </el-row>
+        
+        <div class="detail-item">
+          <label class="detail-label">申请内容:</label>
+          <div class="detail-value">{{ currentViewApproval.content }}</div>
+        </div>
+        
+        <el-row :gutter="20" v-if="currentViewApproval.currentApproverName">
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">当前审批人:</label>
+              <span class="detail-value">{{ currentViewApproval.currentApproverName }}</span>
+            </div>
+          </el-col>
+          <el-col :span="12">
+            <div class="detail-item">
+              <label class="detail-label">审批进度:</label>
+              <span class="detail-value">{{ currentViewApproval.currentStep }} / {{ currentViewApproval.totalSteps }}</span>
+            </div>
+          </el-col>
+        </el-row>
+        
+        <div class="detail-item" v-if="currentViewApproval.completedTime">
+          <label class="detail-label">完成时间:</label>
+          <span class="detail-value">{{ currentViewApproval.completedTime }}</span>
+        </div>
+        
+        <div class="detail-item" v-if="currentViewApproval.remark">
+          <label class="detail-label">备注:</label>
+          <div class="detail-value">{{ currentViewApproval.remark }}</div>
+        </div>
+      </div>
+      
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="viewApprovalDialogVisible = false">关闭</el-button>
+          <el-button 
+            v-if="currentViewApproval.status === 'pending'" 
+            type="primary" 
+            @click="handleApprovalFromView"
+          >
+            审批
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
+    
+    <!-- 导出选择对话框 -->
+    <el-dialog 
+      v-model="exportDialogVisible" 
+      title="导出权限管理记录" 
+      width="600px"
+      :close-on-click-modal="false"
+    >
+      <el-form :model="exportFormData" label-width="120px">
+        <el-form-item label="导出类型">
+          <el-radio-group v-model="exportFormData.type">
+            <el-radio label="all">完整记录（所有数据）</el-radio>
+            <el-radio label="accounts">管理员账户记录</el-radio>
+            <el-radio label="roles">权限角色记录</el-radio>
+            <el-radio label="history">权限变更历史</el-radio>
+            <el-radio label="approvals">权限审批流程</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        
+        <el-form-item label="关键词">
+          <el-input v-model="exportFormData.keyword" placeholder="请输入关键词进行筛选" />
+        </el-form-item>
+        
+        <el-form-item label="导出时间范围">
+          <el-date-picker
+            v-model="exportFormData.dateRange"
+            type="daterange"
+            range-separator="至"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            format="YYYY-MM-DD"
+            value-format="YYYY-MM-DD"
+            style="width: 100%"
+          />
+        </el-form-item>
+      </el-form>
+      
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="exportDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitExport" :loading="exportLoading">导出</el-button>
         </span>
       </template>
     </el-dialog>
@@ -288,187 +1077,280 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { User, Warning, Check, DataLine } from '@element-plus/icons-vue'
+import { 
+  User, Warning, Check, DataLine, Download, Plus, Refresh, ArrowDown 
+} from '@element-plus/icons-vue'
+import { 
+  adminAccountApi, 
+  permissionRoleApi, 
+  permissionHistoryApi, 
+  permissionApprovalApi, 
+  adminStatsApi,
+  adminExportApi,
+  type AdminAccount,
+  type PermissionRole,
+  type PermissionChangeHistory,
+  type PermissionApprovalProcess,
+  type LoginRecord
+} from '@/api/adminPermission'
 
 // 响应式数据
 const stats = ref({
-  totalRoles: 5,
-  totalAdmins: 12,
-  activeAdmins: 10,
-  assignedPermissions: 86
+  totalAdmins: 0,
+  activeAdmins: 0,
+  pendingApprovals: 0,
+  permissionChanges: 0
 })
 
-const roleList = ref([
-  {
-    id: 1,
-    name: '超级管理员',
-    description: '拥有系统最高权限',
-    adminCount: 1,
-    permissionCount: 50,
-    createTime: '2023-01-01 10:00:00',
-    updateTime: '2023-01-01 10:00:00',
-    permissions: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-  },
-  {
-    id: 2,
-    name: '系统管理员',
-    description: '负责系统日常维护和管理',
-    adminCount: 3,
-    permissionCount: 35,
-    createTime: '2023-01-02 10:00:00',
-    updateTime: '2023-01-02 10:00:00',
-    permissions: [1, 2, 3, 4, 5, 6, 7, 8]
-  },
-  {
-    id: 3,
-    name: '财务管理员',
-    description: '负责财务管理相关权限',
-    adminCount: 2,
-    permissionCount: 20,
-    createTime: '2023-01-03 10:00:00',
-    updateTime: '2023-01-03 10:00:00',
-    permissions: [1, 2, 3, 4, 5]
-  },
-  {
-    id: 4,
-    name: '宿舍管理员',
-    description: '负责宿舍管理相关权限',
-    adminCount: 4,
-    permissionCount: 15,
-    createTime: '2023-01-04 10:00:00',
-    updateTime: '2023-01-04 10:00:00',
-    permissions: [1, 2, 3]
-  },
-  {
-    id: 5,
-    name: '审计员',
-    description: '负责系统审计和监督',
-    adminCount: 2,
-    permissionCount: 25,
-    createTime: '2023-01-05 10:00:00',
-    updateTime: '2023-01-05 10:00:00',
-    permissions: [1, 2, 3, 4, 5, 6, 7]
-  }
-])
-
-const adminList = ref([
-  {
-    id: 1,
-    name: '张三',
-    account: 'admin',
-    email: 'admin@example.com',
-    phone: '13800138000',
-    roleIds: [1],
-    roleNames: ['超级管理员'],
-    lastLoginTime: '2023-11-01 10:35:18',
-    status: 'enabled',
-    createTime: '2023-01-01 10:00:00'
-  },
-  {
-    id: 2,
-    name: '李四',
-    account: 'lisi',
-    email: 'lisi@example.com',
-    phone: '13900139000',
-    roleIds: [2],
-    roleNames: ['系统管理员'],
-    lastLoginTime: '2023-11-01 09:45:33',
-    status: 'enabled',
-    createTime: '2023-01-02 10:00:00'
-  },
-  {
-    id: 3,
-    name: '王五',
-    account: 'wangwu',
-    email: 'wangwu@example.com',
-    phone: '13700137000',
-    roleIds: [2, 3],
-    roleNames: ['系统管理员', '财务管理员'],
-    lastLoginTime: '2023-10-31 15:22:45',
-    status: 'enabled',
-    createTime: '2023-01-03 10:00:00'
-  }
-])
-
+const activeTab = ref('admins')
 const loading = ref(false)
-const activeTab = ref('roles')
+const refreshLoading = ref(false)
+const exportLoading = ref(false)
+const submitLoading = ref(false)
 
-const adminSearchForm = ref({
+// 导出相关
+const exportDialogVisible = ref(false)
+const exportFormData = reactive({
+  type: 'all',
   keyword: '',
-  roleId: '',
+  dateRange: []
+})
+
+// 管理员列表相关
+const adminList = ref<AdminAccount[]>([])
+const adminSearchForm = reactive({
+  keyword: '',
+  status: ''
+})
+const adminCurrentPage = ref(1)
+const adminPageSize = ref(15)
+const adminTotal = ref(0)
+
+// 角色列表相关
+const roleList = ref<PermissionRole[]>([])
+const roleSearchForm = reactive({
+  keyword: '',
   status: ''
 })
 
-const adminCurrentPage = ref(1)
-const adminPageSize = ref(15) // 按照分页设置规范，默认值为15
-const adminTotal = ref(100)
+// 权限变更历史相关
+const historyList = ref<PermissionChangeHistory[]>([])
+const historySearchForm = reactive({
+  adminId: '',
+  changeType: '',
+  dateRange: []
+})
+const historyCurrentPage = ref(1)
+const historyPageSize = ref(15)
+const historyTotal = ref(0)
 
-const roleDetailDialogVisible = ref(false)
+// 权限审批流程相关
+const approvalList = ref<PermissionApprovalProcess[]>([])
+const approvalSearchForm = reactive({
+  type: '',
+  status: '',
+  applicantId: ''
+})
+const approvalCurrentPage = ref(1)
+const approvalPageSize = ref(15)
+const approvalTotal = ref(0)
+
+// 对话框相关
+const adminDialogVisible = ref(false)
+const adminDialogTitle = ref('')
+const isEditAdmin = ref(false)
+const adminFormRef = ref()
+
+const passwordDialogVisible = ref(false)
+const passwordFormRef = ref()
+
 const roleDialogVisible = ref(false)
-const adminDetailDialogVisible = ref(false)
-
 const roleDialogTitle = ref('')
 const isEditRole = ref(false)
+const roleFormRef = ref()
 
-const roleDetailData = ref({
-  id: 0,
-  name: '',
-  description: '',
-  createTime: '',
-  updateTime: '',
-  adminCount: 0,
-  permissionCount: 0,
-  permissions: [] as number[]
-})
+const approvalDialogVisible = ref(false)
+const approvalFormRef = ref()
 
-const roleFormData = ref({
+// 查看管理员详情相关
+const viewAdminDialogVisible = ref(false)
+const currentViewAdmin = ref<AdminAccount>({
   id: 0,
-  name: '',
-  description: ''
-})
-
-const adminDetailData = ref({
-  id: 0,
-  name: '',
-  account: '',
+  username: '',
+  realName: '',
   email: '',
   phone: '',
-  roleIds: [] as number[],
-  roleNames: [] as string[],
+  status: '',
+  roleNames: [],
   lastLoginTime: '',
-  status: 'enabled',
-  createTime: ''
+  createTime: '',
+  updateTime: '',
+  createdByName: '',
+  updatedByName: ''
+})
+const loginHistory = ref<LoginRecord[]>([])
+
+// 查看权限角色详情相关
+const viewRoleDialogVisible = ref(false)
+const currentViewRole = ref<PermissionRole>({
+  id: 0,
+  name: '',
+  code: '',
+  description: '',
+  permissions: [],
+  status: 'active',
+  createTime: '',
+  updateTime: '',
+  createdBy: 0,
+  updatedBy: 0
 })
 
+// 查看权限变更历史相关
+const viewHistoryDialogVisible = ref(false)
+const currentViewHistory = ref<PermissionChangeHistory>({
+  id: 0,
+  adminId: 0,
+  adminName: '',
+  changeType: 'create',
+  changeDescription: '',
+  oldValue: '',
+  newValue: '',
+  operatorId: 0,
+  operatorName: '',
+  ipAddress: '',
+  changeTime: '',
+  approved: false
+})
+
+// 查看权限审批流程相关
+const viewApprovalDialogVisible = ref(false)
+const currentViewApproval = ref<PermissionApprovalProcess>({
+  id: 0,
+  title: '',
+  type: 'create_admin',
+  applicantId: 0,
+  applicantName: '',
+  targetAdminId: 0,
+  targetAdminName: '',
+  content: '',
+  status: 'pending',
+  currentStep: 0,
+  totalSteps: 0,
+  currentApproverId: 0,
+  currentApproverName: '',
+  applyTime: '',
+  completedTime: '',
+  remark: ''
+})
+
+// 表单数据
+const adminFormData = reactive({
+  id: 0,
+  username: '',
+  realName: '',
+  email: '',
+  phone: '',
+  password: '',
+  confirmPassword: '',
+  roleIds: [] as number[],
+  status: 'active'
+})
+
+const passwordFormData = reactive({
+  id: 0,
+  adminName: '',
+  newPassword: '',
+  confirmPassword: ''
+})
+
+const roleFormData = reactive({
+  id: 0,
+  name: '',
+  code: '',
+  description: '',
+  permissions: [] as string[],
+  status: 'active'
+})
+
+const approvalFormData = reactive({
+  approved: true,
+  remark: ''
+})
+
+const currentApproval = ref<PermissionApprovalProcess>({
+  id: 0,
+  title: '',
+  type: 'create_admin',
+  applicantId: 0,
+  applicantName: '',
+  targetAdminId: 0,
+  targetAdminName: '',
+  content: '',
+  status: 'pending',
+  currentStep: 1,
+  totalSteps: 1,
+  applyTime: ''
+})
+
+// 权限树数据
 const permissionTreeData = ref([
   {
-    id: 1,
+    id: 'user_management',
     label: '用户管理',
     children: [
-      { id: 2, label: '用户列表' },
-      { id: 3, label: '用户详情' },
-      { id: 4, label: '用户编辑' },
-      { id: 5, label: '用户删除' }
+      { id: 'user_list', label: '用户列表' },
+      { id: 'user_detail', label: '用户详情' },
+      { id: 'user_create', label: '创建用户' },
+      { id: 'user_edit', label: '编辑用户' },
+      { id: 'user_delete', label: '删除用户' }
     ]
   },
   {
-    id: 6,
+    id: 'admin_management',
+    label: '管理员管理',
+    children: [
+      { id: 'admin_list', label: '管理员列表' },
+      { id: 'admin_detail', label: '管理员详情' },
+      { id: 'admin_create', label: '创建管理员' },
+      { id: 'admin_edit', label: '编辑管理员' },
+      { id: 'admin_delete', label: '删除管理员' },
+      { id: 'admin_permission', label: '权限管理' }
+    ]
+  },
+  {
+    id: 'dormitory_management',
     label: '寝室管理',
     children: [
-      { id: 7, label: '寝室列表' },
-      { id: 8, label: '寝室详情' },
-      { id: 9, label: '寝室分配' }
+      { id: 'dormitory_list', label: '寝室列表' },
+      { id: 'dormitory_detail', label: '寝室详情' },
+      { id: 'dormitory_create', label: '创建寝室' },
+      { id: 'dormitory_edit', label: '编辑寝室' },
+      { id: 'dormitory_delete', label: '删除寝室' },
+      { id: 'dormitory_assign', label: '寝室分配' }
     ]
   },
   {
-    id: 10,
+    id: 'fee_management',
     label: '费用管理',
     children: [
-      { id: 11, label: '费用记录' },
-      { id: 12, label: '费用详情' },
-      { id: 13, label: '费用统计' }
+      { id: 'fee_list', label: '费用列表' },
+      { id: 'fee_detail', label: '费用详情' },
+      { id: 'fee_create', label: '创建费用' },
+      { id: 'fee_edit', label: '编辑费用' },
+      { id: 'fee_delete', label: '删除费用' },
+      { id: 'fee_statistics', label: '费用统计' }
+    ]
+  },
+  {
+    id: 'system_management',
+    label: '系统管理',
+    children: [
+      { id: 'system_settings', label: '系统设置' },
+      { id: 'system_logs', label: '系统日志' },
+      { id: 'system_backup', label: '系统备份' },
+      { id: 'system_monitor', label: '系统监控' }
     ]
   }
 ])
@@ -478,54 +1360,760 @@ const treeProps = {
   label: 'label'
 }
 
-const defaultExpandedKeys = ref([1, 6, 10])
-
 const permissionTreeRef = ref()
 
-const roleFormRules = {
-  name: [{ required: true, message: '请输入角色名称', trigger: 'blur' }],
-  description: [{ required: true, message: '请输入角色描述', trigger: 'blur' }]
+// 表单验证规则
+const adminFormRules = {
+  username: [
+    { required: true, message: '请输入用户名', trigger: 'blur' },
+    { min: 3, max: 20, message: '用户名长度在 3 到 20 个字符', trigger: 'blur' }
+  ],
+  realName: [
+    { required: true, message: '请输入真实姓名', trigger: 'blur' }
+  ],
+  email: [
+    { required: true, message: '请输入邮箱', trigger: 'blur' },
+    { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }
+  ],
+  phone: [
+    { required: true, message: '请输入手机号', trigger: 'blur' },
+    { pattern: /^1[3456789]\d{9}$/, message: '请输入正确的手机号格式', trigger: 'blur' }
+  ],
+  password: [
+    { required: true, message: '请输入密码', trigger: 'blur' },
+    { min: 6, max: 20, message: '密码长度在 6 到 20 个字符', trigger: 'blur' }
+  ],
+  confirmPassword: [
+    { required: true, message: '请确认密码', trigger: 'blur' },
+    {
+      validator: (rule: any, value: string, callback: Function) => {
+        if (value !== adminFormData.password) {
+          callback(new Error('两次输入密码不一致'))
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur'
+    }
+  ],
+  roleIds: [
+    { required: true, type: 'array', message: '请至少选择一个角色', trigger: 'change' }
+  ]
 }
 
-const roleFormRef = ref()
+const passwordFormRules = {
+  newPassword: [
+    { required: true, message: '请输入新密码', trigger: 'blur' },
+    { min: 6, max: 20, message: '密码长度在 6 到 20 个字符', trigger: 'blur' }
+  ],
+  confirmPassword: [
+    { required: true, message: '请确认密码', trigger: 'blur' },
+    {
+      validator: (rule: any, value: string, callback: Function) => {
+        if (value !== passwordFormData.newPassword) {
+          callback(new Error('两次输入密码不一致'))
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur'
+    }
+  ]
+}
+
+const roleFormRules = {
+  name: [
+    { required: true, message: '请输入角色名称', trigger: 'blur' }
+  ],
+  code: [
+    { required: true, message: '请输入角色代码', trigger: 'blur' },
+    { pattern: /^[a-zA-Z_][a-zA-Z0-9_]*$/, message: '角色代码只能包含字母、数字和下划线，且以字母或下划线开头', trigger: 'blur' }
+  ],
+  description: [
+    { required: true, message: '请输入角色描述', trigger: 'blur' }
+  ],
+  permissions: [
+    { required: true, type: 'array', message: '请选择权限', trigger: 'change' }
+  ]
+}
+
+// 获取统计数据
+const fetchStats = async () => {
+  try {
+    const response = await adminStatsApi.getAdminPermissionStats()
+    stats.value = response
+  } catch (error) {
+    console.error('获取统计数据失败:', error)
+    // 使用模拟数据作为后备
+    stats.value = {
+      totalAdmins: 12,
+      activeAdmins: 10,
+      pendingApprovals: 3,
+      permissionChanges: 25
+    }
+  }
+}
+
+// 获取管理员列表
+const fetchAdminList = async () => {
+  loading.value = true
+  try {
+    const params = {
+      page: adminCurrentPage.value,
+      pageSize: adminPageSize.value,
+      keyword: adminSearchForm.keyword || undefined,
+      status: adminSearchForm.status || undefined
+    }
+    const response = await adminAccountApi.getAdminAccounts(params)
+    adminList.value = response.list || []
+    adminTotal.value = response.total || 0
+  } catch (error) {
+    console.error('获取管理员列表失败:', error)
+    // 使用模拟数据作为后备
+    adminList.value = [
+      {
+        id: 1,
+        username: 'admin',
+        email: 'admin@example.com',
+        phone: '13800138000',
+        realName: '张三',
+        status: 'active',
+        roleIds: [1],
+        roleNames: ['超级管理员'],
+        lastLoginTime: '2023-11-01 10:35:18',
+        createTime: '2023-01-01 10:00:00',
+        updateTime: '2023-01-01 10:00:00',
+        createdBy: 0,
+        updatedBy: 0
+      },
+      {
+        id: 2,
+        username: 'lisi',
+        email: 'lisi@example.com',
+        phone: '13900139000',
+        realName: '李四',
+        status: 'active',
+        roleIds: [2],
+        roleNames: ['系统管理员'],
+        lastLoginTime: '2023-11-01 09:45:33',
+        createTime: '2023-01-02 10:00:00',
+        updateTime: '2023-01-02 10:00:00',
+        createdBy: 0,
+        updatedBy: 0
+      }
+    ]
+    adminTotal.value = adminList.value.length
+  } finally {
+    loading.value = false
+  }
+}
+
+// 获取角色列表
+const fetchRoleList = async () => {
+  try {
+    const params = {
+      page: 1,
+      pageSize: 100,
+      keyword: roleSearchForm.keyword || undefined,
+      status: roleSearchForm.status || undefined
+    }
+    const response = await permissionRoleApi.getPermissionRoles(params)
+    roleList.value = response.list || []
+  } catch (error) {
+    console.error('获取角色列表失败:', error)
+    // 使用模拟数据作为后备
+    roleList.value = [
+      {
+        id: 1,
+        name: '超级管理员',
+        code: 'super_admin',
+        description: '拥有系统最高权限',
+        permissions: ['user_management', 'admin_management', 'dormitory_management', 'fee_management', 'system_management'],
+        status: 'active',
+        createTime: '2023-01-01 10:00:00',
+        updateTime: '2023-01-01 10:00:00',
+        createdBy: 0,
+        updatedBy: 0
+      },
+      {
+        id: 2,
+        name: '系统管理员',
+        code: 'system_admin',
+        description: '负责系统日常维护和管理',
+        permissions: ['user_management', 'dormitory_management', 'fee_management'],
+        status: 'active',
+        createTime: '2023-01-02 10:00:00',
+        updateTime: '2023-01-02 10:00:00',
+        createdBy: 0,
+        updatedBy: 0
+      }
+    ]
+  }
+}
+
+// 获取权限变更历史
+const fetchHistoryList = async () => {
+  loading.value = true
+  try {
+    const params: any = {
+      page: historyCurrentPage.value,
+      pageSize: historyPageSize.value
+    }
+    
+    if (historySearchForm.adminId) {
+      params.adminId = historySearchForm.adminId
+    }
+    if (historySearchForm.changeType) {
+      params.changeType = historySearchForm.changeType
+    }
+    if (historySearchForm.dateRange && historySearchForm.dateRange.length === 2) {
+      params.startTime = historySearchForm.dateRange[0]
+      params.endTime = historySearchForm.dateRange[1]
+    }
+    
+    const response = await permissionHistoryApi.getPermissionChangeHistory(params)
+    historyList.value = response.list || []
+    historyTotal.value = response.total || 0
+  } catch (error) {
+    console.error('获取权限变更历史失败:', error)
+    // 使用模拟数据作为后备
+    historyList.value = [
+      {
+        id: 1,
+        adminId: 1,
+        adminName: '张三',
+        changeType: 'create',
+        changeDescription: '创建管理员账户',
+        operatorId: 1,
+        operatorName: '系统管理员',
+        ipAddress: '192.168.1.100',
+        changeTime: '2023-11-01 10:35:18',
+        approved: true,
+        approvedBy: 1,
+        approvedByName: '系统管理员',
+        approvedTime: '2023-11-01 10:36:00'
+      },
+      {
+        id: 2,
+        adminId: 2,
+        adminName: '李四',
+        changeType: 'password_reset',
+        changeDescription: '重置管理员密码',
+        operatorId: 1,
+        operatorName: '系统管理员',
+        ipAddress: '192.168.1.100',
+        changeTime: '2023-11-01 09:45:33',
+        approved: true,
+        approvedBy: 1,
+        approvedByName: '系统管理员',
+        approvedTime: '2023-11-01 09:46:00'
+      }
+    ]
+    historyTotal.value = historyList.value.length
+  } finally {
+    loading.value = false
+  }
+}
+
+// 获取权限审批流程
+const fetchApprovalList = async () => {
+  loading.value = true
+  try {
+    const params: any = {
+      page: approvalCurrentPage.value,
+      pageSize: approvalPageSize.value
+    }
+    
+    if (approvalSearchForm.type) {
+      params.type = approvalSearchForm.type
+    }
+    if (approvalSearchForm.status) {
+      params.status = approvalSearchForm.status
+    }
+    if (approvalSearchForm.applicantId) {
+      params.applicantId = approvalSearchForm.applicantId
+    }
+    
+    const response = await permissionApprovalApi.getPermissionApprovalProcesses(params)
+    approvalList.value = response.list || []
+    approvalTotal.value = response.total || 0
+  } catch (error) {
+    console.error('获取权限审批流程失败:', error)
+    // 使用模拟数据作为后备
+    approvalList.value = [
+      {
+        id: 1,
+        title: '创建新管理员账户申请',
+        type: 'create_admin',
+        applicantId: 2,
+        applicantName: '李四',
+        targetAdminId: 0,
+        targetAdminName: '',
+        content: '申请创建新管理员账户，用户名：wangwu',
+        status: 'pending',
+        currentStep: 1,
+        totalSteps: 2,
+        currentApproverId: 1,
+        currentApproverName: '张三',
+        applyTime: '2023-11-01 08:30:00'
+      },
+      {
+        id: 2,
+        title: '修改管理员权限申请',
+        type: 'modify_permission',
+        applicantId: 3,
+        applicantName: '王五',
+        targetAdminId: 3,
+        targetAdminName: '王五',
+        content: '申请添加费用管理权限',
+        status: 'approved',
+        currentStep: 2,
+        totalSteps: 2,
+        applyTime: '2023-10-31 16:20:00',
+        completedTime: '2023-10-31 17:15:00'
+      }
+    ]
+    approvalTotal.value = approvalList.value.length
+  } finally {
+    loading.value = false
+  }
+}
 
 // 标签页切换
 const handleTabChange = (tabName: string) => {
-  console.log('탭 변경:', tabName)
+  console.log('标签页切换:', tabName)
+  
+  // 根据标签页加载对应数据
+  switch (tabName) {
+    case 'admins':
+      fetchAdminList()
+      break
+    case 'roles':
+      fetchRoleList()
+      break
+    case 'history':
+      fetchHistoryList()
+      break
+    case 'approvals':
+      fetchApprovalList()
+      break
+  }
 }
 
-// 新建角色
+// 刷新数据
+const handleRefresh = async () => {
+  refreshLoading.value = true
+  try {
+    await Promise.all([
+      fetchStats(),
+      fetchAdminList(),
+      fetchRoleList()
+    ])
+    
+    if (activeTab.value === 'history') {
+      await fetchHistoryList()
+    } else if (activeTab.value === 'approvals') {
+      await fetchApprovalList()
+    }
+    
+    ElMessage.success('数据刷新成功')
+  } catch (error) {
+    console.error('刷新数据失败:', error)
+    ElMessage.error('刷新数据失败')
+  } finally {
+    refreshLoading.value = false
+  }
+}
+
+// 导出记录
+const handleExport = () => {
+  // 重置导出表单
+  exportFormData.type = 'all'
+  exportFormData.keyword = ''
+  exportFormData.dateRange = []
+  
+  // 显示导出选择对话框
+  exportDialogVisible.value = true
+}
+
+// 提交导出
+const submitExport = async () => {
+  exportLoading.value = true
+  
+  try {
+    // 构建导出参数
+    const exportParams: any = {}
+    
+    if (exportFormData.keyword) {
+      exportParams.keyword = exportFormData.keyword
+    }
+    
+    if (exportFormData.dateRange && exportFormData.dateRange.length === 2) {
+      exportParams.startDate = exportFormData.dateRange[0]
+      exportParams.endDate = exportFormData.dateRange[1]
+    }
+    
+    let response
+    
+    // 根据选择的导出类型调用不同的API
+    switch (exportFormData.type) {
+      case 'all':
+        response = await adminExportApi.exportAllPermissionData(exportParams)
+        break
+      case 'accounts':
+        response = await adminExportApi.exportAdminAccounts(exportParams)
+        break
+      case 'roles':
+        response = await adminExportApi.exportPermissionRoles(exportParams)
+        break
+      case 'history':
+        response = await adminExportApi.exportPermissionHistory(exportParams)
+        break
+      case 'approvals':
+        response = await adminExportApi.exportApprovalProcesses(exportParams)
+        break
+      default:
+        throw new Error('未知的导出类型')
+    }
+    
+    // 创建下载链接
+    const blob = new Blob([response.data], { 
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+    })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    
+    // 根据导出类型设置文件名
+    const now = new Date()
+    const dateStr = now.toLocaleDateString('zh-CN').replace(/\//g, '-')
+    let filename = ''
+    
+    switch (exportFormData.type) {
+      case 'all':
+        filename = `权限管理完整记录_${dateStr}.xlsx`
+        break
+      case 'accounts':
+        filename = `管理员账户记录_${dateStr}.xlsx`
+        break
+      case 'roles':
+        filename = `权限角色记录_${dateStr}.xlsx`
+        break
+      case 'history':
+        filename = `权限变更历史_${dateStr}.xlsx`
+        break
+      case 'approvals':
+        filename = `权限审批流程_${dateStr}.xlsx`
+        break
+      default:
+        filename = `权限管理记录_${dateStr}.xlsx`
+    }
+    
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    
+    // 关闭对话框
+    exportDialogVisible.value = false
+    
+    ElMessage.success('导出成功')
+  } catch (error) {
+    console.error('导出失败:', error)
+    ElMessage.error('导出失败，请稍后重试')
+  } finally {
+    exportLoading.value = false
+  }
+}
+
+// 管理员相关操作
+const handleCreateAdmin = () => {
+  adminDialogTitle.value = '创建管理员'
+  isEditAdmin.value = false
+  Object.assign(adminFormData, {
+    id: 0,
+    username: '',
+    realName: '',
+    email: '',
+    phone: '',
+    password: '',
+    confirmPassword: '',
+    roleIds: [],
+    status: 'active'
+  })
+  adminDialogVisible.value = true
+}
+
+const handleViewAdmin = async (row: AdminAccount) => {
+  try {
+    viewAdminDialogVisible.value = true
+    
+    // 显示加载状态
+    Object.assign(currentViewAdmin.value, {
+      id: row.id,
+      username: row.username,
+      realName: row.realName,
+      email: row.email,
+      phone: row.phone,
+      status: row.status,
+      roleNames: row.roleNames || [],
+      lastLoginTime: row.lastLoginTime || '',
+      createTime: row.createTime || '',
+      updateTime: row.updateTime || '',
+      createdByName: row.createdByName || '',
+      updatedByName: row.updatedByName || ''
+    })
+    
+    // 获取登录历史（如果API可用）
+    try {
+      if (adminAccountApi.getAdminLoginHistory) {
+        const loginRecords = await adminAccountApi.getAdminLoginHistory(row.id)
+        loginHistory.value = loginRecords || []
+      } else {
+        // 如果没有登录历史API，提供模拟数据
+        loginHistory.value = [
+          {
+            loginTime: new Date().toLocaleString('zh-CN'),
+            ipAddress: '192.168.1.100',
+            browser: 'Chrome 120.0.0.0',
+            success: true
+          },
+          {
+            loginTime: new Date(Date.now() - 86400000).toLocaleString('zh-CN'),
+            ipAddress: '192.168.1.101',
+            browser: 'Firefox 121.0.0.0',
+            success: true
+          }
+        ]
+      }
+    } catch (error) {
+      console.warn('获取登录历史失败:', error)
+      loginHistory.value = []
+    }
+    
+  } catch (error) {
+     console.error('查看管理员详情失败:', error)
+     ElMessage.error('查看管理员详情失败')
+     viewAdminDialogVisible.value = false
+   }
+ }
+
+// 从查看切换到编辑
+const handleEditFromView = () => {
+  viewAdminDialogVisible.value = false
+  // 等待对话框关闭后打开编辑对话框
+  setTimeout(() => {
+    handleEditAdmin(currentViewAdmin.value)
+  }, 100)
+}
+
+// 从查看角色切换到编辑角色
+const handleEditRoleFromView = () => {
+  viewRoleDialogVisible.value = false
+  // 等待对话框关闭后打开编辑对话框
+  setTimeout(() => {
+    handleEditRole(currentViewRole.value)
+  }, 100)
+}
+
+// 从查看审批流程切换到审批操作
+const handleApprovalFromView = () => {
+  viewApprovalDialogVisible.value = false
+  // 等待对话框关闭后打开审批对话框
+  setTimeout(() => {
+    Object.assign(currentApproval.value, currentViewApproval.value)
+    approvalFormData.approved = true
+    approvalFormData.remark = ''
+    approvalDialogVisible.value = true
+  }, 100)
+}
+
+const handleEditAdmin = (row: AdminAccount) => {
+  adminDialogTitle.value = '编辑管理员'
+  isEditAdmin.value = true
+  Object.assign(adminFormData, {
+    id: row.id,
+    username: row.username,
+    realName: row.realName,
+    email: row.email,
+    phone: row.phone,
+    password: '',
+    confirmPassword: '',
+    roleIds: row.roleIds,
+    status: row.status
+  })
+  adminDialogVisible.value = true
+}
+
+const handleResetPassword = (row: AdminAccount) => {
+  Object.assign(passwordFormData, {
+    id: row.id,
+    adminName: row.realName,
+    newPassword: '',
+    confirmPassword: ''
+  })
+  passwordDialogVisible.value = true
+}
+
+const handleStatusCommand = (command: string, row: AdminAccount) => {
+  ElMessageBox.confirm(
+    `确定要将管理员"${row.realName}"状态更改为${getStatusText(command)}吗？`,
+    '确认更改状态',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).then(async () => {
+    try {
+      await adminAccountApi.changeAdminStatus(row.id, command)
+      ElMessage.success('状态更改成功')
+      fetchAdminList()
+    } catch (error) {
+      console.error('更改状态失败:', error)
+      ElMessage.error('更改状态失败')
+    }
+  }).catch(() => {
+    // 用户取消操作
+  })
+}
+
+const handleAdminSearch = () => {
+  adminCurrentPage.value = 1
+  fetchAdminList()
+}
+
+const handleAdminReset = () => {
+  Object.assign(adminSearchForm, {
+    keyword: '',
+    status: ''
+  })
+  handleAdminSearch()
+}
+
+const handleAdminSizeChange = (val: number) => {
+  adminPageSize.value = val
+  adminCurrentPage.value = 1
+  fetchAdminList()
+}
+
+const handleAdminCurrentChange = (val: number) => {
+  adminCurrentPage.value = val
+  fetchAdminList()
+}
+
+// 提交管理员表单
+const submitAdminForm = () => {
+  adminFormRef.value.validate(async (valid: boolean) => {
+    if (valid) {
+      submitLoading.value = true
+      try {
+        const data = { ...adminFormData }
+        // 删除确认密码字段
+        delete data.confirmPassword
+        
+        if (isEditAdmin.value) {
+          // 编辑时不传递密码，除非有修改
+          if (!data.password) {
+            delete data.password
+          }
+          await adminAccountApi.updateAdminAccount(data.id, data)
+          ElMessage.success('管理员更新成功')
+        } else {
+          await adminAccountApi.createAdminAccount(data)
+          ElMessage.success('管理员创建成功')
+        }
+        
+        adminDialogVisible.value = false
+        fetchAdminList()
+      } catch (error) {
+        console.error('提交管理员表单失败:', error)
+        ElMessage.error(isEditAdmin.value ? '更新管理员失败' : '创建管理员失败')
+      } finally {
+        submitLoading.value = false
+      }
+    }
+  })
+}
+
+// 提交密码重置表单
+const submitPasswordForm = () => {
+  passwordFormRef.value.validate(async (valid: boolean) => {
+    if (valid) {
+      submitLoading.value = true
+      try {
+        await adminAccountApi.resetAdminPassword(
+          passwordFormData.id, 
+          passwordFormData.newPassword
+        )
+        ElMessage.success('密码重置成功')
+        passwordDialogVisible.value = false
+      } catch (error) {
+        console.error('密码重置失败:', error)
+        ElMessage.error('密码重置失败')
+      } finally {
+        submitLoading.value = false
+      }
+    }
+  })
+}
+
+// 角色相关操作
 const handleCreateRole = () => {
-  roleDialogTitle.value = '新建角色'
+  roleDialogTitle.value = '创建角色'
   isEditRole.value = false
-  roleFormData.value = {
+  Object.assign(roleFormData, {
     id: 0,
     name: '',
-    description: ''
-  }
+    code: '',
+    description: '',
+    permissions: [],
+    status: 'active'
+  })
   roleDialogVisible.value = true
 }
 
-// 查看角色详情
-const handleViewRole = (row: any) => {
-  roleDetailData.value = { ...row }
-  roleDetailDialogVisible.value = true
+const handleViewRole = async (row: PermissionRole) => {
+  try {
+    viewRoleDialogVisible.value = true
+    
+    // 显示角色详情
+    Object.assign(currentViewRole.value, {
+      id: row.id,
+      name: row.name,
+      code: row.code,
+      description: row.description,
+      permissions: row.permissions || [],
+      status: row.status,
+      createTime: row.createTime,
+      updateTime: row.updateTime,
+      createdBy: row.createdBy,
+      updatedBy: row.updatedBy
+    })
+    
+  } catch (error) {
+    console.error('查看角色详情失败:', error)
+    ElMessage.error('查看角色详情失败')
+    viewRoleDialogVisible.value = false
+  }
 }
 
-// 编辑角色
-const handleEditRole = (row: any) => {
+const handleEditRole = (row: PermissionRole) => {
   roleDialogTitle.value = '编辑角色'
   isEditRole.value = true
-  roleFormData.value = {
+  Object.assign(roleFormData, {
     id: row.id,
     name: row.name,
-    description: row.description
-  }
+    code: row.code,
+    description: row.description,
+    permissions: row.permissions,
+    status: row.status
+  })
   roleDialogVisible.value = true
 }
 
-// 删除角色
-const handleDeleteRole = (row: any) => {
+const handleDeleteRole = (row: PermissionRole) => {
   ElMessageBox.confirm(
     `确定要删除角色"${row.name}"吗？此操作不可逆。`,
     '确认删除',
@@ -534,123 +2122,361 @@ const handleDeleteRole = (row: any) => {
       cancelButtonText: '取消',
       type: 'warning'
     }
-  ).then(() => {
-    console.log('🗑️ 删除角色:', row)
-    ElMessage.success(`角色"${row.name}"已删除`)
-    
-    // 从列表中移除
-    const index = roleList.value.findIndex(item => item.id === row.id)
-    if (index !== -1) {
-      roleList.value.splice(index, 1)
+  ).then(async () => {
+    try {
+      await permissionRoleApi.deletePermissionRole(row.id)
+      ElMessage.success('角色删除成功')
+      fetchRoleList()
+    } catch (error) {
+      console.error('删除角色失败:', error)
+      ElMessage.error('删除角色失败')
     }
   }).catch(() => {
     // 用户取消操作
   })
 }
 
-// 管理员搜索
-const handleAdminSearch = () => {
-  console.log('🔍 搜索管理员:', adminSearchForm.value)
-  ElMessage.success('查询功能待实现')
+const handleRoleSearch = () => {
+  fetchRoleList()
 }
 
-// 管理员重置
-const handleAdminReset = () => {
-  adminSearchForm.value = {
+const handleRoleReset = () => {
+  Object.assign(roleSearchForm, {
     keyword: '',
-    roleId: '',
     status: ''
-  }
-  ElMessage.success('重置搜索条件')
-}
-
-// 查看管理员详情
-const handleViewAdmin = (row: any) => {
-  adminDetailData.value = { ...row }
-  adminDetailDialogVisible.value = true
-}
-
-// 编辑管理员
-const handleEditAdmin = (row: any) => {
-  console.log('✏️ 编辑管理员:', row)
-  ElMessage.info('编辑管理员功能待实现')
-}
-
-// 管理员状态变更
-const handleAdminStatusChange = (row: any) => {
-  console.log('🔄 管理员状态变更:', row)
-  ElMessage.success(`管理员"${row.name}"状态已更新`)
-}
-
-// 展开/折叠权限树
-const handleExpandAll = () => {
-  if (permissionTreeRef.value) {
-    // 这里只是一个示例，实际实现可能需要更复杂的逻辑
-    ElMessage.info('展开/折叠功能待实现')
-  }
-}
-
-// 保存角色权限
-const handleSaveRolePermissions = () => {
-  if (permissionTreeRef.value) {
-    const checkedKeys = permissionTreeRef.value.getCheckedKeys()
-    console.log('💾 保存角色权限:', checkedKeys)
-    ElMessage.success('角色权限保存成功')
-    roleDetailDialogVisible.value = false
-  }
+  })
+  fetchRoleList()
 }
 
 // 提交角色表单
 const submitRoleForm = () => {
-  roleFormRef.value.validate((valid: boolean) => {
+  roleFormRef.value.validate(async (valid: boolean) => {
     if (valid) {
-      if (isEditRole.value) {
-        console.log('✏️ 编辑角色:', roleFormData.value)
-        ElMessage.success('角色编辑成功')
-      } else {
-        console.log('➕ 新建角色:', roleFormData.value)
-        ElMessage.success('角色新建成功')
+      submitLoading.value = true
+      try {
+        // 获取选中的权限
+        if (permissionTreeRef.value) {
+          roleFormData.permissions = permissionTreeRef.value.getCheckedKeys() as string[]
+        }
+        
+        const data = { ...roleFormData }
+        
+        if (isEditRole.value) {
+          await permissionRoleApi.updatePermissionRole(data.id, data)
+          ElMessage.success('角色更新成功')
+        } else {
+          await permissionRoleApi.createPermissionRole(data)
+          ElMessage.success('角色创建成功')
+        }
+        
+        roleDialogVisible.value = false
+        fetchRoleList()
+      } catch (error) {
+        console.error('提交角色表单失败:', error)
+        ElMessage.error(isEditRole.value ? '更新角色失败' : '创建角色失败')
+      } finally {
+        submitLoading.value = false
       }
-      roleDialogVisible.value = false
-    } else {
-      ElMessage.warning('请填写完整信息')
     }
   })
 }
 
-// 保存管理员角色
-const handleSaveAdminRoles = () => {
-  console.log('💾 保存管理员角色:', adminDetailData.value)
-  ElMessage.success('管理员角色保存成功')
-  adminDetailDialogVisible.value = false
+// 权限变更历史相关操作
+const handleViewHistory = async (row: PermissionChangeHistory) => {
+  try {
+    viewHistoryDialogVisible.value = true
+    
+    // 显示历史记录详情
+    Object.assign(currentViewHistory.value, {
+      id: row.id,
+      adminId: row.adminId,
+      adminName: row.adminName,
+      changeType: row.changeType,
+      changeDescription: row.changeDescription,
+      oldValue: row.oldValue,
+      newValue: row.newValue,
+      operatorId: row.operatorId,
+      operatorName: row.operatorName,
+      ipAddress: row.ipAddress,
+      changeTime: row.changeTime,
+      approved: row.approved,
+      approvedBy: row.approvedBy,
+      approvedByName: row.approvedByName,
+      approvedTime: row.approvedTime,
+      remark: row.remark
+    })
+    
+  } catch (error) {
+    console.error('查看历史记录详情失败:', error)
+    ElMessage.error('查看历史记录详情失败')
+    viewHistoryDialogVisible.value = false
+  }
 }
 
-// 管理员分页相关
-const handleAdminSizeChange = (val: number) => {
-  adminPageSize.value = val
-  adminCurrentPage.value = 1
-  console.log(`📈 每页显示 ${val} 条`)
+const handleHistorySearch = () => {
+  historyCurrentPage.value = 1
+  fetchHistoryList()
 }
 
-const handleAdminCurrentChange = (val: number) => {
-  adminCurrentPage.value = val
-  console.log(`📄 当前页: ${val}`)
+const handleHistoryReset = () => {
+  Object.assign(historySearchForm, {
+    adminId: '',
+    changeType: '',
+    dateRange: []
+  })
+  handleHistorySearch()
 }
 
-// 组件挂载
+const handleHistorySizeChange = (val: number) => {
+  historyPageSize.value = val
+  historyCurrentPage.value = 1
+  fetchHistoryList()
+}
+
+const handleHistoryCurrentChange = (val: number) => {
+  historyCurrentPage.value = val
+  fetchHistoryList()
+}
+
+// 权限审批流程相关操作
+const handleViewApproval = async (row: PermissionApprovalProcess) => {
+  try {
+    viewApprovalDialogVisible.value = true
+    
+    // 显示审批流程详情
+    Object.assign(currentViewApproval.value, {
+      id: row.id,
+      title: row.title,
+      type: row.type,
+      applicantId: row.applicantId,
+      applicantName: row.applicantName,
+      targetAdminId: row.targetAdminId,
+      targetAdminName: row.targetAdminName,
+      content: row.content,
+      status: row.status,
+      currentStep: row.currentStep,
+      totalSteps: row.totalSteps,
+      currentApproverId: row.currentApproverId,
+      currentApproverName: row.currentApproverName,
+      applyTime: row.applyTime,
+      completedTime: row.completedTime,
+      remark: row.remark
+    })
+    
+  } catch (error) {
+    console.error('查看审批流程详情失败:', error)
+    ElMessage.error('查看审批流程详情失败')
+    viewApprovalDialogVisible.value = false
+  }
+}
+
+const handleApprove = (row: PermissionApprovalProcess) => {
+  Object.assign(currentApproval.value, row)
+  approvalFormData.approved = true
+  approvalFormData.remark = ''
+  approvalDialogVisible.value = true
+}
+
+const handleReject = (row: PermissionApprovalProcess) => {
+  Object.assign(currentApproval.value, row)
+  approvalFormData.approved = false
+  approvalFormData.remark = ''
+  approvalDialogVisible.value = true
+}
+
+const handleApprovalSearch = () => {
+  approvalCurrentPage.value = 1
+  fetchApprovalList()
+}
+
+const handleApprovalReset = () => {
+  Object.assign(approvalSearchForm, {
+    type: '',
+    status: '',
+    applicantId: ''
+  })
+  handleApprovalSearch()
+}
+
+const handleApprovalSizeChange = (val: number) => {
+  approvalPageSize.value = val
+  approvalCurrentPage.value = 1
+  fetchApprovalList()
+}
+
+const handleApprovalCurrentChange = (val: number) => {
+  approvalCurrentPage.value = val
+  fetchApprovalList()
+}
+
+// 提交审批表单
+const submitApprovalForm = () => {
+  approvalFormRef.value.validate(async (valid: boolean) => {
+    if (valid) {
+      submitLoading.value = true
+      try {
+        await permissionApprovalApi.approvePermissionProcess(
+          currentApproval.value.id,
+          approvalFormData.approved,
+          approvalFormData.remark
+        )
+        ElMessage.success(approvalFormData.approved ? '审批通过' : '审批拒绝')
+        approvalDialogVisible.value = false
+        fetchApprovalList()
+      } catch (error) {
+        console.error('提交审批失败:', error)
+        ElMessage.error('提交审批失败')
+      } finally {
+        submitLoading.value = false
+      }
+    }
+  })
+}
+
+// 工具函数
+const getStatusType = (status: string) => {
+  switch (status) {
+    case 'active':
+      return 'success'
+    case 'inactive':
+      return 'danger'
+    case 'locked':
+      return 'warning'
+    case 'pending':
+      return 'info'
+    default:
+      return 'info'
+  }
+}
+
+const getStatusText = (status: string) => {
+  switch (status) {
+    case 'active':
+      return '活跃'
+    case 'inactive':
+      return '未激活'
+    case 'locked':
+      return '锁定'
+    case 'pending':
+      return '待审核'
+    default:
+      return '未知'
+  }
+}
+
+const getChangeTypeTag = (type: string) => {
+  switch (type) {
+    case 'create':
+      return 'success'
+    case 'update':
+      return 'primary'
+    case 'delete':
+      return 'danger'
+    case 'status_change':
+      return 'warning'
+    case 'password_reset':
+      return 'info'
+    case 'permission_change':
+      return 'warning'
+    default:
+      return 'info'
+  }
+}
+
+const getChangeTypeText = (type: string) => {
+  switch (type) {
+    case 'create':
+      return '创建'
+    case 'update':
+      return '更新'
+    case 'delete':
+      return '删除'
+    case 'status_change':
+      return '状态变更'
+    case 'password_reset':
+      return '密码重置'
+    case 'permission_change':
+      return '权限变更'
+    default:
+      return '未知'
+  }
+}
+
+const getApprovalTypeTag = (type: string) => {
+  switch (type) {
+    case 'create_admin':
+      return 'success'
+    case 'modify_permission':
+      return 'primary'
+    case 'reset_password':
+      return 'warning'
+    case 'change_status':
+      return 'info'
+    case 'delete_admin':
+      return 'danger'
+    default:
+      return 'info'
+  }
+}
+
+const getApprovalTypeText = (type: string) => {
+  switch (type) {
+    case 'create_admin':
+      return '创建管理员'
+    case 'modify_permission':
+      return '修改权限'
+    case 'reset_password':
+      return '重置密码'
+    case 'change_status':
+      return '更改状态'
+    case 'delete_admin':
+      return '删除管理员'
+    default:
+      return '未知'
+  }
+}
+
+const getApprovalStatusTag = (status: string) => {
+  switch (status) {
+    case 'pending':
+      return 'warning'
+    case 'approved':
+      return 'success'
+    case 'rejected':
+      return 'danger'
+    case 'cancelled':
+      return 'info'
+    default:
+      return 'info'
+  }
+}
+
+const getApprovalStatusText = (status: string) => {
+  switch (status) {
+    case 'pending':
+      return '待审批'
+    case 'approved':
+      return '已审批'
+    case 'rejected':
+      return '已拒绝'
+    case 'cancelled':
+      return '已取消'
+    default:
+      return '未知'
+  }
+}
+
+// 初始化
 onMounted(() => {
-  console.log('🔑 管理员权限管理页面加载完成')
+  fetchStats()
+  fetchAdminList()
+  fetchRoleList()
 })
-
-/**
- * 管理员权限管理页面
- * 管理系统中的角色和管理员权限分配
- */
 </script>
 
 <style scoped>
 .admin-permission-management-container {
-  width: 100%;
+  padding: 20px;
 }
 
 .card-header {
@@ -659,23 +2485,30 @@ onMounted(() => {
   align-items: center;
 }
 
+.header-actions {
+  display: flex;
+  gap: 10px;
+}
+
 .stat-card {
-  margin-bottom: 0;
+  height: 100px;
+  margin-bottom: 20px;
 }
 
 .stat-item {
   display: flex;
   align-items: center;
+  height: 100%;
 }
 
 .stat-icon {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  color: white;
+  width: 60px;
+  height: 60px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
+  color: white;
   margin-right: 15px;
 }
 
@@ -683,12 +2516,12 @@ onMounted(() => {
   background-color: #409EFF;
 }
 
-.bg-warning {
-  background-color: #E6A23C;
-}
-
 .bg-success {
   background-color: #67C23A;
+}
+
+.bg-warning {
+  background-color: #E6A23C;
 }
 
 .bg-info {
@@ -706,32 +2539,51 @@ onMounted(() => {
 }
 
 .stat-value {
-  font-size: 20px;
+  font-size: 24px;
   font-weight: bold;
   color: #303133;
 }
 
 .search-bar {
   margin-bottom: 20px;
+  padding: 15px;
+  background-color: #f5f7fa;
+  border-radius: 4px;
 }
 
 .pagination-container {
   margin-top: 20px;
-  display: flex;
-  justify-content: center;
+  text-align: right;
 }
 
-.permission-tree-container,
-.role-assignment-container {
-  margin-top: 20px;
+.permission-tree-container {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  padding: 10px;
 }
 
-.permission-tree-header,
-.role-assignment-header {
+.permission-tree-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
-  font-weight: bold;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #dcdfe6;
+}
+
+.role-assignment-container {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  padding: 10px;
+}
+
+.role-assignment-header {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #dcdfe6;
 }
 </style>

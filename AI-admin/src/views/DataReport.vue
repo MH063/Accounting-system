@@ -23,7 +23,6 @@
               style="margin-right: 15px;"
             />
             <el-button type="primary" @click="handleGenerate">生成报表</el-button>
-            <el-button @click="handleAutoGenerate">自动计划</el-button>
             <el-button @click="handleExport">导出</el-button>
           </div>
         </div>
@@ -52,109 +51,29 @@
       </el-row>
       
       <!-- 图表区域 -->
-      <el-tabs v-model="activeChartTab" @tab-change="handleChartTabChange">
-        <el-tab-pane label="主要趋势" name="main">
-          <el-row :gutter="20">
-            <el-col :span="16">
-              <el-card>
-                <template #header>
-                  <div class="chart-header">
-                    <span>{{ chartTitle }}</span>
-                  </div>
-                </template>
-                <div ref="mainChartRef" style="height: 400px;"></div>
-              </el-card>
-            </el-col>
-            
-            <el-col :span="8">
-              <el-card>
-                <template #header>
-                  <div class="chart-header">
-                    <span>数据分布</span>
-                  </div>
-                </template>
-                <div ref="pieChartRef" style="height: 400px;"></div>
-              </el-card>
-            </el-col>
-          </el-row>
-        </el-tab-pane>
+      <el-row :gutter="20">
+        <el-col :span="16">
+          <el-card>
+            <template #header>
+              <div class="chart-header">
+                <span>{{ chartTitle }}</span>
+              </div>
+            </template>
+            <div ref="mainChartRef" style="height: 400px;"></div>
+          </el-card>
+        </el-col>
         
-        <el-tab-pane label="用户行为分析" name="userBehavior">
-          <el-row :gutter="20">
-            <el-col :span="12">
-              <el-card>
-                <template #header>
-                  <div class="chart-header">
-                    <span>用户路径分析</span>
-                  </div>
-                </template>
-                <div ref="userPathChartRef" style="height: 400px;"></div>
-              </el-card>
-            </el-col>
-            
-            <el-col :span="12">
-              <el-card>
-                <template #header>
-                  <div class="chart-header">
-                    <span>行为模式识别</span>
-                  </div>
-                </template>
-                <div ref="behaviorPatternChartRef" style="height: 400px;"></div>
-              </el-card>
-            </el-col>
-          </el-row>
-        </el-tab-pane>
-        
-        <el-tab-pane label="多维分析" name="multiDimension">
-          <el-row :gutter="20">
-            <el-col :span="8">
-              <el-card>
-                <template #header>
-                  <div class="chart-header">
-                    <span>雷达图分析</span>
-                  </div>
-                </template>
-                <div ref="radarChartRef" style="height: 300px;"></div>
-              </el-card>
-            </el-col>
-            
-            <el-col :span="8">
-              <el-card>
-                <template #header>
-                  <div class="chart-header">
-                    <span>散点图分析</span>
-                  </div>
-                </template>
-                <div ref="scatterChartRef" style="height: 300px;"></div>
-              </el-card>
-            </el-col>
-            
-            <el-col :span="8">
-              <el-card>
-                <template #header>
-                  <div class="chart-header">
-                    <span>热力图分析</span>
-                  </div>
-                </template>
-                <div ref="heatmapChartRef" style="height: 300px;"></div>
-              </el-card>
-            </el-col>
-          </el-row>
-          
-          <el-row :gutter="20" style="margin-top: 20px;">
-            <el-col :span="24">
-              <el-card>
-                <template #header>
-                  <div class="chart-header">
-                    <span>综合仪表盘</span>
-                  </div>
-                </template>
-                <div ref="dashboardChartRef" style="height: 300px;"></div>
-              </el-card>
-            </el-col>
-          </el-row>
-        </el-tab-pane>
-      </el-tabs>
+        <el-col :span="8">
+          <el-card>
+            <template #header>
+              <div class="chart-header">
+                <span>数据分布</span>
+              </div>
+            </template>
+            <div ref="pieChartRef" style="height: 400px;"></div>
+          </el-card>
+        </el-col>
+      </el-row>
       
       <!-- 报表数据表格 -->
       <el-card style="margin-top: 20px;">
@@ -203,9 +122,7 @@ const reportStats = ref([
   { title: '总用户数', value: 1245, trend: 2.5, color: 'primary', icon: 'User' },
   { title: '活跃用户', value: 842, trend: 5.2, color: 'success', icon: 'User' },
   { title: '总收入', value: '¥256,805', trend: -1.8, color: 'warning', icon: 'Coin' },
-  { title: '平均响应时间', value: '128ms', trend: -3.5, color: 'info', icon: 'DataLine' },
-  { title: '系统使用率', value: '85%', trend: 2.1, color: 'success', icon: 'DataLine' },
-  { title: '报表生成数', value: 24, trend: 8.3, color: 'primary', icon: 'Document' }
+  { title: '平均响应时间', value: '128ms', trend: -3.5, color: 'info', icon: 'DataLine' }
 ])
 
 const chartTitle = ref('用户活跃度趋势')
@@ -236,22 +153,6 @@ const total = ref(100)
 // 图表引用
 const mainChartRef = ref()
 const pieChartRef = ref()
-const userPathChartRef = ref()
-const behaviorPatternChartRef = ref()
-const radarChartRef = ref()
-const scatterChartRef = ref()
-const heatmapChartRef = ref()
-const dashboardChartRef = ref()
-
-// 图表实例
-let userPathChart: echarts.ECharts
-let behaviorPatternChart: echarts.ECharts
-let radarChart: echarts.ECharts
-let scatterChart: echarts.ECharts
-let heatmapChart: echarts.ECharts
-let dashboardChart: echarts.ECharts
-
-const activeChartTab = ref('main')
 
 // 图表实例
 let mainChart: echarts.ECharts
@@ -420,12 +321,6 @@ const handleExport = () => {
   ElMessage.success('导出功能待实现')
 }
 
-// 自动计划生成
-const handleAutoGenerate = () => {
-  console.log('⏱️ 设置自动报表生成计划')
-  ElMessage.info('自动报表生成功能待实现')
-}
-
 // 分页相关
 const handleSizeChange = (val: number) => {
   pageSize.value = val
@@ -442,128 +337,12 @@ const handleCurrentChange = (val: number) => {
 const handleResize = () => {
   if (mainChart) mainChart.resize()
   if (pieChart) pieChart.resize()
-  if (userPathChart) userPathChart.resize()
-  if (behaviorPatternChart) behaviorPatternChart.resize()
-}
-
-// 图表标签页切换
-const handleChartTabChange = () => {
-  console.log('📊 图表标签页切换:', activeChartTab.value)
-  
-  // 如果切换到用户行为分析标签页，初始化相关图表
-  if (activeChartTab.value === 'userBehavior') {
-    initUserBehaviorCharts()
-  }
-  
-  // 如果切换到多维分析标签页，初始化相关图表
-  if (activeChartTab.value === 'multiDimension') {
-    initMultiDimensionCharts()
-  }
-}
-
-// 初始化用户行为分析图表
-const initUserBehaviorCharts = () => {
-  // 用户路径分析图
-  userPathChart = echarts.init(userPathChartRef.value)
-  userPathChart.setOption({
-    tooltip: {
-      trigger: 'axis'
-    },
-    legend: {
-      data: ['登录', '浏览', '操作', '退出']
-    },
-    xAxis: {
-      type: 'category',
-      data: ['步骤1', '步骤2', '步骤3', '步骤4', '步骤5', '步骤6']
-    },
-    yAxis: {
-      type: 'value',
-      name: '用户数'
-    },
-    series: [
-      {
-        name: '登录',
-        type: 'line',
-        stack: '总量',
-        data: [100, 85, 70, 60, 50, 30]
-      },
-      {
-        name: '浏览',
-        type: 'line',
-        stack: '总量',
-        data: [85, 75, 65, 55, 45, 25]
-      },
-      {
-        name: '操作',
-        type: 'line',
-        stack: '总量',
-        data: [70, 65, 55, 45, 35, 20]
-      },
-      {
-        name: '退出',
-        type: 'line',
-        stack: '总量',
-        data: [30, 25, 20, 15, 10, 5]
-      }
-    ]
-  })
-  
-  // 行为模式识别图
-  behaviorPatternChart = echarts.init(behaviorPatternChartRef.value)
-  behaviorPatternChart.setOption({
-    tooltip: {
-      trigger: 'item'
-    },
-    legend: {
-      bottom: 'bottom'
-    },
-    series: [
-      {
-        name: '行为模式',
-        type: 'pie',
-        radius: ['40%', '70%'],
-        avoidLabelOverlap: false,
-        itemStyle: {
-          borderRadius: 10,
-          borderColor: '#fff',
-          borderWidth: 2
-        },
-        label: {
-          show: false,
-          position: 'center'
-        },
-        emphasis: {
-          label: {
-            show: true,
-            fontSize: '18',
-            fontWeight: 'bold'
-          }
-        },
-        labelLine: {
-          show: false
-        },
-        data: [
-          { value: 35, name: '高频用户' },
-          { value: 25, name: '低频用户' },
-          { value: 20, name: '新用户' },
-          { value: 15, name: '流失用户' },
-          { value: 5, name: '异常用户' }
-        ]
-      }
-    ]
-  })
 }
 
 // 组件挂载
 onMounted(() => {
   console.log('📈 数据报表页面加载完成')
   initCharts()
-  
-  // 如果默认激活的是用户行为分析标签页，初始化相关图表
-  if (activeChartTab.value === 'userBehavior') {
-    initUserBehaviorCharts()
-  }
-  
   window.addEventListener('resize', handleResize)
 })
 
@@ -572,8 +351,6 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
   if (mainChart) mainChart.dispose()
   if (pieChart) pieChart.dispose()
-  if (userPathChart) userPathChart.dispose()
-  if (behaviorPatternChart) behaviorPatternChart.dispose()
 })
 
 /**
