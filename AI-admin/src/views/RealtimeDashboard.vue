@@ -23,7 +23,7 @@
       
       <!-- 实时数据概览 -->
       <el-row :gutter="20" style="margin-bottom: 20px;">
-        <el-col :span="6">
+        <el-col :span="4">
           <el-card class="stat-card">
             <div class="stat-item">
               <div class="stat-icon bg-success">
@@ -42,57 +42,90 @@
           </el-card>
         </el-col>
         
-        <el-col :span="6">
+        <el-col :span="4">
           <el-card class="stat-card">
             <div class="stat-item">
               <div class="stat-icon bg-primary">
                 <el-icon size="24"><DataLine /></el-icon>
               </div>
               <div class="stat-content">
-                <div class="stat-title">QPS</div>
-                <div class="stat-value">{{ realtimeData.qps }}</div>
-                <div class="stat-trend" :class="realtimeData.qpsTrend > 0 ? 'trend-up' : 'trend-down'">
-                  <el-icon v-if="realtimeData.qpsTrend > 0"><Top /></el-icon>
-                  <el-icon v-else><Bottom /></el-icon>
-                  {{ Math.abs(realtimeData.qpsTrend) }}%
+                <div class="stat-title">活跃用户数</div>
+                <div class="stat-value">{{ realtimeData.activeUsers }}</div>
+                <div class="stat-trend trend-up">
+                  <el-icon><Top /></el-icon>
+                  3.2%
                 </div>
               </div>
             </div>
           </el-card>
         </el-col>
         
-        <el-col :span="6">
-          <el-card class="stat-card">
-            <div class="stat-item">
-              <div class="stat-icon bg-warning">
-                <el-icon size="24"><Warning /></el-icon>
-              </div>
-              <div class="stat-content">
-                <div class="stat-title">异常数量</div>
-                <div class="stat-value">{{ realtimeData.exceptions }}</div>
-                <div class="stat-trend" :class="realtimeData.exceptionsTrend > 0 ? 'trend-up' : 'trend-down'">
-                  <el-icon v-if="realtimeData.exceptionsTrend > 0"><Top /></el-icon>
-                  <el-icon v-else><Bottom /></el-icon>
-                  {{ Math.abs(realtimeData.exceptionsTrend) }}%
-                </div>
-              </div>
-            </div>
-          </el-card>
-        </el-col>
-        
-        <el-col :span="6">
+        <el-col :span="4">
           <el-card class="stat-card">
             <div class="stat-item">
               <div class="stat-icon bg-info">
+                <el-icon size="24"><User /></el-icon>
+              </div>
+              <div class="stat-content">
+                <div class="stat-title">新增用户</div>
+                <div class="stat-value">{{ realtimeData.newUserCount }}</div>
+                <div class="stat-trend trend-up">
+                  <el-icon><Top /></el-icon>
+                  5.1%
+                </div>
+              </div>
+            </div>
+          </el-card>
+        </el-col>
+        
+        <el-col :span="4">
+          <el-card class="stat-card">
+            <div class="stat-item">
+              <div class="stat-icon bg-warning">
                 <el-icon size="24"><Coin /></el-icon>
               </div>
               <div class="stat-content">
-                <div class="stat-title">今日收入</div>
-                <div class="stat-value">¥{{ realtimeData.todayIncome }}</div>
-                <div class="stat-trend" :class="realtimeData.incomeTrend > 0 ? 'trend-up' : 'trend-down'">
-                  <el-icon v-if="realtimeData.incomeTrend > 0"><Top /></el-icon>
-                  <el-icon v-else><Bottom /></el-icon>
-                  {{ Math.abs(realtimeData.incomeTrend) }}%
+                <div class="stat-title">费用交易数</div>
+                <div class="stat-value">{{ realtimeData.feeTransactions }}</div>
+                <div class="stat-trend trend-up">
+                  <el-icon><Top /></el-icon>
+                  8.7%
+                </div>
+              </div>
+            </div>
+          </el-card>
+        </el-col>
+        
+        <el-col :span="4">
+          <el-card class="stat-card">
+            <div class="stat-item">
+              <div class="stat-icon bg-success">
+                <el-icon size="24"><Coin /></el-icon>
+              </div>
+              <div class="stat-content">
+                <div class="stat-title">费用金额</div>
+                <div class="stat-value">¥{{ realtimeData.feeAmount.toFixed(0) }}</div>
+                <div class="stat-trend trend-up">
+                  <el-icon><Top /></el-icon>
+                  12.3%
+                </div>
+              </div>
+            </div>
+          </el-card>
+        </el-col>
+        
+        <el-col :span="4">
+          <el-card class="stat-card">
+            <div class="stat-item">
+              <div class="stat-icon bg-danger">
+                <el-icon size="24"><Warning /></el-icon>
+              </div>
+              <div class="stat-content">
+                <div class="stat-title">告警数量</div>
+                <div class="stat-value">{{ realtimeData.alertCount }}</div>
+                <div class="stat-trend trend-down">
+                  <el-icon><Bottom /></el-icon>
+                  25.0%
                 </div>
               </div>
             </div>
@@ -106,10 +139,10 @@
           <el-card>
             <template #header>
               <div class="chart-header">
-                <span>系统负载趋势</span>
+                <span>用户活跃度趋势</span>
               </div>
             </template>
-            <div ref="loadChartRef" style="height: 300px;"></div>
+            <div ref="userActivityChartRef" style="height: 300px;"></div>
           </el-card>
         </el-col>
         
@@ -117,10 +150,10 @@
           <el-card>
             <template #header>
               <div class="chart-header">
-                <span>请求响应时间</span>
+                <span>费用数据趋势</span>
               </div>
             </template>
-            <div ref="responseTimeChartRef" style="height: 300px;"></div>
+            <div ref="feeDataChartRef" style="height: 300px;"></div>
           </el-card>
         </el-col>
       </el-row>
@@ -130,10 +163,10 @@
           <el-card>
             <template #header>
               <div class="chart-header">
-                <span>内存使用率</span>
+                <span>性能指标趋势</span>
               </div>
             </template>
-            <div ref="memoryChartRef" style="height: 300px;"></div>
+            <div ref="performanceChartRef" style="height: 300px;"></div>
           </el-card>
         </el-col>
         
@@ -141,10 +174,10 @@
           <el-card>
             <template #header>
               <div class="chart-header">
-                <span>CPU使用率</span>
+                <span>业务指标监控</span>
               </div>
             </template>
-            <div ref="cpuChartRef" style="height: 300px;"></div>
+            <div ref="businessChartRef" style="height: 300px;"></div>
           </el-card>
         </el-col>
       </el-row>
@@ -175,6 +208,41 @@
           </div>
         </div>
       </el-card>
+      
+      <!-- 实时告警 -->
+      <el-card style="margin-top: 20px;">
+        <template #header>
+          <div class="alert-header">
+            <span>实时告警</span>
+            <el-badge :value="alertList.filter(a => a.status === 'active').length" type="danger">
+              <el-button size="small" @click="handleClearAlerts">清除已读</el-button>
+            </el-badge>
+          </div>
+        </template>
+        <el-table :data="alertList" style="width: 100%">
+          <el-table-column prop="time" label="告警时间" width="180"></el-table-column>
+          <el-table-column prop="level" label="级别" width="100">
+            <template #default="scope">
+              <el-tag :type="scope.row.level === 'high' ? 'danger' : scope.row.level === 'medium' ? 'warning' : 'info'">
+                {{ scope.row.level === 'high' ? '高' : scope.row.level === 'medium' ? '中' : '低' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="message" label="告警内容"></el-table-column>
+          <el-table-column prop="status" label="状态" width="100">
+            <template #default="scope">
+              <el-tag :type="scope.row.status === 'active' ? 'danger' : 'success'">
+                {{ scope.row.status === 'active' ? '未处理' : '已处理' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="150">
+            <template #default="scope">
+              <el-button size="small" type="primary" @click="handleAcknowledgeAlert(scope.row)" :disabled="scope.row.status !== 'active'">确认</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-card>
     </el-card>
   </div>
 </template>
@@ -184,6 +252,7 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { User, DataLine, Warning, Coin, Top, Bottom } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
+import { systemApi } from '../api/user'
 
 // 响应式数据
 const timeRange = ref(['2023-11-01 00:00:00', '2023-11-01 23:59:59'])
@@ -197,7 +266,15 @@ const realtimeData = ref({
   exceptions: 3,
   exceptionsTrend: -15.8,
   todayIncome: 25680.50,
-  incomeTrend: 5.3
+  incomeTrend: 5.3,
+  activeUsers: 3420,
+  newUserCount: 45,
+  feeTransactions: 128,
+  feeAmount: 32450.80,
+  responseTime: 120,
+  throughput: 128,
+  businessVolume: 865,
+  alertCount: 2
 })
 
 const logList = ref([
@@ -210,105 +287,220 @@ const logList = ref([
   { time: '2023-11-01 10:37:33', level: 'info', message: '费用类型管理模块更新成功' }
 ])
 
+const alertList = ref([
+  { id: 1, time: '2023-11-01 10:35:18', level: 'high', message: '数据库连接超时，已自动重连', status: 'active' },
+  { id: 2, time: '2023-11-01 10:32:45', level: 'medium', message: '系统负载达到85%，请注意', status: 'active' },
+  { id: 3, time: '2023-11-01 10:25:33', level: 'low', message: '用户登录失败次数较多', status: 'acknowledged' },
+  { id: 4, time: '2023-11-01 10:15:22', level: 'high', message: '支付模块响应超时', status: 'resolved' }
+])
+
 // 图表引用
-const loadChartRef = ref()
-const responseTimeChartRef = ref()
-const memoryChartRef = ref()
-const cpuChartRef = ref()
+const userActivityChartRef = ref()
+const feeDataChartRef = ref()
+const performanceChartRef = ref()
+const businessChartRef = ref()
 const logContainerRef = ref()
 
 // 图表实例
-let loadChart: echarts.ECharts
-let responseTimeChart: echarts.ECharts
-let memoryChart: echarts.ECharts
-let cpuChart: echarts.ECharts
+let userActivityChart: echarts.ECharts
+let feeDataChart: echarts.ECharts
+let performanceChart: echarts.ECharts
+let businessChart: echarts.ECharts
 
 // 初始化图表
-const initCharts = () => {
-  // 系统负载趋势图
-  loadChart = echarts.init(loadChartRef.value)
-  loadChart.setOption({
-    tooltip: {
-      trigger: 'axis'
-    },
-    xAxis: {
-      type: 'category',
-      data: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00']
-    },
-    yAxis: {
-      type: 'value',
-      name: '负载 (%)'
-    },
-    series: [{
-      data: [30, 45, 60, 75, 65, 50, 40],
-      type: 'line',
-      smooth: true,
-      areaStyle: {}
-    }]
-  })
+const initCharts = async () => {
+  try {
+    // 获取图表数据
+    const response = await systemApi.getSystemStats()
+    const data = response.data || response
+    
+    let loadChartData = [30, 45, 60, 75, 65, 50, 40]
+    let responseTimeData = [120, 150, 180, 200, 170, 140, 130]
+    let memoryData = [45, 52, 60, 68, 72, 65, 58]
+    let cpuData = [25, 35, 45, 55, 60, 50, 40]
+    
+    // 如果API返回了图表数据，则使用真实数据
+    if (data && data.charts) {
+      if (data.charts.loadChart) loadChartData = data.charts.loadChart
+      if (data.charts.responseTimeChart) responseTimeData = data.charts.responseTimeChart
+      if (data.charts.memoryChart) memoryData = data.charts.memoryChart
+      if (data.charts.cpuChart) cpuData = data.charts.cpuChart
+    }
+    
+    // 用户活跃度趋势图
+    userActivityChart = echarts.init(userActivityChartRef.value)
+    userActivityChart.setOption({
+      tooltip: {
+        trigger: 'axis'
+      },
+      xAxis: {
+        type: 'category',
+        data: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00']
+      },
+      yAxis: {
+        type: 'value',
+        name: '活跃用户数'
+      },
+      series: [{
+        data: [1200, 1500, 1800, 2100, 1900, 1600, 1300],
+        type: 'line',
+        smooth: true,
+        areaStyle: {}
+      }]
+    })
 
-  // 请求响应时间图
-  responseTimeChart = echarts.init(responseTimeChartRef.value)
-  responseTimeChart.setOption({
-    tooltip: {
-      trigger: 'axis'
-    },
-    xAxis: {
-      type: 'category',
-      data: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00']
-    },
-    yAxis: {
-      type: 'value',
-      name: '响应时间 (ms)'
-    },
-    series: [{
-      data: [120, 150, 180, 200, 170, 140, 130],
-      type: 'line',
-      smooth: true
-    }]
-  })
+    // 费用数据趋势图
+    feeDataChart = echarts.init(feeDataChartRef.value)
+    feeDataChart.setOption({
+      tooltip: {
+        trigger: 'axis'
+      },
+      xAxis: {
+        type: 'category',
+        data: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00']
+      },
+      yAxis: {
+        type: 'value',
+        name: '费用金额 (元)'
+      },
+      series: [{
+        data: [25000, 32000, 28000, 45000, 38000, 31000, 29000],
+        type: 'line',
+        smooth: true
+      }]
+    })
 
-  // 内存使用率图
-  memoryChart = echarts.init(memoryChartRef.value)
-  memoryChart.setOption({
-    tooltip: {
-      trigger: 'axis'
-    },
-    xAxis: {
-      type: 'category',
-      data: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00']
-    },
-    yAxis: {
-      type: 'value',
-      name: '使用率 (%)'
-    },
-    series: [{
-      data: [45, 52, 60, 68, 72, 65, 58],
-      type: 'line',
-      smooth: true
-    }]
-  })
+    // 性能指标趋势图
+    performanceChart = echarts.init(performanceChartRef.value)
+    performanceChart.setOption({
+      tooltip: {
+        trigger: 'axis'
+      },
+      xAxis: {
+        type: 'category',
+        data: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00']
+      },
+      yAxis: {
+        type: 'value',
+        name: '响应时间 (ms)'
+      },
+      series: [{
+        data: [120, 150, 180, 200, 170, 140, 130],
+        type: 'line',
+        smooth: true
+      }]
+    })
 
-  // CPU使用率图
-  cpuChart = echarts.init(cpuChartRef.value)
-  cpuChart.setOption({
-    tooltip: {
-      trigger: 'axis'
-    },
-    xAxis: {
-      type: 'category',
-      data: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00']
-    },
-    yAxis: {
-      type: 'value',
-      name: '使用率 (%)'
-    },
-    series: [{
-      data: [25, 35, 45, 55, 60, 50, 40],
-      type: 'line',
-      smooth: true
-    }]
-  })
+    // 业务指标监控图
+    businessChart = echarts.init(businessChartRef.value)
+    businessChart.setOption({
+      tooltip: {
+        trigger: 'axis'
+      },
+      xAxis: {
+        type: 'category',
+        data: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00']
+      },
+      yAxis: {
+        type: 'value',
+        name: '业务量'
+      },
+      series: [{
+        data: [800, 1200, 1500, 1800, 1600, 1300, 1000],
+        type: 'line',
+        smooth: true
+      }]
+    })
+  } catch (error) {
+    console.error('❌ 初始化图表数据失败:', error)
+    ElMessage.error('初始化图表数据失败: ' + (error as Error).message)
+    
+    // 出错时使用默认数据
+    // 用户活跃度趋势图
+    userActivityChart = echarts.init(userActivityChartRef.value)
+    userActivityChart.setOption({
+      tooltip: {
+        trigger: 'axis'
+      },
+      xAxis: {
+        type: 'category',
+        data: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00']
+      },
+      yAxis: {
+        type: 'value',
+        name: '活跃用户数'
+      },
+      series: [{
+        data: [1200, 1500, 1800, 2100, 1900, 1600, 1300],
+        type: 'line',
+        smooth: true,
+        areaStyle: {}
+      }]
+    })
+
+    // 费用数据趋势图
+    feeDataChart = echarts.init(feeDataChartRef.value)
+    feeDataChart.setOption({
+      tooltip: {
+        trigger: 'axis'
+      },
+      xAxis: {
+        type: 'category',
+        data: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00']
+      },
+      yAxis: {
+        type: 'value',
+        name: '费用金额 (元)'
+      },
+      series: [{
+        data: [25000, 32000, 28000, 45000, 38000, 31000, 29000],
+        type: 'line',
+        smooth: true
+      }]
+    })
+
+    // 性能指标趋势图
+    performanceChart = echarts.init(performanceChartRef.value)
+    performanceChart.setOption({
+      tooltip: {
+        trigger: 'axis'
+      },
+      xAxis: {
+        type: 'category',
+        data: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00']
+      },
+      yAxis: {
+        type: 'value',
+        name: '响应时间 (ms)'
+      },
+      series: [{
+        data: [120, 150, 180, 200, 170, 140, 130],
+        type: 'line',
+        smooth: true
+      }]
+    })
+
+    // 业务指标监控图
+    businessChart = echarts.init(businessChartRef.value)
+    businessChart.setOption({
+      tooltip: {
+        trigger: 'axis'
+      },
+      xAxis: {
+        type: 'category',
+        data: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00']
+      },
+      yAxis: {
+        type: 'value',
+        name: '业务量'
+      },
+      series: [{
+        data: [800, 1200, 1500, 1800, 1600, 1300, 1000],
+        type: 'line',
+        smooth: true
+      }]
+    })
+  }
 }
 
 // 时间范围变更
@@ -318,15 +510,73 @@ const handleTimeChange = () => {
 }
 
 // 刷新数据
-const handleRefresh = () => {
-  console.log('🔄 刷新实时数据')
-  ElMessage.success('数据刷新成功')
+const handleRefresh = async () => {
+  ElMessage.info('正在刷新实时数据...')
+  try {
+    // 调用API获取真实的实时数据
+    const response = await systemApi.getSystemStats()
+    const data = response.data || response
+    
+    // 更新实时数据
+    if (data && data.realtimeData) {
+      realtimeData.value.onlineUsers = data.realtimeData.onlineUsers || realtimeData.value.onlineUsers
+      realtimeData.value.qps = data.realtimeData.qps || realtimeData.value.qps
+      realtimeData.value.exceptions = data.realtimeData.exceptions || realtimeData.value.exceptions
+      realtimeData.value.todayIncome = data.realtimeData.todayIncome || realtimeData.value.todayIncome
+      realtimeData.value.activeUsers = data.realtimeData.activeUsers || realtimeData.value.activeUsers
+      realtimeData.value.newUserCount = data.realtimeData.newUserCount || realtimeData.value.newUserCount
+      realtimeData.value.feeTransactions = data.realtimeData.feeTransactions || realtimeData.value.feeTransactions
+      realtimeData.value.feeAmount = data.realtimeData.feeAmount || realtimeData.value.feeAmount
+      realtimeData.value.responseTime = data.realtimeData.responseTime || realtimeData.value.responseTime
+      realtimeData.value.throughput = data.realtimeData.throughput || realtimeData.value.throughput
+      realtimeData.value.businessVolume = data.realtimeData.businessVolume || realtimeData.value.businessVolume
+      realtimeData.value.alertCount = data.realtimeData.alertCount || realtimeData.value.alertCount
+      
+      // 更新趋势数据
+      if (data.realtimeData.trends) {
+        realtimeData.value.onlineUsersTrend = data.realtimeData.trends.onlineUsersTrend || realtimeData.value.onlineUsersTrend
+        realtimeData.value.qpsTrend = data.realtimeData.trends.qpsTrend || realtimeData.value.qpsTrend
+        realtimeData.value.exceptionsTrend = data.realtimeData.trends.exceptionsTrend || realtimeData.value.exceptionsTrend
+        realtimeData.value.incomeTrend = data.realtimeData.trends.incomeTrend || realtimeData.value.incomeTrend
+      }
+    } else {
+      ElMessage.warning('暂无实时数据')
+    }
+    
+    ElMessage.success('数据刷新成功')
+  } catch (error) {
+    console.error('❌ 刷新实时数据失败:', error)
+    ElMessage.error('刷新实时数据失败: ' + (error as Error).message)
+  }
 }
 
 // 日志级别变更
-const handleLogLevelChange = () => {
+const handleLogLevelChange = async () => {
   console.log('📝 日志级别变更:', logLevel.value)
-  ElMessage.info('日志级别已更新')
+  ElMessage.info('正在获取日志数据...')
+  
+  try {
+    // 调用API获取日志数据
+    const response = await systemApi.getLogs({ level: logLevel.value })
+    const logs = response.data || response
+    
+    // 更新日志列表
+    if (Array.isArray(logs)) {
+      logList.value = logs.map(log => ({
+        time: log.time || new Date().toLocaleString(),
+        level: log.level || 'info',
+        message: log.message || ''
+      }))
+    } else {
+      ElMessage.warning('暂无日志数据')
+    }
+    
+    ElMessage.success('日志数据获取成功')
+    scrollToBottom()
+  } catch (error) {
+    console.error('❌ 获取日志数据失败:', error)
+    ElMessage.error('获取日志数据失败: ' + (error as Error).message)
+  }
 }
 
 // 滚动日志到底部
@@ -336,29 +586,50 @@ const scrollToBottom = () => {
   }
 }
 
+// 清除已读告警
+const handleClearAlerts = () => {
+  alertList.value = alertList.value.filter(alert => alert.status === 'active')
+  ElMessage.success('已清除已读告警')
+}
+
+// 确认告警
+const handleAcknowledgeAlert = (alert: any) => {
+  const index = alertList.value.findIndex(item => item.id === alert.id)
+  if (index !== -1) {
+    alertList.value[index].status = 'acknowledged'
+    ElMessage.success('告警已确认')
+  }
+}
+
 // 窗口大小变更处理
 const handleResize = () => {
-  if (loadChart) loadChart.resize()
-  if (responseTimeChart) responseTimeChart.resize()
-  if (memoryChart) memoryChart.resize()
-  if (cpuChart) cpuChart.resize()
+  if (userActivityChart) userActivityChart.resize()
+  if (feeDataChart) feeDataChart.resize()
+  if (performanceChart) performanceChart.resize()
+  if (businessChart) businessChart.resize()
 }
 
 // 组件挂载
-onMounted(() => {
+onMounted(async () => {
   console.log('📊 实时监控仪表盘页面加载完成')
-  initCharts()
+  await initCharts()
   scrollToBottom()
   window.addEventListener('resize', handleResize)
+  
+  // 初始加载实时数据
+  await handleRefresh()
+  
+  // 初始加载日志数据
+  await handleLogLevelChange()
 })
 
 // 组件卸载前
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
-  if (loadChart) loadChart.dispose()
-  if (responseTimeChart) responseTimeChart.dispose()
-  if (memoryChart) memoryChart.dispose()
-  if (cpuChart) cpuChart.dispose()
+  if (userActivityChart) userActivityChart.dispose()
+  if (feeDataChart) feeDataChart.dispose()
+  if (performanceChart) performanceChart.dispose()
+  if (businessChart) businessChart.dispose()
 })
 
 /**
@@ -385,6 +656,12 @@ onBeforeUnmount(() => {
 }
 
 .log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.alert-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -424,6 +701,10 @@ onBeforeUnmount(() => {
 
 .bg-info {
   background-color: #909399;
+}
+
+.bg-danger {
+  background-color: #F56C6C;
 }
 
 .stat-content {

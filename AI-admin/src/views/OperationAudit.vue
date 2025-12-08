@@ -122,6 +122,77 @@
         </el-form>
       </div>
       
+      <!-- 异常行为检测 -->
+      <el-card style="margin-bottom: 20px;">
+        <template #header>
+          <span>异常行为检测</span>
+        </template>
+        <el-table :data="abnormalBehaviors" style="width: 100%" v-loading="abnormalLoading">
+          <el-table-column prop="id" label="ID" width="80" />
+          <el-table-column prop="user" label="操作用户" width="120" />
+          <el-table-column prop="behaviorType" label="异常类型" width="120">
+            <template #default="scope">
+              <el-tag type="danger">{{ getAbnormalTypeText(scope.row.behaviorType) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="description" label="异常描述" />
+          <el-table-column prop="operateTime" label="发生时间" width="160" />
+          <el-table-column prop="riskLevel" label="风险等级" width="100">
+            <template #default="scope">
+              <el-tag :type="getRiskLevelTagType(scope.row.riskLevel)">
+                {{ getRiskLevelText(scope.row.riskLevel) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="150">
+            <template #default="scope">
+              <el-button size="small" @click="handleViewAbnormal(scope.row)">查看详情</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-card>
+      
+      <!-- 统计分析图表 -->
+      <el-row :gutter="20" style="margin-bottom: 20px;">
+        <el-col :span="12">
+          <el-card>
+            <template #header>
+              <span>操作类型分布</span>
+            </template>
+            <div ref="operationTypeChartRef" style="height: 300px;"></div>
+          </el-card>
+        </el-col>
+        
+        <el-col :span="12">
+          <el-card>
+            <template #header>
+              <span>模块分布</span>
+            </template>
+            <div ref="moduleChartRef" style="height: 300px;"></div>
+          </el-card>
+        </el-col>
+      </el-row>
+      
+      <el-row :gutter="20" style="margin-bottom: 20px;">
+        <el-col :span="12">
+          <el-card>
+            <template #header>
+              <span>操作结果统计</span>
+            </template>
+            <div ref="resultChartRef" style="height: 300px;"></div>
+          </el-card>
+        </el-col>
+        
+        <el-col :span="12">
+          <el-card>
+            <template #header>
+              <span>用户操作频次</span>
+            </template>
+            <div ref="userFrequencyChartRef" style="height: 300px;"></div>
+          </el-card>
+        </el-col>
+      </el-row>
+      
       <!-- 操作审计列表 -->
       <el-table :data="auditList" style="width: 100%" v-loading="loading">
         <el-table-column prop="id" label="ID" width="80" />
@@ -146,6 +217,11 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="关键行为" width="100">
+          <template #default="scope">
+            <el-tag v-if="isCriticalOperation(scope.row)" type="warning">关键</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="150">
           <template #default="scope">
             <el-button size="small" @click="handleView(scope.row)">查看详情</el-button>
@@ -167,30 +243,55 @@
     </el-card>
     
     <!-- 操作详情对话框 -->
-    <el-dialog v-model="detailDialogVisible" title="操作详情" width="700px">
-      <el-descriptions :column="2" border>
-        <el-descriptions-item label="操作ID">{{ detailData.id }}</el-descriptions-item>
-        <el-descriptions-item label="操作用户">{{ detailData.user }}</el-descriptions-item>
-        <el-descriptions-item label="操作类型">{{ getOperationTypeText(detailData.operationType) }}</el-descriptions-item>
-        <el-descriptions-item label="操作模块">{{ getModuleText(detailData.module) }}</el-descriptions-item>
-        <el-descriptions-item label="操作描述" :span="2">{{ detailData.description }}</el-descriptions-item>
-        <el-descriptions-item label="请求参数" :span="2">
-          <pre class="code-block">{{ detailData.requestParams }}</pre>
-        </el-descriptions-item>
-        <el-descriptions-item label="响应结果" :span="2">
-          <pre class="code-block">{{ detailData.responseResult }}</pre>
-        </el-descriptions-item>
-        <el-descriptions-item label="IP地址">{{ detailData.ipAddress }}</el-descriptions-item>
-        <el-descriptions-item label="浏览器">{{ detailData.browser }}</el-descriptions-item>
-        <el-descriptions-item label="操作系统">{{ detailData.os }}</el-descriptions-item>
-        <el-descriptions-item label="操作时间">{{ detailData.operateTime }}</el-descriptions-item>
-        <el-descriptions-item label="操作结果">
-          <el-tag :type="detailData.result === 'success' ? 'success' : 'danger'">
-            {{ detailData.result === 'success' ? '成功' : '失败' }}
-          </el-tag>
-        </el-descriptions-item>
-        <el-descriptions-item label="耗时">{{ detailData.duration }}ms</el-descriptions-item>
-      </el-descriptions>
+    <el-dialog v-model="detailDialogVisible" title="操作详情" width="800px">
+      <el-tabs v-model="activeDetailTab">
+        <el-tab-pane label="基本信息" name="basic">
+          <el-descriptions :column="2" border>
+            <el-descriptions-item label="操作ID">{{ detailData.id }}</el-descriptions-item>
+            <el-descriptions-item label="操作用户">{{ detailData.user }}</el-descriptions-item>
+            <el-descriptions-item label="操作类型">{{ getOperationTypeText(detailData.operationType) }}</el-descriptions-item>
+            <el-descriptions-item label="操作模块">{{ getModuleText(detailData.module) }}</el-descriptions-item>
+            <el-descriptions-item label="操作描述" :span="2">{{ detailData.description }}</el-descriptions-item>
+            <el-descriptions-item label="IP地址">{{ detailData.ipAddress }}</el-descriptions-item>
+            <el-descriptions-item label="浏览器">{{ detailData.browser }}</el-descriptions-item>
+            <el-descriptions-item label="操作系统">{{ detailData.os }}</el-descriptions-item>
+            <el-descriptions-item label="操作时间">{{ detailData.operateTime }}</el-descriptions-item>
+            <el-descriptions-item label="操作结果">
+              <el-tag :type="detailData.result === 'success' ? 'success' : 'danger'">
+                {{ detailData.result === 'success' ? '成功' : '失败' }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="耗时">{{ detailData.duration }}ms</el-descriptions-item>
+          </el-descriptions>
+        </el-tab-pane>
+        
+        <el-tab-pane label="请求详情" name="request">
+          <el-descriptions :column="1" border>
+            <el-descriptions-item label="请求参数">
+              <pre class="code-block">{{ detailData.requestParams }}</pre>
+            </el-descriptions-item>
+            <el-descriptions-item label="响应结果">
+              <pre class="code-block">{{ detailData.responseResult }}</pre>
+            </el-descriptions-item>
+          </el-descriptions>
+        </el-tab-pane>
+        
+        <el-tab-pane label="操作链追踪" name="trace">
+          <el-table :data="operationTrace" style="width: 100%">
+            <el-table-column prop="sequence" label="序号" width="60" />
+            <el-table-column prop="time" label="时间" width="160" />
+            <el-table-column prop="operation" label="操作" />
+            <el-table-column prop="ip" label="IP地址" width="130" />
+            <el-table-column prop="result" label="结果" width="80">
+              <template #default="scope">
+                <el-tag :type="scope.row.result === 'success' ? 'success' : 'danger'">
+                  {{ scope.row.result === 'success' ? '成功' : '失败' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+      </el-tabs>
       
       <template #footer>
         <span class="dialog-footer">
@@ -202,9 +303,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Document, User, Warning, DataLine } from '@element-plus/icons-vue'
+import * as echarts from 'echarts'
 
 // 响应式数据
 const stats = ref({
@@ -213,6 +315,18 @@ const stats = ref({
   abnormalOperations: 3,
   coverageRate: 92.5
 })
+
+// 图表引用
+const operationTypeChartRef = ref()
+const moduleChartRef = ref()
+const resultChartRef = ref()
+const userFrequencyChartRef = ref()
+
+// 图表实例
+let operationTypeChart: echarts.ECharts
+let moduleChart: echarts.ECharts
+let resultChart: echarts.ECharts
+let userFrequencyChart: echarts.ECharts
 
 const auditList = ref([
   {
@@ -308,6 +422,63 @@ const detailData = ref({
   responseResult: ''
 })
 
+const activeDetailTab = ref('basic')
+
+// 操作链追踪数据
+const operationTrace = ref([
+  {
+    sequence: 1,
+    time: '2023-11-01 10:35:10',
+    operation: '用户登录',
+    ip: '192.168.1.100',
+    result: 'success'
+  },
+  {
+    sequence: 2,
+    time: '2023-11-01 10:35:15',
+    operation: '访问用户管理页面',
+    ip: '192.168.1.100',
+    result: 'success'
+  },
+  {
+    sequence: 3,
+    time: '2023-11-01 10:35:18',
+    operation: '新增用户李四',
+    ip: '192.168.1.100',
+    result: 'success'
+  }
+])
+
+// 异常行为数据
+const abnormalBehaviors = ref([
+  {
+    id: 1,
+    user: '张三',
+    behaviorType: 'frequent_login',
+    description: '10分钟内登录失败5次',
+    operateTime: '2023-11-01 10:35:18',
+    riskLevel: 'high'
+  },
+  {
+    id: 2,
+    user: '李四',
+    behaviorType: 'abnormal_export',
+    description: '非工作时间大量导出用户数据',
+    operateTime: '2023-11-01 02:15:33',
+    riskLevel: 'critical'
+  },
+  {
+    id: 3,
+    user: '王五',
+    behaviorType: 'sensitive_operation',
+    description: '频繁修改系统配置参数',
+    operateTime: '2023-11-01 14:22:45',
+    riskLevel: 'medium'
+  }
+])
+
+const abnormalLoading = ref(false)
+
 // 获取操作类型文本
 const getOperationTypeText = (type: string) => {
   switch (type) {
@@ -348,6 +519,74 @@ const getModuleText = (module: string) => {
   }
 }
 
+// 获取异常类型文本
+const getAbnormalTypeText = (type: string) => {
+  switch (type) {
+    case 'frequent_login':
+      return '频繁登录'
+    case 'abnormal_export':
+      return '异常导出'
+    case 'sensitive_operation':
+      return '敏感操作'
+    case 'mass_operation':
+      return '批量操作'
+    default:
+      return '未知'
+  }
+}
+
+// 获取风险等级文本
+const getRiskLevelText = (level: string) => {
+  switch (level) {
+    case 'low':
+      return '低风险'
+    case 'medium':
+      return '中风险'
+    case 'high':
+      return '高风险'
+    case 'critical':
+      return '严重'
+    default:
+      return '未知'
+  }
+}
+
+// 获取风险等级标签类型
+const getRiskLevelTagType = (level: string) => {
+  switch (level) {
+    case 'low':
+      return 'info'
+    case 'medium':
+      return ''
+    case 'high':
+      return 'warning'
+    case 'critical':
+      return 'danger'
+    default:
+      return 'info'
+  }
+}
+
+// 判断是否为关键操作
+const isCriticalOperation = (row: any) => {
+  // 关键操作类型：删除、导出、系统配置修改
+  if (row.operationType === 'delete' || row.operationType === 'export') {
+    return true
+  }
+  
+  // 关键模块：系统配置
+  if (row.module === 'system') {
+    return true
+  }
+  
+  // 关键用户操作：管理员操作
+  if (row.user === 'admin' || row.user === 'administrator') {
+    return true
+  }
+  
+  return false
+}
+
 // 导出
 const handleExport = () => {
   console.log('📤 导出操作审计数据')
@@ -378,6 +617,12 @@ const handleView = (row: any) => {
   detailDialogVisible.value = true
 }
 
+// 查看异常行为详情
+const handleViewAbnormal = (row: any) => {
+  detailData.value = { ...row }
+  detailDialogVisible.value = true
+}
+
 // 分页相关
 const handleSizeChange = (val: number) => {
   pageSize.value = val
@@ -390,9 +635,190 @@ const handleCurrentChange = (val: number) => {
   console.log(`📄 当前页: ${val}`)
 }
 
+// 初始化图表
+const initCharts = () => {
+  // 操作类型分布图
+  operationTypeChart = echarts.init(operationTypeChartRef.value)
+  operationTypeChart.setOption({
+    tooltip: {
+      trigger: 'item'
+    },
+    legend: {
+      bottom: 'bottom'
+    },
+    series: [
+      {
+        name: '操作类型分布',
+        type: 'pie',
+        radius: ['40%', '70%'],
+        avoidLabelOverlap: false,
+        itemStyle: {
+          borderRadius: 10,
+          borderColor: '#fff',
+          borderWidth: 2
+        },
+        label: {
+          show: false,
+          position: 'center'
+        },
+        emphasis: {
+          label: {
+            show: true,
+            fontSize: '18',
+            fontWeight: 'bold'
+          }
+        },
+        labelLine: {
+          show: false
+        },
+        data: [
+          { value: 35, name: '新增' },
+          { value: 28, name: '修改' },
+          { value: 15, name: '删除' },
+          { value: 42, name: '查询' },
+          { value: 8, name: '导出' },
+          { value: 25, name: '登录' }
+        ]
+      }
+    ]
+  })
+  
+  // 模块分布图
+  moduleChart = echarts.init(moduleChartRef.value)
+  moduleChart.setOption({
+    tooltip: {
+      trigger: 'item'
+    },
+    legend: {
+      bottom: 'bottom'
+    },
+    series: [
+      {
+        name: '模块分布',
+        type: 'pie',
+        radius: ['40%', '70%'],
+        avoidLabelOverlap: false,
+        itemStyle: {
+          borderRadius: 10,
+          borderColor: '#fff',
+          borderWidth: 2
+        },
+        label: {
+          show: false,
+          position: 'center'
+        },
+        emphasis: {
+          label: {
+            show: true,
+            fontSize: '18',
+            fontWeight: 'bold'
+          }
+        },
+        labelLine: {
+          show: false
+        },
+        data: [
+          { value: 45, name: '用户管理' },
+          { value: 32, name: '寝室管理' },
+          { value: 28, name: '费用管理' },
+          { value: 18, name: '支付管理' },
+          { value: 12, name: '系统配置' }
+        ]
+      }
+    ]
+  })
+  
+  // 操作结果统计图
+  resultChart = echarts.init(resultChartRef.value)
+  resultChart.setOption({
+    tooltip: {
+      trigger: 'axis'
+    },
+    legend: {
+      data: ['成功', '失败']
+    },
+    xAxis: {
+      type: 'category',
+      data: ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+    },
+    yAxis: {
+      type: 'value',
+      name: '操作次数'
+    },
+    series: [
+      {
+        name: '成功',
+        type: 'bar',
+        stack: '总量',
+        data: [120, 132, 101, 134, 90, 230, 210],
+        itemStyle: {
+          color: '#67C23A'
+        }
+      },
+      {
+        name: '失败',
+        type: 'bar',
+        stack: '总量',
+        data: [2, 3, 1, 4, 2, 3, 1],
+        itemStyle: {
+          color: '#F56C6C'
+        }
+      }
+    ]
+  })
+  
+  // 用户操作频次图
+  userFrequencyChart = echarts.init(userFrequencyChartRef.value)
+  userFrequencyChart.setOption({
+    tooltip: {
+      trigger: 'axis'
+    },
+    legend: {
+      data: ['操作频次']
+    },
+    xAxis: {
+      type: 'category',
+      data: ['张三', '李四', '王五', '赵六', '钱七', '孙八', '周九', '吴十']
+    },
+    yAxis: {
+      type: 'value',
+      name: '操作次数'
+    },
+    series: [
+      {
+        name: '操作频次',
+        type: 'bar',
+        data: [45, 38, 32, 28, 25, 22, 18, 15],
+        itemStyle: {
+          color: '#409EFF'
+        }
+      }
+    ]
+  })
+}
+
+// 窗口大小变更处理
+const handleResize = () => {
+  if (operationTypeChart) operationTypeChart.resize()
+  if (moduleChart) moduleChart.resize()
+  if (resultChart) resultChart.resize()
+  if (userFrequencyChart) userFrequencyChart.resize()
+}
+
 // 组件挂载
 onMounted(() => {
   console.log('📋 操作审计页面加载完成')
+  initCharts()
+  window.addEventListener('resize', handleResize)
+})
+
+// 组件卸载前
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize)
+  if (operationTypeChart) operationTypeChart.dispose()
+  if (moduleChart) moduleChart.dispose()
+  if (resultChart) resultChart.dispose()
+  if (userFrequencyChart) userFrequencyChart.dispose()
 })
 
 /**

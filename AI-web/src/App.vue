@@ -1,11 +1,13 @@
 <template>
   <div id="app">
+    <MaintenanceNotice />
     <router-view />
   </div>
 </template>
 
 <script setup lang="ts">
 // 应用主组件
+import MaintenanceNotice from './components/MaintenanceNotice.vue'
 </script>
 
 <style>

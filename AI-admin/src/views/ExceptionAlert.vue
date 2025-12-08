@@ -68,116 +68,368 @@
             </div>
           </el-card>
         </el-col>
+        
+        <el-col :span="6">
+          <el-card class="stat-card">
+            <div class="stat-item">
+              <div class="stat-icon bg-danger">
+                <el-icon size="24"><Warning /></el-icon>
+              </div>
+              <div class="stat-content">
+                <div class="stat-title">安全威胁</div>
+                <div class="stat-value">{{ stats.securityThreats }}</div>
+              </div>
+            </div>
+          </el-card>
+        </el-col>
       </el-row>
       
-      <!-- 告警级别分布 -->
-      <el-card style="margin-bottom: 20px;">
-        <template #header>
-          <span>告警级别分布</span>
-        </template>
-        <div ref="levelChartRef" style="height: 300px;"></div>
-      </el-card>
+      <!-- 告警统计分析 -->
+      <el-row :gutter="20" style="margin-bottom: 20px;">
+        <el-col :span="12">
+          <el-card>
+            <template #header>
+              <span>告警级别分布</span>
+            </template>
+            <div ref="levelChartRef" style="height: 300px;"></div>
+          </el-card>
+        </el-col>
+        
+        <el-col :span="12">
+          <el-card>
+            <template #header>
+              <span>安全威胁趋势</span>
+            </template>
+            <div ref="securityChartRef" style="height: 300px;"></div>
+          </el-card>
+        </el-col>
+      </el-row>
+      
+      <el-row :gutter="20" style="margin-bottom: 20px;">
+        <el-col :span="12">
+          <el-card>
+            <template #header>
+              <span>告警类型分布</span>
+            </template>
+            <div ref="typeChartRef" style="height: 300px;"></div>
+          </el-card>
+        </el-col>
+        
+        <el-col :span="12">
+          <el-card>
+            <template #header>
+              <span>处理状态统计</span>
+            </template>
+            <div ref="statusChartRef" style="height: 300px;"></div>
+          </el-card>
+        </el-col>
+      </el-row>
       
       <!-- 搜索和筛选 -->
       <div class="search-bar">
-        <el-form :model="searchForm" label-width="80px" inline>
-          <el-form-item label="告警类型">
-            <el-select v-model="searchForm.type" placeholder="请选择告警类型" clearable>
-              <el-option label="系统异常" value="system" />
-              <el-option label="业务异常" value="business" />
-              <el-option label="网络异常" value="network" />
-              <el-option label="数据库异常" value="database" />
-              <el-option label="安全异常" value="security" />
-            </el-select>
-          </el-form-item>
+        <el-tabs v-model="activeTab">
+          <el-tab-pane label="告警列表" name="alerts">
+            <el-form :model="searchForm" label-width="80px" inline>
+              <el-form-item label="告警类型">
+                <el-select v-model="searchForm.type" placeholder="请选择告警类型" clearable>
+                  <el-option label="系统异常" value="system" />
+                  <el-option label="业务异常" value="business" />
+                  <el-option label="网络异常" value="network" />
+                  <el-option label="数据库异常" value="database" />
+                  <el-option label="安全异常" value="security" />
+                </el-select>
+              </el-form-item>
+              
+              <el-form-item label="威胁等级">
+                <el-select v-model="searchForm.threatLevel" placeholder="请选择威胁等级" clearable>
+                  <el-option label="高危" value="high" />
+                  <el-option label="中危" value="medium" />
+                  <el-option label="低危" value="low" />
+                </el-select>
+              </el-form-item>
+              
+              <el-form-item label="告警级别">
+                <el-select v-model="searchForm.level" placeholder="请选择告警级别" clearable>
+                  <el-option label="紧急" value="critical" />
+                  <el-option label="严重" value="major" />
+                  <el-option label="一般" value="minor" />
+                  <el-option label="提示" value="info" />
+                </el-select>
+              </el-form-item>
+              
+              <el-form-item label="处理状态">
+                <el-select v-model="searchForm.status" placeholder="请选择处理状态" clearable>
+                  <el-option label="未处理" value="unhandled" />
+                  <el-option label="处理中" value="processing" />
+                  <el-option label="已处理" value="handled" />
+                  <el-option label="已忽略" value="ignored" />
+                </el-select>
+              </el-form-item>
+              
+              <el-form-item label="告警来源">
+                <el-input v-model="searchForm.source" placeholder="请输入告警来源" clearable />
+              </el-form-item>
+              
+              <el-form-item label="关键字">
+                <el-input v-model="searchForm.keyword" placeholder="请输入关键字" clearable />
+              </el-form-item>
+              
+              <el-form-item label="时间范围">
+                <el-date-picker
+                  v-model="searchForm.dateRange"
+                  type="datetimerange"
+                  range-separator="至"
+                  start-placeholder="开始时间"
+                  end-placeholder="结束时间"
+                  format="YYYY-MM-DD HH:mm:ss"
+                  value-format="YYYY-MM-DD HH:mm:ss"
+                />
+              </el-form-item>
+              
+              <el-form-item>
+                <el-button type="primary" @click="handleSearch">查询</el-button>
+                <el-button @click="handleReset">重置</el-button>
+              </el-form-item>
+            </el-form>
+          </el-tab-pane>
           
-          <el-form-item label="告警级别">
-            <el-select v-model="searchForm.level" placeholder="请选择告警级别" clearable>
-              <el-option label="紧急" value="critical" />
-              <el-option label="严重" value="major" />
-              <el-option label="一般" value="minor" />
-              <el-option label="提示" value="info" />
-            </el-select>
-          </el-form-item>
+          <el-tab-pane label="异常行为" name="behaviors">
+            <el-form :model="behaviorSearchForm" label-width="80px" inline>
+              <el-form-item label="用户">
+                <el-input v-model="behaviorSearchForm.user" placeholder="请输入用户名" clearable />
+              </el-form-item>
+              
+              <el-form-item label="行为类型">
+                <el-select v-model="behaviorSearchForm.type" placeholder="请选择行为类型" clearable>
+                  <el-option label="频繁登录" value="login" />
+                  <el-option label="异常查询" value="query" />
+                  <el-option label="敏感操作" value="operation" />
+                  <el-option label="数据导出" value="export" />
+                </el-select>
+              </el-form-item>
+              
+              <el-form-item label="风险等级">
+                <el-select v-model="behaviorSearchForm.riskLevel" placeholder="请选择风险等级" clearable>
+                  <el-option label="高风险" value="high" />
+                  <el-option label="中风险" value="medium" />
+                  <el-option label="低风险" value="low" />
+                </el-select>
+              </el-form-item>
+              
+              <el-form-item label="时间范围">
+                <el-date-picker
+                  v-model="behaviorSearchForm.dateRange"
+                  type="datetimerange"
+                  range-separator="至"
+                  start-placeholder="开始时间"
+                  end-placeholder="结束时间"
+                  format="YYYY-MM-DD HH:mm:ss"
+                  value-format="YYYY-MM-DD HH:mm:ss"
+                />
+              </el-form-item>
+              
+              <el-form-item>
+                <el-button type="primary" @click="handleBehaviorSearch">查询</el-button>
+                <el-button @click="handleBehaviorReset">重置</el-button>
+              </el-form-item>
+            </el-form>
+          </el-tab-pane>
           
-          <el-form-item label="处理状态">
-            <el-select v-model="searchForm.status" placeholder="请选择处理状态" clearable>
-              <el-option label="未处理" value="unhandled" />
-              <el-option label="处理中" value="processing" />
-              <el-option label="已处理" value="handled" />
-              <el-option label="已忽略" value="ignored" />
-            </el-select>
-          </el-form-item>
+          <el-tab-pane label="告警规则" name="rules">
+            <div class="rule-toolbar">
+              <el-button type="primary" @click="handleAddRule">新增规则</el-button>
+              <el-button @click="handleBatchDelete">批量删除</el-button>
+            </div>
+            
+            <div v-show="activeTab === 'rules'">
+              <el-table :data="ruleList" style="width: 100%" @selection-change="handleRuleSelectionChange">
+                <el-table-column type="selection" width="55" />
+                <el-table-column prop="name" label="规则名称" />
+                <el-table-column prop="type" label="规则类型" width="120">
+                  <template #default="scope">
+                    {{ getRuleTypeText(scope.row.type) }}
+                  </template>
+                </el-table-column>
+                <el-table-column prop="level" label="告警级别" width="100">
+                  <template #default="scope">
+                    <el-tag :type="getLevelTagType(scope.row.level)">
+                      {{ getLevelText(scope.row.level) }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="status" label="启用状态" width="100">
+                  <template #default="scope">
+                    <el-switch 
+                      v-model="scope.row.enabled" 
+                      @change="handleRuleStatusChange(scope.row)"
+                    />
+                  </template>
+                </el-table-column>
+                <el-table-column prop="createTime" label="创建时间" width="160" />
+                <el-table-column label="操作" width="200">
+                  <template #default="scope">
+                    <el-button size="small" @click="handleEditRule(scope.row)">编辑</el-button>
+                    <el-button size="small" type="danger" @click="handleDeleteRule(scope.row)">删除</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+              
+              <div class="pagination-container">
+                <el-pagination
+                  v-model:current-page="ruleCurrentPage"
+                  v-model:page-size="rulePageSize"
+                  :page-sizes="[5, 10, 15, 20, 50]"
+                  layout="total, sizes, prev, pager, next, jumper"
+                  :total="ruleTotal"
+                  @size-change="handleRuleSizeChange"
+                  @current-change="handleRuleCurrentChange"
+                />
+              </div>
+            </div>
+          </el-tab-pane>
           
-          <el-form-item label="时间范围">
-            <el-date-picker
-              v-model="searchForm.dateRange"
-              type="datetimerange"
-              range-separator="至"
-              start-placeholder="开始时间"
-              end-placeholder="结束时间"
-              format="YYYY-MM-DD HH:mm:ss"
-              value-format="YYYY-MM-DD HH:mm:ss"
-            />
-          </el-form-item>
-          
-          <el-form-item>
-            <el-button type="primary" @click="handleSearch">查询</el-button>
-            <el-button @click="handleReset">重置</el-button>
-          </el-form-item>
-        </el-form>
+          <el-tab-pane label="应急响应" name="emergency">
+            <div class="emergency-toolbar">
+              <el-button type="primary" @click="handleAddEmergencyPlan">新增预案</el-button>
+              <el-button @click="handleStartEmergencyResponse">启动应急响应</el-button>
+            </div>
+            
+            <div v-show="activeTab === 'emergency'">
+              <el-table :data="emergencyPlanList" style="width: 100%">
+                <el-table-column prop="name" label="预案名称" />
+                <el-table-column prop="level" label="响应级别" width="120">
+                  <template #default="scope">
+                    <el-tag :type="getEmergencyLevelTagType(scope.row.level)">
+                      {{ getEmergencyLevelText(scope.row.level) }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="status" label="状态" width="100">
+                  <template #default="scope">
+                    <el-tag :type="scope.row.status === 'active' ? 'success' : 'info'">
+                      {{ scope.row.status === 'active' ? '启用' : '停用' }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="creator" label="创建人" width="120" />
+                <el-table-column prop="createTime" label="创建时间" width="160" />
+                <el-table-column label="操作" width="250">
+                  <template #default="scope">
+                    <el-button size="small" @click="handleViewEmergencyPlan(scope.row)">查看详情</el-button>
+                    <el-button size="small" @click="handleEditEmergencyPlan(scope.row)">编辑</el-button>
+                    <el-button size="small" type="danger" @click="handleDeleteEmergencyPlan(scope.row)">删除</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+              
+              <div class="pagination-container">
+                <el-pagination
+                  v-model:current-page="emergencyCurrentPage"
+                  v-model:page-size="emergencyPageSize"
+                  :page-sizes="[5, 10, 15, 20, 50]"
+                  layout="total, sizes, prev, pager, next, jumper"
+                  :total="emergencyTotal"
+                  @size-change="handleEmergencySizeChange"
+                  @current-change="handleEmergencyCurrentChange"
+                />
+              </div>
+            </div>
+          </el-tab-pane>
+        </el-tabs>
       </div>
       
       <!-- 告警列表 -->
-      <el-table :data="alertList" style="width: 100%" v-loading="loading">
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="type" label="告警类型" width="120">
-          <template #default="scope">
-            {{ getAlertTypeText(scope.row.type) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="level" label="告警级别" width="100">
-          <template #default="scope">
-            <el-tag :type="getLevelTagType(scope.row.level)">
-              {{ getLevelText(scope.row.level) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="title" label="告警标题" />
-        <el-table-column prop="source" label="告警来源" width="150" />
-        <el-table-column prop="occurTime" label="发生时间" width="160" />
-        <el-table-column prop="status" label="处理状态" width="120">
-          <template #default="scope">
-            <el-tag :type="getStatusTagType(scope.row.status)">
-              {{ getStatusText(scope.row.status) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="200">
-          <template #default="scope">
-            <el-button size="small" @click="handleView(scope.row)">查看详情</el-button>
-            <el-button 
-              size="small" 
-              type="primary" 
-              @click="handleProcess(scope.row)" 
-              :disabled="scope.row.status === 'handled' || scope.row.status === 'ignored'"
-            >
-              处理
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <div v-show="activeTab === 'alerts'">
+        <el-table :data="alertList" style="width: 100%" v-loading="loading">
+          <el-table-column prop="id" label="ID" width="80" />
+          <el-table-column prop="type" label="告警类型" width="120">
+            <template #default="scope">
+              {{ getAlertTypeText(scope.row.type) }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="level" label="告警级别" width="100">
+            <template #default="scope">
+              <el-tag :type="getLevelTagType(scope.row.level)">
+                {{ getLevelText(scope.row.level) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="title" label="告警标题" />
+          <el-table-column prop="source" label="告警来源" width="150" />
+          <el-table-column prop="occurTime" label="发生时间" width="160" />
+          <el-table-column prop="status" label="处理状态" width="120">
+            <template #default="scope">
+              <el-tag :type="getStatusTagType(scope.row.status)">
+                {{ getStatusText(scope.row.status) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="200">
+            <template #default="scope">
+              <el-button size="small" @click="handleView(scope.row)">查看详情</el-button>
+              <el-button 
+                size="small" 
+                type="primary" 
+                @click="handleProcess(scope.row)" 
+                :disabled="scope.row.status === 'handled' || scope.row.status === 'ignored'"
+              >
+                处理
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        
+        <div class="pagination-container">
+          <el-pagination
+            v-model:current-page="currentPage"
+            v-model:page-size="pageSize"
+            :page-sizes="[5, 10, 15, 20, 50]"
+            layout="total, sizes, prev, pager, next, jumper"
+            :total="total"
+            @size-change="handleSizeChange"
+            @current-change="handleCurrentChange"
+          />
+        </div>
+      </div>
       
-      <div class="pagination-container">
-        <el-pagination
-          v-model:current-page="currentPage"
-          v-model:page-size="pageSize"
-          :page-sizes="[5, 10, 15, 20, 50]"
-          layout="total, sizes, prev, pager, next, jumper"
-          :total="total"
-          @size-change="handleSizeChange"
-          @current-change="handleCurrentChange"
-        />
+      <!-- 异常行为列表 -->
+      <div v-show="activeTab === 'behaviors'">
+        <el-table :data="behaviorList" style="width: 100%" v-loading="loading">
+          <el-table-column prop="id" label="ID" width="80" />
+          <el-table-column prop="user" label="用户" width="120" />
+          <el-table-column prop="type" label="行为类型" width="120">
+            <template #default="scope">
+              {{ getBehaviorTypeText(scope.row.type) }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="riskLevel" label="风险等级" width="100">
+            <template #default="scope">
+              <el-tag :type="getRiskLevelTagType(scope.row.riskLevel)">
+                {{ getRiskLevelText(scope.row.riskLevel) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="description" label="行为描述" />
+          <el-table-column prop="ip" label="IP地址" width="150" />
+          <el-table-column prop="time" label="发生时间" width="160" />
+          <el-table-column label="操作" width="150">
+            <template #default="scope">
+              <el-button size="small" @click="handleViewBehavior(scope.row)">查看详情</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        
+        <div class="pagination-container">
+          <el-pagination
+            v-model:current-page="behaviorCurrentPage"
+            v-model:page-size="behaviorPageSize"
+            :page-sizes="[5, 10, 15, 20, 50]"
+            layout="total, sizes, prev, pager, next, jumper"
+            :total="behaviorTotal"
+            @size-change="handleBehaviorSizeChange"
+            @current-change="handleBehaviorCurrentChange"
+          />
+        </div>
       </div>
     </el-card>
     
@@ -257,7 +509,8 @@ const stats = ref({
   todayTotal: 24,
   unhandled: 8,
   handled: 14,
-  handleRate: 75
+  handleRate: 75,
+  securityThreats: 3
 })
 
 const alertList = ref([
@@ -312,6 +565,32 @@ const alertList = ref([
     handler: '王五',
     handleTime: '2023-11-01 09:46:00',
     result: '误报，正常用户行为'
+  },
+  {
+    id: 5,
+    type: 'security',
+    level: 'critical',
+    title: 'SQL注入攻击尝试',
+    content: '检测到可疑的SQL注入攻击模式',
+    source: 'Web应用防火墙',
+    occurTime: '2023-11-01 11:20:45',
+    status: 'unhandled',
+    handler: '',
+    handleTime: '',
+    result: ''
+  },
+  {
+    id: 6,
+    type: 'security',
+    level: 'major',
+    title: '恶意文件上传尝试',
+    content: '检测到可疑的文件上传行为',
+    source: '应用安全网关',
+    occurTime: '2023-11-01 11:05:12',
+    status: 'processing',
+    handler: '安全团队',
+    handleTime: '2023-11-01 11:06:00',
+    result: '正在分析上传文件'
   }
 ])
 
@@ -324,11 +603,115 @@ const searchForm = ref({
   type: '',
   level: '',
   status: '',
+  threatLevel: '',
+  source: '',
+  keyword: '',
   dateRange: []
 })
 
+const behaviorSearchForm = ref({
+  user: '',
+  type: '',
+  riskLevel: '',
+  dateRange: []
+})
+
+const activeTab = ref('alerts')
+
 const detailDialogVisible = ref(false)
 const processDialogVisible = ref(false)
+
+// 异常行为相关数据
+const behaviorList = ref([
+  {
+    id: 1,
+    user: '张三',
+    type: 'login',
+    riskLevel: 'high',
+    description: '10分钟内连续登录失败5次',
+    ip: '192.168.1.100',
+    time: '2023-11-01 10:35:18'
+  },
+  {
+    id: 2,
+    user: '李四',
+    type: 'query',
+    riskLevel: 'medium',
+    description: '高频查询敏感数据',
+    ip: '192.168.1.101',
+    time: '2023-11-01 10:32:45'
+  },
+  {
+    id: 3,
+    user: '王五',
+    type: 'export',
+    riskLevel: 'high',
+    description: '非工作时间大量导出用户数据',
+    ip: '192.168.1.102',
+    time: '2023-11-01 10:30:12'
+  }
+])
+
+const behaviorCurrentPage = ref(1)
+const behaviorPageSize = ref(15)
+const behaviorTotal = ref(100)
+
+// 告警规则相关数据
+const ruleList = ref([
+  {
+    id: 1,
+    name: '数据库连接失败告警',
+    type: 'system',
+    level: 'critical',
+    enabled: true,
+    createTime: '2023-10-01 09:00:00'
+  },
+  {
+    id: 2,
+    name: '支付超时告警',
+    type: 'business',
+    level: 'major',
+    enabled: true,
+    createTime: '2023-10-05 14:30:00'
+  },
+  {
+    id: 3,
+    name: '频繁登录失败告警',
+    type: 'security',
+    level: 'critical',
+    enabled: false,
+    createTime: '2023-10-10 10:15:00'
+  }
+])
+
+const ruleCurrentPage = ref(1)
+const rulePageSize = ref(15)
+const ruleTotal = ref(100)
+const selectedRules = ref<any[]>([])
+
+// 应急响应相关数据
+const emergencyPlanList = ref([
+  {
+    id: 1,
+    name: '数据库故障应急响应预案',
+    level: 'high',
+    status: 'active',
+    creator: '系统管理员',
+    createTime: '2023-09-01 09:00:00'
+  },
+  {
+    id: 2,
+    name: '网络安全攻击应急响应预案',
+    level: 'critical',
+    status: 'active',
+    creator: '安全管理员',
+    createTime: '2023-09-15 14:30:00'
+  }
+])
+
+const emergencyCurrentPage = ref(1)
+const emergencyPageSize = ref(15)
+const emergencyTotal = ref(100)
 
 const detailData = ref({
   id: 0,
@@ -353,9 +736,15 @@ const processForm = ref({
 
 // 图表引用
 const levelChartRef = ref()
+const securityChartRef = ref()
+const typeChartRef = ref()
+const statusChartRef = ref()
 
 // 图表实例
 let levelChart: echarts.ECharts
+let securityChart: echarts.ECharts
+let typeChart: echarts.ECharts
+let statusChart: echarts.ECharts
 
 // 初始化图表
 const initCharts = () => {
@@ -399,6 +788,138 @@ const initCharts = () => {
           { value: 12, name: '一般' },
           { value: 15, name: '提示' }
         ]
+      }
+    ]
+  })
+  
+  // 安全威胁趋势图
+  securityChart = echarts.init(securityChartRef.value)
+  securityChart.setOption({
+    tooltip: {
+      trigger: 'axis'
+    },
+    legend: {
+      data: ['高危', '中危', '低危']
+    },
+    xAxis: {
+      type: 'category',
+      data: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00']
+    },
+    yAxis: {
+      type: 'value',
+      name: '威胁数量'
+    },
+    series: [
+      {
+        name: '高危',
+        type: 'line',
+        stack: '总量',
+        areaStyle: {},
+        data: [2, 3, 1, 4, 2, 3, 1]
+      },
+      {
+        name: '中危',
+        type: 'line',
+        stack: '总量',
+        areaStyle: {},
+        data: [5, 4, 6, 3, 4, 5, 3]
+      },
+      {
+        name: '低危',
+        type: 'line',
+        stack: '总量',
+        areaStyle: {},
+        data: [8, 10, 7, 9, 8, 7, 6]
+      }
+    ]
+  })
+  
+  // 告警类型分布图
+  typeChart = echarts.init(typeChartRef.value)
+  typeChart.setOption({
+    tooltip: {
+      trigger: 'item'
+    },
+    legend: {
+      bottom: 'bottom'
+    },
+    series: [
+      {
+        name: '告警类型分布',
+        type: 'pie',
+        radius: ['40%', '70%'],
+        avoidLabelOverlap: false,
+        itemStyle: {
+          borderRadius: 10,
+          borderColor: '#fff',
+          borderWidth: 2
+        },
+        label: {
+          show: false,
+          position: 'center'
+        },
+        emphasis: {
+          label: {
+            show: true,
+            fontSize: '18',
+            fontWeight: 'bold'
+          }
+        },
+        labelLine: {
+          show: false
+        },
+        data: [
+          { value: 8, name: '系统异常' },
+          { value: 6, name: '业务异常' },
+          { value: 4, name: '网络异常' },
+          { value: 3, name: '数据库异常' },
+          { value: 5, name: '安全异常' }
+        ]
+      }
+    ]
+  })
+  
+  // 处理状态统计图
+  statusChart = echarts.init(statusChartRef.value)
+  statusChart.setOption({
+    tooltip: {
+      trigger: 'axis'
+    },
+    legend: {
+      data: ['未处理', '处理中', '已处理', '已忽略']
+    },
+    xAxis: {
+      type: 'category',
+      data: ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+    },
+    yAxis: {
+      type: 'value',
+      name: '告警数量'
+    },
+    series: [
+      {
+        name: '未处理',
+        type: 'bar',
+        stack: '总量',
+        data: [2, 1, 3, 2, 1, 0, 2]
+      },
+      {
+        name: '处理中',
+        type: 'bar',
+        stack: '总量',
+        data: [1, 2, 1, 1, 2, 1, 0]
+      },
+      {
+        name: '已处理',
+        type: 'bar',
+        stack: '总量',
+        data: [5, 6, 4, 5, 6, 8, 7]
+      },
+      {
+        name: '已忽略',
+        type: 'bar',
+        stack: '总量',
+        data: [1, 0, 1, 0, 1, 0, 1]
       }
     ]
   })
@@ -486,6 +1007,100 @@ const getStatusTagType = (status: string) => {
   }
 }
 
+// 获取行为类型文本
+const getBehaviorTypeText = (type: string) => {
+  switch (type) {
+    case 'login':
+      return '频繁登录'
+    case 'query':
+      return '异常查询'
+    case 'operation':
+      return '敏感操作'
+    case 'export':
+      return '数据导出'
+    default:
+      return '未知'
+  }
+}
+
+// 获取风险等级文本
+const getRiskLevelText = (level: string) => {
+  switch (level) {
+    case 'high':
+      return '高风险'
+    case 'medium':
+      return '中风险'
+    case 'low':
+      return '低风险'
+    default:
+      return '未知'
+  }
+}
+
+// 获取风险等级标签类型
+const getRiskLevelTagType = (level: string) => {
+  switch (level) {
+    case 'high':
+      return 'danger'
+    case 'medium':
+      return 'warning'
+    case 'low':
+      return 'info'
+    default:
+      return 'info'
+  }
+}
+
+// 获取规则类型文本
+const getRuleTypeText = (type: string) => {
+  switch (type) {
+    case 'system':
+      return '系统规则'
+    case 'business':
+      return '业务规则'
+    case 'network':
+      return '网络规则'
+    case 'database':
+      return '数据库规则'
+    case 'security':
+      return '安全规则'
+    default:
+      return '未知'
+  }
+}
+
+// 获取应急响应级别文本
+const getEmergencyLevelText = (level: string) => {
+  switch (level) {
+    case 'critical':
+      return '特别重大'
+    case 'high':
+      return '重大'
+    case 'medium':
+      return '较大'
+    case 'low':
+      return '一般'
+    default:
+      return '未知'
+  }
+}
+
+// 获取应急响应级别标签类型
+const getEmergencyLevelTagType = (level: string) => {
+  switch (level) {
+    case 'critical':
+      return 'danger'
+    case 'high':
+      return 'warning'
+    case 'medium':
+      return ''
+    case 'low':
+      return 'info'
+    default:
+      return 'info'
+  }
+}
+
 // 刷新
 const handleRefresh = () => {
   console.log('🔄 刷新告警数据')
@@ -510,9 +1125,29 @@ const handleReset = () => {
     type: '',
     level: '',
     status: '',
+    threatLevel: '',
+    source: '',
+    keyword: '',
     dateRange: []
   }
   ElMessage.success('重置搜索条件')
+}
+
+// 异常行为搜索
+const handleBehaviorSearch = () => {
+  console.log('🔍 搜索异常行为:', behaviorSearchForm.value)
+  ElMessage.success('查询异常行为功能待实现')
+}
+
+// 异常行为重置
+const handleBehaviorReset = () => {
+  behaviorSearchForm.value = {
+    user: '',
+    type: '',
+    riskLevel: '',
+    dateRange: []
+  }
+  ElMessage.success('重置异常行为搜索条件')
 }
 
 // 查看详情
@@ -561,9 +1196,101 @@ const handleCurrentChange = (val: number) => {
   console.log(`📄 当前页: ${val}`)
 }
 
+// 异常行为分页相关
+const handleBehaviorSizeChange = (val: number) => {
+  behaviorPageSize.value = val
+  behaviorCurrentPage.value = 1
+  console.log(`📈 异常行为每页显示 ${val} 条`)
+}
+
+const handleBehaviorCurrentChange = (val: number) => {
+  behaviorCurrentPage.value = val
+  console.log(`📄 异常行为当前页: ${val}`)
+}
+
+// 查看异常行为详情
+const handleViewBehavior = (row: any) => {
+  ElMessage.info(`查看异常行为详情: ${row.id}`)
+}
+
+// 告警规则相关方法
+const handleAddRule = () => {
+  ElMessage.info('新增告警规则')
+}
+
+const handleBatchDelete = () => {
+  if (selectedRules.value.length === 0) {
+    ElMessage.warning('请先选择要删除的规则')
+    return
+  }
+  ElMessage.info(`批量删除 ${selectedRules.value.length} 条规则`)
+}
+
+const handleRuleSelectionChange = (selection: any[]) => {
+  selectedRules.value = selection
+}
+
+const handleRuleStatusChange = (row: any) => {
+  ElMessage.info(`规则状态已更新: ${row.name}`)
+}
+
+const handleEditRule = (row: any) => {
+  ElMessage.info(`编辑告警规则: ${row.name}`)
+}
+
+const handleDeleteRule = (row: any) => {
+  ElMessage.info(`删除告警规则: ${row.name}`)
+}
+
+const handleRuleSizeChange = (val: number) => {
+  rulePageSize.value = val
+  ruleCurrentPage.value = 1
+  console.log(`📈 告警规则每页显示 ${val} 条`)
+}
+
+const handleRuleCurrentChange = (val: number) => {
+  ruleCurrentPage.value = val
+  console.log(`📄 告警规则当前页: ${val}`)
+}
+
+// 应急响应相关方法
+const handleAddEmergencyPlan = () => {
+  ElMessage.info('新增应急响应预案')
+}
+
+const handleStartEmergencyResponse = () => {
+  ElMessage.info('启动应急响应')
+}
+
+const handleViewEmergencyPlan = (row: any) => {
+  ElMessage.info(`查看应急响应预案: ${row.name}`)
+}
+
+const handleEditEmergencyPlan = (row: any) => {
+  ElMessage.info(`编辑应急响应预案: ${row.name}`)
+}
+
+const handleDeleteEmergencyPlan = (row: any) => {
+  ElMessage.info(`删除应急响应预案: ${row.name}`)
+}
+
+const handleEmergencySizeChange = (val: number) => {
+  emergencyPageSize.value = val
+  emergencyCurrentPage.value = 1
+  console.log(`📈 应急响应预案每页显示 ${val} 条`)
+}
+
+const handleEmergencyCurrentChange = (val: number) => {
+  emergencyCurrentPage.value = val
+  console.log(`📄 应急响应预案当前页: ${val}`)
+}
+
 // 窗口大小变更处理
 const handleResize = () => {
   if (levelChart) levelChart.resize()
+  if (securityChart) securityChart.resize()
+  if (typeChart) typeChart.resize()
+  if (statusChart) statusChart.resize()
 }
 
 // 组件挂载
@@ -577,6 +1304,9 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
   if (levelChart) levelChart.dispose()
+  if (securityChart) securityChart.dispose()
+  if (typeChart) typeChart.dispose()
+  if (statusChart) statusChart.dispose()
 })
 
 /**
@@ -656,5 +1386,17 @@ onBeforeUnmount(() => {
   margin-top: 20px;
   display: flex;
   justify-content: center;
+}
+
+.rule-toolbar {
+  margin-bottom: 20px;
+  display: flex;
+  gap: 10px;
+}
+
+.emergency-toolbar {
+  margin-bottom: 20px;
+  display: flex;
+  gap: 10px;
 }
 </style>

@@ -70,6 +70,43 @@
         </el-col>
       </el-row>
       
+      <!-- 统计分析面板 -->
+      <el-row :gutter="20" style="margin-bottom: 20px;">
+        <el-col :span="12">
+          <el-card>
+            <template #header>
+              <span>支付状态统计</span>
+            </template>
+            <div ref="statusChartRef" style="height: 300px;"></div>
+          </el-card>
+        </el-col>
+        
+        <el-col :span="12">
+          <el-card>
+            <template #header>
+              <span>支付方式分布</span>
+            </template>
+            <div ref="methodChartRef" style="height: 300px;"></div>
+          </el-card>
+        </el-col>
+      </el-row>
+      
+      <!-- 成功率监控 -->
+      <el-card style="margin-bottom: 20px;">
+        <template #header>
+          <span>支付成功率趋势</span>
+        </template>
+        <div ref="successRateChartRef" style="height: 300px;"></div>
+      </el-card>
+      
+      <!-- 时间分布分析 -->
+      <el-card style="margin-bottom: 20px;">
+        <template #header>
+          <span>支付时间分布</span>
+        </template>
+        <div ref="timeDistributionChartRef" style="height: 300px;"></div>
+      </el-card>
+      
       <!-- 搜索和筛选 -->
       <div class="search-bar">
         <el-form :model="searchForm" label-width="80px" inline>
@@ -137,6 +174,7 @@
         <el-table-column label="操作" width="150">
           <template #default="scope">
             <el-button size="small" @click="handleView(scope.row)">查看详情</el-button>
+            <el-button size="small" type="warning" @click="handleMarkException(scope.row)" v-if="!scope.row.isException">标记异常</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -175,18 +213,44 @@
       
       <el-divider />
       
-      <el-descriptions title="异常信息" :column="1" v-if="detailData.exception">
-        <el-descriptions-item label="异常类型">{{ detailData.exception.type }}</el-descriptions-item>
-        <el-descriptions-item label="异常描述">{{ detailData.exception.description }}</el-descriptions-item>
-        <el-descriptions-item label="处理状态">{{ detailData.exception.status }}</el-descriptions-item>
-        <el-descriptions-item label="处理人">{{ detailData.exception.handler }}</el-descriptions-item>
-        <el-descriptions-item label="处理时间">{{ detailData.exception.handleTime }}</el-descriptions-item>
+      <el-descriptions title="异常信息" :column="1" v-if="detailData.exception || detailData.isException">
+        <el-descriptions-item label="异常类型">{{ detailData.exception?.type || '手动标记' }}</el-descriptions-item>
+        <el-descriptions-item label="异常描述">{{ detailData.exception?.description || '用户手动标记为异常' }}</el-descriptions-item>
+        <el-descriptions-item label="处理状态">{{ detailData.exception?.status || '待处理' }}</el-descriptions-item>
+        <el-descriptions-item label="处理人">{{ detailData.exception?.handler || '未处理' }}</el-descriptions-item>
+        <el-descriptions-item label="处理时间">{{ detailData.exception?.handleTime || '未处理' }}</el-descriptions-item>
       </el-descriptions>
       
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="detailDialogVisible = false">关闭</el-button>
-          <el-button type="primary" @click="handleProcessException" v-if="detailData.exception && detailData.exception.status === 'pending'">处理异常</el-button>
+          <el-button type="primary" @click="handleProcessException" v-if="(detailData.exception && detailData.exception.status === 'pending') || detailData.isException">处理异常</el-button>
+        </span>
+      </template>
+    </el-dialog>
+    
+    <!-- 标记异常对话框 -->
+    <el-dialog v-model="exceptionDialogVisible" title="标记异常" width="500px">
+      <el-form :model="exceptionFormData" label-width="100px">
+        <el-form-item label="异常类型">
+          <el-select v-model="exceptionFormData.type" placeholder="请选择异常类型">
+            <el-option label="支付超时" value="timeout" />
+            <el-option label="金额不符" value="amount_mismatch" />
+            <el-option label="重复支付" value="duplicate" />
+            <el-option label="用户投诉" value="complaint" />
+            <el-option label="其他" value="other" />
+          </el-select>
+        </el-form-item>
+        
+        <el-form-item label="异常描述">
+          <el-input v-model="exceptionFormData.description" type="textarea" placeholder="请输入异常描述" />
+        </el-form-item>
+      </el-form>
+      
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="exceptionDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitExceptionForm">确定标记</el-button>
         </span>
       </template>
     </el-dialog>
@@ -194,9 +258,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, onMounted, watch, nextTick } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { SuccessFilled, CircleCloseFilled, Warning, Money } from '@element-plus/icons-vue'
+import * as echarts from 'echarts'
 
 // 异常信息接口
 interface ExceptionInfo {
@@ -221,7 +286,20 @@ interface PaymentRecord {
   transactionNo: string | null
   remark: string
   exception: ExceptionInfo | null
+  isException: boolean // 新增字段用于标记异常
 }
+
+// 图表引用
+const statusChartRef = ref()
+const methodChartRef = ref()
+const successRateChartRef = ref()
+const timeDistributionChartRef = ref()
+
+// 图表实例
+let statusChart: any = null
+let methodChart: any = null
+let successRateChart: any = null
+let timeDistributionChart: any = null
 
 // 响应式数据
 const stats = ref({
@@ -244,7 +322,8 @@ const tableData = ref<PaymentRecord[]>([
     merchantOrderNo: 'M202310150001',
     transactionNo: 'T202310150001ALI',
     remark: '住宿费',
-    exception: null
+    exception: null,
+    isException: false
   },
   {
     id: 2,
@@ -264,7 +343,8 @@ const tableData = ref<PaymentRecord[]>([
       status: 'processed',
       handler: '系统自动处理',
       handleTime: '2023-10-15 11:20:42'
-    }
+    },
+    isException: true
   },
   {
     id: 3,
@@ -278,7 +358,8 @@ const tableData = ref<PaymentRecord[]>([
     merchantOrderNo: 'M202310150003',
     transactionNo: null,
     remark: '网费',
-    exception: null
+    exception: null,
+    isException: false
   }
 ])
 
@@ -295,6 +376,8 @@ const searchForm = ref({
 })
 
 const detailDialogVisible = ref(false)
+const exceptionDialogVisible = ref(false)
+
 const detailData = ref<PaymentRecord>({
   id: 0,
   orderNo: '',
@@ -307,8 +390,16 @@ const detailData = ref<PaymentRecord>({
   merchantOrderNo: '',
   transactionNo: '',
   remark: '',
-  exception: null
+  exception: null,
+  isException: false
 })
+
+const exceptionFormData = ref({
+  type: 'timeout',
+  description: ''
+})
+
+const currentRow = ref<PaymentRecord | null>(null)
 
 // 获取支付方式文本
 const getPaymentMethodText = (method: string) => {
@@ -358,16 +449,267 @@ const getStatusText = (status: string) => {
   }
 }
 
+// 初始化图表
+const initCharts = () => {
+  // 确保DOM已经渲染
+  nextTick(() => {
+    if (statusChartRef.value) {
+      statusChart = echarts.init(statusChartRef.value)
+      renderStatusChart()
+    }
+    
+    if (methodChartRef.value) {
+      methodChart = echarts.init(methodChartRef.value)
+      renderMethodChart()
+    }
+    
+    if (successRateChartRef.value) {
+      successRateChart = echarts.init(successRateChartRef.value)
+      renderSuccessRateChart()
+    }
+    
+    if (timeDistributionChartRef.value) {
+      timeDistributionChart = echarts.init(timeDistributionChartRef.value)
+      renderTimeDistributionChart()
+    }
+  })
+}
+
+// 渲染支付状态统计图表
+const renderStatusChart = () => {
+  if (!statusChart) return
+  
+  const option = {
+    tooltip: {
+      trigger: 'item'
+    },
+    legend: {
+      top: '5%',
+      left: 'center'
+    },
+    series: [
+      {
+        name: '支付状态',
+        type: 'pie',
+        radius: ['40%', '70%'],
+        avoidLabelOverlap: false,
+        itemStyle: {
+          borderRadius: 10,
+          borderColor: '#fff',
+          borderWidth: 2
+        },
+        label: {
+          show: false,
+          position: 'center'
+        },
+        emphasis: {
+          label: {
+            show: true,
+            fontSize: 18,
+            fontWeight: 'bold'
+          }
+        },
+        labelLine: {
+          show: false
+        },
+        data: [
+          { value: 1048, name: '成功', itemStyle: { color: '#67C23A' } },
+          { value: 735, name: '失败', itemStyle: { color: '#F56C6C' } },
+          { value: 580, name: '处理中', itemStyle: { color: '#E6A23C' } },
+          { value: 484, name: '已退款', itemStyle: { color: '#409EFF' } }
+        ]
+      }
+    ]
+  }
+  
+  statusChart.setOption(option)
+}
+
+// 渲染支付方式分布图表
+const renderMethodChart = () => {
+  if (!methodChart) return
+  
+  const option = {
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: {
+        type: 'shadow'
+      }
+    },
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: '3%',
+      containLabel: true
+    },
+    xAxis: [
+      {
+        type: 'category',
+        data: ['支付宝', '微信', '银行卡', '现金'],
+        axisTick: {
+          alignWithLabel: true
+        }
+      }
+    ],
+    yAxis: [
+      {
+        type: 'value'
+      }
+    ],
+    series: [
+      {
+        name: '支付笔数',
+        type: 'bar',
+        barWidth: '60%',
+        data: [1048, 735, 580, 320],
+        itemStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: '#83bff6' },
+            { offset: 0.5, color: '#188df0' },
+            { offset: 1, color: '#188df0' }
+          ])
+        },
+        emphasis: {
+          itemStyle: {
+            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              { offset: 0, color: '#2378f7' },
+              { offset: 0.7, color: '#2378f7' },
+              { offset: 1, color: '#83bff6' }
+            ])
+          }
+        }
+      }
+    ]
+  }
+  
+  methodChart.setOption(option)
+}
+
+// 渲染支付成功率趋势图表
+const renderSuccessRateChart = () => {
+  if (!successRateChart) return
+  
+  const option = {
+    tooltip: {
+      trigger: 'axis'
+    },
+    legend: {
+      data: ['成功率']
+    },
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: '3%',
+      containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: ['10-01', '10-02', '10-03', '10-04', '10-05', '10-06', '10-07', '10-08', '10-09', '10-10', '10-11', '10-12', '10-13', '10-14', '10-15']
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: {
+        formatter: '{value} %'
+      }
+    },
+    series: [
+      {
+        name: '成功率',
+        type: 'line',
+        data: [98.2, 97.8, 98.5, 99.1, 97.9, 98.3, 98.7, 99.0, 98.6, 98.1, 98.4, 98.8, 99.2, 98.9, 98.5],
+        smooth: true,
+        itemStyle: {
+          color: '#67C23A'
+        },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            {
+              offset: 0,
+              color: 'rgba(103, 194, 58, 0.3)'
+            },
+            {
+              offset: 1,
+              color: 'rgba(103, 194, 58, 0.1)'
+            }
+          ])
+        }
+      }
+    ]
+  }
+  
+  successRateChart.setOption(option)
+}
+
+// 渲染支付时间分布图表
+const renderTimeDistributionChart = () => {
+  if (!timeDistributionChart) return
+  
+  const option = {
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: {
+        type: 'shadow'
+      }
+    },
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: '3%',
+      containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      data: ['0-2点', '2-4点', '4-6点', '6-8点', '8-10点', '10-12点', '12-14点', '14-16点', '16-18点', '18-20点', '20-22点', '22-24点']
+    },
+    yAxis: {
+      type: 'value'
+    },
+    series: [
+      {
+        name: '支付笔数',
+        type: 'bar',
+        barWidth: '60%',
+        data: [12, 8, 15, 45, 89, 120, 135, 110, 95, 150, 180, 90],
+        itemStyle: {
+          color: '#409EFF'
+        }
+      }
+    ]
+  }
+  
+  timeDistributionChart.setOption(option)
+}
+
 // 刷新
 const handleRefresh = () => {
   console.log('🔄 刷新支付记录')
   ElMessage.success('刷新成功')
+  // 重新渲染图表
+  renderAllCharts()
+}
+
+// 重新渲染所有图表
+const renderAllCharts = () => {
+  renderStatusChart()
+  renderMethodChart()
+  renderSuccessRateChart()
+  renderTimeDistributionChart()
 }
 
 // 导出
 const handleExport = () => {
   console.log('📤 导出支付记录')
-  ElMessage.success('导出功能待实现')
+  ElMessageBox.confirm('确定要导出当前查询条件下的所有支付记录吗？', '导出确认', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(() => {
+    // 模拟导出过程
+    ElMessage.success('支付记录导出成功')
+  }).catch(() => {
+    // 取消导出
+  })
 }
 
 // 搜索
@@ -393,10 +735,55 @@ const handleView = (row: any) => {
   detailDialogVisible.value = true
 }
 
+// 标记异常
+const handleMarkException = (row: PaymentRecord) => {
+  currentRow.value = row
+  exceptionFormData.value = {
+    type: '',
+    description: ''
+  }
+  exceptionDialogVisible.value = true
+}
+
+// 提交异常标记
+const submitExceptionForm = () => {
+  if (!currentRow.value) return
+  
+  // 更新行数据
+  const index = tableData.value.findIndex(item => item.id === currentRow.value!.id)
+  if (index !== -1) {
+    tableData.value[index].isException = true
+    tableData.value[index].exception = {
+      type: exceptionFormData.value.type || 'manual',
+      description: exceptionFormData.value.description || '手动标记异常',
+      status: 'pending',
+      handler: '',
+      handleTime: ''
+    }
+  }
+  
+  exceptionDialogVisible.value = false
+  ElMessage.success('异常标记成功')
+}
+
 // 处理异常
 const handleProcessException = () => {
   console.log('🔧 处理异常:', detailData.value)
-  ElMessage.success('异常处理功能待实现')
+  
+  // 更新行数据
+  const index = tableData.value.findIndex(item => item.id === detailData.value.id)
+  if (index !== -1) {
+    const existingException = tableData.value[index].exception;
+    tableData.value[index].exception = {
+      type: existingException?.type || 'unknown',
+      description: existingException?.description || '未指定',
+      status: 'processed',
+      handler: '管理员',
+      handleTime: new Date().toLocaleString()
+    }
+  }
+  
+  ElMessage.success('异常处理成功')
   detailDialogVisible.value = false
 }
 
@@ -415,7 +802,20 @@ const handleCurrentChange = (val: number) => {
 // 组件挂载
 onMounted(() => {
   console.log('💳 支付记录监控页面加载完成')
+  initCharts()
 })
+
+// 监听窗口大小变化，重新渲染图表
+watch(
+  () => [statusChartRef.value, methodChartRef.value, successRateChartRef.value, timeDistributionChartRef.value],
+  () => {
+    if (statusChart) statusChart.resize()
+    if (methodChart) methodChart.resize()
+    if (successRateChart) successRateChart.resize()
+    if (timeDistributionChart) timeDistributionChart.resize()
+  },
+  { flush: 'post' }
+)
 
 /**
  * 支付记录监控页面

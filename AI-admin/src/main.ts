@@ -28,8 +28,14 @@ const routes: RouteRecordRaw[] = [
       },
       {
         path: '/user-detail',
+        name: 'UserDetailDefault',
+        component: () => import('./views/UserDetailDefault.vue')
+      },
+      {
+        path: '/user-detail/:id',
         name: 'UserDetail',
-        component: () => import('./views/UserDetail.vue')
+        component: () => import('./views/UserDetail.vue'),
+        props: true
       },
       {
         path: '/batch-operation',
@@ -49,7 +55,14 @@ const routes: RouteRecordRaw[] = [
       {
         path: '/dormitory-detail',
         name: 'DormitoryDetail',
-        component: () => import('./views/DormitoryDetail.vue')
+        component: () => import('./views/DormitoryDetail.vue'),
+        props: true
+      },
+      {
+        path: '/dormitory-detail/:id',
+        name: 'DormitoryDetailWithId',
+        component: () => import('./views/DormitoryDetail.vue'),
+        props: true
       },
       {
         path: '/fee-record-list',
@@ -59,7 +72,14 @@ const routes: RouteRecordRaw[] = [
       {
         path: '/fee-detail',
         name: 'FeeDetail',
-        component: () => import('./views/FeeDetail.vue')
+        component: () => import('./views/FeeDetail.vue'),
+        props: true
+      },
+      {
+        path: '/fee-detail/:id',
+        name: 'FeeDetailWithId',
+        component: () => import('./views/FeeDetail.vue'),
+        props: true
       },
       {
         path: '/payment-record-monitor',

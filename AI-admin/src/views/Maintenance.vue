@@ -21,6 +21,95 @@
         style="margin-bottom: 20px;"
       />
       
+      <!-- 维护模式控制 -->
+      <el-card shadow="never" style="margin-bottom: 20px;">
+        <template #header>
+          <div class="card-header">
+            <span>维护模式控制</span>
+          </div>
+        </template>
+        
+        <div v-if="!isMaintenanceMode" class="maintenance-mode-control">
+          <el-alert
+            title="维护模式未启用"
+            type="success"
+            description="当前系统正常运行，客户端可正常使用所有功能。"
+            show-icon
+            style="margin-bottom: 20px;"
+          />
+          
+          <el-form 
+            :model="maintenanceModeForm" 
+            :rules="maintenanceModeRules" 
+            ref="maintenanceModeFormRef"
+            label-width="120px"
+          >
+            <el-form-item label="倒计时时间" prop="countdownMinutes">
+              <el-input-number 
+                v-model="maintenanceModeForm.countdownMinutes" 
+                :min="1" 
+                :max="1440" 
+              />
+              <span class="form-tip">分钟（默认30分钟）</span>
+            </el-form-item>
+            
+            <el-form-item label="维护消息" prop="message">
+              <el-input 
+                v-model="maintenanceModeForm.message" 
+                type="textarea" 
+                :rows="3" 
+                placeholder="请输入维护通知消息，将会显示给所有客户端用户"
+              />
+            </el-form-item>
+            
+            <el-form-item>
+              <el-button 
+                type="warning" 
+                @click="enableMaintenanceMode"
+                :loading="enablingMaintenance"
+              >
+                启用维护模式
+              </el-button>
+            </el-form-item>
+          </el-form>
+        </div>
+        
+        <div v-else class="maintenance-mode-active">
+          <el-alert
+            title="维护模式已启用"
+            type="warning"
+            :description="maintenanceModeDescription"
+            show-icon
+            style="margin-bottom: 20px;"
+          />
+          
+          <el-descriptions :column="1" border>
+            <el-descriptions-item label="启用时间">
+              {{ formatDateTime(maintenanceModeInfo.startTime) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="预计生效时间">
+              {{ formatDateTime(maintenanceModeInfo.effectiveTime) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="倒计时">
+              <el-tag type="warning">{{ maintenanceCountdown }}</el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="维护消息">
+              {{ maintenanceModeInfo.message }}
+            </el-descriptions-item>
+          </el-descriptions>
+          
+          <div style="margin-top: 20px;">
+            <el-button 
+              type="danger" 
+              @click="disableMaintenanceMode"
+              :loading="disablingMaintenance"
+            >
+              立即取消维护模式
+            </el-button>
+          </div>
+        </div>
+      </el-card>
+      
       <!-- 维护操作 -->
       <el-tabs v-model="activeTab">
         <!-- 系统信息 -->
@@ -201,18 +290,67 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { maintenanceApi } from '../api/maintenance'
+import { systemApi } from '../api/user'
 
 // 响应式数据
 const activeTab = ref('info')
 const maintenanceDialogVisible = ref(false)
 const maintenanceFormRef = ref()
+const maintenanceModeFormRef = ref()
 
 const maintenanceStatus = ref({
   title: '系统运行正常',
   type: 'success',
   description: '当前系统运行稳定，无维护任务进行中。'
+})
+
+// 维护模式相关数据
+const isMaintenanceMode = ref(false)
+const enablingMaintenance = ref(false)
+const disablingMaintenance = ref(false)
+const maintenanceModeInfo = ref({
+  startTime: '',
+  effectiveTime: '',
+  message: '系统将在30分钟后进行维护，请提前保存好您的数据。'
+})
+
+let countdownTimer: NodeJS.Timeout | null = null
+
+const maintenanceModeForm = reactive({
+  countdownMinutes: 30,
+  message: '系统将在30分钟后进行维护，请提前保存好您的数据。'
+})
+
+const maintenanceModeRules = {
+  countdownMinutes: [{ required: true, message: '请输入倒计时时间', trigger: 'change' }],
+  message: [{ required: true, message: '请输入维护消息', trigger: 'blur' }]
+}
+
+const maintenanceModeDescription = computed(() => {
+  return `系统将在 ${maintenanceCountdown.value} 后进入维护状态，届时客户端用户将收到提醒并无法使用系统。`
+})
+
+const maintenanceCountdown = computed(() => {
+  if (!maintenanceModeInfo.value.effectiveTime) return ''
+  
+  const now = new Date().getTime()
+  const effectiveTime = new Date(maintenanceModeInfo.value.effectiveTime).getTime()
+  const remainingSeconds = Math.max(0, Math.floor((effectiveTime - now) / 1000))
+  
+  const hours = Math.floor(remainingSeconds / 3600)
+  const minutes = Math.floor((remainingSeconds % 3600) / 60)
+  const seconds = remainingSeconds % 60
+  
+  if (hours > 0) {
+    return `${hours}小时${minutes}分钟${seconds}秒`
+  } else if (minutes > 0) {
+    return `${minutes}分钟${seconds}秒`
+  } else {
+    return `${seconds}秒`
+  }
 })
 
 const systemInfo = ref({
@@ -317,6 +455,12 @@ const maintenanceRules = {
   type: [{ required: true, message: '请选择维护类型', trigger: 'change' }],
   duration: [{ required: true, message: '请输入预计时长', trigger: 'change' }],
   description: [{ required: true, message: '请输入维护说明', trigger: 'blur' }]
+}
+
+// 格式化日期时间
+const formatDateTime = (dateString: string) => {
+  if (!dateString) return ''
+  return new Date(dateString).toLocaleString('zh-CN')
 }
 
 // 获取维护计划类型文本
@@ -435,6 +579,122 @@ const getDbOpStatusTag = (status: string) => {
   }
 }
 
+// 启用维护模式
+const enableMaintenanceMode = () => {
+  if (!maintenanceModeFormRef.value) return
+  
+  maintenanceModeFormRef.value.validate(async (valid: boolean) => {
+    if (valid) {
+      enablingMaintenance.value = true
+      
+      try {
+        const response = await maintenanceApi.startMaintenance({
+          countdownMinutes: maintenanceModeForm.countdownMinutes,
+          message: maintenanceModeForm.message
+        })
+        
+        // 检查API响应是否成功
+        if (response && response.data) {
+          // 获取最新的维护状态
+          await fetchMaintenanceStatus()
+          ElMessage.success('维护模式已启用')
+        } else {
+          ElMessage.error('启用维护模式失败')
+        }
+      } catch (error) {
+        ElMessage.error('启用维护模式失败')
+        console.error('启用维护模式失败:', error)
+      } finally {
+        enablingMaintenance.value = false
+      }
+    } else {
+      ElMessage.error('请填写正确的表单信息')
+    }
+  })
+}
+
+// 禁用维护模式
+const disableMaintenanceMode = () => {
+  ElMessageBox.confirm(
+    '确定要取消维护模式吗？这将立即恢复客户端服务。',
+    '取消维护模式',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).then(async () => {
+    disablingMaintenance.value = true
+    
+    try {
+      const response = await maintenanceApi.cancelMaintenance()
+      
+      // 检查API响应是否成功
+      if (response && response.data) {
+        // 获取最新的维护状态
+        await fetchMaintenanceStatus()
+        ElMessage.success('维护模式已取消')
+      } else {
+        ElMessage.error('取消维护模式失败')
+      }
+    } catch (error) {
+      ElMessage.error('取消维护模式失败')
+      console.error('取消维护模式失败:', error)
+    } finally {
+      disablingMaintenance.value = false
+    }
+  }).catch(() => {
+    ElMessage.info('已取消操作')
+  })
+}
+
+// 获取维护状态
+const fetchMaintenanceStatus = async () => {
+  try {
+    const response = await maintenanceApi.getMaintenanceStatus()
+    const status = response.data // 从响应中提取数据
+    
+    if (status && status.enabled) {
+      isMaintenanceMode.value = true
+      maintenanceModeInfo.value = {
+        startTime: status.startTime,
+        effectiveTime: status.effectiveTime,
+        message: status.message
+      }
+    } else {
+      isMaintenanceMode.value = false
+      maintenanceModeInfo.value = {
+        startTime: '',
+        effectiveTime: '',
+        message: '系统将在30分钟后进行维护，请提前保存好您的数据。'
+      }
+      
+      // 清除定时器
+      if (countdownTimer) {
+        clearInterval(countdownTimer)
+        countdownTimer = null
+      }
+    }
+  } catch (error) {
+    ElMessage.error('获取维护状态失败')
+    console.error('获取维护状态失败:', error)
+  }
+}
+
+// 启动倒计时
+const startCountdown = () => {
+  // 清除之前的定时器
+  if (countdownTimer) {
+    clearInterval(countdownTimer)
+  }
+  
+  // 每秒更新倒计时
+  countdownTimer = setInterval(() => {
+    // 强制更新计算属性
+    // Vue 会自动追踪依赖，不需要手动触发
+  }, 1000)
+}
+
 // 开始维护
 const handleStartMaintenance = () => {
   maintenanceDialogVisible.value = true
@@ -513,8 +773,28 @@ const handleBackupDatabase = () => {
 }
 
 // 优化数据库
-const handleOptimizeDatabase = () => {
-  ElMessage.success('数据库优化任务已启动')
+const handleOptimizeDatabase = async () => {
+  ElMessageBox.confirm(
+    '确定要优化数据库吗？这可能会暂时影响系统性能。',
+    '优化确认',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).then(async () => {
+    try {
+      ElMessage.info('正在优化数据库...')
+      // 调用API执行数据库优化
+      await systemApi.optimizeDatabase()
+      ElMessage.success('数据库优化完成')
+    } catch (error) {
+      console.error('❌ 数据库优化失败:', error)
+      ElMessage.error('数据库优化失败: ' + (error as Error).message)
+    }
+  }).catch(() => {
+    ElMessage.info('已取消优化')
+  })
 }
 
 // 检查数据库
@@ -531,6 +811,15 @@ const handleViewDbDetail = (row: any) => {
 // 组件挂载
 onMounted(() => {
   console.log('🔧 系统维护页面加载完成')
+  // 获取初始维护状态
+  fetchMaintenanceStatus()
+})
+
+// 组件卸载时清除定时器
+onUnmounted(() => {
+  if (countdownTimer) {
+    clearInterval(countdownTimer)
+  }
 })
 
 /**
@@ -562,5 +851,10 @@ onMounted(() => {
 .form-tip {
   margin-left: 10px;
   color: #909399;
+}
+
+.maintenance-mode-control,
+.maintenance-mode-active {
+  padding: 20px 0;
 }
 </style>

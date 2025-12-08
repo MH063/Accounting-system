@@ -3,7 +3,7 @@ import api from './index'
 // 维护模式相关API
 export const maintenanceApi = {
   // 启动维护模式
-  startMaintenance: (data: { duration: number; message: string }) => 
+  startMaintenance: (data: { countdownMinutes: number; message: string }) => 
     api.post('/maintenance/start', data),
   
   // 获取维护模式状态

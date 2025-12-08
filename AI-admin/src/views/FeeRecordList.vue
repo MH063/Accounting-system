@@ -32,6 +32,14 @@
             </el-select>
           </el-form-item>
           
+          <el-form-item label="审核状态">
+            <el-select v-model="searchForm.auditStatus" placeholder="请选择审核状态" clearable>
+              <el-option label="待审核" value="pending" />
+              <el-option label="已审核" value="approved" />
+              <el-option label="已拒绝" value="rejected" />
+            </el-select>
+          </el-form-item>
+          
           <el-form-item label="时间范围">
             <el-date-picker
               v-model="searchForm.dateRange"
@@ -51,7 +59,67 @@
         </el-form>
       </div>
       
-      <el-table :data="tableData" style="width: 100%" v-loading="loading">
+      <!-- 费用统计汇总 -->
+      <div class="fee-stats-container">
+        <el-row :gutter="20">
+          <el-col :span="6">
+            <el-card class="stats-card">
+              <el-statistic title="总费用金额" :value="feeStats.totalAmount" prefix="¥" />
+            </el-card>
+          </el-col>
+          <el-col :span="6">
+            <el-card class="stats-card">
+              <el-statistic title="已缴费金额" :value="feeStats.paidAmount" prefix="¥" />
+            </el-card>
+          </el-col>
+          <el-col :span="6">
+            <el-card class="stats-card">
+              <el-statistic title="待缴费金额" :value="feeStats.unpaidAmount" prefix="¥" />
+            </el-card>
+          </el-col>
+          <el-col :span="6">
+            <el-card class="stats-card">
+              <el-statistic title="待审核记录" :value="feeStats.pendingCount" suffix="条" />
+            </el-card>
+          </el-col>
+        </el-row>
+      </div>
+      
+      <!-- 批量操作区域 -->
+      <div class="batch-operations">
+        <el-button 
+          type="primary" 
+          :disabled="selectedRows.length === 0"
+          @click="batchApprove"
+        >
+          批量审核通过
+        </el-button>
+        <el-button 
+          type="warning" 
+          :disabled="selectedRows.length === 0"
+          @click="batchReject"
+        >
+          批量审核拒绝
+        </el-button>
+        <el-button 
+          type="success" 
+          :disabled="selectedRows.length === 0"
+          @click="batchMarkPaid"
+        >
+          批量标记已缴费
+        </el-button>
+        <span class="selection-info" v-if="selectedRows.length > 0">
+          已选择 {{ selectedRows.length }} 条记录
+        </span>
+      </div>
+      
+      <el-table 
+        :data="tableData" 
+        style="width: 100%" 
+        v-loading="loading"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="55" />
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="studentName" label="学生姓名" />
         <el-table-column prop="studentId" label="学号" />
@@ -67,6 +135,13 @@
           <template #default="scope">
             <el-tag :type="getStatusTagType(scope.row.status)">
               {{ getStatusText(scope.row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="auditStatus" label="审核状态">
+          <template #default="scope">
+            <el-tag :type="getAuditStatusTagType(scope.row.auditStatus)">
+              {{ getAuditStatusText(scope.row.auditStatus) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -181,7 +256,11 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+
+// 路由相关
+const router = useRouter()
 
 // 响应式数据
 const tableData = ref([
@@ -194,6 +273,7 @@ const tableData = ref([
     dueDate: '2023-09-30',
     paymentDate: '2023-09-25',
     status: 'paid',
+    auditStatus: 'approved',
     remark: '按时缴费'
   },
   {
@@ -205,6 +285,7 @@ const tableData = ref([
     dueDate: '2023-10-15',
     paymentDate: null,
     status: 'unpaid',
+    auditStatus: 'pending',
     remark: ''
   },
   {
@@ -216,9 +297,33 @@ const tableData = ref([
     dueDate: '2023-10-10',
     paymentDate: '2023-10-08',
     status: 'paid',
+    auditStatus: 'approved',
     remark: '提前缴费'
+  },
+  {
+    id: 4,
+    studentName: '赵六',
+    studentId: '2023004',
+    feeType: 'accommodation',
+    amount: 1200.00,
+    dueDate: '2023-10-20',
+    paymentDate: null,
+    status: 'unpaid',
+    auditStatus: 'rejected',
+    remark: '申请被拒绝'
   }
 ])
+
+// 费用统计数据
+const feeStats = ref({
+  totalAmount: 2630.50,
+  paidAmount: 1280.00,
+  unpaidAmount: 1350.50,
+  pendingCount: 1
+})
+
+// 选中的行数据
+const selectedRows = ref([])
 
 const loading = ref(false)
 const currentPage = ref(1)
@@ -229,6 +334,7 @@ const searchForm = ref({
   studentName: '',
   feeType: '',
   status: '',
+  auditStatus: '',
   dateRange: []
 })
 
@@ -302,6 +408,34 @@ const getStatusText = (status: string) => {
   }
 }
 
+// 获取审核状态标签类型
+const getAuditStatusTagType = (status: string) => {
+  switch (status) {
+    case 'approved':
+      return 'success'
+    case 'pending':
+      return 'warning'
+    case 'rejected':
+      return 'danger'
+    default:
+      return 'info'
+  }
+}
+
+// 获取审核状态文本
+const getAuditStatusText = (status: string) => {
+  switch (status) {
+    case 'approved':
+      return '已审核'
+    case 'pending':
+      return '待审核'
+    case 'rejected':
+      return '已拒绝'
+    default:
+      return '未知'
+  }
+}
+
 // 搜索
 const handleSearch = () => {
   console.log('🔍 搜索费用记录:', searchForm.value)
@@ -314,6 +448,7 @@ const handleReset = () => {
     studentName: '',
     feeType: '',
     status: '',
+    auditStatus: '',
     dateRange: []
   }
   ElMessage.success('重置搜索条件')
@@ -322,7 +457,7 @@ const handleReset = () => {
 // 查看详情
 const handleView = (row: any) => {
   console.log('👁️ 查看费用详情:', row)
-  ElMessage.info(`查看费用详情: ${row.studentName} - ${getFeeTypeText(row.feeType)}`)
+  router.push(`/fee-detail/${row.id}`)
 }
 
 // 新增
@@ -404,9 +539,152 @@ const handleCurrentChange = (val: number) => {
   console.log(`📄 当前页: ${val}`)
 }
 
+// 表格选择变化
+const handleSelectionChange = (selection: any[]) => {
+  selectedRows.value = selection
+  console.log('📋 表格选择变化:', selection)
+}
+
+// 批量审核通过
+const batchApprove = async () => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要审核通过选中的 ${selectedRows.value.length} 条费用记录吗？`,
+      '批量审核通过',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    
+    console.log('✅ 批量审核通过:', selectedRows.value)
+    
+    // 更新表格中的审核状态
+    selectedRows.value.forEach(row => {
+      const index = tableData.value.findIndex(item => item.id === row.id)
+      if (index !== -1) {
+        tableData.value[index].auditStatus = 'approved'
+      }
+    })
+    
+    // 清空选择
+    selectedRows.value = []
+    
+    // 更新统计
+    updateFeeStats()
+    
+    ElMessage.success('批量审核通过成功')
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('❌ 批量审核通过失败:', error)
+      ElMessage.error('批量审核通过失败')
+    }
+  }
+}
+
+// 批量审核拒绝
+const batchReject = async () => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要审核拒绝选中的 ${selectedRows.value.length} 条费用记录吗？`,
+      '批量审核拒绝',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    
+    console.log('❌ 批量审核拒绝:', selectedRows.value)
+    
+    // 更新表格中的审核状态
+    selectedRows.value.forEach(row => {
+      const index = tableData.value.findIndex(item => item.id === row.id)
+      if (index !== -1) {
+        tableData.value[index].auditStatus = 'rejected'
+      }
+    })
+    
+    // 清空选择
+    selectedRows.value = []
+    
+    // 更新统计
+    updateFeeStats()
+    
+    ElMessage.success('批量审核拒绝成功')
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('❌ 批量审核拒绝失败:', error)
+      ElMessage.error('批量审核拒绝失败')
+    }
+  }
+}
+
+// 批量标记已缴费
+const batchMarkPaid = async () => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要将选中的 ${selectedRows.value.length} 条费用记录标记为已缴费吗？`,
+      '批量标记已缴费',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    
+    console.log('💰 批量标记已缴费:', selectedRows.value)
+    
+    // 更新表格中的缴费状态
+    selectedRows.value.forEach(row => {
+      const index = tableData.value.findIndex(item => item.id === row.id)
+      if (index !== -1) {
+        tableData.value[index].status = 'paid'
+        tableData.value[index].paymentDate = new Date().toISOString().split('T')[0]
+      }
+    })
+    
+    // 清空选择
+    selectedRows.value = []
+    
+    // 更新统计
+    updateFeeStats()
+    
+    ElMessage.success('批量标记已缴费成功')
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('❌ 批量标记已缴费失败:', error)
+      ElMessage.error('批量标记已缴费失败')
+    }
+  }
+}
+
+// 更新费用统计
+const updateFeeStats = () => {
+  const totalAmount = tableData.value.reduce((sum, item) => sum + item.amount, 0)
+  const paidAmount = tableData.value
+    .filter(item => item.status === 'paid')
+    .reduce((sum, item) => sum + item.amount, 0)
+  const unpaidAmount = totalAmount - paidAmount
+  const pendingCount = tableData.value.filter(item => item.auditStatus === 'pending').length
+  
+  feeStats.value = {
+    totalAmount,
+    paidAmount,
+    unpaidAmount,
+    pendingCount
+  }
+  
+  console.log('📊 更新费用统计:', feeStats.value)
+}
+
 // 组件挂载
 onMounted(() => {
   console.log('💰 费用记录列表页面加载完成')
+  
+  // 初始化统计数据
+  updateFeeStats()
 })
 
 /**
@@ -428,6 +706,27 @@ onMounted(() => {
 
 .search-bar {
   margin-bottom: 20px;
+}
+
+.fee-stats-container {
+  margin-bottom: 20px;
+}
+
+.stats-card {
+  text-align: center;
+}
+
+.batch-operations {
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.selection-info {
+  margin-left: 10px;
+  color: #606266;
+  font-size: 14px;
 }
 
 .pagination-container {
