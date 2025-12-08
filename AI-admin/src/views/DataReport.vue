@@ -104,6 +104,56 @@
             </el-col>
           </el-row>
         </el-tab-pane>
+        
+        <el-tab-pane label="多维分析" name="multiDimension">
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <el-card>
+                <template #header>
+                  <div class="chart-header">
+                    <span>雷达图分析</span>
+                  </div>
+                </template>
+                <div ref="radarChartRef" style="height: 300px;"></div>
+              </el-card>
+            </el-col>
+            
+            <el-col :span="8">
+              <el-card>
+                <template #header>
+                  <div class="chart-header">
+                    <span>散点图分析</span>
+                  </div>
+                </template>
+                <div ref="scatterChartRef" style="height: 300px;"></div>
+              </el-card>
+            </el-col>
+            
+            <el-col :span="8">
+              <el-card>
+                <template #header>
+                  <div class="chart-header">
+                    <span>热力图分析</span>
+                  </div>
+                </template>
+                <div ref="heatmapChartRef" style="height: 300px;"></div>
+              </el-card>
+            </el-col>
+          </el-row>
+          
+          <el-row :gutter="20" style="margin-top: 20px;">
+            <el-col :span="24">
+              <el-card>
+                <template #header>
+                  <div class="chart-header">
+                    <span>综合仪表盘</span>
+                  </div>
+                </template>
+                <div ref="dashboardChartRef" style="height: 300px;"></div>
+              </el-card>
+            </el-col>
+          </el-row>
+        </el-tab-pane>
       </el-tabs>
       
       <!-- 报表数据表格 -->
@@ -188,10 +238,18 @@ const mainChartRef = ref()
 const pieChartRef = ref()
 const userPathChartRef = ref()
 const behaviorPatternChartRef = ref()
+const radarChartRef = ref()
+const scatterChartRef = ref()
+const heatmapChartRef = ref()
+const dashboardChartRef = ref()
 
 // 图表实例
 let userPathChart: echarts.ECharts
 let behaviorPatternChart: echarts.ECharts
+let radarChart: echarts.ECharts
+let scatterChart: echarts.ECharts
+let heatmapChart: echarts.ECharts
+let dashboardChart: echarts.ECharts
 
 const activeChartTab = ref('main')
 
@@ -395,6 +453,11 @@ const handleChartTabChange = () => {
   // 如果切换到用户行为分析标签页，初始化相关图表
   if (activeChartTab.value === 'userBehavior') {
     initUserBehaviorCharts()
+  }
+  
+  // 如果切换到多维分析标签页，初始化相关图表
+  if (activeChartTab.value === 'multiDimension') {
+    initMultiDimensionCharts()
   }
 }
 
