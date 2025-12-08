@@ -384,12 +384,123 @@ const handleCurrentChange = (val: number) => {
 const handleResize = () => {
   if (mainChart) mainChart.resize()
   if (pieChart) pieChart.resize()
+  if (userPathChart) userPathChart.resize()
+  if (behaviorPatternChart) behaviorPatternChart.resize()
+}
+
+// 图表标签页切换
+const handleChartTabChange = () => {
+  console.log('📊 图表标签页切换:', activeChartTab.value)
+  
+  // 如果切换到用户行为分析标签页，初始化相关图表
+  if (activeChartTab.value === 'userBehavior') {
+    initUserBehaviorCharts()
+  }
+}
+
+// 初始化用户行为分析图表
+const initUserBehaviorCharts = () => {
+  // 用户路径分析图
+  userPathChart = echarts.init(userPathChartRef.value)
+  userPathChart.setOption({
+    tooltip: {
+      trigger: 'axis'
+    },
+    legend: {
+      data: ['登录', '浏览', '操作', '退出']
+    },
+    xAxis: {
+      type: 'category',
+      data: ['步骤1', '步骤2', '步骤3', '步骤4', '步骤5', '步骤6']
+    },
+    yAxis: {
+      type: 'value',
+      name: '用户数'
+    },
+    series: [
+      {
+        name: '登录',
+        type: 'line',
+        stack: '总量',
+        data: [100, 85, 70, 60, 50, 30]
+      },
+      {
+        name: '浏览',
+        type: 'line',
+        stack: '总量',
+        data: [85, 75, 65, 55, 45, 25]
+      },
+      {
+        name: '操作',
+        type: 'line',
+        stack: '总量',
+        data: [70, 65, 55, 45, 35, 20]
+      },
+      {
+        name: '退出',
+        type: 'line',
+        stack: '总量',
+        data: [30, 25, 20, 15, 10, 5]
+      }
+    ]
+  })
+  
+  // 行为模式识别图
+  behaviorPatternChart = echarts.init(behaviorPatternChartRef.value)
+  behaviorPatternChart.setOption({
+    tooltip: {
+      trigger: 'item'
+    },
+    legend: {
+      bottom: 'bottom'
+    },
+    series: [
+      {
+        name: '行为模式',
+        type: 'pie',
+        radius: ['40%', '70%'],
+        avoidLabelOverlap: false,
+        itemStyle: {
+          borderRadius: 10,
+          borderColor: '#fff',
+          borderWidth: 2
+        },
+        label: {
+          show: false,
+          position: 'center'
+        },
+        emphasis: {
+          label: {
+            show: true,
+            fontSize: '18',
+            fontWeight: 'bold'
+          }
+        },
+        labelLine: {
+          show: false
+        },
+        data: [
+          { value: 35, name: '高频用户' },
+          { value: 25, name: '低频用户' },
+          { value: 20, name: '新用户' },
+          { value: 15, name: '流失用户' },
+          { value: 5, name: '异常用户' }
+        ]
+      }
+    ]
+  })
 }
 
 // 组件挂载
 onMounted(() => {
   console.log('📈 数据报表页面加载完成')
   initCharts()
+  
+  // 如果默认激活的是用户行为分析标签页，初始化相关图表
+  if (activeChartTab.value === 'userBehavior') {
+    initUserBehaviorCharts()
+  }
+  
   window.addEventListener('resize', handleResize)
 })
 
