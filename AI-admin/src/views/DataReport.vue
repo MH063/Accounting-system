@@ -52,29 +52,59 @@
       </el-row>
       
       <!-- 图表区域 -->
-      <el-row :gutter="20">
-        <el-col :span="16">
-          <el-card>
-            <template #header>
-              <div class="chart-header">
-                <span>{{ chartTitle }}</span>
-              </div>
-            </template>
-            <div ref="mainChartRef" style="height: 400px;"></div>
-          </el-card>
-        </el-col>
+      <el-tabs v-model="activeChartTab" @tab-change="handleChartTabChange">
+        <el-tab-pane label="主要趋势" name="main">
+          <el-row :gutter="20">
+            <el-col :span="16">
+              <el-card>
+                <template #header>
+                  <div class="chart-header">
+                    <span>{{ chartTitle }}</span>
+                  </div>
+                </template>
+                <div ref="mainChartRef" style="height: 400px;"></div>
+              </el-card>
+            </el-col>
+            
+            <el-col :span="8">
+              <el-card>
+                <template #header>
+                  <div class="chart-header">
+                    <span>数据分布</span>
+                  </div>
+                </template>
+                <div ref="pieChartRef" style="height: 400px;"></div>
+              </el-card>
+            </el-col>
+          </el-row>
+        </el-tab-pane>
         
-        <el-col :span="8">
-          <el-card>
-            <template #header>
-              <div class="chart-header">
-                <span>数据分布</span>
-              </div>
-            </template>
-            <div ref="pieChartRef" style="height: 400px;"></div>
-          </el-card>
-        </el-col>
-      </el-row>
+        <el-tab-pane label="用户行为分析" name="userBehavior">
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-card>
+                <template #header>
+                  <div class="chart-header">
+                    <span>用户路径分析</span>
+                  </div>
+                </template>
+                <div ref="userPathChartRef" style="height: 400px;"></div>
+              </el-card>
+            </el-col>
+            
+            <el-col :span="12">
+              <el-card>
+                <template #header>
+                  <div class="chart-header">
+                    <span>行为模式识别</span>
+                  </div>
+                </template>
+                <div ref="behaviorPatternChartRef" style="height: 400px;"></div>
+              </el-card>
+            </el-col>
+          </el-row>
+        </el-tab-pane>
+      </el-tabs>
       
       <!-- 报表数据表格 -->
       <el-card style="margin-top: 20px;">
@@ -156,6 +186,14 @@ const total = ref(100)
 // 图表引用
 const mainChartRef = ref()
 const pieChartRef = ref()
+const userPathChartRef = ref()
+const behaviorPatternChartRef = ref()
+
+// 图表实例
+let userPathChart: echarts.ECharts
+let behaviorPatternChart: echarts.ECharts
+
+const activeChartTab = ref('main')
 
 // 图表实例
 let mainChart: echarts.ECharts
