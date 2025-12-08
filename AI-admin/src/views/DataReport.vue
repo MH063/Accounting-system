@@ -123,7 +123,9 @@ const reportStats = ref([
   { title: '总用户数', value: 1245, trend: 2.5, color: 'primary', icon: 'User' },
   { title: '活跃用户', value: 842, trend: 5.2, color: 'success', icon: 'User' },
   { title: '总收入', value: '¥256,805', trend: -1.8, color: 'warning', icon: 'Coin' },
-  { title: '平均响应时间', value: '128ms', trend: -3.5, color: 'info', icon: 'DataLine' }
+  { title: '平均响应时间', value: '128ms', trend: -3.5, color: 'info', icon: 'DataLine' },
+  { title: '系统使用率', value: '85%', trend: 2.1, color: 'success', icon: 'DataLine' },
+  { title: '报表生成数', value: 24, trend: 8.3, color: 'primary', icon: 'Document' }
 ])
 
 const chartTitle = ref('用户活跃度趋势')
