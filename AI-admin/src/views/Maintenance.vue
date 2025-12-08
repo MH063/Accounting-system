@@ -164,7 +164,7 @@
             <el-pagination
               v-model:current-page="backupCurrentPage"
               v-model:page-size="backupPageSize"
-              :page-sizes="[10, 15, 20, 30, 50]"
+              :page-sizes="[10, 20, 50, 100]"
               layout="total, sizes, prev, pager, next, jumper"
               :total="backupTotal"
               @size-change="handleBackupSizeChange"
@@ -235,7 +235,7 @@
             <el-pagination
               v-model:current-page="logCurrentPage"
               v-model:page-size="logPageSize"
-              :page-sizes="[10, 15, 20, 30, 50]"
+              :page-sizes="[10, 20, 50, 100]"
               layout="total, sizes, prev, pager, next, jumper"
               :total="logTotal"
               @size-change="handleLogSizeChange"
@@ -476,7 +476,7 @@
             <el-pagination
               v-model:current-page="healthCurrentPage"
               v-model:page-size="healthPageSize"
-              :page-sizes="[10, 15, 20, 30, 50]"
+              :page-sizes="[10, 20, 50, 100]"
               layout="total, sizes, prev, pager, next, jumper"
               :total="healthTotal"
               @size-change="handleHealthSizeChange"
@@ -832,7 +832,7 @@ const creatingBackup = ref(false)
 const restoringBackup = ref(false)
 const backupTotal = ref(0)
 const backupCurrentPage = ref(1)
-const backupPageSize = ref(15)
+const backupPageSize = ref(20)
 const backupDialogVisible = ref(false)
 const backupForm = reactive({
   name: '',
@@ -1387,7 +1387,7 @@ const healthResultsLoading = ref(false)
 const healthResults = ref([])
 const healthTotal = ref(0)
 const healthCurrentPage = ref(1)
-const healthPageSize = ref(15)
+const healthPageSize = ref(20)
 const healthDetailDialogVisible = ref(false)
 const healthDetailData = ref({})
 const systemHealth = ref({
@@ -1991,7 +1991,7 @@ const logLoading = ref(false)
 const logList = ref([])
 const logTotal = ref(0)
 const logCurrentPage = ref(1)
-const logPageSize = ref(15)
+const logPageSize = ref(20)
 const logSearchForm = reactive({
   type: '',
   level: '',

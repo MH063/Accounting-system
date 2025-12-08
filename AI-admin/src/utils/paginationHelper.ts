@@ -39,7 +39,7 @@ export function createPaginationManager<T>(
   // 分页状态
   const paginationState = ref<PaginationState>({
     currentPage: 1,
-    pageSize: 15,
+    pageSize: 20,
     total: 0,
     loading: false,
     error: null
@@ -144,7 +144,7 @@ export function createPaginationManager<T>(
    */
   const reset = () => {
     paginationState.value.currentPage = 1
-    paginationState.value.pageSize = 15
+    paginationState.value.pageSize = 20
     paginationState.value.total = 0
     paginationState.value.loading = false
     paginationState.value.error = null

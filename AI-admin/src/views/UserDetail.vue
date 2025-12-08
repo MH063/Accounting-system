@@ -92,7 +92,7 @@
         <el-pagination
           v-model:current-page="logsPage"
           v-model:page-size="logsPageSize"
-          :page-sizes="[5, 10, 20]"
+          :page-sizes="[10, 20, 50, 100]"
           layout="total, sizes, prev, pager, next, jumper"
           :total="logsTotal"
           @size-change="handleLogsSizeChange"
@@ -136,7 +136,7 @@
         <el-pagination
           v-model:current-page="paymentsPage"
           v-model:page-size="paymentsPageSize"
-          :page-sizes="[5, 10, 20]"
+          :page-sizes="[10, 20, 50, 100]"
           layout="total, sizes, prev, pager, next, jumper"
           :total="paymentsTotal"
           @size-change="handlePaymentsSizeChange"
@@ -246,14 +246,14 @@ const originalUserDetail = ref<any>({})
 const loginLogs = ref<any[]>([])
 const logsLoading = ref(false)
 const logsPage = ref(1)
-const logsPageSize = ref(10)
+const logsPageSize = ref(20)
 const logsTotal = ref(0)
 
 // 支付记录相关
 const paymentRecords = ref<any[]>([])
 const paymentsLoading = ref(false)
 const paymentsPage = ref(1)
-const paymentsPageSize = ref(10)
+const paymentsPageSize = ref(20)
 const paymentsTotal = ref(0)
 
 // 权限角色相关

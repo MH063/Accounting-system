@@ -27,22 +27,8 @@ export const getUserInfo = async (username: string, email: string): Promise<User
     
     // 模拟用户数据库查询
     // 在实际应用中，这里应该调用后端API来验证用户信息
-    if (username === 'admin' && email === 'admin@example.com') {
-      return {
-        id: '1',
-        username: 'admin',
-        email: 'admin@example.com'
-      }
-    }
-    
-    // 添加更多测试用户
-    if (username === 'test' && email === 'test@example.com') {
-      return {
-        id: '2',
-        username: 'test',
-        email: 'test@example.com'
-      }
-    }
+    // 硬编码测试凭证已移除以避免安全风险
+    // 实际项目中应通过后端API验证用户凭证
     
     // 模拟用户不存在的情况
     return null

@@ -807,8 +807,9 @@ const handleLogin = async () => {
         
         // 模拟登录请求
         setTimeout(async () => {
-          // 简单的模拟登录验证
-          if (loginForm.username === 'admin' && loginForm.password === '123456') {
+          // 模拟登录验证 - 已移除硬编码测试凭证以避免安全风险
+          // 实际项目中应通过后端API验证用户凭证
+          if (false) { // 硬编码测试凭证已删除
             // 检查是否需要两步验证
             const twoFactorStatus = getTwoFactorStatus(accountId)
             
