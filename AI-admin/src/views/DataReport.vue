@@ -23,6 +23,7 @@
               style="margin-right: 15px;"
             />
             <el-button type="primary" @click="handleGenerate">生成报表</el-button>
+            <el-button @click="handleAutoGenerate">自动计划</el-button>
             <el-button @click="handleExport">导出</el-button>
           </div>
         </div>
@@ -319,6 +320,12 @@ const handleGenerate = () => {
 const handleExport = () => {
   console.log('📤 导出报表数据')
   ElMessage.success('导出功能待实现')
+}
+
+// 自动计划生成
+const handleAutoGenerate = () => {
+  console.log('⏱️ 设置自动报表生成计划')
+  ElMessage.info('自动报表生成功能待实现')
 }
 
 // 分页相关
