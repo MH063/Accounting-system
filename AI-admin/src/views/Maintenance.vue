@@ -2089,6 +2089,12 @@ const handleSearchLog = () => {
   fetchLogList()
 }
 
+// 查询日志
+const handleSearchLogs = () => {
+  logCurrentPage.value = 1
+  fetchLogList()
+}
+
 // 重置日志搜索
 const handleResetLogSearch = () => {
   Object.assign(logSearchForm, {
