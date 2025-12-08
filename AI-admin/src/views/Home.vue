@@ -794,6 +794,7 @@ import { ref, onMounted, computed, nextTick, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { User, House, Coin, CreditCard, Monitor, Setting, CoffeeCup, DataAnalysis } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
+import { createChartManager } from '@/utils/chartManager'
 import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 // 添加API导入
 import api from '../api/index'
@@ -802,6 +803,11 @@ import { maintenanceApi } from '../api/maintenance'
 
 // 获取路由器实例
 const router = useRouter()
+
+// 图表管理器实例
+let clientChartManager: any
+let backendChartManager: any
+let databaseChartManager: any
 
 // 响应式数据
 const activeComponentTab = ref('overview')
@@ -2363,6 +2369,11 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   
+  // 清理图表管理器
+  if (clientChartManager) clientChartManager.dispose()
+  if (backendChartManager) backendChartManager.dispose()
+  if (databaseChartManager) databaseChartManager.dispose()
+  
   // 清理定时器
   if (statusCheckTimer) {
     clearInterval(statusCheckTimer)
@@ -2373,61 +2384,52 @@ onUnmounted(() => {
 // 处理窗口大小改变事件
 const handleResize = () => {
   nextTick(() => {
-    const chartIds = ['clientChart', 'backendChart', 'databaseChart']
-    chartIds.forEach(id => {
-      const chartDom = document.getElementById(id)
-      if (chartDom) {
-        const chartInstance = echarts.getInstanceByDom(chartDom)
-        if (chartInstance) {
-          // 检查图表容器是否可见
-          const rect = chartDom.getBoundingClientRect()
-          const isVisible = (
-            rect.top < window.innerHeight &&
-            rect.bottom > 0 &&
-            rect.left < window.innerWidth &&
-            rect.right > 0
-          )
-          
-          if (isVisible) {
-            chartInstance.resize()
-            console.log(`图表 ${id} 已重绘`)  
-          }
-        }
-      }
-    })
+    if (clientChartManager) clientChartManager.resize()
+    if (backendChartManager) backendChartManager.resize()
+    if (databaseChartManager) databaseChartManager.resize()
   })
 }
 
 // 重置图表初始化状态
 const resetChartInitialization = () => {
-  const chartIds = ['clientChart', 'backendChart', 'databaseChart']
-  chartIds.forEach(id => {
-    const chartDom = document.getElementById(id)
-    if (chartDom) {
-      chartDom.removeAttribute('data-chart-initialized')
-      // 销毁已存在的图表实例
-      const chartInstance = echarts.getInstanceByDom(chartDom)
-      if (chartInstance) {
-        chartInstance.dispose()
-      }
-    }
-  })
+  // 销毁已存在的图表实例
+  if (clientChartManager) {
+    clientChartManager.dispose()
+    clientChartManager = null
+  }
+  if (backendChartManager) {
+    backendChartManager.dispose()
+    backendChartManager = null
+  }
+  if (databaseChartManager) {
+    databaseChartManager.dispose()
+    databaseChartManager = null
+  }
 }
 
 // 当图表容器可见时初始化图表
 const initChartsWhenVisible = () => {
-  const chartIds = ['clientChart', 'backendChart', 'databaseChart']
-  
-  chartIds.forEach(id => {
-    const chartDom = document.getElementById(id)
-    if (chartDom && !chartDom.getAttribute('data-chart-initialized')) {
+  const chartConfigs = [
+    { id: 'clientChart', manager: clientChartManager, setter: (manager: any) => clientChartManager = manager },
+    { id: 'backendChart', manager: backendChartManager, setter: (manager: any) => backendChartManager = manager },
+    { id: 'databaseChart', manager: databaseChartManager, setter: (manager: any) => databaseChartManager = manager }
+  ]
+
+  chartConfigs.forEach(config => {
+    const chartDom = document.getElementById(config.id)
+    if (chartDom && !config.manager) {
       // 使用Intersection Observer检测元素是否可见
       const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
           if (entry.isIntersecting) {
             // 元素可见时初始化图表
-            console.log(`图表容器 ${id} 已进入视口，开始初始化`)  
-            initChartWithRetry(id, getChartOptionsById(id))
+            console.log(`图表容器 ${config.id} 已进入视口，开始初始化`)
+            const options = getChartOptionsById(config.id)
+            const chartManager = createChartManager({
+              container: chartDom,
+              options: options
+            })
+            config.setter(chartManager)
             // 初始化完成后停止观察
             observer.unobserve(entry.target)
           }
@@ -2435,7 +2437,7 @@ const initChartsWhenVisible = () => {
       }, {
         threshold: 0.1  // 当10%的元素可见时触发
       })
-      
+
       observer.observe(chartDom)
     }
   })
@@ -2590,8 +2592,28 @@ const initChartWithRetry = (elementId: string, option: any, retries = 0) => {
       
       console.log(`初始化图表 ${elementId}，容器尺寸: ${chartDom.clientWidth}x${chartDom.clientHeight}，是否在视口内: ${isInViewport}`)
       
-      const chart = echarts.init(chartDom)
-      chart.setOption(option)
+      // 使用图表管理器创建图表
+      let chartManager: any;
+      if (elementId === 'clientChart') {
+        chartManager = createChartManager({
+          container: chartDom,
+          options: option
+        });
+        clientChartManager = chartManager;
+      } else if (elementId === 'backendChart') {
+        chartManager = createChartManager({
+          container: chartDom,
+          options: option
+        });
+        backendChartManager = chartManager;
+      } else if (elementId === 'databaseChart') {
+        chartManager = createChartManager({
+          container: chartDom,
+          options: option
+        });
+        databaseChartManager = chartManager;
+      }
+      
       // 标记图表已初始化
       chartDom.setAttribute('data-chart-initialized', 'true')
       console.log(`图表 ${elementId} 初始化成功`)

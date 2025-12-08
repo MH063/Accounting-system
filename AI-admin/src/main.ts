@@ -10,6 +10,9 @@ import Home from './views/Home.vue'
 import NotFound from './views/NotFound.vue'
 import './style.css'
 
+// 导入Vuex store
+import store from './store'
+
 // 路由配置
 const routes: RouteRecordRaw[] = [
   {
@@ -223,6 +226,9 @@ app.use(ElementPlus)
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
   app.component(key, component)
 }
+
+// 注册Vuex store
+app.use(store)
 
 app.use(router)
 app.mount('#app')

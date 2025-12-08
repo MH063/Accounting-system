@@ -302,6 +302,7 @@
         action="/api/upload"
         :auto-upload="false"
         :on-change="handleFileChange"
+        :before-upload="beforeUpload"
         :file-list="fileList"
       >
         <el-icon class="el-icon--upload"><upload-filled /></el-icon>
@@ -345,6 +346,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
+import { validateCustomFile, createCustomFileType } from '@/utils/fileUploadValidator'
 
 // 路由相关
 const router = useRouter()
@@ -684,6 +686,19 @@ const handleUploadCertificate = () => {
 const handleFileChange = (file: any, fileList: any) => {
   // 实际应用中这里会处理文件上传逻辑
   console.log('文件变化:', file, fileList)
+}
+
+// 上传前检查
+const beforeUpload = (file: any) => {
+  // 创建自定义文件类型配置（凭证图片）
+  const certificateFileType = createCustomFileType(
+    ['.jpg', '.jpeg', '.png'],
+    ['image/jpeg', 'image/png'],
+    0.5, // 500KB
+    '凭证图片'
+  )
+  
+  return validateCustomFile(file, certificateFileType)
 }
 
 // 提交凭证表单

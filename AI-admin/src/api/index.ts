@@ -26,12 +26,19 @@ api.interceptors.response.use(
   (response) => {
     console.log('✅ API响应:', response.config.url, response.status)
     
-    // 处理后端返回的数据结构 {success: true, data: {xxx: []}}
+    // 统一处理后端返回的数据结构 {success: true, data: {xxx: []}}
     if (response.data && typeof response.data === 'object') {
-      if (response.data.success === true && response.data.data) {
-        return response.data.data
+      // 如果是标准的成功响应结构
+      if (response.data.hasOwnProperty('success')) {
+        if (response.data.success === true) {
+          // 成功时返回data字段
+          return response.data.data || {}
+        } else {
+          // 失败时抛出错误
+          return Promise.reject(new Error(response.data.message || '请求失败'))
+        }
       }
-      // 如果没有success字段，直接返回数据
+      // 如果不是标准结构，直接返回数据
       return response.data
     }
     
@@ -57,4 +64,11 @@ export const apiRequest = {
   post: (url: string, data?: any) => api.post(url, data),
   put: (url: string, data?: any) => api.put(url, data),
   delete: (url: string) => api.delete(url)
+}
+
+// API响应类型
+export interface ApiResponse<T = any> {
+  success: boolean
+  data: T
+  message?: string
 }

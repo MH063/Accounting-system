@@ -2129,7 +2129,14 @@ const handleNotificationReset = () => {
     status: '',
     priority: ''
   })
-  handleNotificationSearch()
+  // 清除表单验证状态
+  const form = document.querySelector('.notification-search-form .el-form')
+  if (form) {
+    const elFormInstance = (form as any).__vueParentComponent?.ctx?.$.setupState
+    if (elFormInstance && elFormInstance.validate) {
+      elFormInstance.clearValidate()
+    }
+  }
 }
 
 const handleNotificationSizeChange = (size: number) => {
@@ -2213,7 +2220,14 @@ const handleTemplateReset = () => {
     type: '',
     isActive: undefined
   })
-  handleTemplateSearch()
+  // 清除表单验证状态
+  const form = document.querySelector('.template-search-form .el-form')
+  if (form) {
+    const elFormInstance = (form as any).__vueParentComponent?.ctx?.$.setupState
+    if (elFormInstance && elFormInstance.validate) {
+      elFormInstance.clearValidate()
+    }
+  }
 }
 
 const handleTemplateSizeChange = (size: number) => {
@@ -2317,7 +2331,14 @@ const handleHistoryReset = () => {
     status: '',
     dateRange: []
   })
-  handleHistorySearch()
+  // 清除表单验证状态
+  const form = document.querySelector('.history-search-form .el-form')
+  if (form) {
+    const elFormInstance = (form as any).__vueParentComponent?.ctx?.$.setupState
+    if (elFormInstance && elFormInstance.validate) {
+      elFormInstance.clearValidate()
+    }
+  }
 }
 
 const handleHistorySizeChange = (size: number) => {
@@ -2341,7 +2362,14 @@ const handleStatsReset = () => {
     type: '',
     method: ''
   })
-  handleStatsSearch()
+  // 清除表单验证状态
+  const form = document.querySelector('.stats-search-form .el-form')
+  if (form) {
+    const elFormInstance = (form as any).__vueParentComponent?.ctx?.$.setupState
+    if (elFormInstance && elFormInstance.validate) {
+      elFormInstance.clearValidate()
+    }
+  }
 }
 
 // 用户群体相关处理函数
@@ -2492,7 +2520,14 @@ const handleUserGroupReset = () => {
     keyword: '',
     isActive: undefined
   })
-  handleUserGroupSearch()
+  // 清除表单验证状态
+  const form = document.querySelector('.usergroup-search-form .el-form')
+  if (form) {
+    const elFormInstance = (form as any).__vueParentComponent?.ctx?.$.setupState
+    if (elFormInstance && elFormInstance.validate) {
+      elFormInstance.clearValidate()
+    }
+  }
 }
 
 const handleUserGroupSizeChange = (size: number) => {
@@ -2610,7 +2645,14 @@ const handleTaskReset = () => {
     status: '',
     dateRange: []
   })
-  handleTaskSearch()
+  // 清除表单验证状态
+  const form = document.querySelector('.task-search-form .el-form')
+  if (form) {
+    const elFormInstance = (form as any).__vueParentComponent?.ctx?.$.setupState
+    if (elFormInstance && elFormInstance.validate) {
+      elFormInstance.clearValidate()
+    }
+  }
 }
 
 const handleTaskSizeChange = (size: number) => {

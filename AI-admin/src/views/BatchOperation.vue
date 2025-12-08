@@ -336,6 +336,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
 import { userApi, systemApi } from '../api/user'
+import { validateFile } from '@/utils/fileUploadValidator'
 
 // 路由相关
 const router = useRouter()
@@ -419,19 +420,7 @@ const goBack = () => {
 
 // 文件上传前验证
 const beforeUpload = (file: File) => {
-  const isExcel = file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-                  file.type === 'application/vnd.ms-excel'
-  const isLt10M = file.size / 1024 / 1024 < 10
-
-  if (!isExcel) {
-    ElMessage.error('只能上传Excel文件!')
-    return false
-  }
-  if (!isLt10M) {
-    ElMessage.error('文件大小不能超过10MB!')
-    return false
-  }
-  return true
+  return validateFile(file, 'excel')
 }
 
 // 文件选择处理

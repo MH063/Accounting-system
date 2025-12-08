@@ -967,7 +967,7 @@ const getLevelTagType = (level: string) => {
     case 'major':
       return 'warning'
     case 'minor':
-      return ''
+      return 'info'
     case 'info':
       return 'info'
     default:
@@ -1093,7 +1093,7 @@ const getEmergencyLevelTagType = (level: string) => {
     case 'high':
       return 'warning'
     case 'medium':
-      return ''
+      return 'info'
     case 'low':
       return 'info'
     default:
@@ -1130,7 +1130,14 @@ const handleReset = () => {
     keyword: '',
     dateRange: []
   }
-  ElMessage.success('重置搜索条件')
+  // 清除表单验证状态
+  const form = document.querySelector('.search-form .el-form')
+  if (form) {
+    const elFormInstance = (form as any).__vueParentComponent?.ctx?.$.setupState
+    if (elFormInstance && elFormInstance.validate) {
+      elFormInstance.clearValidate()
+    }
+  }
 }
 
 // 异常行为搜索

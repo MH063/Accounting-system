@@ -113,6 +113,7 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { User, Coin, Document, DataLine, Top, Bottom } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
+import { createChartManager } from '@/utils/chartManager'
 
 // 响应式数据
 const reportType = ref('userActivity')
@@ -154,15 +155,16 @@ const total = ref(100)
 const mainChartRef = ref()
 const pieChartRef = ref()
 
-// 图表实例
-let mainChart: echarts.ECharts
-let pieChart: echarts.ECharts
+// 图表管理器实例
+let mainChartManager: any
+let pieChartManager: any
 
 // 初始化图表
 const initCharts = () => {
+  if (!mainChartRef.value || !pieChartRef.value) return
+  
   // 主图表
-  mainChart = echarts.init(mainChartRef.value)
-  mainChart.setOption({
+  const mainChartOptions = {
     tooltip: {
       trigger: 'axis'
     },
@@ -193,11 +195,15 @@ const initCharts = () => {
         data: [180, 210, 195, 240, 225, 205, 230]
       }
     ]
+  }
+  
+  mainChartManager = createChartManager({
+    container: mainChartRef.value,
+    options: mainChartOptions
   })
 
   // 饼图
-  pieChart = echarts.init(pieChartRef.value)
-  pieChart.setOption({
+  const pieChartOptions = {
     tooltip: {
       trigger: 'item'
     },
@@ -235,6 +241,11 @@ const initCharts = () => {
         ]
       }
     ]
+  }
+  
+  pieChartManager = createChartManager({
+    container: pieChartRef.value,
+    options: pieChartOptions
   })
 }
 
@@ -335,8 +346,8 @@ const handleCurrentChange = (val: number) => {
 
 // 窗口大小变更处理
 const handleResize = () => {
-  if (mainChart) mainChart.resize()
-  if (pieChart) pieChart.resize()
+  if (mainChartManager) mainChartManager.resize()
+  if (pieChartManager) pieChartManager.resize()
 }
 
 // 组件挂载
@@ -349,8 +360,8 @@ onMounted(() => {
 // 组件卸载前
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
-  if (mainChart) mainChart.dispose()
-  if (pieChart) pieChart.dispose()
+  if (mainChartManager) mainChartManager.dispose()
+  if (pieChartManager) pieChartManager.dispose()
 })
 
 /**

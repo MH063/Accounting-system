@@ -796,7 +796,14 @@ const handleReset = () => {
     name: '',
     status: ''
   }
-  ElMessage.success('重置搜索条件')
+  // 清除表单验证状态
+  const form = document.querySelector('.search-bar .el-form')
+  if (form) {
+    const elFormInstance = (form as any).__vueParentComponent?.ctx?.$.setupState
+    if (elFormInstance && elFormInstance.validate) {
+      elFormInstance.clearValidate()
+    }
+  }
 }
 
 // 查看详情

@@ -1001,6 +1001,9 @@ import { ElMessage } from 'element-plus'
 import { Document, Check, Warning, Finished } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 
+// 导入统一验证规则库
+import { commonRules } from '@/utils/validationRules'
+
 // 定义灰度策略类型
 interface GrayReleaseStrategy {
   id: number
@@ -1409,13 +1412,13 @@ const sentimentData = ref<SentimentData>({
 })
 
 const formRules = {
-  name: [{ required: true, message: '请输入策略名称', trigger: 'blur' }],
-  featureId: [{ required: true, message: '请选择关联功能', trigger: 'change' }],
-  targetGroup: [{ required: true, message: '请选择目标用户组', trigger: 'change' }],
-  initialPercentage: [{ required: true, message: '请设置初始发布比例', trigger: 'blur' }],
-  releasePace: [{ required: true, message: '请选择发布节奏', trigger: 'change' }],
-  startTime: [{ required: true, message: '请选择开始时间', trigger: 'change' }],
-  endTime: [{ required: true, message: '请选择预计结束时间', trigger: 'change' }]
+  name: commonRules.name,
+  featureId: commonRules.select,
+  targetGroup: commonRules.select,
+  initialPercentage: commonRules.integer,
+  releasePace: commonRules.select,
+  startTime: commonRules.date,
+  endTime: commonRules.date
 }
 
 const formRef = ref()
@@ -1636,7 +1639,7 @@ const getProgressStatus = (status: string) => {
 const getStatusTagType = (status: string) => {
   switch (status) {
     case 'pending':
-      return ''
+      return 'info'
     case 'in-progress':
       return 'warning'
     case 'paused':

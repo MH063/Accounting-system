@@ -302,6 +302,7 @@ import { ref, onMounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
+import { validateCustomFile, createCustomFileType } from '@/utils/fileUploadValidator'
 
 // 图表引用
 const usageChartRef = ref()
@@ -741,17 +742,15 @@ const handlePictureCardPreview = (file: any) => {
 
 // 上传前检查
 const beforeUpload = (file: any) => {
-  const isJPG = file.type === 'image/jpeg' || file.type === 'image/png'
-  const isLt2M = file.size / 1024 / 1024 < 2
+  // 创建自定义文件类型配置（收款码图片）
+  const qrCodeFileType = createCustomFileType(
+    ['.jpg', '.jpeg', '.png'],
+    ['image/jpeg', 'image/png'],
+    2,
+    '收款码图片'
+  )
   
-  if (!isJPG) {
-    ElMessage.error('收款码图片只能是 JPG 或 PNG 格式!')
-  }
-  if (!isLt2M) {
-    ElMessage.error('收款码图片大小不能超过 2MB!')
-  }
-  
-  return isJPG && isLt2M
+  return validateCustomFile(file, qrCodeFileType)
 }
 
 // 提交表单

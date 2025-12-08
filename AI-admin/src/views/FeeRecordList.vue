@@ -259,6 +259,9 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
+// 导入统一验证规则库
+import { commonRules } from '@/utils/validationRules'
+
 // 路由相关
 const router = useRouter()
 
@@ -323,7 +326,7 @@ const feeStats = ref({
 })
 
 // 选中的行数据
-const selectedRows = ref([])
+const selectedRows = ref<any[]>([])
 
 const loading = ref(false)
 const currentPage = ref(1)
@@ -355,11 +358,11 @@ const formData = ref({
 })
 
 const formRules = {
-  studentName: [{ required: true, message: '请输入学生姓名', trigger: 'blur' }],
-  studentId: [{ required: true, message: '请输入学号', trigger: 'blur' }],
-  feeType: [{ required: true, message: '请选择费用类型', trigger: 'change' }],
-  amount: [{ required: true, message: '请输入金额', trigger: 'blur' }],
-  dueDate: [{ required: true, message: '请选择应缴日期', trigger: 'change' }]
+  studentName: commonRules.name,
+  studentId: commonRules.name,
+  feeType: commonRules.select,
+  amount: commonRules.amount,
+  dueDate: commonRules.date
 }
 
 const formRef = ref()
@@ -451,7 +454,14 @@ const handleReset = () => {
     auditStatus: '',
     dateRange: []
   }
-  ElMessage.success('重置搜索条件')
+  // 清除表单验证状态
+  const form = document.querySelector('.search-form .el-form')
+  if (form) {
+    const elFormInstance = (form as any).__vueParentComponent?.ctx?.$.setupState
+    if (elFormInstance && elFormInstance.validate) {
+      elFormInstance.clearValidate()
+    }
+  }
 }
 
 // 查看详情

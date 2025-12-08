@@ -211,7 +211,8 @@ import { useRouter } from 'vue-router'
 import { dormitoryApi } from '../api/dormitory'
 import { House, Check, Tools, Warning } from '@element-plus/icons-vue'
 
-// 路由器实例
+// 导入统一验证规则库
+import { commonRules } from '@/utils/validationRules'// 路由器实例
 const router = useRouter()
 
 // 响应式数据
@@ -253,14 +254,12 @@ const formData = ref({
 })
 
 const formRules = {
-  dormNumber: [{ required: true, message: '请输入寝室号', trigger: 'blur' }],
-  building: [{ required: true, message: '请输入楼栋', trigger: 'blur' }],
-  capacity: [{ required: true, message: '请输入容量', trigger: 'change' }]
+  dormNumber: commonRules.name,
+  building: commonRules.name,
+  capacity: commonRules.integer
 }
 
-const formRef = ref()
-
-// 格式化日期
+const formRef = ref()// 格式化日期
 const formatDate = (dateString: string) => {
   if (!dateString) return '-'
   return new Date(dateString).toLocaleString()

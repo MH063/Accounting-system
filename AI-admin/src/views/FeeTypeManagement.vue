@@ -246,6 +246,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 
+// 导入统一验证规则库
+import { commonRules, businessRules } from '@/utils/validationRules'
+
 // 图表引用
 const usageChartRef = ref()
 
@@ -357,12 +360,12 @@ const detailData = ref({
 })
 
 const formRules = {
-  name: [{ required: true, message: '请输入费用类型名称', trigger: 'blur' }],
-  code: [{ required: true, message: '请输入费用类型编码', trigger: 'blur' }],
-  defaultAmount: [{ required: true, message: '请输入默认金额', trigger: 'blur' }],
-  billingCycle: [{ required: true, message: '请选择计费周期', trigger: 'change' }],
-  allocationRule: [{ required: true, message: '请选择默认分摊规则', trigger: 'change' }],
-  sortOrder: [{ required: true, message: '请输入显示顺序', trigger: 'blur' }]
+  name: commonRules.name,
+  code: businessRules.feeTypeCode,
+  defaultAmount: commonRules.amount,
+  billingCycle: commonRules.select,
+  allocationRule: commonRules.select,
+  sortOrder: commonRules.integer
 }
 
 const formRef = ref()

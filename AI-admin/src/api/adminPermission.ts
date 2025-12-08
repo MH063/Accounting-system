@@ -85,7 +85,7 @@ export interface PermissionApprovalProcess {
 export const adminAccountApi = {
   // 获取管理员账户列表
   getAdminAccounts: (params?: { page?: number; pageSize?: number; keyword?: string; status?: string }) => {
-    return apiRequest.get('/admin/accounts', params)
+    return apiRequest.get('/admin/accounts', { params })
   },
   
   // 获取管理员账户详情
@@ -109,8 +109,8 @@ export const adminAccountApi = {
   },
   
   // 重置管理员密码
-  resetAdminPassword: (id: number, newPassword: string) => {
-    return apiRequest.put(`/admin/accounts/${id}/password`, { newPassword })
+  resetAdminPassword: (id: number, newPassword: string, verificationCode?: string, reason?: string) => {
+    return apiRequest.put(`/admin/accounts/${id}/password`, { newPassword, verificationCode, reason })
   },
   
   // 更改管理员状态
@@ -120,7 +120,7 @@ export const adminAccountApi = {
   
   // 获取管理员权限变更历史
   getAdminPermissionHistory: (adminId: number, params?: { page?: number; pageSize?: number }) => {
-    return apiRequest.get(`/admin/accounts/${adminId}/permission-history`, params)
+    return apiRequest.get(`/admin/accounts/${adminId}/permission-history`, { params })
   },
 
   // 获取管理员登录历史
@@ -133,7 +133,7 @@ export const adminAccountApi = {
 export const permissionRoleApi = {
   // 获取权限角色列表
   getPermissionRoles: (params?: { page?: number; pageSize?: number; keyword?: string; status?: string }) => {
-    return apiRequest.get('/admin/roles', params)
+    return apiRequest.get('/admin/roles', { params })
   },
   
   // 获取权限角色详情
@@ -173,7 +173,7 @@ export const permissionHistoryApi = {
     startTime?: string; 
     endTime?: string 
   }) => {
-    return apiRequest.get('/admin/permission-history', params)
+    return apiRequest.get('/admin/permission-history', { params })
   },
   
   // 获取权限变更历史详情
@@ -192,7 +192,7 @@ export const permissionApprovalApi = {
     type?: string; 
     applicantId?: number 
   }) => {
-    return apiRequest.get('/admin/approval-processes', params)
+    return apiRequest.get('/admin/approval-processes', { params })
   },
   
   // 获取权限审批流程详情

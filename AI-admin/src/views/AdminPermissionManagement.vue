@@ -135,7 +135,7 @@
                 <el-button size="small" @click="handleViewAdmin(scope.row)">查看</el-button>
                 <el-button size="small" @click="handleEditAdmin(scope.row)">编辑</el-button>
                 <el-button size="small" type="warning" @click="handleResetPassword(scope.row)">重置密码</el-button>
-                <el-dropdown @command="(command) => handleStatusCommand(command, scope.row)">
+                <el-dropdown @command="(command: string) => handleStatusCommand(command, scope.row)">
                   <el-button size="small" type="info">
                     状态<el-icon class="el-icon--right"><arrow-down /></el-icon>
                   </el-button>
@@ -486,13 +486,13 @@
           <el-col :span="12">
             <div class="detail-item">
               <label class="detail-label">创建人:</label>
-              <span class="detail-value">{{ currentViewAdmin.createdByName || '-' }}</span>
+              <span class="detail-value">{{ currentViewAdmin.createdBy || '-' }}</span>
             </div>
           </el-col>
           <el-col :span="12">
             <div class="detail-item">
               <label class="detail-label">更新人:</label>
-              <span class="detail-value">{{ currentViewAdmin.updatedByName || '-' }}</span>
+              <span class="detail-value">{{ currentViewAdmin.updatedBy || '-' }}</span>
             </div>
           </el-col>
         </el-row>
@@ -634,6 +634,20 @@
         
         <el-form-item label="确认密码" prop="confirmPassword">
           <el-input v-model="passwordFormData.confirmPassword" type="password" placeholder="请确认密码" show-password />
+        </el-form-item>
+        
+        <!-- 安全验证 -->
+        <el-form-item label="验证码" prop="verificationCode" v-if="showSecurityVerification">
+          <el-input v-model="securityVerification.verificationCode" placeholder="请输入验证码" />
+        </el-form-item>
+        
+        <el-form-item label="重置原因" prop="reason" v-if="showSecurityVerification">
+          <el-input 
+            v-model="securityVerification.reason" 
+            type="textarea" 
+            :rows="3" 
+            placeholder="请输入密码重置原因" 
+          />
         </el-form-item>
       </el-form>
       
@@ -1096,6 +1110,8 @@ import {
   type LoginRecord
 } from '@/api/adminPermission'
 
+// 导入统一验证规则库
+import { commonRules, businessRules } from '@/utils/validationRules'
 // 响应式数据
 const stats = ref({
   totalAdmins: 0,
@@ -1166,6 +1182,13 @@ const adminFormRef = ref()
 const passwordDialogVisible = ref(false)
 const passwordFormRef = ref()
 
+// 安全验证相关
+const showSecurityVerification = ref(false)
+const securityVerification = ref({
+  verificationCode: '',
+  reason: ''
+})
+
 const roleDialogVisible = ref(false)
 const roleDialogTitle = ref('')
 const isEditRole = ref(false)
@@ -1182,13 +1205,14 @@ const currentViewAdmin = ref<AdminAccount>({
   realName: '',
   email: '',
   phone: '',
-  status: '',
+  status: 'active',
+  roleIds: [],
   roleNames: [],
   lastLoginTime: '',
   createTime: '',
   updateTime: '',
-  createdByName: '',
-  updatedByName: ''
+  createdBy: 0,
+  updatedBy: 0
 })
 const loginHistory = ref<LoginRecord[]>([])
 
@@ -1364,93 +1388,31 @@ const permissionTreeRef = ref()
 
 // 表单验证规则
 const adminFormRules = {
-  username: [
-    { required: true, message: '请输入用户名', trigger: 'blur' },
-    { min: 3, max: 20, message: '用户名长度在 3 到 20 个字符', trigger: 'blur' }
-  ],
-  realName: [
-    { required: true, message: '请输入真实姓名', trigger: 'blur' }
-  ],
-  email: [
-    { required: true, message: '请输入邮箱', trigger: 'blur' },
-    { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }
-  ],
-  phone: [
-    { required: true, message: '请输入手机号', trigger: 'blur' },
-    { pattern: /^1[3456789]\d{9}$/, message: '请输入正确的手机号格式', trigger: 'blur' }
-  ],
-  password: [
-    { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, max: 20, message: '密码长度在 6 到 20 个字符', trigger: 'blur' }
-  ],
-  confirmPassword: [
-    { required: true, message: '请确认密码', trigger: 'blur' },
-    {
-      validator: (rule: any, value: string, callback: Function) => {
-        if (value !== adminFormData.password) {
-          callback(new Error('两次输入密码不一致'))
-        } else {
-          callback()
-        }
-      },
-      trigger: 'blur'
-    }
-  ],
-  roleIds: [
-    { required: true, type: 'array', message: '请至少选择一个角色', trigger: 'change' }
-  ]
+  username: commonRules.username,
+  realName: commonRules.name,
+  email: commonRules.email,
+  phone: commonRules.phone,
+  password: commonRules.password,
+  confirmPassword: commonRules.confirmPassword(() => adminFormData.password),
+  roleIds: commonRules.multiSelect
 }
-
 const passwordFormRules = {
-  newPassword: [
-    { required: true, message: '请输入新密码', trigger: 'blur' },
-    { min: 6, max: 20, message: '密码长度在 6 到 20 个字符', trigger: 'blur' }
-  ],
-  confirmPassword: [
-    { required: true, message: '请确认密码', trigger: 'blur' },
-    {
-      validator: (rule: any, value: string, callback: Function) => {
-        if (value !== passwordFormData.newPassword) {
-          callback(new Error('两次输入密码不一致'))
-        } else {
-          callback()
-        }
-      },
-      trigger: 'blur'
-    }
-  ]
+  newPassword: commonRules.password,
+  confirmPassword: commonRules.confirmPassword(() => passwordFormData.newPassword)
 }
-
 const roleFormRules = {
-  name: [
-    { required: true, message: '请输入角色名称', trigger: 'blur' }
-  ],
-  code: [
-    { required: true, message: '请输入角色代码', trigger: 'blur' },
-    { pattern: /^[a-zA-Z_][a-zA-Z0-9_]*$/, message: '角色代码只能包含字母、数字和下划线，且以字母或下划线开头', trigger: 'blur' }
-  ],
-  description: [
-    { required: true, message: '请输入角色描述', trigger: 'blur' }
-  ],
-  permissions: [
-    { required: true, type: 'array', message: '请选择权限', trigger: 'change' }
-  ]
-}
-
-// 获取统计数据
+  name: commonRules.name,
+  code: businessRules.roleCode,
+  description: commonRules.description,
+  permissions: commonRules.multiSelect
+}// 获取统计数据
 const fetchStats = async () => {
   try {
     const response = await adminStatsApi.getAdminPermissionStats()
-    stats.value = response
+    stats.value = response.data
   } catch (error) {
     console.error('获取统计数据失败:', error)
-    // 使用模拟数据作为后备
-    stats.value = {
-      totalAdmins: 12,
-      activeAdmins: 10,
-      pendingApprovals: 3,
-      permissionChanges: 25
-    }
+    ElMessage.error('获取统计数据失败')
   }
 }
 
@@ -1465,44 +1427,11 @@ const fetchAdminList = async () => {
       status: adminSearchForm.status || undefined
     }
     const response = await adminAccountApi.getAdminAccounts(params)
-    adminList.value = response.list || []
-    adminTotal.value = response.total || 0
+    adminList.value = response.data.list || []
+    adminTotal.value = response.data.total || 0
   } catch (error) {
     console.error('获取管理员列表失败:', error)
-    // 使用模拟数据作为后备
-    adminList.value = [
-      {
-        id: 1,
-        username: 'admin',
-        email: 'admin@example.com',
-        phone: '13800138000',
-        realName: '张三',
-        status: 'active',
-        roleIds: [1],
-        roleNames: ['超级管理员'],
-        lastLoginTime: '2023-11-01 10:35:18',
-        createTime: '2023-01-01 10:00:00',
-        updateTime: '2023-01-01 10:00:00',
-        createdBy: 0,
-        updatedBy: 0
-      },
-      {
-        id: 2,
-        username: 'lisi',
-        email: 'lisi@example.com',
-        phone: '13900139000',
-        realName: '李四',
-        status: 'active',
-        roleIds: [2],
-        roleNames: ['系统管理员'],
-        lastLoginTime: '2023-11-01 09:45:33',
-        createTime: '2023-01-02 10:00:00',
-        updateTime: '2023-01-02 10:00:00',
-        createdBy: 0,
-        updatedBy: 0
-      }
-    ]
-    adminTotal.value = adminList.value.length
+    ElMessage.error('获取管理员列表失败')
   } finally {
     loading.value = false
   }
@@ -1518,36 +1447,10 @@ const fetchRoleList = async () => {
       status: roleSearchForm.status || undefined
     }
     const response = await permissionRoleApi.getPermissionRoles(params)
-    roleList.value = response.list || []
+    roleList.value = response.data.list || []
   } catch (error) {
     console.error('获取角色列表失败:', error)
-    // 使用模拟数据作为后备
-    roleList.value = [
-      {
-        id: 1,
-        name: '超级管理员',
-        code: 'super_admin',
-        description: '拥有系统最高权限',
-        permissions: ['user_management', 'admin_management', 'dormitory_management', 'fee_management', 'system_management'],
-        status: 'active',
-        createTime: '2023-01-01 10:00:00',
-        updateTime: '2023-01-01 10:00:00',
-        createdBy: 0,
-        updatedBy: 0
-      },
-      {
-        id: 2,
-        name: '系统管理员',
-        code: 'system_admin',
-        description: '负责系统日常维护和管理',
-        permissions: ['user_management', 'dormitory_management', 'fee_management'],
-        status: 'active',
-        createTime: '2023-01-02 10:00:00',
-        updateTime: '2023-01-02 10:00:00',
-        createdBy: 0,
-        updatedBy: 0
-      }
-    ]
+    ElMessage.error('获取角色列表失败')
   }
 }
 
@@ -1572,44 +1475,11 @@ const fetchHistoryList = async () => {
     }
     
     const response = await permissionHistoryApi.getPermissionChangeHistory(params)
-    historyList.value = response.list || []
-    historyTotal.value = response.total || 0
+    historyList.value = response.data.list || []
+    historyTotal.value = response.data.total || 0
   } catch (error) {
     console.error('获取权限变更历史失败:', error)
-    // 使用模拟数据作为后备
-    historyList.value = [
-      {
-        id: 1,
-        adminId: 1,
-        adminName: '张三',
-        changeType: 'create',
-        changeDescription: '创建管理员账户',
-        operatorId: 1,
-        operatorName: '系统管理员',
-        ipAddress: '192.168.1.100',
-        changeTime: '2023-11-01 10:35:18',
-        approved: true,
-        approvedBy: 1,
-        approvedByName: '系统管理员',
-        approvedTime: '2023-11-01 10:36:00'
-      },
-      {
-        id: 2,
-        adminId: 2,
-        adminName: '李四',
-        changeType: 'password_reset',
-        changeDescription: '重置管理员密码',
-        operatorId: 1,
-        operatorName: '系统管理员',
-        ipAddress: '192.168.1.100',
-        changeTime: '2023-11-01 09:45:33',
-        approved: true,
-        approvedBy: 1,
-        approvedByName: '系统管理员',
-        approvedTime: '2023-11-01 09:46:00'
-      }
-    ]
-    historyTotal.value = historyList.value.length
+    ElMessage.error('获取权限变更历史失败')
   } finally {
     loading.value = false
   }
@@ -1635,45 +1505,11 @@ const fetchApprovalList = async () => {
     }
     
     const response = await permissionApprovalApi.getPermissionApprovalProcesses(params)
-    approvalList.value = response.list || []
-    approvalTotal.value = response.total || 0
+    approvalList.value = response.data.list || []
+    approvalTotal.value = response.data.total || 0
   } catch (error) {
     console.error('获取权限审批流程失败:', error)
-    // 使用模拟数据作为后备
-    approvalList.value = [
-      {
-        id: 1,
-        title: '创建新管理员账户申请',
-        type: 'create_admin',
-        applicantId: 2,
-        applicantName: '李四',
-        targetAdminId: 0,
-        targetAdminName: '',
-        content: '申请创建新管理员账户，用户名：wangwu',
-        status: 'pending',
-        currentStep: 1,
-        totalSteps: 2,
-        currentApproverId: 1,
-        currentApproverName: '张三',
-        applyTime: '2023-11-01 08:30:00'
-      },
-      {
-        id: 2,
-        title: '修改管理员权限申请',
-        type: 'modify_permission',
-        applicantId: 3,
-        applicantName: '王五',
-        targetAdminId: 3,
-        targetAdminName: '王五',
-        content: '申请添加费用管理权限',
-        status: 'approved',
-        currentStep: 2,
-        totalSteps: 2,
-        applyTime: '2023-10-31 16:20:00',
-        completedTime: '2023-10-31 17:15:00'
-      }
-    ]
-    approvalTotal.value = approvalList.value.length
+    ElMessage.error('获取权限审批流程失败')
   } finally {
     loading.value = false
   }
@@ -1861,15 +1697,15 @@ const handleViewAdmin = async (row: AdminAccount) => {
       lastLoginTime: row.lastLoginTime || '',
       createTime: row.createTime || '',
       updateTime: row.updateTime || '',
-      createdByName: row.createdByName || '',
-      updatedByName: row.updatedByName || ''
+      createdBy: row.createdBy || 0,
+      updatedBy: row.updatedBy || 0
     })
     
     // 获取登录历史（如果API可用）
     try {
       if (adminAccountApi.getAdminLoginHistory) {
         const loginRecords = await adminAccountApi.getAdminLoginHistory(row.id)
-        loginHistory.value = loginRecords || []
+        loginHistory.value = loginRecords.data || []
       } else {
         // 如果没有登录历史API，提供模拟数据
         loginHistory.value = [
@@ -1953,6 +1789,14 @@ const handleResetPassword = (row: AdminAccount) => {
     newPassword: '',
     confirmPassword: ''
   })
+  
+  // 显示安全验证
+  showSecurityVerification.value = true
+  securityVerification.value = {
+    verificationCode: '',
+    reason: ''
+  }
+  
   passwordDialogVisible.value = true
 }
 
@@ -1989,7 +1833,14 @@ const handleAdminReset = () => {
     keyword: '',
     status: ''
   })
-  handleAdminSearch()
+  // 清除表单验证状态
+  const form = document.querySelector('.admin-search-form .el-form')
+  if (form) {
+    const elFormInstance = (form as any).__vueParentComponent?.ctx?.$.setupState
+    if (elFormInstance && elFormInstance.validate) {
+      elFormInstance.clearValidate()
+    }
+  }
 }
 
 const handleAdminSizeChange = (val: number) => {
@@ -2011,17 +1862,17 @@ const submitAdminForm = () => {
       try {
         const data = { ...adminFormData }
         // 删除确认密码字段
-        delete data.confirmPassword
+        delete (data as any).confirmPassword
         
         if (isEditAdmin.value) {
           // 编辑时不传递密码，除非有修改
           if (!data.password) {
-            delete data.password
+            delete (data as any).password
           }
-          await adminAccountApi.updateAdminAccount(data.id, data)
+          await adminAccountApi.updateAdminAccount(data.id, data as unknown as Partial<AdminAccount>)
           ElMessage.success('管理员更新成功')
         } else {
-          await adminAccountApi.createAdminAccount(data)
+          await adminAccountApi.createAdminAccount(data as unknown as Partial<AdminAccount>)
           ElMessage.success('管理员创建成功')
         }
         
@@ -2038,25 +1889,46 @@ const submitAdminForm = () => {
 }
 
 // 提交密码重置表单
-const submitPasswordForm = () => {
-  passwordFormRef.value.validate(async (valid: boolean) => {
-    if (valid) {
-      submitLoading.value = true
-      try {
-        await adminAccountApi.resetAdminPassword(
-          passwordFormData.id, 
-          passwordFormData.newPassword
-        )
-        ElMessage.success('密码重置成功')
-        passwordDialogVisible.value = false
-      } catch (error) {
-        console.error('密码重置失败:', error)
-        ElMessage.error('密码重置失败')
-      } finally {
-        submitLoading.value = false
-      }
-    }
+const submitPasswordForm = async () => {
+  // 首先验证基本表单
+  const valid = await new Promise<boolean>(resolve => {
+    passwordFormRef.value.validate((valid: boolean) => resolve(valid))
   })
+  
+  if (!valid) return
+  
+  // 如果需要安全验证，验证安全信息
+  if (showSecurityVerification.value) {
+    if (!securityVerification.value.verificationCode) {
+      ElMessage.warning('请输入验证码')
+      return
+    }
+    if (!securityVerification.value.reason) {
+      ElMessage.warning('请输入重置原因')
+      return
+    }
+  }
+  
+  submitLoading.value = true
+  try {
+    await adminAccountApi.resetAdminPassword(
+      passwordFormData.id, 
+      passwordFormData.newPassword,
+      securityVerification.value.verificationCode,
+      securityVerification.value.reason
+    )
+    ElMessage.success('密码重置成功')
+    
+    // 记录审计日志
+    console.log(`管理员 ${passwordFormData.adminName} 的密码已被重置，操作人: ${localStorage.getItem('adminName') || '未知'}，原因: ${securityVerification.value.reason}`)
+    
+    passwordDialogVisible.value = false
+  } catch (error) {
+    console.error('密码重置失败:', error)
+    ElMessage.error('密码重置失败: ' + (error as Error).message)
+  } finally {
+    submitLoading.value = false
+  }
 }
 
 // 角色相关操作
@@ -2145,7 +2017,14 @@ const handleRoleReset = () => {
     keyword: '',
     status: ''
   })
-  fetchRoleList()
+  // 清除表单验证状态
+  const form = document.querySelector('.role-search-form .el-form')
+  if (form) {
+    const elFormInstance = (form as any).__vueParentComponent?.ctx?.$.setupState
+    if (elFormInstance && elFormInstance.validate) {
+      elFormInstance.clearValidate()
+    }
+  }
 }
 
 // 提交角色表单
@@ -2162,10 +2041,10 @@ const submitRoleForm = () => {
         const data = { ...roleFormData }
         
         if (isEditRole.value) {
-          await permissionRoleApi.updatePermissionRole(data.id, data)
+          await permissionRoleApi.updatePermissionRole(data.id, data as unknown as Partial<PermissionRole>)
           ElMessage.success('角色更新成功')
         } else {
-          await permissionRoleApi.createPermissionRole(data)
+          await permissionRoleApi.createPermissionRole(data as unknown as Partial<PermissionRole>)
           ElMessage.success('角色创建成功')
         }
         
@@ -2224,7 +2103,14 @@ const handleHistoryReset = () => {
     changeType: '',
     dateRange: []
   })
-  handleHistorySearch()
+  // 清除表单验证状态
+  const form = document.querySelector('.history-search-form .el-form')
+  if (form) {
+    const elFormInstance = (form as any).__vueParentComponent?.ctx?.$.setupState
+    if (elFormInstance && elFormInstance.validate) {
+      elFormInstance.clearValidate()
+    }
+  }
 }
 
 const handleHistorySizeChange = (val: number) => {
@@ -2295,7 +2181,14 @@ const handleApprovalReset = () => {
     status: '',
     applicantId: ''
   })
-  handleApprovalSearch()
+  // 清除表单验证状态
+  const form = document.querySelector('.approval-search-form .el-form')
+  if (form) {
+    const elFormInstance = (form as any).__vueParentComponent?.ctx?.$.setupState
+    if (elFormInstance && elFormInstance.validate) {
+      elFormInstance.clearValidate()
+    }
+  }
 }
 
 const handleApprovalSizeChange = (val: number) => {

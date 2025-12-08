@@ -8,7 +8,7 @@
               <span>访问量统计</span>
             </div>
           </template>
-          <div id="visitChart" style="height: 300px;"></div>
+          <div ref="visitChartRef" style="height: 300px;"></div>
         </el-card>
       </el-col>
       <el-col :span="12">
@@ -18,7 +18,7 @@
               <span>用户分布</span>
             </div>
           </template>
-          <div id="userChart" style="height: 300px;"></div>
+          <div ref="userChartRef" style="height: 300px;"></div>
         </el-card>
       </el-col>
     </el-row>
@@ -31,7 +31,7 @@
               <span>数据趋势</span>
             </div>
           </template>
-          <div id="trendChart" style="height: 400px;"></div>
+          <div ref="trendChartRef" style="height: 400px;"></div>
         </el-card>
       </el-col>
     </el-row>
@@ -39,15 +39,23 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import * as echarts from 'echarts'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { createChartManager } from '@/utils/chartManager'
+
+// 图表引用
+const visitChartRef = ref()
+const userChartRef = ref()
+const trendChartRef = ref()
+
+// 图表管理器实例
+let visitChartManager: any
+let userChartManager: any
+let trendChartManager: any
 
 // 初始化图表
-onMounted(() => {
+const initCharts = () => {
   // 访问量统计图表
-  const visitChartDom = document.getElementById('visitChart')
-  if (visitChartDom) {
-    const visitChart = echarts.init(visitChartDom)
+  if (visitChartRef.value) {
     const visitOption = {
       title: {
         text: '月度访问量',
@@ -71,13 +79,15 @@ onMounted(() => {
         }
       ]
     }
-    visitChart.setOption(visitOption)
+    
+    visitChartManager = createChartManager({
+      container: visitChartRef.value,
+      options: visitOption
+    })
   }
   
   // 用户分布图表
-  const userChartDom = document.getElementById('userChart')
-  if (userChartDom) {
-    const userChart = echarts.init(userChartDom)
+  if (userChartRef.value) {
     const userOption = {
       title: {
         text: '用户地区分布',
@@ -108,13 +118,15 @@ onMounted(() => {
         }
       ]
     }
-    userChart.setOption(userOption)
+    
+    userChartManager = createChartManager({
+      container: userChartRef.value,
+      options: userOption
+    })
   }
   
   // 数据趋势图表
-  const trendChartDom = document.getElementById('trendChart')
-  if (trendChartDom) {
-    const trendChart = echarts.init(trendChartDom)
+  if (trendChartRef.value) {
     const trendOption = {
       title: {
         text: '年度数据趋势',
@@ -176,8 +188,33 @@ onMounted(() => {
         }
       ]
     }
-    trendChart.setOption(trendOption)
+    
+    trendChartManager = createChartManager({
+      container: trendChartRef.value,
+      options: trendOption
+    })
   }
+}
+
+// 窗口大小变更处理
+const handleResize = () => {
+  if (visitChartManager) visitChartManager.resize()
+  if (userChartManager) userChartManager.resize()
+  if (trendChartManager) trendChartManager.resize()
+}
+
+// 组件挂载
+onMounted(() => {
+  initCharts()
+  window.addEventListener('resize', handleResize)
+})
+
+// 组件卸载前
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize)
+  if (visitChartManager) visitChartManager.dispose()
+  if (userChartManager) userChartManager.dispose()
+  if (trendChartManager) trendChartManager.dispose()
 })
 
 /**

@@ -284,7 +284,9 @@ import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Document, Warning, Check, TrendCharts } from '@element-plus/icons-vue'
 
-// 响应式数据
+// 导入统一验证规则库
+import { commonRules, businessRules } from '@/utils/validationRules'
+import { validateFile } from '@/utils/fileUploadValidator'// 响应式数据
 const stats = ref({
   todayNew: 5,
   pending: 12,
@@ -389,16 +391,15 @@ const detailData = ref({
 const fileList = ref([])
 
 const formRules = {
-  disputeNo: [{ required: true, message: '请输入争议编号', trigger: 'blur' }],
-  applicant: [{ required: true, message: '请输入申请人', trigger: 'blur' }],
-  contact: [{ required: true, message: '请输入联系方式', trigger: 'blur' }],
-  type: [{ required: true, message: '请选择争议类型', trigger: 'change' }],
-  title: [{ required: true, message: '请输入争议标题', trigger: 'blur' }],
-  description: [{ required: true, message: '请输入争议描述', trigger: 'blur' }]
+  disputeNo: businessRules.disputeNo,
+  applicant: commonRules.name,
+  contact: commonRules.phone,
+  type: commonRules.select,
+  title: commonRules.name,
+  description: commonRules.description
 }
 
 const formRef = ref()
-
 // 获取争议类型文本
 const getDisputeTypeText = (type: string) => {
   switch (type) {

@@ -132,24 +132,178 @@
         />
       </div>
     </el-card>
+
+    <!-- 新增用户对话框 -->
+    <el-dialog
+      v-model="addDialogVisible"
+      title="新增用户"
+      width="600px"
+      :close-on-click-modal="false"
+    >
+      <el-form
+        ref="addFormRef"
+        :model="addForm"
+        :rules="addFormRules"
+        label-width="100px"
+        v-loading="addLoading"
+      >
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="用户名" prop="username">
+              <el-input
+                v-model="addForm.username"
+                placeholder="请输入用户名"
+                clearable
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="邮箱" prop="email">
+              <el-input
+                v-model="addForm.email"
+                placeholder="请输入邮箱地址"
+                clearable
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="手机号" prop="phone">
+              <el-input
+                v-model="addForm.phone"
+                placeholder="请输入手机号"
+                clearable
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="角色" prop="role">
+              <el-select v-model="addForm.role" placeholder="请选择角色" style="width: 100%;">
+                <el-option label="管理员" value="admin" />
+                <el-option label="普通用户" value="user" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="初始密码" prop="password">
+              <el-input
+                v-model="addForm.password"
+                type="password"
+                placeholder="请输入初始密码"
+                show-password
+                clearable
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="确认密码" prop="confirmPassword">
+              <el-input
+                v-model="addForm.confirmPassword"
+                type="password"
+                placeholder="请再次输入密码"
+                show-password
+                clearable
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="寝室号" prop="dormitory">
+              <el-input
+                v-model="addForm.dormitory"
+                placeholder="请输入寝室号（可选）"
+                clearable
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="状态" prop="status">
+              <el-select v-model="addForm.status" placeholder="请选择状态" style="width: 100%;">
+                <el-option label="激活" value="active" />
+                <el-option label="禁用" value="inactive" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-form-item label="备注信息" prop="remark">
+          <el-input
+            v-model="addForm.remark"
+            type="textarea"
+            :rows="3"
+            placeholder="请输入备注信息（可选）"
+            maxlength="200"
+            show-word-limit
+          />
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="handleCancelAdd">取消</el-button>
+          <el-button type="primary" @click="handleSubmitAdd" :loading="addLoading">
+            确定
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { userApi, systemApi } from '../api/user'
 import { useRouter } from 'vue-router'
+import { userApi, systemApi } from '@/api/user'
+import { Search, Refresh, Plus, View, Edit, Delete } from '@element-plus/icons-vue'
+
+// 导入统一验证规则库
+import { commonRules } from '@/utils/validationRules'
+
+// 导入分页管理工具
+import { createPaginationManager } from '@/utils/paginationHelper'
 
 // 路由器实例
 const router = useRouter()
 
+// 创建分页管理器
+const { paginationState, dataList, loadData, handleSizeChange: pagerHandleSizeChange, handleCurrentChange: pagerHandleCurrentChange, refresh } = createPaginationManager<any>(
+  async (params) => {
+    const response = await userApi.getUsers(params)
+    // 处理后端返回的数据结构
+    const usersData = response?.data?.users || response?.data || []
+    const totalCount = response?.data?.total || response?.data?.count || usersData.length
+    
+    return {
+      data: usersData,
+      total: totalCount
+    }
+  }
+)
+
 // 响应式数据
-const tableData = ref<any[]>([])
-const loading = ref(false)
-const currentPage = ref(1)
-const pageSize = ref(15)
-const total = ref(0)
+const tableData = dataList
+const loading = computed(() => paginationState.value.loading)
+const currentPage = computed({
+  get: () => paginationState.value.currentPage,
+  set: (val) => {
+    paginationState.value.currentPage = val
+  }
+})
+const pageSize = computed({
+  get: () => paginationState.value.pageSize,
+  set: (val) => {
+    paginationState.value.pageSize = val
+  }
+})
+const total = computed(() => paginationState.value.total)
 const selectedUsers = ref<any[]>([])
 
 // 搜索表单
@@ -160,6 +314,33 @@ const searchForm = ref({
   dormitory: ''
 })
 
+// 新增用户相关
+const addDialogVisible = ref(false)
+const addLoading = ref(false)
+const addFormRef = ref()
+const addForm = ref({
+  username: '',
+  email: '',
+  phone: '',
+  role: '',
+  password: '',
+  confirmPassword: '',
+  dormitory: '',
+  status: 'active',
+  remark: ''
+})
+
+// 新增用户表单验证规则
+const addFormRules = {
+  username: commonRules.username,
+  email: commonRules.email,
+  phone: commonRules.phone,
+  role: commonRules.role,
+  password: commonRules.password,
+  confirmPassword: commonRules.confirmPassword(() => addForm.value.password),
+  status: commonRules.status
+}
+
 // 格式化日期
 const formatDate = (dateString: string) => {
   if (!dateString) return '-'
@@ -168,40 +349,19 @@ const formatDate = (dateString: string) => {
 
 // 加载用户列表
 const loadUsers = async () => {
-  try {
-    loading.value = true
-    console.log('🔄 开始加载用户列表...', {
-      page: currentPage.value,
-      pageSize: pageSize.value,
-      ...searchForm.value
-    })
-    
-    const params = {
-      page: currentPage.value,
-      pageSize: pageSize.value,
-      ...searchForm.value
-    }
-    
-    const response = await userApi.getUsers(params)
-    console.log('✅ 用户列表响应:', response)
-    
-    // 处理后端返回的数据结构
-    const usersData = response?.data?.users || response?.data || []
-    const totalCount = response?.data?.total || response?.data?.count || usersData.length
-    
-    tableData.value = usersData
-    total.value = totalCount
-    
-  } catch (error: any) {
-    console.error('❌ 加载用户列表失败:', error)
-    ElMessage.error('加载用户列表失败，请检查网络连接')
-    
-    // 使用空数组作为默认值
-    tableData.value = []
-    total.value = 0
-  } finally {
-    loading.value = false
+  console.log('🔄 开始加载用户列表...', {
+    page: currentPage.value,
+    pageSize: pageSize.value,
+    ...searchForm.value
+  })
+  
+  const params = {
+    page: currentPage.value,
+    pageSize: pageSize.value,
+    ...searchForm.value
   }
+  
+  return loadData(params)
 }
 
 // 搜索用户
@@ -224,7 +384,75 @@ const handleReset = () => {
 
 // 操作方法
 const handleAdd = () => {
-  ElMessage.info('新增用户功能待实现')
+  addDialogVisible.value = true
+  resetAddForm()
+}
+
+const resetAddForm = () => {
+  addForm.value = {
+    username: '',
+    email: '',
+    phone: '',
+    role: '',
+    password: '',
+    confirmPassword: '',
+    dormitory: '',
+    status: 'active',
+    remark: ''
+  }
+  if (addFormRef.value) {
+    addFormRef.value.clearValidate()
+  }
+}
+
+const handleCancelAdd = () => {
+  addDialogVisible.value = false
+  resetAddForm()
+}
+
+const handleSubmitAdd = async () => {
+  if (!addFormRef.value) return
+  
+  try {
+    await addFormRef.value.validate()
+    addLoading.value = true
+    
+    console.log('🔄 创建用户:', addForm.value)
+    
+    // 准备提交数据
+    const submitData = {
+      username: addForm.value.username,
+      email: addForm.value.email,
+      phone: addForm.value.phone,
+      role: addForm.value.role,
+      password: addForm.value.password,
+      dormitory: addForm.value.dormitory,
+      status: addForm.value.status,
+      remark: addForm.value.remark
+    }
+    
+    const response = await userApi.createUser(submitData)
+    console.log('✅ 用户创建成功:', response)
+    
+    // 检查API响应结构
+    if (response && response.data) {
+      ElMessage.success('用户创建成功')
+      addDialogVisible.value = false
+      resetAddForm()
+      
+      // 刷新用户列表
+      loadUsers()
+    } else {
+      ElMessage.error('创建用户失败')
+    }
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('❌ 创建用户失败:', error)
+      ElMessage.error('创建用户失败')
+    }
+  } finally {
+    addLoading.value = false
+  }
 }
 
 const handleView = (row: any) => {
@@ -426,5 +654,13 @@ onMounted(() => {
   margin-top: 20px;
   display: flex;
   justify-content: center;
+}
+
+.dialog-footer {
+  text-align: right;
+}
+
+.dialog-footer .el-button {
+  margin-left: 10px;
 }
 </style>

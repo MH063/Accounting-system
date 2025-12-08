@@ -916,8 +916,14 @@ const handleReset = () => {
     riskLevel: '',
     dateRange: []
   }
-  currentPage.value = 1
-  fetchBehaviorList()
+  // 清除表单验证状态
+  const form = document.querySelector('.search-form .el-form')
+  if (form) {
+    const elFormInstance = (form as any).__vueParentComponent?.ctx?.$.setupState
+    if (elFormInstance && elFormInstance.validate) {
+      elFormInstance.clearValidate()
+    }
+  }
 }
 
 // 查看详情
