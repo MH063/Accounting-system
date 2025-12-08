@@ -509,6 +509,8 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
   if (mainChart) mainChart.dispose()
   if (pieChart) pieChart.dispose()
+  if (userPathChart) userPathChart.dispose()
+  if (behaviorPatternChart) behaviorPatternChart.dispose()
 })
 
 /**
