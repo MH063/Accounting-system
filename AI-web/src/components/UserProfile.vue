@@ -54,10 +54,10 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
 import { User, SwitchButton, ArrowDown, Refresh, QuestionFilled, InfoFilled } from '@element-plus/icons-vue'
 import { getCurrentUser } from '@/services/userService'
 import { checkForUpdates } from '@/services/versionService'
+import { showInfoMessage, showErrorMessage, showSuccessMessage, showConfirmDialog } from '@/utils/messageUtils'
 
 
 // 路由
@@ -120,7 +120,7 @@ const handleCheckUpdate = async (): Promise<void> => {
   
   try {
     // 显示检查更新提示
-    ElMessage.info('正在检查更新...')
+    showInfoMessage('正在检查更新...')
     
     // 调用版本检查服务
     const updateInfo = await checkForUpdates()
@@ -130,7 +130,7 @@ const handleCheckUpdate = async (): Promise<void> => {
     
     if (updateInfo.hasUpdate && updateInfo.latestVersion) {
       // 有更新时显示详细信息
-      ElMessageBox.confirm(
+      showConfirmDialog(
         `${updateInfo.updateMessage}
 
 最新版本: ${updateInfo.latestVersion.version}
@@ -154,7 +154,7 @@ ${updateInfo.latestVersion.releaseNotes}
           beforeClose: (action, instance, done) => {
             if (action === 'cancel') {
               // 用户点击"稍后再说"
-              ElMessageBox.confirm(
+              showConfirmDialog(
                 '您确定要暂时忽略此更新吗？<br/><br/>您可以选择：<br/>1. 暂时忽略（下次启动时仍会提醒）<br/>2. 永久忽略此版本<br/>3. 立即更新',
                 '暂停更新选项',
                 {
@@ -167,12 +167,12 @@ ${updateInfo.latestVersion.releaseNotes}
               ).then(() => {
                 // 用户选择永久忽略此版本
                 localStorage.setItem('ignoredVersion', updateInfo.latestVersion!.version);
-                ElMessage.info(`已永久忽略版本 ${updateInfo.latestVersion!.version} 的更新提醒`);
+                showInfoMessage(`已永久忽略版本 ${updateInfo.latestVersion!.version} 的更新提醒`);
                 done();
               }).catch((action) => {
                 if (action === 'cancel') {
                   // 用户选择暂时忽略
-                  ElMessage.info('已暂时忽略此次更新提醒，下次启动时仍会检查');
+                  showInfoMessage('已暂时忽略此次更新提醒，下次启动时仍会检查');
                   done();
                 }
               });
@@ -184,15 +184,15 @@ ${updateInfo.latestVersion.releaseNotes}
         }
       ).then(async () => {
         try {
-          ElMessage.success('开始下载更新...')
+          showSuccessMessage('开始下载更新...')
           // 这里可以调用下载更新功能
           // await downloadUpdate(updateInfo.latestVersion!)
           // 模拟下载完成后跳转到更新页面
           setTimeout(() => {
-            ElMessage.success('更新下载完成，请重启应用以完成更新')
+            showSuccessMessage('更新下载完成，请重启应用以完成更新')
           }, 2000)
         } catch (error) {
-          ElMessage.error('下载更新失败')
+          showErrorMessage('下载更新失败')
         }
       }).catch((action) => {
         // 用户关闭对话框或取消操作
@@ -200,14 +200,14 @@ ${updateInfo.latestVersion.releaseNotes}
           // 不是通过关闭按钮关闭的，说明用户已经处理了暂停更新的选择
           return;
         }
-        ElMessage.info('您稍后可以在设置中手动检查更新')
+        showInfoMessage('您稍后可以在设置中手动检查更新')
       })
     } else {
-      ElMessage.success(updateInfo.updateMessage || '您当前使用的是最新版本')
+      showSuccessMessage(updateInfo.updateMessage || '您当前使用的是最新版本')
     }
   } catch (error) {
     console.error('检查更新失败:', error)
-    ElMessage.error('检查更新失败，请稍后重试')
+    showErrorMessage('检查更新失败，请稍后重试')
   }
 }
 
@@ -264,11 +264,11 @@ const fetchUserInfo = async (): Promise<void> => {
       console.log('用户信息获取成功:', userInfo)
     } else {
       console.error('获取用户信息失败:', response?.message || '未知错误')
-      ElMessage.error('获取用户信息失败')
+      showErrorMessage('获取用户信息失败')
     }
   } catch (error) {
     console.error('获取用户信息异常:', error)
-    ElMessage.error('获取用户信息失败')
+    showErrorMessage('获取用户信息失败')
   }
 }
 
@@ -430,4 +430,6 @@ onMounted(() => {
 .fade-leave-to {
   opacity: 0;
 }
+
+
 </style>

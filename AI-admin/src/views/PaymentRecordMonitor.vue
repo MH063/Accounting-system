@@ -183,7 +183,7 @@
         <el-pagination
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
-          :page-sizes="[5, 10, 15, 20, 50]"
+          :page-sizes="[10, 20, 50, 100]"
           layout="total, sizes, prev, pager, next, jumper"
           :total="total"
           @size-change="handleSizeChange"
@@ -365,7 +365,7 @@ const tableData = ref<PaymentRecord[]>([
 
 const loading = ref(false)
 const currentPage = ref(1)
-const pageSize = ref(15) // 按照分页设置规范，默认值为15
+const pageSize = ref(10) // 按照分页设置规范，默认值为10
 const total = ref(100)
 
 const searchForm = ref({

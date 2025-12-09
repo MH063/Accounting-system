@@ -244,7 +244,7 @@ const performGlobalSearch = async (): Promise<void> => {
     searchResults.value = results
     showSearchResults.value = results.length > 0
     
-    console.log(`全局搜索完成："${searchQuery.value}"，找到 ${results.length} 个结果`)
+    // 搜索完成日志已移除以优化性能
     
     if (results.length === 0) {
       ElMessage.info('未找到相关内容，请尝试其他关键词')
@@ -314,7 +314,7 @@ const handleSearchBlur = (): void => {
  */
 const handleSearchResultClick = (result: SearchResult): void => {
   try {
-    console.log('点击搜索结果:', result)
+    // 点击搜索结果日志已移除以优化性能
     
     // 立即隐藏搜索面板，防止竞态条件
     showSearchResults.value = false
@@ -331,7 +331,7 @@ const handleSearchResultClick = (result: SearchResult): void => {
     router.push(result.path)
       .then(() => {
         ElMessage.success(`已跳转到：${result.title}`)
-        console.log(`成功跳转到: ${result.path}`)
+        // 跳转成功日志已移除以优化性能
       })
       .catch((error) => {
         console.error('路由跳转失败:', error)
@@ -352,7 +352,7 @@ const handleSearchResultClick = (result: SearchResult): void => {
  */
 const handleSuggestionClick = (suggestion: string): void => {
   try {
-    console.log('点击搜索建议:', suggestion)
+    // 点击搜索建议日志已移除以优化性能
     
     // 立即隐藏搜索面板
     showSearchResults.value = false
@@ -481,7 +481,7 @@ onUnmounted(() => {
 .header {
   position: sticky;
   top: 0;
-  z-index: 1000;
+  z-index: 100;
   background: white;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   border-bottom: 1px solid #f0f0f0;
@@ -544,12 +544,26 @@ onUnmounted(() => {
   max-width: 500px;
   margin-right: 24px;
   position: relative;
+  display: flex;
+  align-items: center;
 }
 
 .header-search {
-  border-radius: 20px;
+  border-radius: 30px; /* 更大的圆角使其更明显地呈现椭圆形 */
   border: 1px solid #dcdfe6;
   transition: all 0.3s ease;
+  height: 40px; /* 固定高度使椭圆效果更明显 */
+  min-width: 200px; /* 最小宽度确保在小屏幕上也能保持椭圆形状 */
+}
+
+/* 确保搜索框内部元素也适应椭圆形 */
+.header-search :deep(.el-input__wrapper) {
+  border-radius: 30px;
+  height: 40px;
+}
+
+.header-search :deep(.el-input__inner) {
+  border-radius: 30px;
 }
 
 .header-search:focus-within {
@@ -671,7 +685,7 @@ onUnmounted(() => {
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   border: 1px solid rgba(0, 0, 0, 0.06);
-  z-index: 2000;
+  z-index: 200;
   max-height: 500px;
   overflow-y: auto;
   margin-top: 8px;
@@ -836,6 +850,15 @@ onUnmounted(() => {
   .search-container {
     max-width: 300px;
   }
+  
+  /* 在中等屏幕上调整搜索框 */
+  .header-search {
+    height: 38px;
+  }
+  
+  .header-search :deep(.el-input__wrapper) {
+    height: 38px;
+  }
 }
 
 @media (max-width: 768px) {
@@ -845,6 +868,16 @@ onUnmounted(() => {
   
   .search-container {
     max-width: 200px;
+  }
+  
+  /* 在小屏幕上调整搜索框 */
+  .header-search {
+    height: 36px;
+    min-width: 120px;
+  }
+  
+  .header-search :deep(.el-input__wrapper) {
+    height: 36px;
   }
 }
 
@@ -858,11 +891,23 @@ onUnmounted(() => {
   }
   
   .search-container {
-    display: none;
+    max-width: 120px;
   }
   
   .nav-item {
     padding: 0 12px;
   }
+  
+  /* 在小屏幕上调整搜索框最小宽度 */
+  .header-search {
+    min-width: 100px;
+    height: 36px;
+  }
+  
+  .header-search :deep(.el-input__wrapper) {
+    height: 36px;
+  }
 }
+
+
 </style>

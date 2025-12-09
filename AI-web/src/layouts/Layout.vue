@@ -38,7 +38,7 @@ import Footer from '@/components/Footer.vue'
 /* 响应式设计 */
 @media (max-width: 768px) {
   .main-content {
-    max-width: 375px;
+    max-width: 100%;
     padding: 15px;
   }
 }

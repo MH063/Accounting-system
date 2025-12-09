@@ -155,7 +155,7 @@
             <el-pagination
               v-model:current-page="adminCurrentPage"
               v-model:page-size="adminPageSize"
-              :page-sizes="[5, 10, 15, 20, 50]"
+              :page-sizes="[10, 20, 50, 100]"
               layout="total, sizes, prev, pager, next, jumper"
               :total="adminTotal"
               @size-change="handleAdminSizeChange"
@@ -289,7 +289,7 @@
             <el-pagination
               v-model:current-page="historyCurrentPage"
               v-model:page-size="historyPageSize"
-              :page-sizes="[5, 10, 15, 20, 50]"
+              :page-sizes="[10, 20, 50, 100]"
               layout="total, sizes, prev, pager, next, jumper"
               :total="historyTotal"
               @size-change="handleHistorySizeChange"
@@ -386,7 +386,7 @@
             <el-pagination
               v-model:current-page="approvalCurrentPage"
               v-model:page-size="approvalPageSize"
-              :page-sizes="[5, 10, 15, 20, 50]"
+              :page-sizes="[10, 20, 50, 100]"
               layout="total, sizes, prev, pager, next, jumper"
               :total="approvalTotal"
               @size-change="handleApprovalSizeChange"
@@ -1141,7 +1141,7 @@ const adminSearchForm = reactive({
   status: ''
 })
 const adminCurrentPage = ref(1)
-const adminPageSize = ref(15)
+const adminPageSize = ref(10)
 const adminTotal = ref(0)
 
 // 角色列表相关
@@ -1159,7 +1159,7 @@ const historySearchForm = reactive({
   dateRange: []
 })
 const historyCurrentPage = ref(1)
-const historyPageSize = ref(15)
+const historyPageSize = ref(10)
 const historyTotal = ref(0)
 
 // 权限审批流程相关
@@ -1170,7 +1170,7 @@ const approvalSearchForm = reactive({
   applicantId: ''
 })
 const approvalCurrentPage = ref(1)
-const approvalPageSize = ref(15)
+const approvalPageSize = ref(10)
 const approvalTotal = ref(0)
 
 // 对话框相关

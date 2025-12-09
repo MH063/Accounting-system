@@ -78,7 +78,7 @@
                   <div class="notification-content">
                     <div class="notification-title">{{ notification.title }}</div>
                     <div class="notification-message">{{ notification.message }}</div>
-                    <div class="notification-time">{{ formatTime(notification.time) }}</div>
+                    <div class="notification-time">{{ formatRelativeTime(notification.time) }}</div>
                   </div>
                   <div class="notification-actions">
                     <el-button size="small" type="primary" @click="handleNotificationAction(notification)">
@@ -120,7 +120,7 @@
                     <div class="activity-title">{{ activity.title }}</div>
                     <div class="activity-description">{{ activity.description }}</div>
                     <div class="activity-meta">
-                      <span class="activity-time">{{ formatTime(activity.time) }}</span>
+                      <span class="activity-time">{{ formatRelativeTime(activity.time) }}</span>
                       <span v-if="activity.user" class="activity-user">{{ activity.user }}</span>
                       <span v-if="activity.amount" class="activity-amount">¥{{ activity.amount }}</span>
                     </div>
@@ -267,6 +267,7 @@ import {
   Grid,
   List
 } from '@element-plus/icons-vue'
+import { formatRelativeTime } from '@/utils/timeUtils'
 import { useNotifications } from '../services/notificationService'
 import type { Notification } from '../services/notificationService'
 
@@ -414,16 +415,7 @@ const updateDashboardData = () => {
   console.log('数据已更新:', new Date().toLocaleTimeString())
 }
 
-const formatTime = (time: Date) => {
-  const now = new Date()
-  const diff = now.getTime() - time.getTime()
-  const minutes = Math.floor(diff / 60000)
-  
-  if (minutes < 1) return '刚刚'
-  if (minutes < 60) return `${minutes}分钟前`
-  if (minutes < 1440) return `${Math.floor(minutes / 60)}小时前`
-  return `${Math.floor(minutes / 1440)}天前`
-}
+
 
 // 获取活动图标
 const getActivityIcon = (type: string) => {
@@ -544,12 +536,12 @@ onUnmounted(() => {
 }
 
 .dashboard-header h1 {
-  color: #303133;
+  color: #1f2937;
   margin-bottom: 10px;
 }
 
 .dashboard-header p {
-  color: #606266;
+  color: #4b5563;
   font-size: 16px;
 }
 
@@ -587,7 +579,7 @@ onUnmounted(() => {
 }
 
 .stat-label {
-  color: #606266;
+  color: #4b5563;
   font-size: 14px;
 }
 
@@ -648,7 +640,7 @@ onUnmounted(() => {
 
 .notification-message {
   font-size: 14px;
-  color: #606266;
+  color: #4b5563;
   margin-bottom: 6px;
 }
 
@@ -726,7 +718,7 @@ onUnmounted(() => {
 
 .activity-description {
   font-size: 14px;
-  color: #606266;
+  color: #4b5563;
   margin-bottom: 6px;
 }
 
@@ -845,4 +837,6 @@ onUnmounted(() => {
   justify-content: flex-end;
   gap: 10px;
 }
+
+
 </style>

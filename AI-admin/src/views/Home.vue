@@ -1127,7 +1127,6 @@ const handleHealthCheck = async () => {
     ElMessage.info('已取消健康检查')
   })
 }
-
 // 查看日志
 const handleViewLogs = () => {
   // 使用Vue Router导航到日志页面
@@ -1942,6 +1941,7 @@ interface SystemStatsData {
   todayPayments?: number
   todayAbnormalOps?: number
   pendingNotifications?: number
+  healthScore?: number
   resourceUsage?: {
     cpu?: number
     memory?: number
@@ -1985,7 +1985,6 @@ interface SystemStatsData {
     text?: string
   }
 }
-
 // 检查维护状态
 const checkMaintenanceStatus = async () => {
   try {
@@ -2055,6 +2054,11 @@ const fetchSystemStats = async () => {
       systemStats.value.feeRecords = statsData.feeRecords || 0
       systemStats.value.payments = statsData.payments || 0
       
+      // 更新健康度评分
+      if (statsData.healthScore !== undefined) {
+        healthScore.value = statsData.healthScore
+      }
+      
       // 更新实时监控数据
       if (statsData.todayPayments !== undefined) {
         realtimeStats.value.todayPayments = statsData.todayPayments
@@ -2064,8 +2068,7 @@ const fetchSystemStats = async () => {
       }
       if (statsData.pendingNotifications !== undefined) {
         realtimeStats.value.pendingNotifications = statsData.pendingNotifications
-      }
-      
+      }      
       console.log('📊 实时监控数据更新:', {
         todayPayments: realtimeStats.value.todayPayments,
         todayAbnormalOps: realtimeStats.value.todayAbnormalOps,
@@ -2179,12 +2182,13 @@ const fetchSystemStats = async () => {
     extraStats.value.todayVisits = 0
     extraStats.value.systemAvailability = '0%'
     
+    // 注意：这里不设置healthScore的默认值，因为它已经在组件初始化时设置了默认值92
+    
     console.log('ℹ️ 已设置默认值:', {
       todayPayments: realtimeStats.value.todayPayments,
       todayAbnormalOps: realtimeStats.value.todayAbnormalOps,
       pendingNotifications: realtimeStats.value.pendingNotifications
-    })
-  }
+    })  }
 }
 
 // 定义用户统计数据接口
@@ -2352,19 +2356,15 @@ onMounted(async () => {
   // 添加窗口大小改变监听器，用于重绘图表
   window.addEventListener('resize', handleResize)
   
-  // 设置定时器定期检查网络状态和维护状态（每30秒检查一次）
+  // 设置定时器定期获取系统统计数据（包括健康度评分），每30秒更新一次
   statusCheckTimer = setInterval(async () => {
     try {
-      await Promise.all([
-        checkMaintenanceStatus(),
-        checkNetworkStatus()
-      ])
+      await fetchSystemStats()
     } catch (error) {
-      console.error('❌ 定期检查状态失败:', error)
+      console.error('❌ 定期获取系统统计数据失败:', error)
     }
   }, 30000)
 })
-
 // 组件卸载前清理事件监听器
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)

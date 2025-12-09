@@ -181,25 +181,25 @@
           <h4>选择支付方式</h4>
           <div class="method-options">
             <el-radio-group v-model="paymentForm.method" @change="handlePaymentMethodChange">
-              <el-radio label="alipay" size="large">
+              <el-radio label="alipay" size="large" tabindex="0" @keydown.enter="$event.target.click()" @keydown.space="$event.target.click()">
                 <div class="method-option">
                   <el-icon><CreditCard /></el-icon>
                   <span>支付宝</span>
                 </div>
               </el-radio>
-              <el-radio label="wechat" size="large">
+              <el-radio label="wechat" size="large" tabindex="0" @keydown.enter="$event.target.click()" @keydown.space="$event.target.click()">
                 <div class="method-option">
                   <el-icon><ChatLineRound /></el-icon>
                   <span>微信支付</span>
                 </div>
               </el-radio>
-              <el-radio label="bank" size="large">
+              <el-radio label="bank" size="large" tabindex="0" @keydown.enter="$event.target.click()" @keydown.space="$event.target.click()">
                 <div class="method-option">
                   <el-icon><Postcard /></el-icon>
                   <span>银行卡转账</span>
                 </div>
               </el-radio>
-              <el-radio label="cash" size="large">
+              <el-radio label="cash" size="large" tabindex="0" @keydown.enter="$event.target.click()" @keydown.space="$event.target.click()">
                 <div class="method-option">
                   <el-icon><Money /></el-icon>
                   <span>现金支付</span>
@@ -1598,4 +1598,6 @@ onMounted(() => {
   justify-content: flex-end;
   gap: 12px;
 }
+
+
 </style>

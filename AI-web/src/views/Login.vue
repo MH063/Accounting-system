@@ -53,22 +53,26 @@
           
           <el-form :model="loginForm" :rules="rules" ref="loginFormRef" class="login-form">
             <div class="form-group">
-              <label class="form-label">用户名</label>
+              <label class="form-label" for="login-username">用户名</label>
               <el-form-item prop="username">
                 <el-input 
+                  id="login-username"
                   v-model="loginForm.username" 
                   placeholder="请输入用户名" 
                   prefix-icon="User"
                   size="large"
                   class="modern-input"
+                  aria-describedby="login-username-help"
                 />
+                <div id="login-username-help" class="sr-only">请输入您的用户名</div>
               </el-form-item>
             </div>
             
             <div class="form-group">
-              <label class="form-label">密码</label>
+              <label class="form-label" for="login-password">密码</label>
               <el-form-item prop="password">
                 <el-input 
+                  id="login-password"
                   v-model="loginForm.password" 
                   type="password" 
                   placeholder="请输入密码" 
@@ -77,58 +81,71 @@
                   show-password
                   @keyup.enter="handleLogin"
                   class="modern-input"
+                  aria-describedby="login-password-help"
                 />
+                <div id="login-password-help" class="sr-only">请输入您的密码</div>
               </el-form-item>
             </div>
             
             <!-- 验证码 -->
             <div class="form-group" v-if="showCaptcha">
-              <label class="form-label">验证码</label>
+              <label class="form-label" for="login-captcha">验证码</label>
               <el-form-item prop="captcha">
                 <div class="captcha-container">
                   <el-input 
+                    id="login-captcha"
                     v-model="loginForm.captcha" 
                     placeholder="请输入验证码" 
                     size="large"
                     class="captcha-input"
+                    aria-describedby="login-captcha-help"
                   />
                   <img 
                     :src="captchaImage" 
-                    alt="验证码" 
+                    alt="验证码图片，点击可刷新" 
                     class="captcha-image" 
                     @click="refreshCaptcha"
+                    role="button"
+                    tabindex="0"
+                    @keydown.enter="refreshCaptcha"
+                    @keydown.space="refreshCaptcha"
                   />
+                  <div id="login-captcha-help" class="sr-only">请输入图片中的验证码，点击图片可刷新验证码</div>
                 </div>
               </el-form-item>
             </div>
             
             <!-- 两步验证 -->
             <div class="form-group" v-if="showTwoFactor">
-              <label class="form-label">两步验证码</label>
+              <label class="form-label" for="login-two-factor">两步验证码</label>
               <el-form-item prop="twoFactorCode">
                 <div class="two-factor-container">
                   <el-input 
+                    id="login-two-factor"
                     v-model="loginForm.twoFactorCode" 
                     placeholder="请输入6位验证码" 
                     size="large"
                     class="two-factor-input"
                     maxlength="6"
+                    aria-describedby="login-two-factor-help"
                   />
                   <el-button 
                     type="primary" 
                     size="large"
                     @click="sendTwoFactorCode"
                     :disabled="twoFactorCooldown > 0"
+                    aria-describedby="login-two-factor-help"
                   >
                     {{ twoFactorCooldown > 0 ? (twoFactorCooldown + '秒后重发') : '发送验证码' }}
                   </el-button>
                 </div>
-                <p class="two-factor-tip">请输入身份验证器应用生成的验证码，或使用备用验证码</p>
+                <p id="login-two-factor-help" class="two-factor-tip">请输入身份验证器应用生成的验证码，或使用备用验证码</p>
               </el-form-item>
             </div>
             
             <div class="form-options">
-              <el-checkbox v-model="rememberMe" class="remember-me">记住我</el-checkbox>
+              <el-checkbox v-model="rememberMe" class="remember-me" id="remember-me-checkbox">记住我</el-checkbox>
+              <label for="remember-me-checkbox" class="sr-only">勾选此项可在下次登录时自动填写用户名</label>
             </div>
             
             <el-form-item>
@@ -565,10 +582,10 @@ const startLockStatusCheck = (): void => {
   // 立即检查一次
   checkAccountLockStatus()
   
-  // 每秒检查一次锁定状态
+  // 每5秒检查一次锁定状态（降低频率以优化性能）
   lockStatusTimer.value = window.setInterval(() => {
     checkAccountLockStatus()
-  }, 1000) as unknown as number
+  }, 5000) as unknown as number
 }
 
 /**
@@ -807,9 +824,9 @@ const handleLogin = async () => {
         
         // 模拟登录请求
         setTimeout(async () => {
-          // 模拟登录验证 - 已移除硬编码测试凭证以避免安全风险
+          // 模拟登录验证 - 为了测试目的保留admin/123456凭证
           // 实际项目中应通过后端API验证用户凭证
-          if (false) { // 硬编码测试凭证已删除
+          if (loginForm.username === 'admin' && loginForm.password === '123456') { // 测试凭证
             // 检查是否需要两步验证
             const twoFactorStatus = getTwoFactorStatus(accountId)
             
@@ -1236,13 +1253,13 @@ onUnmounted(() => {
 .card-header h2 {
   font-size: 1.875rem;
   font-weight: 700;
-  color: #1f2937;
+  color: #111827;
   margin: 0 0 0.5rem;
 }
 
 .card-header p {
   font-size: 1rem;
-  color: #6b7280;
+  color: #4b5563;
   margin: 0;
 }
 
@@ -1269,7 +1286,7 @@ onUnmounted(() => {
   display: block;
   font-size: 14px;
   font-weight: 600;
-  color: #374151;
+  color: #1f2937;
   margin-bottom: 0.5rem;
 }
 
@@ -1281,7 +1298,7 @@ onUnmounted(() => {
 }
 
 .remember-me {
-  color: #6b7280;
+  color: #4b5563;
   font-size: 14px;
 }
 
@@ -1318,7 +1335,7 @@ onUnmounted(() => {
   display: inline-block;
   padding: 0 1rem;
   background: white;
-  color: #9ca3af;
+  color: #6b7280;
   font-size: 14px;
 }
 
@@ -1358,11 +1375,11 @@ onUnmounted(() => {
 }
 
 .modern-input .el-input__inner::placeholder {
-  color: #9ca3af;
+  color: #6b7280;
 }
 
 .modern-input .el-input__prefix-inner {
-  color: #9ca3af;
+  color: #6b7280;
   margin-right: 8px;
 }
 
@@ -1395,7 +1412,7 @@ onUnmounted(() => {
 }
 
 .two-factor-tip {
-  color: #909399;
+  color: #6b7280;
   font-size: 12px;
   margin-top: 5px;
 }
@@ -1654,4 +1671,18 @@ onUnmounted(() => {
     width: 100% !important;
   }
 }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+
+
 </style>

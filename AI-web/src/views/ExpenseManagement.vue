@@ -12,7 +12,7 @@
         <el-button 
           type="primary" 
           :icon="Plus" 
-          @click="$router.push('/dashboard/expense/create')"
+          @click="router.push('/dashboard/expense/create')"
           class="create-btn"
         >
           新建费用
@@ -20,7 +20,7 @@
         <el-button 
           type="warning" 
           :icon="DocumentChecked" 
-          @click="$router.push('/dashboard/expense/review')"
+          @click="router.push('/dashboard/expense/review')"
           class="review-btn"
         >
           费用审核
@@ -425,6 +425,9 @@
                     :key="expense.id"
                     class="expense-card"
                     shadow="hover"
+                    tabindex="0"
+                    @keydown.enter="handleView(expense)"
+                    @keydown.space="handleView(expense)"
                   >
                     <div class="card-header">
                       <div class="card-title-section">
@@ -561,7 +564,7 @@
             <el-button 
               v-if="!searchQuery && !statusFilter && !categoryFilter && !monthFilter"
               type="primary" 
-              @click="$router.push('/dashboard/expense/create')"
+              @click="router.push('/dashboard/expense/create')"
             >
               创建费用
             </el-button>
@@ -634,7 +637,7 @@
         <div v-if="showQRCode" class="qr-code-section">
           <h4>请扫描下方二维码完成支付</h4>
           <div class="qr-code-container">
-            <img :src="qrCodeUrl" alt="收款码" class="qr-code-image" />
+            <img :src="qrCodeUrl" alt="收款码" class="qr-code-image" role="img" aria-label="支付收款码，请使用相应支付应用扫描此码完成支付" />
             <p class="qr-code-tip">扫描二维码完成支付</p>
           </div>
           <div class="payment-status">
@@ -892,6 +895,7 @@ const handleSelectPaymentMethod = async (method: string) => {
       ElMessage.warning(`未找到对应的收款码，请联系管理员`)
     }
   } catch (error) {
+    ElMessage.error('获取收款码信息失败，请检查网络连接或联系管理员')
     console.error('获取收款码信息失败:', error)
   }
 }
@@ -966,7 +970,7 @@ const handleConfirmPayment = async () => {
       ElMessage.error('获取收款码失败')
     }
   } catch (error) {
-    ElMessage.error('获取收款码过程中出现错误')
+    ElMessage.error('获取收款码过程中出现错误，请稍后重试或联系技术支持')
   }
 }
 
@@ -1051,7 +1055,7 @@ const handleRefresh = async () => {
     ElMessage.success('数据刷新成功')
   } catch (error) {
     console.error('刷新失败:', error)
-    ElMessage.error('数据刷新失败，请重试')
+    ElMessage.error('数据刷新失败，请检查网络连接或稍后重试')
   } finally {
     refreshing.value = false
   }
@@ -1099,7 +1103,7 @@ const handleLoadMore = async () => {
     ElMessage.success('已加载更多数据')
   } catch (error) {
     console.error('加载更多失败:', error)
-    ElMessage.error('加载更多失败，请重试')
+    ElMessage.error('加载更多失败，请检查网络连接或稍后重试')
   } finally {
     loadingMore.value = false
   }
@@ -1201,14 +1205,14 @@ const exportExpenses = async (format: 'csv' | 'xlsx' = 'csv') => {
 
     if (format === 'xlsx') {
       // 导出为Excel格式
-      ElMessage.info('正在生成Excel文件...')
+      ElMessage.info('正在生成Excel文件，请稍候...')
       
       // 这里应该调用实际的Excel导出服务
       // 模拟处理时间
       await new Promise(resolve => setTimeout(resolve, 1000))
       
       // 创建简单的CSV格式作为Excel替代（实际项目中应使用xlsx库）
-      const headers = Object.keys(exportData[0])
+      const headers = exportData.length > 0 ? Object.keys(exportData[0]!) : []
       const csvContent = [
         headers.join(','),
         ...exportData.map(row => 
@@ -1240,11 +1244,11 @@ const exportExpenses = async (format: 'csv' | 'xlsx' = 'csv') => {
         
         ElMessage.success(`成功导出 ${exportData.length} 条费用记录 (Excel格式)`)
       } else {
-        ElMessage.error('您的浏览器不支持文件下载')
+        ElMessage.error('您的浏览器版本较低，不支持文件下载功能，请升级浏览器或使用其他浏览器重试')
       }
     } else {
       // 导出为CSV格式
-      const headers = Object.keys(exportData[0])
+      const headers = exportData.length > 0 ? Object.keys(exportData[0]!) : []
       const csvContent = [
         headers.join(','),
         ...exportData.map(row => 
@@ -1276,12 +1280,12 @@ const exportExpenses = async (format: 'csv' | 'xlsx' = 'csv') => {
         
         ElMessage.success(`成功导出 ${exportData.length} 条费用记录 (CSV格式)`)
       } else {
-        ElMessage.error('您的浏览器不支持文件下载')
+        ElMessage.error('您的浏览器版本较低，不支持文件下载功能，请升级浏览器或使用其他浏览器重试')
       }
     }
   } catch (error) {
     console.error('导出失败:', error)
-    ElMessage.error('导出失败，请重试')
+    ElMessage.error('导出失败，请检查网络连接或稍后重试')
   }
 }
 
@@ -1543,7 +1547,7 @@ const handleClearAll = async () => {
   margin: 0;
   font-size: 28px;
   font-weight: 700;
-  color: #303133;
+  color: #1f2937;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1668,7 +1672,7 @@ const handleClearAll = async () => {
 
 .summary-text {
   font-size: 13px;
-  color: #606266;
+  color: #4b5563;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -2280,4 +2284,6 @@ const handleClearAll = async () => {
   justify-content: flex-end;
   gap: 12px;
 }
+
+
 </style>

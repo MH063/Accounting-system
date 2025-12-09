@@ -832,7 +832,7 @@ const creatingBackup = ref(false)
 const restoringBackup = ref(false)
 const backupTotal = ref(0)
 const backupCurrentPage = ref(1)
-const backupPageSize = ref(20)
+const backupPageSize = ref(10)
 const backupDialogVisible = ref(false)
 const backupForm = reactive({
   name: '',
@@ -1387,7 +1387,7 @@ const healthResultsLoading = ref(false)
 const healthResults = ref([])
 const healthTotal = ref(0)
 const healthCurrentPage = ref(1)
-const healthPageSize = ref(20)
+const healthPageSize = ref(10)
 const healthDetailDialogVisible = ref(false)
 const healthDetailData = ref({})
 const systemHealth = ref({
@@ -1991,7 +1991,7 @@ const logLoading = ref(false)
 const logList = ref([])
 const logTotal = ref(0)
 const logCurrentPage = ref(1)
-const logPageSize = ref(20)
+const logPageSize = ref(10)
 const logSearchForm = reactive({
   type: '',
   level: '',

@@ -45,7 +45,7 @@
             <div class="notification-content">
               <div class="notification-title">{{ notification.title }}</div>
               <div class="notification-message">{{ notification.message }}</div>
-              <div class="notification-time">{{ formatTime(new Date(notification.createdAt)) }}</div>
+              <div class="notification-time">{{ formatRelativeTime(new Date(notification.createdAt)) }}</div>
             </div>
           </div>
         </div>
@@ -68,6 +68,7 @@ import {
   User
 } from '@element-plus/icons-vue'
 import { useNotifications } from '../services/notificationService'
+import { formatRelativeTime } from '@/utils/timeUtils'
 
 // Props
 const props = defineProps<{
@@ -123,8 +124,7 @@ const getNotificationIcon = (type: string) => {
     system: Bell,
     expense: Wallet,
     bill: Document,
-    member: User,
-    warning: Warning
+    member: User
   }
   return iconMap[type] || Bell
 }
@@ -139,17 +139,7 @@ const getPriorityClass = (priority: string) => {
   return classMap[priority] || ''
 }
 
-// 格式化时间
-const formatTime = (time: Date) => {
-  const now = new Date()
-  const diff = now.getTime() - time.getTime()
-  const minutes = Math.floor(diff / 60000)
-  
-  if (minutes < 1) return '刚刚'
-  if (minutes < 60) return `${minutes}分钟前`
-  if (minutes < 1440) return `${Math.floor(minutes / 60)}小时前`
-  return `${Math.floor(minutes / 1440)}天前`
-}
+
 
 // 查看全部通知
 const viewAllNotifications = () => {

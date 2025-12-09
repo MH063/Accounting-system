@@ -1,0 +1,312 @@
+/* 全局焦点样式优化 */
+
+/* 基础焦点样式 - 使用更现代的设计 */
+*:focus-visible:not(.el-button):not(.el-input__wrapper):not(.el-textarea__wrapper):not(.el-card):not(.el-table__cell):not(.el-menu-item):not(.el-sub-menu__title):not(.el-tabs__item):not(.el-pager li):not(.el-pagination__jump):not(.el-pagination__sizes):not(.el-dropdown-menu__item):not(.el-dialog):not(.el-drawer):not(.el-message-box):not(.el-notification):not(a):not(.el-radio):not(.el-checkbox):not(.el-switch):not(.el-slider__button-wrapper):not(.el-date-editor):not(.el-time-panel):not(.el-tree-node > .el-tree-node__content):not(.el-cascader):not(.el-upload):not(.el-progress):not(.el-badge):not(.el-tag):not(.el-avatar):not(.el-alert):not(.el-collapse-item__header):not(.el-carousel__item):not(.el-image-viewer):not(.el-color-picker):not(.el-rate):not(.el-step):not(.el-timeline-item):not(.el-backtop):not(.el-page-header):not(.el-result):not(.el-descriptions__cell):not(.el-empty):not(.el-virtual-scroll) {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 4px;
+  /* 添加阴影效果使焦点更明显 */
+  box-shadow: 0 0 0 4px rgba(64, 158, 255, 0.2);
+  /* 添加过渡效果 */
+  transition: box-shadow 0.2s ease;
+}
+
+/* 特殊元素焦点样式 */
+
+/* 按钮焦点样式 - 与按钮圆角一致 */
+.el-button:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: var(--el-border-radius-base, 4px);
+  box-shadow: 0 0 0 4px rgba(64, 158, 255, 0.3);
+}
+
+/* 输入框焦点样式 - 与输入框圆角一致 */
+.el-input__wrapper:focus-within,
+.el-textarea__wrapper:focus-within {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: var(--el-border-radius-base, 4px);
+  box-shadow: 0 0 0 4px rgba(64, 158, 255, 0.2);
+}
+
+/* 卡片焦点样式 - 与卡片圆角一致 */
+.el-card:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: var(--el-border-radius-base, 4px);
+  box-shadow: 0 0 0 4px rgba(64, 158, 255, 0.2);
+}
+
+/* 表格单元格焦点样式 - 更柔和的焦点效果 */
+.el-table__cell:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: -2px;
+  border-radius: 0;
+  box-shadow: inset 0 0 0 2px rgba(64, 158, 255, 0.3);
+}
+
+/* 菜单项焦点样式 - 与菜单项设计一致 */
+.el-menu-item:focus-visible,
+.el-sub-menu__title:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: -2px;
+  border-radius: 0;
+  background-color: var(--el-menu-hover-bg-color, #ecf5ff);
+}
+
+/* 选项卡焦点样式 - 与选项卡设计一致 */
+.el-tabs__item:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: -2px;
+  border-radius: 0;
+  background-color: var(--el-tabs-hover-color, #f5f7fa);
+}
+
+/* 分页焦点样式 - 与分页按钮设计一致 */
+.el-pager li:focus-visible,
+.el-pagination__jump:focus-visible,
+.el-pagination__sizes:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 4px;
+  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.2);
+}
+
+/* 下拉菜单焦点样式 */
+.el-dropdown-menu__item:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: -2px;
+  border-radius: 0;
+}
+
+/* 对话框焦点样式 - 与对话框圆角一致 */
+.el-dialog:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: var(--el-border-radius-large, 8px);
+  box-shadow: 0 0 0 4px rgba(64, 158, 255, 0.2);
+}
+
+/* 抽屉焦点样式 */
+.el-drawer:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 0;
+}
+
+/* 提示框焦点样式 */
+.el-message-box:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* 通知焦点样式 */
+.el-notification:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* 链接焦点样式 - 更优雅的设计 */
+a:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 4px;
+  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.3);
+  /* 添加下划线以增强可见性 */
+  text-decoration: underline;
+}
+
+/* 单选框和复选框焦点样式 - 与控件形状一致 */
+.el-radio:focus-visible,
+.el-checkbox:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px rgba(64, 158, 255, 0.2);
+}
+
+/* 开关焦点样式 - 与开关圆角一致 */
+.el-switch:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 10px;
+  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.2);
+}
+
+/* 滑块焦点样式 */
+.el-slider__button-wrapper:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 50%;
+}
+
+/* 日期选择器焦点样式 - 与输入框设计一致 */
+.el-date-editor:focus-within {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: var(--el-border-radius-base, 4px);
+  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.2);
+}
+
+/* 时间选择器焦点样式 */
+.el-time-panel:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* 树形控件焦点样式 - 与树节点设计一致 */
+.el-tree-node:focus-visible > .el-tree-node__content {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: var(--el-border-radius-small, 2px);
+  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.2);
+}
+
+/* 级联选择器焦点样式 */
+.el-cascader:focus-within {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* 上传组件焦点样式 - 与上传区域设计一致 */
+.el-upload:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: var(--el-border-radius-base, 4px);
+  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.2);
+}
+
+/* 进度条焦点样式 */
+.el-progress:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 0;
+}
+
+/* 徽章焦点样式 - 与徽章设计一致 */
+.el-badge:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: var(--el-border-radius-base, 10px);
+  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.2);
+}
+
+/* 标签焦点样式 - 与标签设计一致 */
+.el-tag:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: var(--el-border-radius-base, 4px);
+  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.2);
+}
+
+/* 头像焦点样式 - 与头像形状一致 */
+.el-avatar:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.2);
+}
+
+/* 警告焦点样式 */
+.el-alert:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* 折叠面板焦点样式 */
+.el-collapse-item__header:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: -2px;
+  border-radius: 0;
+}
+
+/* 走马灯焦点样式 */
+.el-carousel__item:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* 图片预览焦点样式 */
+.el-image-viewer:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 0;
+}
+
+/* 颜色选择器焦点样式 */
+.el-color-picker:focus-within {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* 评分焦点样式 */
+.el-rate:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 0;
+}
+
+/* 步骤条焦点样式 */
+.el-step:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 0;
+}
+
+/* 时间线焦点样式 */
+.el-timeline-item:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 0;
+}
+
+/* 回到顶部焦点样式 - 与回到顶部按钮设计一致 */
+.el-backtop:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.3);
+}
+
+/* 页面头部焦点样式 */
+.el-page-header:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* 结果焦点样式 */
+.el-result:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 0;
+}
+
+/* 描述列表焦点样式 */
+.el-descriptions__cell:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 0;
+}
+
+/* 空状态焦点样式 */
+.el-empty:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 0;
+}
+
+/* 虚拟滚动焦点样式 */
+.el-virtual-scroll:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 0;
+}

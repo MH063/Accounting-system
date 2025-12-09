@@ -27,7 +27,7 @@
                 <!-- 移除了手动刷新按钮 -->
               </el-descriptions-item>
               <el-descriptions-item label="最后检查时间">
-                {{ formatTime(systemStatus.lastCheckTime) }}
+                {{ formatLocalTime(systemStatus.lastCheckTime) }}
               </el-descriptions-item>
               <el-descriptions-item v-if="systemStatus.uptime !== undefined" label="运行时间">
                 {{ formatUptime(systemStatus.uptime) }}
@@ -173,6 +173,7 @@ import { InfoFilled, Setting, House, User, Wallet, Document, CreditCard, DataAna
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { getSystemStatus, formatUptime, formatPercentage } from '@/services/systemStatusService'
+import { formatLocalTime } from '@/utils/timeUtils'
 import type { SystemStatus } from '@/services/systemStatusService'
 
 const router = useRouter()
@@ -234,10 +235,7 @@ const stopAutoRefresh = () => {
   }
 }
 
-// 格式化时间
-const formatTime = (date: Date): string => {
-  return date.toLocaleString('zh-CN')
-}
+
 
 // 格式化运行时间
 const formatUptimeDisplay = (seconds: number): string => {

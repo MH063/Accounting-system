@@ -553,19 +553,19 @@
                 </div>
                 <div class="info-item-preview">
                   <label>联系电话：</label>
-                  <span>{{ selectedExpense.phone }}</span>
+                  <span>-</span>
                 </div>
                 <div class="info-item-preview">
                   <label>所属部门：</label>
-                  <span>{{ selectedExpense.department }}</span>
+                  <span>-</span>
                 </div>
                 <div class="info-item-preview">
                   <label>职位：</label>
-                  <span>{{ selectedExpense.position }}</span>
+                  <span>-</span>
                 </div>
                 <div class="info-item-preview">
                   <label>申请日期：</label>
-                  <span>{{ formatDate(selectedExpense.date) }}</span>
+                  <span>{{ formatDate(selectedExpense.createdAt) }}</span>
                 </div>
                 <div class="info-item-preview">
                   <label>提交时间：</label>
@@ -626,10 +626,10 @@
                   :key="index"
                   class="history-item"
                 >
-                  <div class="history-time">{{ formatDateTime(history.createdAt || history.time) }}</div>
+                  <div class="history-time">{{ formatDateTime(history.createdAt) }}</div>
                   <div class="history-content">
                     <div class="history-action">{{ getActionText(history.action) }}</div>
-                    <div class="history-reviewer">{{ history.reviewer || history.reviewerName || '系统' }}</div>
+                    <div class="history-reviewer">{{ history.reviewer || '系统' }}</div>
                     <div class="history-comment" v-if="history.comment">
                       备注：{{ history.comment }}
                     </div>
@@ -693,7 +693,7 @@
               </div>
               <div class="meta-item">
                 <span class="meta-label">申请日期：</span>
-                <span class="meta-value">{{ formatDate(selectedExpense?.date) }}</span>
+                <span class="meta-value">{{ formatDate(selectedExpense?.createdAt) }}</span>
               </div>
               <div class="meta-item">
                 <span class="meta-label">紧急程度：</span>
@@ -750,9 +750,9 @@
             <div class="applicant-details">
               <div class="applicant-name">{{ selectedExpense?.applicant || '-' }}</div>
               <div class="applicant-contact">
-                {{ selectedExpense?.phone || '-' }} | {{ selectedExpense?.department || '-' }}
+                {{ '-' }} | {{ '-' }}
               </div>
-              <div class="applicant-position">{{ selectedExpense?.position || '-' }}</div>
+              <div class="applicant-position">{{ '-' }}</div>
             </div>
           </div>
         </el-card>
@@ -777,13 +777,13 @@
               </div>
               <div class="status-options">
                 <el-radio-group v-model="reviewForm.status" @change="handleStatusChange">
-                  <el-radio value="approved" size="large" class="status-radio approved">
+                  <el-radio value="approved" size="large" class="status-radio approved" tabindex="0" @keydown.enter="$event.target.click()" @keydown.space="$event.target.click()">
                     <div class="radio-content">
                       <el-icon><CircleCheck /></el-icon>
                       <span>通过</span>
                     </div>
                   </el-radio>
-                  <el-radio value="rejected" size="large" class="status-radio rejected">
+                  <el-radio value="rejected" size="large" class="status-radio rejected" tabindex="0" @keydown.enter="$event.target.click()" @keydown.space="$event.target.click()">
                     <div class="radio-content">
                       <el-icon><CircleClose /></el-icon>
                       <span>拒绝</span>
@@ -931,20 +931,19 @@
           <div class="timeline">
             <div 
               v-for="(history, index) in selectedExpense.reviewHistory" 
-              :key="(history.createdAt || history.time) + '-' + index"
+              :key="history.createdAt + '-' + index"
               class="timeline-item"
-              :class="getHistoryItemClass(history)"
+              
             >
-              <div class="timeline-marker" :class="history.status"></div>
+              <div class="timeline-marker"></div>
               <div class="timeline-content">
                 <div class="timeline-header">
                   <span class="timeline-title">{{ getActionText(history.action) }}</span>
-                  <span class="timeline-time">{{ formatDateTime(history.createdAt || history.time) }}</span>
+                  <span class="timeline-time">{{ formatDateTime(history.createdAt) }}</span>
                 </div>
                 <div class="timeline-description" v-if="selectedExpense">
-                  {{ history.reviewer || history.reviewerName || '系统' }} 
-                  <span v-if="history.status === 'approved'" class="status-approved">通过</span>
-                  <span v-else-if="history.status === 'rejected'" class="status-rejected">拒绝</span>
+                  {{ history.reviewer || '系统' }} 
+                  
                   了申请
                 </div>
                 <div class="timeline-comment" v-if="history.comment">
@@ -953,9 +952,9 @@
                 </div>
                 <div class="timeline-meta">
                   <el-icon class="meta-icon"><User /></el-icon>
-                  <span class="operator">{{ history.reviewer || history.reviewerName || '系统' }}</span>
+                  <span class="operator">{{ history.reviewer || '系统' }}</span>
                   <el-icon class="meta-icon"><Clock /></el-icon>
-                  <span class="time">{{ formatDateTime(history.createdAt || history.time) }}</span>
+                  <span class="time">{{ formatDateTime(history.createdAt) }}</span>
                 </div>
               </div>
             </div>
@@ -1172,10 +1171,6 @@ const pendingExpenses = ref<ExpenseItem[]>([
     category: 'utilities',
     applicant: '张三',
     applicantId: 'user1',
-    phone: '13800138000',
-    department: '行政部',
-    position: '行政专员',
-    date: '2024-12-15',
     status: 'pending',
     createdAt: '2024-12-15T10:30:00',
     updatedAt: '2024-12-15T10:30:00',
@@ -1195,7 +1190,7 @@ const pendingExpenses = ref<ExpenseItem[]>([
         id: 'history1',
         reviewer: '张三',
         reviewerId: 'user1',
-        action: 'submitted',
+        action: 'resubmitted',
         comment: '',
         createdAt: '2024-12-15T10:30:00'
       }
@@ -1211,10 +1206,6 @@ const pendingExpenses = ref<ExpenseItem[]>([
     category: 'cleaning',
     applicant: '李四',
     applicantId: 'user2',
-    phone: '13900139000',
-    department: '后勤部',
-    position: '后勤主管',
-    date: '2024-12-18',
     status: 'pending',
     createdAt: '2024-12-18T09:15:00',
     updatedAt: '2024-12-18T09:15:00',
@@ -1234,7 +1225,7 @@ const pendingExpenses = ref<ExpenseItem[]>([
         id: 'history2',
         reviewer: '李四',
         reviewerId: 'user2',
-        action: 'submitted',
+        action: 'resubmitted',
         comment: '',
         createdAt: '2024-12-18T09:15:00'
       }
@@ -1248,10 +1239,6 @@ const pendingExpenses = ref<ExpenseItem[]>([
     category: 'maintenance',
     applicant: '王五',
     applicantId: 'user3',
-    phone: '13700137000',
-    department: '技术部',
-    position: '设备管理员',
-    date: '2024-12-20',
     status: 'pending',
     createdAt: '2024-12-20T14:20:00',
     updatedAt: '2024-12-20T14:20:00',
@@ -1271,7 +1258,7 @@ const pendingExpenses = ref<ExpenseItem[]>([
         id: 'history3',
         reviewer: '王五',
         reviewerId: 'user3',
-        action: 'submitted',
+        action: 'resubmitted',
         comment: '',
         createdAt: '2024-12-20T14:20:00'
       }
@@ -1285,10 +1272,6 @@ const pendingExpenses = ref<ExpenseItem[]>([
     category: 'accommodation',
     applicant: '赵六',
     applicantId: 'user4',
-    phone: '13600136000',
-    department: '人事部',
-    position: '人事专员',
-    date: '2024-12-21',
     status: 'pending',
     createdAt: '2024-12-21T10:45:00',
     updatedAt: '2024-12-21T10:45:00',
@@ -1308,7 +1291,7 @@ const pendingExpenses = ref<ExpenseItem[]>([
         id: 'history4',
         reviewer: '赵六',
         reviewerId: 'user4',
-        action: 'submitted',
+        action: 'resubmitted',
         comment: '',
         createdAt: '2024-12-21T10:45:00'
       }
@@ -1322,10 +1305,6 @@ const pendingExpenses = ref<ExpenseItem[]>([
     category: 'other',
     applicant: '钱七',
     applicantId: 'user5',
-    phone: '13500135000',
-    department: '行政部',
-    position: '活动策划专员',
-    date: '2024-12-22',
     status: 'pending',
     createdAt: '2024-12-22T16:30:00',
     updatedAt: '2024-12-22T16:30:00',
@@ -1345,7 +1324,7 @@ const pendingExpenses = ref<ExpenseItem[]>([
         id: 'history5',
         reviewer: '钱七',
         reviewerId: 'user5',
-        action: 'submitted',
+        action: 'resubmitted',
         comment: '',
         createdAt: '2024-12-22T16:30:00'
       }
@@ -1424,7 +1403,7 @@ watch(() => route.query.id, (newId, oldId) => {
   // 只有在明确有ID参数时才加载数据，避免自动跳转
   if (newId && typeof newId === 'string') {
     const idNumber = parseInt(newId)
-    const foundExpense = pendingExpenses.value.find(expense => expense.id === idNumber)
+    const foundExpense = pendingExpenses.value.find(expense => expense.id === String(idNumber))
     if (foundExpense) {
       selectedExpense.value = foundExpense
       currentView.value = 'review'
@@ -1448,7 +1427,7 @@ const loadExpenseData = (): void => {
     const expenseId = route.query.id
     if (expenseId && typeof expenseId === 'string') {
       const idNumber = parseInt(expenseId)
-      const foundExpense = pendingExpenses.value.find(expense => expense.id === idNumber)
+      const foundExpense = pendingExpenses.value.find(expense => expense.id === String(idNumber))
       if (foundExpense) {
         selectedExpense.value = foundExpense
         currentView.value = 'review'
@@ -1505,7 +1484,7 @@ const handleSelectAll = (selection: any[]): void => {
 const sendRejectionNotification = (expense: ExpenseItem, reason: string, suggestion: string, customReason?: string): RejectionNotification => {
   const notification: RejectionNotification = {
     id: Date.now(),
-    expenseId: expense.id,
+    expenseId: Number(expense.id),
     expenseTitle: expense.title,
     applicant: expense.applicant,
     reason: reason,
@@ -1513,12 +1492,12 @@ const sendRejectionNotification = (expense: ExpenseItem, reason: string, suggest
     suggestion: suggestion,
     status: 'rejected',
     rejectedAt: new Date().toISOString(),
-    reviewer: expense.reviewer || '当前用户',
+    reviewer: '当前用户',
     isRead: false,
     canResubmit: true,
     resubmissionCount: 0,
-    originalRejectDate: expense.reviewDate,
-    originalRejectComment: expense.reviewComment
+    originalRejectDate: new Date().toISOString(),
+    originalRejectComment: ''
   }
   
   // 将通知添加到系统
@@ -1532,8 +1511,8 @@ const sendRejectionNotification = (expense: ExpenseItem, reason: string, suggest
 }
 
 // 检查费用是否可以被重新提交
-const canResubmitExpense = (expenseId: number): boolean => {
-  const notification = notificationSystem.value.rejectedNotifications.find(n => n.expenseId === expenseId)
+const canResubmitExpense = (expenseId: string): boolean => {
+  const notification = notificationSystem.value.rejectedNotifications.find(n => String(n.expenseId) === expenseId)
   return notification && notification.canResubmit && notification.resubmissionCount < 3 // 最多重新提交3次
 }
 
@@ -1613,7 +1592,7 @@ const handleQuickApproveSingle = async (expense: ExpenseItem): Promise<void> => 
 
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('快速通过操作失败')
+      ElMessage.error('快速通过操作失败，请稍后重试或联系技术支持')
     }
   }
 }
@@ -1666,7 +1645,7 @@ const handleBatchApprove = async (): Promise<void> => {
 
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('批量通过操作失败')
+      ElMessage.error('批量通过操作失败，请稍后重试或联系技术支持')
     }
   } finally {
     batchProcessing.value = false
@@ -1762,7 +1741,7 @@ const confirmQuickReject = async (): Promise<void> => {
 
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('快速拒绝操作失败')
+      ElMessage.error('快速拒绝操作失败，请稍后重试或联系技术支持')
     }
   }
 }
@@ -1813,7 +1792,7 @@ const confirmBatchReject = async (): Promise<void> => {
 
     } catch (error) {
       if (error !== 'cancel') {
-        ElMessage.error('批量拒绝操作失败')
+        ElMessage.error('批量拒绝操作失败，请稍后重试或联系技术支持')
       }
     } finally {
       batchProcessing.value = false
@@ -2151,7 +2130,7 @@ const handleSaveDraft = async (): Promise<void> => {
     await new Promise(resolve => setTimeout(resolve, 1000))
     ElMessage.success('草稿保存成功')
   } catch (error) {
-    ElMessage.error('保存失败，请重试')
+    ElMessage.error('保存失败，请检查网络连接或稍后重试')
   } finally {
     saving.value = false
   }
@@ -2259,7 +2238,7 @@ const handleQuickApprove = async (): Promise<void> => {
 
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('快速通过操作失败，请重试')
+      ElMessage.error('快速通过操作失败，请检查网络连接或稍后重试')
       console.error('Quick approve error:', error)
     }
   }
@@ -2584,7 +2563,7 @@ const handlePreviewAttachment = (attachment: string | { url?: string; name?: str
     }
   } catch (error) {
     console.error('预览附件时发生错误:', error)
-    ElMessage.error('预览附件时发生错误，请重试')
+    ElMessage.error('预览附件时发生错误，请检查网络连接或稍后重试')
   }
 }
 
@@ -2630,7 +2609,7 @@ const handleDownloadAttachment = (attachment: string | { url?: string; name?: st
     
   } catch (error) {
     console.error('下载附件失败:', error)
-    ElMessage.error(`下载 ${getFileNameFromPath(attachment)} 失败，请重试`)
+    ElMessage.error(`下载 ${getFileNameFromPath(attachment)} 失败，请检查网络连接或稍后重试`)
   }
 }
 
@@ -4073,4 +4052,6 @@ const getFileExtension = (fileNameOrUrl: string): string => {
   justify-content: center;
   gap: 12px;
 }
+
+
 </style>

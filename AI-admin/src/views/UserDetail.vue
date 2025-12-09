@@ -246,14 +246,14 @@ const originalUserDetail = ref<any>({})
 const loginLogs = ref<any[]>([])
 const logsLoading = ref(false)
 const logsPage = ref(1)
-const logsPageSize = ref(20)
+const logsPageSize = ref(10)
 const logsTotal = ref(0)
 
 // 支付记录相关
 const paymentRecords = ref<any[]>([])
 const paymentsLoading = ref(false)
 const paymentsPage = ref(1)
-const paymentsPageSize = ref(20)
+const paymentsPageSize = ref(10)
 const paymentsTotal = ref(0)
 
 // 权限角色相关

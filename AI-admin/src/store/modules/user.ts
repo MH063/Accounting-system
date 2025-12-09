@@ -11,6 +11,7 @@ export interface UserState {
   isLoggedIn: boolean
   avatar?: string
   email?: string
+  loginTime?: number // 添加登录时间戳
 }
 
 // 初始状态
@@ -21,7 +22,8 @@ const state: UserState = {
   permissions: [],
   isLoggedIn: false,
   avatar: '',
-  email: ''
+  email: '',
+  loginTime: undefined
 }
 
 // getters
@@ -42,6 +44,7 @@ const mutations = {
   SET_USER(state: UserState, user: Partial<UserState>) {
     Object.assign(state, user)
     state.isLoggedIn = true
+    state.loginTime = Date.now() // 设置登录时间戳
   },
   
   CLEAR_USER(state: UserState) {

@@ -1155,7 +1155,7 @@ const notificationSearchForm = reactive({
   priority: ''
 })
 const notificationCurrentPage = ref(1)
-const notificationPageSize = ref(20)
+const notificationPageSize = ref(10)
 const notificationTotal = ref(0)
 
 // 通知模板相关
@@ -1167,7 +1167,7 @@ const templateSearchForm = reactive({
   isActive: undefined as boolean | undefined
 })
 const templateCurrentPage = ref(1)
-const templatePageSize = ref(20)
+const templatePageSize = ref(10)
 const templateTotal = ref(0)
 
 // 发送历史相关
@@ -1181,7 +1181,7 @@ const historySearchForm = reactive({
   dateRange: []
 })
 const historyCurrentPage = ref(1)
-const historyPageSize = ref(20)
+const historyPageSize = ref(10)
 const historyTotal = ref(0)
 
 // 统计数据相关
@@ -1210,7 +1210,7 @@ const userGroupSearchForm = reactive({
   isActive: undefined as boolean | undefined
 })
 const userGroupCurrentPage = ref(1)
-const userGroupPageSize = ref(20)
+const userGroupPageSize = ref(10)
 const userGroupTotal = ref(0)
 
 // 定时任务相关
@@ -1222,7 +1222,7 @@ const taskSearchForm = reactive({
   dateRange: []
 })
 const taskCurrentPage = ref(1)
-const taskPageSize = ref(20)
+const taskPageSize = ref(10)
 const taskTotal = ref(0)
 
 // 对话框相关
@@ -1328,7 +1328,7 @@ const userPreviewDialogVisible = ref(false)
 const userPreviewLoading = ref(false)
 const userPreviewList = ref([])
 const userPreviewCurrentPage = ref(1)
-const userPreviewPageSize = ref(20)
+const userPreviewPageSize = ref(10)
 const userPreviewTotal = ref(0)
 
 // 通知选项

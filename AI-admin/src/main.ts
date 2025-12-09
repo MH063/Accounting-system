@@ -7,6 +7,7 @@ import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import App from './App.vue'
 import Layout from './components/Layout.vue'
 import Home from './views/Home.vue'
+import Login from './views/Login.vue'
 import NotFound from './views/NotFound.vue'
 import './style.css'
 
@@ -202,6 +203,11 @@ const routes: RouteRecordRaw[] = [
     ]
   },
   {
+    path: '/login',
+    name: 'Login',
+    component: Login
+  },
+  {
     path: '/404',
     name: 'NotFound',
     component: NotFound
@@ -215,6 +221,35 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHistory(),
   routes
+})
+
+// 添加路由守卫
+router.beforeEach((to, from, next) => {
+  // 获取Vuex中的用户状态
+  const isLoggedIn = store.getters['user/isLoggedIn']
+  const loginTime = store.state.user.loginTime
+  
+  // 检查是否已登录超过7天
+  const sevenDaysInMillis = 7 * 24 * 60 * 60 * 1000
+  const isSessionExpired = loginTime && (Date.now() - loginTime > sevenDaysInMillis)
+  
+  // 如果会话已过期，清除用户状态
+  if (isSessionExpired) {
+    store.dispatch('user/logout')
+  }
+  
+  // 如果目标路由需要认证且用户未登录或会话已过期，重定向到登录页
+  if (to.path !== '/login' && (!isLoggedIn || isSessionExpired)) {
+    next('/login')
+  } 
+  // 如果用户已登录且试图访问登录页，重定向到首页
+  else if (to.path === '/login' && isLoggedIn && !isSessionExpired) {
+    next('/')
+  } 
+  // 其他情况允许访问
+  else {
+    next()
+  }
 })
 
 const app = createApp(App)

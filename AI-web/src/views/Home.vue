@@ -637,12 +637,17 @@ onMounted(() => {
   height: 100%;
   background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="2" fill="rgba(255,255,255,0.1)"/></svg>');
   background-size: 50px 50px;
-  animation: featureBackgroundMove 30s linear infinite;
+  animation: featureBackgroundMove 60s linear infinite; /* 降低动画速度以优化性能 */
 }
 
 @keyframes featureBackgroundMove {
   0% { transform: translate(0, 0); }
   100% { transform: translate(50px, 50px); }
+}
+
+/* 添加will-change属性优化动画性能 */
+.features::before {
+  will-change: transform;
 }
 
 .features-grid {
@@ -828,12 +833,17 @@ onMounted(() => {
   height: 100%;
   background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><polygon points="0,0 100,0 50,100" fill="rgba(255,255,255,0.05)"/></svg>');
   background-size: 100px 100px;
-  animation: workBackgroundMove 25s linear infinite;
+  animation: workBackgroundMove 50s linear infinite; /* 降低动画速度以优化性能 */
 }
 
 @keyframes workBackgroundMove {
   0% { transform: translate(0, 0) rotate(0deg); }
   100% { transform: translate(100px, 100px) rotate(360deg); }
+}
+
+/* 添加will-change属性优化动画性能 */
+.how-it-works::before {
+  will-change: transform;
 }
 
 .steps-container {
@@ -1014,12 +1024,17 @@ onMounted(() => {
   height: 100%;
   background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300"><path d="M50,50 Q150,10 250,50 Q290,150 250,250 Q150,290 50,250 Q10,150 50,50 Z" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="3"/></svg>');
   background-size: 300px 300px;
-  animation: ctaBackground 50s linear infinite;
+  animation: ctaBackground 100s linear infinite; /* 降低动画速度以优化性能 */
 }
 
 @keyframes ctaBackground {
   0% { transform: translate(0, 0) rotate(0deg); }
   100% { transform: translate(300px, 300px) rotate(360deg); }
+}
+
+/* 添加will-change属性优化动画性能 */
+.cta-section::before {
+  will-change: transform;
 }
 
 .cta-content {

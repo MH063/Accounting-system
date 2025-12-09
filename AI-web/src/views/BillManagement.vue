@@ -13,7 +13,7 @@
         <el-button 
           type="primary" 
           :icon="Plus" 
-          @click="$router.push('/dashboard/bill/create')"
+          @click="router.push('/dashboard/bill/create')"
           class="create-btn"
         >
           生成账单
@@ -202,6 +202,9 @@
             :key="bill.id"
             class="bill-item"
             :class="{ selected: selectedBills.includes(bill.id) }"
+            tabindex="0"
+            @keydown.enter="handleViewDetail(bill.id)"
+            @keydown.space="handleViewDetail(bill.id)"
           >
             <div class="bill-checkbox">
               <el-checkbox 
@@ -231,7 +234,7 @@
                 <div class="bill-meta">
                   <span class="meta-item">
                     <el-icon><Calendar /></el-icon>
-                    {{ formatDate(bill.billDate) }}
+                    {{ formatLocalDate(bill.billDate) }}
                   </span>
                   <span class="meta-item">
                     <el-icon><User /></el-icon>
@@ -286,7 +289,7 @@
                 title="处理付款"
                 v-if="bill.status !== 'paid'"
               />
-              <el-dropdown @command="(command: string) => handleCommand(command, bill.id)">
+              <el-dropdown @command="(command: string) => handleCommand(command, bill)">
                 <el-button :icon="MoreFilled" circle size="small" />
                 <template #dropdown>
                   <el-dropdown-menu>
@@ -315,7 +318,7 @@
           <!-- 空状态 -->
           <div v-if="billList.length === 0 && !loading" class="empty-state">
             <el-empty description="暂无账单数据">
-              <el-button type="primary" @click="$router.push('/dashboard/bill/create')">
+              <el-button type="primary" @click="router.push('/dashboard/bill/create')">
                 立即生成账单
               </el-button>
             </el-empty>
@@ -496,6 +499,7 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getQRCodes } from '@/services/paymentService'
+import { formatLocalDate } from '@/utils/timeUtils'
 
 // 账单类型定义
 interface Bill {
@@ -508,6 +512,8 @@ interface Bill {
   payerName: string
   type: 'monthly' | 'temporary' | 'expense'
   description: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 // 响应式数据
@@ -632,15 +638,7 @@ const formatCurrency = (amount: number): string => {
   return `¥${amount.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`
 }
 
-/**
- * 格式化日期
- * @param date 日期
- * @returns 格式化后的日期字符串
- */
-const formatDate = (date: string | Date): string => {
-  if (!date) return '-'
-  return new Date(date).toLocaleDateString('zh-CN')
-}
+
 
 /**
  * 计算付款进度
@@ -794,8 +792,7 @@ const loadBillList = async () => {
     }
     
     // 打印筛选信息
-    console.log('搜索条件:', searchForm)
-    console.log('筛选结果:', filteredBills)
+    // 搜索条件和筛选结果日志已移除以优化性能
     
     // 分页处理
     const start = (pagination.page - 1) * pagination.size
@@ -818,8 +815,7 @@ const loadBillList = async () => {
     }
     
   } catch (error) {
-    console.error('加载账单列表失败:', error)
-    ElMessage.error('加载账单列表失败')
+    ElMessage.error('加载账单列表失败，请检查网络连接或稍后重试')
   } finally {
     loading.value = false
   }
@@ -941,7 +937,7 @@ const handleBatchDelete = async () => {
 /**
  * 下拉菜单命令处理
  */
-const handleCommand = async (command: string) => {
+const handleCommand = async (command: string, bill: Bill) => {
   switch (command) {
     case 'duplicate':
       ElMessage.success('账单复制功能开发中')
@@ -996,8 +992,14 @@ const exportBills = async (format: 'csv' | 'xlsx' = 'csv') => {
       return
     }
 
-    ElMessage.info(`正在准备导出${format === 'xlsx' ? 'Excel' : 'CSV'}格式文件...`)
+    ElMessage.info(`正在准备导出${format === 'xlsx' ? 'Excel' : 'CSV'}格式文件，请稍候...`)
 
+    // 检查是否有数据可以导出
+    if (billList.value.length === 0) {
+      ElMessage.warning('没有数据可以导出')
+      return
+    }
+    
     // 准备导出数据 - 使用当前筛选后的数据
     const exportData = billList.value.map(bill => ({
       '账单ID': bill.id,
@@ -1007,11 +1009,11 @@ const exportBills = async (format: 'csv' | 'xlsx' = 'csv') => {
       '总金额': bill.totalAmount.toFixed(2),
       '已付金额': bill.paidAmount.toFixed(2),
       '剩余金额': (bill.totalAmount - bill.paidAmount).toFixed(2),
-      '账单日期': formatDate(bill.billDate),
+      '账单日期': formatLocalDate(bill.billDate),
       '付款人': bill.payerName,
       '账单类型': getTypeText(bill.type),
-      '创建时间': formatDate(bill.createdAt || new Date().toISOString()),
-      '更新时间': formatDate(bill.updatedAt || new Date().toISOString())
+      '创建时间': formatLocalDate(bill.createdAt || new Date().toISOString()),
+      '更新时间': formatLocalDate(bill.updatedAt || new Date().toISOString())
     }))
 
     // 模拟处理时间
@@ -1021,7 +1023,7 @@ const exportBills = async (format: 'csv' | 'xlsx' = 'csv') => {
     
     if (format === 'xlsx') {
       // 导出为Excel格式 (实际使用CSV格式，但文件扩展名为xlsx)
-      const headers = Object.keys(exportData[0])
+      const headers = exportData.length > 0 ? Object.keys(exportData[0]!) : []
       const csvContent = [
         headers.join(','),
         ...exportData.map(row => 
@@ -1054,11 +1056,11 @@ const exportBills = async (format: 'csv' | 'xlsx' = 'csv') => {
         
         ElMessage.success(`成功导出 ${exportData.length} 条账单记录 (Excel格式)`)
       } else {
-        ElMessage.error('您的浏览器不支持文件下载')
+        ElMessage.error('您的浏览器版本较低，不支持文件下载功能，请升级浏览器或使用其他浏览器重试')
       }
     } else {
       // 导出为CSV格式
-      const headers = Object.keys(exportData[0])
+      const headers = exportData.length > 0 ? Object.keys(exportData[0]!) : []
       const csvContent = [
         headers.join(','),
         ...exportData.map(row => 
@@ -1091,7 +1093,7 @@ const exportBills = async (format: 'csv' | 'xlsx' = 'csv') => {
         
         ElMessage.success(`成功导出 ${exportData.length} 条账单记录 (CSV格式)`)
       } else {
-        ElMessage.error('您的浏览器不支持文件下载')
+        ElMessage.error('您的浏览器版本较低，不支持文件下载功能，请升级浏览器或使用其他浏览器重试')
       }
     }
 
@@ -1100,7 +1102,7 @@ const exportBills = async (format: 'csv' | 'xlsx' = 'csv') => {
     
   } catch (error) {
     console.error('导出失败:', error)
-    ElMessage.error('导出失败，请重试')
+    ElMessage.error('导出失败，请检查网络连接或稍后重试')
   }
 }
 
@@ -1310,7 +1312,7 @@ onMounted(() => {
   gap: 8px;
   font-size: 24px;
   font-weight: 600;
-  color: #303133;
+  color: #1f2937;
   margin: 0 0 8px 0;
 }
 
@@ -1319,7 +1321,7 @@ onMounted(() => {
 }
 
 .page-subtitle {
-  color: #909399;
+  color: #6b7280;
   margin: 0;
   font-size: 14px;
 }
@@ -1394,13 +1396,13 @@ onMounted(() => {
 .stat-number {
   font-size: 24px;
   font-weight: 700;
-  color: #303133;
+  color: #1f2937;
   line-height: 1.2;
 }
 
 .stat-label {
   font-size: 14px;
-  color: #909399;
+  color: #6b7280;
   margin-top: 4px;
 }
 
@@ -1490,7 +1492,7 @@ onMounted(() => {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: #303133;
+  color: #1f2937;
 }
 
 .bill-amount {
@@ -1752,4 +1754,6 @@ onMounted(() => {
     font-size: 12px;
   }
 }
+
+
 </style>

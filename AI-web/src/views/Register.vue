@@ -59,26 +59,33 @@
           >
             <el-form-item label="用户名" prop="username">
               <el-input
+                id="register-username"
                 v-model="registerForm.username"
                 placeholder="请输入用户名"
                 prefix-icon="User"
                 size="large"
                 clearable
+                aria-describedby="register-username-help"
               />
+              <div id="register-username-help" class="sr-only">请输入您的用户名，长度应在3到20个字符之间</div>
             </el-form-item>
 
             <el-form-item label="邮箱" prop="email">
               <el-input
+                id="register-email"
                 v-model="registerForm.email"
                 placeholder="请输入邮箱地址"
                 prefix-icon="Message"
                 size="large"
                 clearable
+                aria-describedby="register-email-help"
               />
+              <div id="register-email-help" class="sr-only">请输入有效的邮箱地址</div>
             </el-form-item>
 
             <el-form-item label="密码" prop="password">
               <el-input
+                id="register-password"
                 v-model="registerForm.password"
                 type="password"
                 placeholder="请输入密码"
@@ -87,8 +94,10 @@
                 show-password
                 clearable
                 @input="updatePasswordStrength"
+                aria-describedby="register-password-help register-password-requirements"
               />
-              <div class="password-strength-indicator" v-if="registerForm.password">
+              <div id="register-password-help" class="sr-only">请输入密码，至少8个字符，包含大小写字母、数字和特殊字符</div>
+              <div class="password-strength-indicator" v-if="registerForm.password" role="status" aria-live="polite">
                 <div class="strength-label">密码强度：</div>
                 <div class="strength-bar-container">
                   <div 
@@ -107,7 +116,7 @@
               </div>
               
               <!-- 密码要求检查 -->
-              <div class="password-requirements" v-if="registerForm.password">
+              <div id="register-password-requirements" class="password-requirements" v-if="registerForm.password">
                 <div class="requirement-item" :class="{ 'met': calculatedStrength.requirements.minLength }">
                   <span class="requirement-icon">{{ calculatedStrength.requirements.minLength ? '✓' : '○' }}</span>
                   <span class="requirement-text">至少8个字符</span>
@@ -137,6 +146,7 @@
 
             <el-form-item label="确认密码" prop="confirmPassword">
               <el-input
+                id="register-confirm-password"
                 v-model="registerForm.confirmPassword"
                 type="password"
                 placeholder="请再次输入密码"
@@ -144,7 +154,9 @@
                 size="large"
                 show-password
                 clearable
+                aria-describedby="register-confirm-password-help"
               />
+              <div id="register-confirm-password-help" class="sr-only">请再次输入密码以确认</div>
             </el-form-item>
 
             <el-form-item>
@@ -509,7 +521,7 @@ const goToHome = (): void => {
 
 .strength-label {
   font-size: 12px;
-  color: #606266;
+  color: #4b5563;
   white-space: nowrap;
 }
 
@@ -571,7 +583,7 @@ const goToHome = (): void => {
   align-items: center;
   margin-bottom: 8px;
   font-size: 12px;
-  color: #909399;
+  color: #6b7280;
 }
 
 .requirement-item:last-child {
@@ -613,7 +625,7 @@ const goToHome = (): void => {
 
 .register-subtitle {
   font-size: 1rem;
-  color: #6b7280;
+  color: #4b5563;
   margin: 0;
 }
 
@@ -627,7 +639,7 @@ const goToHome = (): void => {
 
 .register-form .el-form-item__label {
   font-weight: 600;
-  color: #374151;
+  color: #1f2937;
   line-height: 1.5;
   margin-bottom: 0.5rem;
 }
@@ -762,4 +774,18 @@ const goToHome = (): void => {
     width: 32px;
   }
 }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+
+
 </style>

@@ -17,6 +17,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { Warning } from '@element-plus/icons-vue'
 import { getMaintenanceStatus } from '@/services/maintenanceService'
+import { formatTimeDuration } from '@/utils/timeUtils'
 
 // 响应式数据
 const showNotice = ref(false)
@@ -27,20 +28,7 @@ const noticeMessage = ref('系统即将进入维护模式')
 let countdownTimer: NodeJS.Timeout | null = null
 let checkStatusTimer: NodeJS.Timeout | null = null
 
-// 格式化时间显示
-const formatTime = (seconds: number): string => {
-  const hours = Math.floor(seconds / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-  const secs = seconds % 60
-  
-  if (hours > 0) {
-    return `${hours}小时${minutes}分钟`
-  } else if (minutes > 0) {
-    return `${minutes}分钟${secs}秒`
-  } else {
-    return `${secs}秒`
-  }
-}
+
 
 // 检查维护状态
 const checkMaintenanceStatus = async () => {
@@ -65,7 +53,7 @@ const checkMaintenanceStatus = async () => {
         const endTime = new Date(status.effectiveTime).getTime()
         const remainingSeconds = Math.max(0, Math.floor((endTime - now) / 1000))
         
-        timeLeft.value = formatTime(remainingSeconds)
+        timeLeft.value = formatTimeDuration(remainingSeconds)
         
         // 启动倒计时
         startCountdown(remainingSeconds)
@@ -93,7 +81,7 @@ const startCountdown = (totalSeconds: number) => {
   let remainingSeconds = totalSeconds
   
   // 立即更新一次显示
-  timeLeft.value = formatTime(remainingSeconds)
+  timeLeft.value = formatTimeDuration(remainingSeconds)
   
   countdownTimer = setInterval(() => {
     remainingSeconds--
@@ -110,7 +98,7 @@ const startCountdown = (totalSeconds: number) => {
       timeLeft.value = '维护中'
       noticeMessage.value = '系统正在维护中'
     } else {
-      timeLeft.value = formatTime(remainingSeconds)
+      timeLeft.value = formatTimeDuration(remainingSeconds)
     }
   }, 1000)
 }

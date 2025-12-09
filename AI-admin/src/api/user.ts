@@ -93,8 +93,7 @@ export const systemApi = {
   
   // 执行系统健康检查
   healthCheck: () => 
-    api.post('/health/check'),
-  
+    api.post('/health/check'),  
   // 获取数据库表信息
   getTables: () => 
     api.get('/tables'),

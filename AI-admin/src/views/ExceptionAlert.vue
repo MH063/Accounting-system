@@ -278,7 +278,7 @@
                 <el-pagination
                   v-model:current-page="ruleCurrentPage"
                   v-model:page-size="rulePageSize"
-                  :page-sizes="[5, 10, 15, 20, 50]"
+                  :page-sizes="[10, 20, 50, 100]"
                   layout="total, sizes, prev, pager, next, jumper"
                   :total="ruleTotal"
                   @size-change="handleRuleSizeChange"
@@ -326,7 +326,7 @@
                 <el-pagination
                   v-model:current-page="emergencyCurrentPage"
                   v-model:page-size="emergencyPageSize"
-                  :page-sizes="[5, 10, 15, 20, 50]"
+                  :page-sizes="[10, 20, 50, 100]"
                   layout="total, sizes, prev, pager, next, jumper"
                   :total="emergencyTotal"
                   @size-change="handleEmergencySizeChange"
@@ -383,7 +383,7 @@
           <el-pagination
             v-model:current-page="currentPage"
             v-model:page-size="pageSize"
-            :page-sizes="[5, 10, 15, 20, 50]"
+            :page-sizes="[10, 20, 50, 100]"
             layout="total, sizes, prev, pager, next, jumper"
             :total="total"
             @size-change="handleSizeChange"
@@ -423,7 +423,7 @@
           <el-pagination
             v-model:current-page="behaviorCurrentPage"
             v-model:page-size="behaviorPageSize"
-            :page-sizes="[5, 10, 15, 20, 50]"
+            :page-sizes="[10, 20, 50, 100]"
             layout="total, sizes, prev, pager, next, jumper"
             :total="behaviorTotal"
             @size-change="handleBehaviorSizeChange"
@@ -596,7 +596,7 @@ const alertList = ref([
 
 const loading = ref(false)
 const currentPage = ref(1)
-const pageSize = ref(15) // 按照分页设置规范，默认值为15
+const pageSize = ref(10) // 按照分页设置规范，默认值为10
 const total = ref(100)
 
 const searchForm = ref({
@@ -653,7 +653,7 @@ const behaviorList = ref([
 ])
 
 const behaviorCurrentPage = ref(1)
-const behaviorPageSize = ref(15)
+const behaviorPageSize = ref(10)
 const behaviorTotal = ref(100)
 
 // 告警规则相关数据
@@ -685,7 +685,7 @@ const ruleList = ref([
 ])
 
 const ruleCurrentPage = ref(1)
-const rulePageSize = ref(15)
+const rulePageSize = ref(10)
 const ruleTotal = ref(100)
 const selectedRules = ref<any[]>([])
 
@@ -710,7 +710,7 @@ const emergencyPlanList = ref([
 ])
 
 const emergencyCurrentPage = ref(1)
-const emergencyPageSize = ref(15)
+const emergencyPageSize = ref(10)
 const emergencyTotal = ref(100)
 
 const detailData = ref({

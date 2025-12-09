@@ -42,7 +42,7 @@
       <!-- 头像区域 -->
       <div class="avatar-section">
         <div class="avatar-container">
-          <img :src="avatarUrl" alt="用户头像" class="user-avatar" />
+          <img :src="avatarUrl" alt="用户头像" class="user-avatar" role="img" aria-label="当前用户头像" />
           <div class="avatar-overlay">
             <el-button type="primary" size="small" @click="showAvatarDialog = true">更换头像</el-button>
           </div>
@@ -216,12 +216,14 @@
               ref="cropImageRef" 
               :src="cropData.image" 
               alt="待裁剪图片"
+              role="img"
+              aria-label="待裁剪的头像图片"
             />
           </div>
           <div class="crop-preview">
             <div class="preview-title">预览</div>
             <div class="preview-circle">
-              <img :src="cropData.preview" alt="预览头像" />
+              <img :src="cropData.preview" alt="预览头像" role="img" aria-label="头像预览" />
             </div>
           </div>
         </div>
@@ -490,7 +492,7 @@ const savePersonalInfo = async (): Promise<void> => {
     await performSavePersonalInfo()
   } catch (error) {
     console.error('表单验证失败:', error)
-    ElMessage.error('请检查输入的信息')
+    ElMessage.error('表单验证失败，请检查输入的信息是否符合要求')
     // 更新验证状态
     await updateValidationStatus()
   }
@@ -547,7 +549,7 @@ const performSavePersonalInfo = async (): Promise<void> => {
     
   } catch (error) {
     console.error('保存个人信息失败:', error)
-    ElMessage.error('个人信息保存失败')
+    ElMessage.error('个人信息保存失败，请检查网络连接或稍后重试')
     // 更新验证状态
     await updateValidationStatus()
   } finally {
@@ -589,7 +591,7 @@ const resetForm = (): void => {
 // 同步数据
 const syncData = async (): Promise<void> => {
   syncLoading.value = true
-  showSyncStatus('info', '正在同步', '正在从服务器同步最新数据...')
+  showSyncStatus('info', '正在同步', '正在从服务器同步最新数据，请稍候...')
   
   try {
     // 模拟API调用
@@ -626,7 +628,7 @@ const syncData = async (): Promise<void> => {
     addSyncHistory('manual', 'success', '数据同步成功')
     showSyncStatus('success', '同步成功', '个人信息已更新为最新数据')
   } catch (error) {
-    console.error('同步数据失败:', error)
+    // 同步数据失败日志已移除以优化性能
     addSyncHistory('manual', 'failed', '数据同步失败')
     showSyncStatus('error', '同步失败', '个人信息同步失败，请稍后重试')
   } finally {
@@ -648,7 +650,7 @@ const originalPersonalForm = reactive<PersonalForm>({
 // 加载个人信息
 const loadPersonalInfo = async (): Promise<void> => {
   try {
-    showSyncStatus('info', '正在加载', '正在加载个人信息...')
+    showSyncStatus('info', '正在加载', '正在加载个人信息，请稍候...')
     
     // 模拟API调用
     await new Promise(resolve => setTimeout(resolve, 1000))
@@ -695,9 +697,9 @@ const loadPersonalInfo = async (): Promise<void> => {
           personalData.bio = dataEncryptionManager.decryptField(encryptedBio)
         }
         
-        console.log('敏感信息已解密加载')
+        // 敏感信息已解密加载日志已移除以优化性能
       } catch (error) {
-        console.warn('解密个人信息失败:', error)
+        // 解密个人信息失败日志已移除以优化性能
         // 如果解密失败，使用原始值
       }
     }
@@ -725,7 +727,7 @@ const loadPersonalInfo = async (): Promise<void> => {
     await updateValidationStatus()
     
   } catch (error) {
-    console.error('加载个人信息失败:', error)
+    // 加载个人信息失败日志已移除以优化性能
     showSyncStatus('error', '加载失败', '个人信息加载失败')
   }
 }
@@ -799,7 +801,7 @@ const initCropper = (): void => {
   if (!cropImageRef.value) return
   
   // 这里使用简单的裁剪实现，实际项目中可以使用 cropper.js 等库
-  console.log('初始化头像裁剪器')
+  // 初始化头像裁剪器日志已移除以优化性能
   
   // 创建预览
   cropData.preview = cropData.image
@@ -838,7 +840,7 @@ const uploadAvatar = async (): Promise<void> => {
   } catch (error) {
     console.error('头像上传失败:', error)
     avatarUploadStatus.status = 'exception'
-    ElMessage.error('头像上传失败')
+    ElMessage.error('头像上传失败，请检查网络连接或稍后重试')
     addDataOperationHistory('avatar_upload', 'failed', '头像上传失败')
   } finally {
     avatarUploading.value = false
@@ -938,7 +940,7 @@ const exportPersonalData = (): void => {
     addDataOperationHistory('export', 'success', '个人信息导出成功')
   } catch (error) {
     console.error('导出失败:', error)
-    ElMessage.error('个人信息导出失败')
+    ElMessage.error('个人信息导出失败，请检查网络连接或稍后重试')
     addDataOperationHistory('export', 'failed', '个人信息导出失败')
   }
 }
@@ -992,7 +994,7 @@ const createDataBackup = (): void => {
     addDataOperationHistory('backup_create', 'success', '数据备份创建成功')
   } catch (error) {
     console.error('创建备份失败:', error)
-    ElMessage.error('数据备份创建失败')
+    ElMessage.error('数据备份创建失败，请检查网络连接或稍后重试')
     addDataOperationHistory('backup_create', 'failed', '数据备份创建失败')
   }
 }
