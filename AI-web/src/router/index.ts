@@ -57,9 +57,10 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: 'dormitory',
         name: 'Dormitory',
-        component: () => import('@/views/DormManagement.vue'),
+        component: () => import('@/views/NotFound.vue'),
         meta: { 
-          title: '寝室管理'
+          title: '寝室管理',
+          requiresAuth: true
         }
       },
       {
@@ -91,9 +92,10 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: 'members',
         name: 'Members',
-        component: () => import('@/views/MemberManagement.vue'),
+        component: () => import('@/views/NotFound.vue'),
         meta: { 
-          title: '成员管理'
+          title: '成员管理',
+          requiresAuth: true
         }
       },
       {
@@ -124,9 +126,10 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: 'expense-management',
         name: 'ExpenseManagement',
-        component: () => import('@/views/ExpenseManagement.vue'),
+        component: () => import('@/views/NotFound.vue'),
         meta: { 
-          title: '费用管理'
+          title: '费用管理',
+          requiresAuth: true
         }
       },
       {
@@ -166,9 +169,10 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: 'expenses',
         name: 'Expenses',
-        component: () => import('@/views/ExpenseManagement.vue'),
+        component: () => import('@/views/NotFound.vue'),
         meta: { 
-          title: '费用列表'
+          title: '费用列表',
+          requiresAuth: true
         }
       },
       {

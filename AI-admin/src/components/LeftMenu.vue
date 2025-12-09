@@ -39,7 +39,7 @@
           <el-icon><Coin /></el-icon>
           <span>费用管理</span>
         </template>
-        <el-menu-item index="/fee-record-list">费用记录列表</el-menu-item>
+        <el-menu-item index="/expense-management">费用管理</el-menu-item>
         <el-menu-item index="/fee-detail">费用详情</el-menu-item>
       </el-sub-menu>
       

@@ -69,9 +69,24 @@ const routes: RouteRecordRaw[] = [
         props: true
       },
       {
-        path: '/fee-record-list',
-        name: 'FeeRecordList',
-        component: () => import('./views/FeeRecordList.vue')
+        path: '/dormitory/create',
+        name: 'DormitoryCreate',
+        component: () => import('./views/DormitoryCreate.vue')
+      },
+      {
+        path: '/expense-management',
+        name: 'ExpenseManagement',
+        component: () => import('./views/ExpenseManagement.vue')
+      },
+      {
+        path: '/expense/create',
+        name: 'ExpenseCreate',
+        component: () => import('./views/ExpenseCreate.vue')
+      },
+      {
+        path: '/expense/review',
+        name: 'ExpenseReview',
+        component: () => import('./views/ExpenseReview.vue')
       },
       {
         path: '/fee-detail',

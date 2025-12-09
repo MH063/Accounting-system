@@ -5,7 +5,7 @@
         <div class="card-header">
           <span>寝室列表</span>
           <div>
-            <el-button type="primary" @click="handleAdd">新增寝室</el-button>
+            <el-button type="primary" @click="goToCreateDormitory">新增寝室</el-button>
             <el-dropdown @command="handleExportCommand">
               <el-button>
                 导出数据<i class="el-icon-arrow-down el-icon--right"></i>
@@ -553,19 +553,9 @@ const handleBatchDelete = async () => {
   }
 }
 
-// 新增
-const handleAdd = () => {
-  dialogTitle.value = '新增寝室'
-  isEdit.value = false
-  formData.value = {
-    id: 0,
-    dormNumber: '',
-    building: '',
-    capacity: 4,
-    status: 'normal',
-    description: ''
-  }
-  dialogVisible.value = true
+// 跳转到创建寝室页面
+const goToCreateDormitory = () => {
+  router.push('/dormitory/create')
 }
 
 // 提交表单

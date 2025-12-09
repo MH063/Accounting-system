@@ -19,6 +19,7 @@ const oauth2Routes = require('./oauth2');
 const permissionRoutes = require('./permissions');
 const apiDocsRoutes = require('./apiDocs');
 const messageQueueRoutes = require('./messageQueue');
+const clientFeatureRoutes = require('./clientFeatureRoutes');
 
 module.exports = {
   authRoutes,
@@ -36,5 +37,6 @@ module.exports = {
   oauth2Routes,
   permissionRoutes,
   apiDocsRoutes,
-  messageQueueRoutes
+  messageQueueRoutes,
+  clientFeatureRoutes
 };

@@ -352,6 +352,25 @@ import {
   SuccessFilled, InfoFilled, CircleCloseFilled
 } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
+import { clientFeatureControlApi } from '@/api/clientFeatureControl'
+
+// 定义功能模块类型
+interface FeatureModule {
+  id: number
+  name: string
+  icon?: string
+  description: string
+  enabled: boolean
+  status: string
+  usageCount: number
+  hasRollback: boolean
+}
+
+// 定义可用功能类型
+interface AvailableFeature {
+  id: number
+  name: string
+}
 
 // 图表引用
 const statsChartRef = ref()
@@ -361,94 +380,13 @@ let statsChart: any = null
 
 // 响应式数据
 const stats = ref({
-  enabledCount: 6,
-  disabledCount: 2,
-  warningCount: 1,
-  errorCount: 1
+  enabledCount: 0,
+  disabledCount: 0,
+  warningCount: 0,
+  errorCount: 0
 })
 
-const featureList = ref([
-  {
-    id: 1,
-    name: '用户管理',
-    icon: 'User',
-    description: '管理用户信息、权限分配等',
-    enabled: true,
-    status: 'normal', // normal, warning, error
-    usageCount: 1256,
-    hasRollback: false
-  },
-  {
-    id: 2,
-    name: '寝室管理',
-    icon: 'House',
-    description: '管理寝室分配、入住情况等',
-    enabled: true,
-    status: 'normal',
-    usageCount: 892,
-    hasRollback: true
-  },
-  {
-    id: 3,
-    name: '费用管理',
-    icon: 'Coin',
-    description: '管理各类费用的收取、统计等',
-    enabled: true,
-    status: 'warning',
-    usageCount: 2103,
-    hasRollback: true
-  },
-  {
-    id: 4,
-    name: '支付管理',
-    icon: 'CreditCard',
-    description: '处理支付流程、对账等',
-    enabled: true,
-    status: 'normal',
-    usageCount: 1756,
-    hasRollback: false
-  },
-  {
-    id: 5,
-    name: '系统配置',
-    icon: 'Tools',
-    description: '系统参数设置、基础配置等',
-    enabled: true,
-    status: 'normal',
-    usageCount: 423,
-    hasRollback: false
-  },
-  {
-    id: 6,
-    name: '客户端功能',
-    icon: 'Phone',
-    description: '移动端功能控制、版本管理等',
-    enabled: true,
-    status: 'normal',
-    usageCount: 3456,
-    hasRollback: true
-  },
-  {
-    id: 7,
-    name: '数据监控',
-    icon: 'Monitor',
-    description: '实时监控系统运行状态',
-    enabled: false,
-    status: 'error',
-    usageCount: 0,
-    hasRollback: false
-  },
-  {
-    id: 8,
-    name: '行为分析',
-    icon: 'TrendCharts',
-    description: '分析用户行为模式',
-    enabled: true,
-    status: 'normal',
-    usageCount: 789,
-    hasRollback: false
-  }
-])
+const featureList = ref<FeatureModule[]>([])
 
 const permissionDialogVisible = ref(false)
 const configDialogVisible = ref(false)
@@ -494,16 +432,7 @@ const userList = ref([
   { id: 3, name: '王五' }
 ])
 
-const availableFeatures = ref([
-  { id: 1, name: '用户管理' },
-  { id: 2, name: '寝室管理' },
-  { id: 3, name: '费用管理' },
-  { id: 4, name: '支付管理' },
-  { id: 5, name: '系统配置' },
-  { id: 6, name: '客户端功能' },
-  { id: 7, name: '数据监控' },
-  { id: 8, name: '行为分析' }
-])
+const availableFeatures = ref<AvailableFeature[]>([])
 
 const historyData = ref([
   {
@@ -581,35 +510,97 @@ const searchUsers = (query: string) => {
   }
 }
 
-// 状态变更
-const handleStatusChange = (row: any) => {
-  console.log('🔄 功能模块状态变更:', row)
-  ElMessage.success(`"${row.name}"功能模块状态已更新`)
+// 获取功能模块列表
+const fetchFeatureModules = async () => {
+  try {
+    const res: any = await clientFeatureControlApi.getFeatureModules()
+    featureList.value = res.map((item: any) => ({
+      id: item.id,
+      name: item.name,
+      icon: item.icon || 'Setting',
+      description: item.description,
+      enabled: item.enabled,
+      status: item.status || 'normal',
+      usageCount: item.usageCount || 0,
+      hasRollback: item.hasRollback || false
+    }))
+    
+    // 更新统计信息
+    updateStats()
+  } catch (error) {
+    console.error('获取功能模块列表失败:', error)
+    ElMessage.error('获取功能模块列表失败')
+  }
+}
+
+// 获取功能模块统计信息
+const fetchFeatureStats = async () => {
+  try {
+    const res: any = await clientFeatureControlApi.getFeatureModuleStats()
+    stats.value = {
+      enabledCount: res.enabledCount || 0,
+      disabledCount: res.disabledCount || 0,
+      warningCount: res.warningCount || 0,
+      errorCount: res.errorCount || 0
+    }
+  } catch (error) {
+    console.error('获取功能模块统计信息失败:', error)
+  }
+}
+
+// 更新统计信息
+const updateStats = () => {
+  const enabledCount = featureList.value.filter(f => f.enabled).length
+  const disabledCount = featureList.value.filter(f => !f.enabled).length
+  const warningCount = featureList.value.filter(f => f.status === 'warning').length
+  const errorCount = featureList.value.filter(f => f.status === 'error').length
   
-  // 更新统计信息
-  if (row.enabled) {
-    stats.value.enabledCount++
-    stats.value.disabledCount--
-  } else {
-    stats.value.enabledCount--
-    stats.value.disabledCount++
+  stats.value = {
+    enabledCount,
+    disabledCount,
+    warningCount,
+    errorCount
+  }
+}
+
+// 状态变更
+const handleStatusChange = async (row: FeatureModule) => {
+  try {
+    await clientFeatureControlApi.updateFeatureModuleStatus(row.id, row.enabled ? 'enabled' : 'disabled')
+    ElMessage.success(`"${row.name}"功能模块状态已更新`)
+    
+    // 更新统计信息
+    updateStats()
+  } catch (error) {
+    console.error('更新功能模块状态失败:', error)
+    ElMessage.error('更新功能模块状态失败')
+    // 回滚状态
+    row.enabled = !row.enabled
   }
 }
 
 // 设置权限
-const handlePermission = (row: any) => {
-  permissionForm.value = {
-    featureId: row.id,
-    featureName: row.name,
-    allowedRoles: [1, 2], // 默认允许超级管理员和管理员
-    whitelistUsers: [],
-    whitelistIPs: ''
+const handlePermission = async (row: FeatureModule) => {
+  try {
+    // 获取功能模块权限信息
+    const res: any = await clientFeatureControlApi.getFeatureModulePermissions(row.id)
+    
+    permissionForm.value = {
+      featureId: row.id,
+      featureName: row.name,
+      allowedRoles: res.allowedRoles || [],
+      whitelistUsers: res.whitelistUsers || [],
+      whitelistIPs: res.whitelistIPs?.join('\n') || ''
+    }
+    permissionDialogVisible.value = true
+  } catch (error) {
+    console.error('获取功能模块权限信息失败:', error)
+    ElMessage.error('获取功能模块权限信息失败')
   }
-  permissionDialogVisible.value = true
 }
 
 // 功能配置
-const handleConfig = (row: any) => {
+const handleConfig = (row: FeatureModule) => {
   configForm.value = {
     featureId: row.id,
     featureName: row.name,
@@ -623,7 +614,7 @@ const handleConfig = (row: any) => {
 }
 
 // 功能依赖关系配置
-const handleDependency = (row: any) => {
+const handleDependency = (row: FeatureModule) => {
   dependencyForm.value = {
     featureId: row.id,
     featureName: row.name,
@@ -634,12 +625,12 @@ const handleDependency = (row: any) => {
 }
 
 // 功能切换历史记录
-const handleHistory = (row: any) => {
+const handleHistory = (row: FeatureModule) => {
   historyDialogVisible.value = true
 }
 
 // 功能回滚
-const handleRollback = (row: any) => {
+const handleRollback = (row: FeatureModule) => {
   ElMessageBox.confirm(
     `确定要回滚"${row.name}"功能到上一个稳定版本吗？`,
     '功能回滚确认',
@@ -648,16 +639,22 @@ const handleRollback = (row: any) => {
       cancelButtonText: '取消',
       type: 'warning'
     }
-  ).then(() => {
-    console.log('⏪ 功能回滚:', row)
-    ElMessage.success('功能回滚成功')
+  ).then(async () => {
+    try {
+      // 这里应该调用实际的回滚API
+      console.log('⏪ 功能回滚:', row)
+      ElMessage.success('功能回滚成功')
+    } catch (error) {
+      console.error('功能回滚失败:', error)
+      ElMessage.error('功能回滚失败')
+    }
   }).catch(() => {
     // 取消回滚
   })
 }
 
 // 功能使用统计
-const handleStats = (row: any) => {
+const handleStats = (row: FeatureModule) => {
   statsDialogVisible.value = true
   // 初始化图表
   nextTick(() => {
@@ -724,10 +721,24 @@ const renderStatsChart = () => {
 }
 
 // 保存权限设置
-const savePermission = () => {
-  console.log('🔐 保存权限设置:', permissionForm.value)
-  ElMessage.success('权限设置保存成功')
-  permissionDialogVisible.value = false
+const savePermission = async () => {
+  try {
+    const permissionData = {
+      allowedRoles: permissionForm.value.allowedRoles,
+      whitelistIPs: permissionForm.value.whitelistIPs.split('\n').filter(ip => ip.trim() !== '')
+    }
+    
+    await clientFeatureControlApi.setFeatureModulePermissions(
+      permissionForm.value.featureId, 
+      permissionData
+    )
+    
+    ElMessage.success('权限设置保存成功')
+    permissionDialogVisible.value = false
+  } catch (error) {
+    console.error('保存权限设置失败:', error)
+    ElMessage.error('保存权限设置失败')
+  }
 }
 
 // 保存功能配置
@@ -751,22 +762,15 @@ const handleSave = () => {
 }
 
 // 刷新
-const handleRefresh = () => {
-  console.log('🔄 刷新功能状态')
-  ElMessage.success('功能状态刷新成功')
-  
-  // 模拟更新状态
-  featureList.value.forEach(feature => {
-    // 随机更新一些功能的状态
-    if (Math.random() > 0.7) {
-      const statuses = ['normal', 'warning', 'error']
-      feature.status = statuses[Math.floor(Math.random() * statuses.length)]
-    }
-  })
-  
-  // 更新统计信息
-  stats.value.warningCount = featureList.value.filter(f => f.status === 'warning').length
-  stats.value.errorCount = featureList.value.filter(f => f.status === 'error').length
+const handleRefresh = async () => {
+  try {
+    await fetchFeatureModules()
+    await fetchFeatureStats()
+    ElMessage.success('功能状态刷新成功')
+  } catch (error) {
+    console.error('刷新功能状态失败:', error)
+    ElMessage.error('刷新功能状态失败')
+  }
 }
 
 // 历史记录分页相关
@@ -782,8 +786,10 @@ const handleHistoryCurrentChange = (val: number) => {
 }
 
 // 组件挂载
-onMounted(() => {
+onMounted(async () => {
   console.log('🎛️ 功能模块控制页面加载完成')
+  await fetchFeatureModules()
+  await fetchFeatureStats()
 })
 
 // 监听窗口大小变化，重新渲染图表

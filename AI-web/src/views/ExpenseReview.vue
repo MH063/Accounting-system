@@ -2156,7 +2156,7 @@ const handleApprove = async (): Promise<void> => {
     await new Promise(resolve => setTimeout(resolve, 1500))
     
     ElMessage.success('费用申请已通过审核')
-    router.push('/dashboard/expense-management')
+    router.push('/dashboard/bills')
   } catch {
     // 用户取消
   } finally {
@@ -2184,7 +2184,7 @@ const handleReject = async (): Promise<void> => {
     await new Promise(resolve => setTimeout(resolve, 1500))
     
     ElMessage.success('费用申请已拒绝')
-    router.push('/dashboard/expense-management')
+    router.push('/dashboard/bills')
   } catch {
     // 用户取消
   } finally {

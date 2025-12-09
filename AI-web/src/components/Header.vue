@@ -192,9 +192,6 @@ let searchDebounceTimer: NodeJS.Timeout | null = null
 // 导航项配置
 const navItems = [
   { name: '仪表盘', path: '/dashboard' },
-  { name: '寝室管理', path: '/dashboard/dormitory' },
-  { name: '成员管理', path: '/dashboard/members' },
-  { name: '费用管理', path: '/dashboard/expenses' },
   { name: '账单管理', path: '/dashboard/bills' },
   { name: '支付功能', path: '/dashboard/payment' },
   { name: '统计分析', path: '/dashboard/analytics' }
@@ -374,10 +371,13 @@ const handleSuggestionClick = (suggestion: string): void => {
 const getSearchResultCategories = computed(() => {
   const categories: Record<string, SearchResult[]> = {}
   searchResults.value.forEach(result => {
-    if (!categories[result.category]) {
-      categories[result.category] = []
+    // 添加类型检查以避免 TypeScript 错误
+    if (result.category) {
+      if (!categories[result.category]) {
+        categories[result.category] = []
+      }
+      categories[result.category]?.push(result)
     }
-    categories[result.category].push(result)
   })
   return categories
 })
@@ -881,6 +881,8 @@ onUnmounted(() => {
   }
 }
 
+</style>
+
 @media (max-width: 480px) {
   .header-container {
     padding: 0 12px;
@@ -908,6 +910,3 @@ onUnmounted(() => {
     height: 36px;
   }
 }
-
-
-</style>
