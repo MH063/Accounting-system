@@ -125,129 +125,120 @@
       </div>
       
       <div class="operations-row">
-        <!-- 左侧区域：快速筛选按钮组和搜索框 -->
-        <div class="left-operations">
-          <!-- 快速筛选按钮组 -->
-          <div class="quick-filters">
-            <el-button-group>
-              <el-button 
-                size="small"
-                :type="quickFilter === '' ? 'primary' : 'default'"
-                @click="quickFilter = ''; resetFilters()"
-              >
-                全部
-              </el-button>
-              <el-button 
-                size="small"
-                :type="quickFilter === 'pending' ? 'primary' : 'default'"
-                @click="quickFilter = 'pending'; statusFilter = 'pending'; resetPagination()"
-              >
-                待审核
-              </el-button>
-              <el-button 
-                size="small"
-                :type="quickFilter === 'approved' ? 'primary' : 'default'"
-                @click="quickFilter = 'approved'; statusFilter = 'approved'; resetPagination()"
-              >
-                已通过
-              </el-button>
-              <el-button 
-                size="small"
-                :type="quickFilter === 'rejected' ? 'primary' : 'default'"
-                @click="quickFilter = 'rejected'; statusFilter = 'rejected'; resetPagination()"
-              >
-                已拒绝
-              </el-button>
-            </el-button-group>
-          </div>
-
-          <el-input
-            v-model="searchQuery"
-            placeholder="快速搜索费用..."
-            :prefix-icon="Search"
-            class="search-input"
-            clearable
-            @keyup.enter="handleSearch"
-          />
-        </div>
-        
-        <!-- 右侧区域：筛选控件和操作按钮 -->
-        <div class="right-operations">
-          <el-select
-            v-model="statusFilter"
-            placeholder="费用状态"
-            clearable
-            class="filter-select"
-          >
-            <el-option label="全部状态" value="" />
-            <el-option label="待审核" value="pending" />
-            <el-option label="已通过" value="approved" />
-            <el-option label="已拒绝" value="rejected" />
-          </el-select>
-
-          <el-select
-            v-model="categoryFilter"
-            placeholder="费用类别"
-            clearable
-            class="filter-select"
-          >
-            <el-option label="全部分类" value="" />
-            <el-option label="住宿费" value="accommodation" />
-            <el-option label="水电费" value="utilities" />
-            <el-option label="维修费" value="maintenance" />
-            <el-option label="清洁费" value="cleaning" />
-            <el-option label="其他" value="other" />
-          </el-select>
-
-          <el-select
-            v-model="monthFilter"
-            placeholder="费用月份"
-            clearable
-            class="filter-select"
-          >
-            <el-option label="全部月份" value="" />
-            <el-option 
-              v-for="month in availableMonths" 
-              :key="month.value" 
-              :label="month.label" 
-              :value="month.value" 
-            />
-          </el-select>
-
-          <el-button 
-            type="primary" 
-            :icon="Refresh" 
-            @click="resetFilters"
-            class="reset-button"
-          >
-            重置
-          </el-button>
-
-          <!-- 更多操作 -->
-          <el-dropdown trigger="click">
+        <!-- 快速筛选按钮组 -->
+        <div class="quick-filters">
+          <el-button-group>
             <el-button 
-              :icon="More"
-              type="text"
               size="small"
-              class="more-actions-btn"
+              :type="quickFilter === '' ? 'primary' : 'default'"
+              @click="quickFilter = ''; resetFilters()"
             >
-              更多
-              <el-icon class="el-icon--right"><arrow-down /></el-icon>
+              全部
             </el-button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item @click="handleBatchApprove">
-                  <el-icon><CircleCheck /></el-icon>
-                  审核待处理项目
-                </el-dropdown-item>
-                <el-dropdown-item divided @click="handleClearAll">
-                  <el-icon><Delete /></el-icon>
-                  清空所有记录
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
+            <el-button 
+              size="small"
+              :type="quickFilter === 'pending' ? 'primary' : 'default'"
+              @click="quickFilter = 'pending'; statusFilter = 'pending'; resetPagination()"
+            >
+              待审核
+            </el-button>
+            <el-button 
+              size="small"
+              :type="quickFilter === 'approved' ? 'primary' : 'default'"
+              @click="quickFilter = 'approved'; statusFilter = 'approved'; resetPagination()"
+            >
+              已通过
+            </el-button>
+            <el-button 
+              size="small"
+              :type="quickFilter === 'rejected' ? 'primary' : 'default'"
+              @click="quickFilter = 'rejected'; statusFilter = 'rejected'; resetPagination()"
+            >
+              已拒绝
+            </el-button>
+          </el-button-group>
         </div>
+
+        <el-input
+          v-model="searchQuery"
+          placeholder="快速搜索费用..."
+          :prefix-icon="Search"
+          class="search-input"
+          clearable
+          @keyup.enter="handleSearch"
+        />
+        
+        <el-select
+          v-model="statusFilter"
+          placeholder="费用状态"
+          clearable
+        >
+          <el-option label="全部状态" value="" />
+          <el-option label="待审核" value="pending" />
+          <el-option label="已通过" value="approved" />
+          <el-option label="已拒绝" value="rejected" />
+        </el-select>
+
+        <el-select
+          v-model="categoryFilter"
+          placeholder="费用类别"
+          clearable
+        >
+          <el-option label="全部分类" value="" />
+          <el-option label="住宿费" value="accommodation" />
+          <el-option label="水电费" value="utilities" />
+          <el-option label="维修费" value="maintenance" />
+          <el-option label="清洁费" value="cleaning" />
+          <el-option label="其他" value="other" />
+        </el-select>
+
+        <el-select
+          v-model="monthFilter"
+          placeholder="费用月份"
+          clearable
+        >
+          <el-option label="全部月份" value="" />
+          <el-option 
+            v-for="month in availableMonths" 
+            :key="month.value" 
+            :label="month.label" 
+            :value="month.value" 
+          />
+        </el-select>
+
+        <el-button 
+          type="primary" 
+          :icon="Refresh" 
+          @click="resetFilters"
+          class="reset-button"
+        >
+          重置
+        </el-button>
+
+        <!-- 更多操作 -->
+        <el-dropdown trigger="click">
+          <el-button 
+            :icon="More"
+            type="text"
+            size="small"
+            class="more-actions-btn"
+          >
+            更多
+            <el-icon class="el-icon--right"><arrow-down /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item @click="handleBatchApprove">
+                <el-icon><CircleCheck /></el-icon>
+                审核待处理项目
+              </el-dropdown-item>
+              <el-dropdown-item divided @click="handleClearAll">
+                <el-icon><Delete /></el-icon>
+                清空所有记录
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </div>
     </div>
 
@@ -281,6 +272,10 @@
                     <el-dropdown-item command="csv">
                       <el-icon><Document /></el-icon>
                       CSV格式
+                    </el-dropdown-item>
+                    <el-dropdown-item command="xlsx">
+                      <el-icon><Grid /></el-icon>
+                      Excel格式
                     </el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
@@ -989,7 +984,7 @@ const handleClosePaymentDialog = () => {
 }
 
 // 处理导出命令
-const handleExportCommand = (command: 'csv') => {
+const handleExportCommand = (command: 'csv' | 'xlsx') => {
   exportExpenses(command)
 }
 
@@ -1248,48 +1243,25 @@ const handleClearAll = async () => {
 }
 
 // 导出费用
-const exportExpenses = async (format: 'csv') => {
+const exportExpenses = async (format: 'csv' | 'xlsx') => {
   try {
-    ElMessage.info('正在导出CSV文件...')
+    ElMessage.info(`正在导出${format === 'xlsx' ? 'Excel' : 'CSV'}文件...`)
     
-    // 获取当前过滤后的费用数据
-    const exportData = filteredExpenses.value
-    
-    // 定义CSV列标题
-    const headers = ['ID', '费用标题', '费用描述', '费用金额', '费用类别', '申请人', '费用日期', '状态', '审核人', '审核日期', '审核意见']
-    
-    // 转换数据为CSV格式
-    const csvContent = [
-      headers.join(','),
-      ...exportData.map(expense => [
-        expense.id,
-        `"${expense.title}"`,
-        `"${expense.description}"`,
-        expense.amount,
-        getCategoryText(expense.category),
-        expense.applicant,
-        expense.date,
-        getStatusText(expense.status),
-        expense.reviewer || '',
-        expense.reviewDate || '',
-        `"${expense.reviewComment || ''}"`
-      ].join(','))
-    ].join('\n')
-    
-    // 创建Blob对象
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
+    // 调用导出API
+    // const response = await expenseApi.exportExpenses(format)
     
     // 创建下载链接
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `费用数据_${new Date().toISOString().slice(0, 10)}.csv`
-    link.click()
+    // const blob = new Blob([response.data], { type: format === 'xlsx' ? 'application/vnd.ms-excel' : 'text/csv' })
+    // const url = window.URL.createObjectURL(blob)
+    // const link = document.createElement('a')
+    // link.href = url
+    // link.download = `费用数据_${new Date().getTime()}.${format === 'xlsx' ? 'xlsx' : 'csv'}`
+    // link.click()
     
     // 清理URL对象
-    window.URL.revokeObjectURL(url)
+    // window.URL.revokeObjectURL(url)
     
-    ElMessage.success('CSV导出成功')
+    ElMessage.success('导出成功')
   } catch (error) {
     console.error('导出失败:', error)
     ElMessage.error('导出失败: ' + ((error as any).message || '未知错误'))
@@ -1302,6 +1274,7 @@ const resetFilters = () => {
   statusFilter.value = ''
   categoryFilter.value = ''
   monthFilter.value = ''
+  currentPage.value = 1
 }
 
 // 重置分页
@@ -1494,25 +1467,6 @@ onMounted(() => {
   flex-wrap: wrap;
   gap: 12px;
   align-items: center;
-  justify-content: space-between;
-}
-
-.left-operations {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-}
-
-.right-operations {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-}
-
-.filter-select {
-  width: 120px;
 }
 
 .quick-filters {
@@ -1526,7 +1480,7 @@ onMounted(() => {
 }
 
 .reset-button {
-  margin-left: 0;
+  margin-left: auto;
 }
 
 .more-actions-btn {
@@ -1845,17 +1799,7 @@ onMounted(() => {
     align-items: stretch;
   }
   
-  .left-operations,
-  .right-operations {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
   .search-input {
-    width: 100%;
-  }
-  
-  .filter-select {
     width: 100%;
   }
   

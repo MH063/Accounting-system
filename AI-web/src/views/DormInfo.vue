@@ -257,7 +257,7 @@
               <el-divider />
 
               <div class="expense-actions">
-                <el-button type="primary" size="small" @click="$router.push('/dashboard/expenses')">
+                <el-button type="primary" size="small" @click="$router.push('/dashboard/expense')">
                   <el-icon><Document /></el-icon>
                   查看详情
                 </el-button>

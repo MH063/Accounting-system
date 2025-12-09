@@ -448,13 +448,13 @@ const goToDormManagement = () => {
 const addMembers = () => {
   showSuccessDialog.value = false
   // 跳转到成员管理页面
-  window.location.href = '/dashboard/members'
+  window.location.href = '/dashboard/member'
 }
 
 const setBudget = () => {
   showSuccessDialog.value = false
   // 跳转到费用管理页面
-  window.location.href = '/dashboard/expenses'
+  window.location.href = '/dashboard/expense'
 }
 </script>
 

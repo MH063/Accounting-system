@@ -54,15 +54,7 @@ const routes: Array<RouteRecordRaw> = [
           title: '仪表盘首页'
         }
       },
-      {
-        path: 'dormitory',
-        name: 'Dormitory',
-        component: () => import('@/views/NotFound.vue'),
-        meta: { 
-          title: '寝室管理',
-          requiresAuth: true
-        }
-      },
+
       {
         path: 'dorm/create',
         name: 'DormCreate',
@@ -90,12 +82,27 @@ const routes: Array<RouteRecordRaw> = [
         }
       },
       {
-        path: 'members',
-        name: 'Members',
-        component: () => import('@/views/NotFound.vue'),
+        path: 'dormitory',
+        name: 'Dormitory',
+        component: () => import('@/views/DormManagement.vue'),
         meta: { 
-          title: '成员管理',
-          requiresAuth: true
+          title: '寝室管理'
+        }
+      },
+      {
+        path: 'member',
+        name: 'Member',
+        component: () => import('@/views/MemberManagement.vue'),
+        meta: { 
+          title: '成员管理'
+        }
+      },
+      {
+        path: 'expense',
+        name: 'Expense',
+        component: () => import('@/views/ExpenseManagement.vue'),
+        meta: { 
+          title: '费用管理'
         }
       },
       {
@@ -123,15 +130,7 @@ const routes: Array<RouteRecordRaw> = [
           title: '成员详情'
         }
       },
-      {
-        path: 'expense-management',
-        name: 'ExpenseManagement',
-        component: () => import('@/views/NotFound.vue'),
-        meta: { 
-          title: '费用管理',
-          requiresAuth: true
-        }
-      },
+
       {
         path: 'expense/create',
         name: 'ExpenseCreate',
@@ -164,15 +163,6 @@ const routes: Array<RouteRecordRaw> = [
         component: () => import('@/views/ExpenseReview.vue'),
         meta: { 
           title: '费用审核'
-        }
-      },
-      {
-        path: 'expenses',
-        name: 'Expenses',
-        component: () => import('@/views/NotFound.vue'),
-        meta: { 
-          title: '费用列表',
-          requiresAuth: true
         }
       },
       {
@@ -387,24 +377,6 @@ const routes: Array<RouteRecordRaw> = [
     component: NotFound,
     meta: { 
       title: '页面未找到',
-      requiresAuth: false
-    }
-  },
-  {
-    path: '/403',
-    name: 'Forbidden',
-    component: () => import('@/views/NotFound.vue'),
-    meta: { 
-      title: '权限不足',
-      requiresAuth: false
-    }
-  },
-  {
-    path: '/unauthorized',
-    name: 'Unauthorized',
-    component: () => import('@/views/NotFound.vue'),
-    meta: { 
-      title: '未授权访问',
       requiresAuth: false
     }
   },

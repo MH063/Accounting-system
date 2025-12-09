@@ -49,7 +49,7 @@ class NotificationService {
         isRead: false,
         isImportant: true,
         actionText: '查看详情',
-        actionPath: '/dashboard/expenses',
+        actionPath: '/dashboard/expense',
         createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
       },
       {
@@ -71,7 +71,7 @@ class NotificationService {
         isRead: false,
         isImportant: true,
         actionText: '审核申请',
-        actionPath: '/dashboard/member/list',
+        actionPath: '/dashboard/member',
         createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString()
       },
       {

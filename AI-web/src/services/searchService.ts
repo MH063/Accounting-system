@@ -45,8 +45,8 @@ class SearchService {
       // 页面搜索结果
       { id: '1', title: '仪表盘', description: '查看系统概览和数据统计', category: 'page', path: '/dashboard', icon: 'dashboard', priority: 1, keywords: ['仪表盘', 'dashboard', '首页', '概览'] },
       { id: '2', title: '寝室管理', description: '管理寝室信息和入住情况', category: 'page', path: '/dashboard/dormitory', icon: 'house', priority: 1, keywords: ['寝室', '宿舍', 'dormitory', '房间', '住宿'] },
-      { id: '3', title: '成员管理', description: '管理系统用户和成员信息', category: 'page', path: '/dashboard/members', icon: 'user', priority: 1, keywords: ['成员', '用户', 'member', '用户管理', '人员'] },
-      { id: '4', title: '费用管理', description: '记录和管理各项费用支出', category: 'page', path: '/dashboard/expenses', icon: 'money', priority: 1, keywords: ['费用', '支出', 'expense', '费用管理', '开销'] },
+      { id: '3', title: '成员管理', description: '管理系统用户和成员信息', category: 'page', path: '/dashboard/member', icon: 'user', priority: 1, keywords: ['成员', '用户', 'member', '用户管理', '人员'] },
+      { id: '4', title: '费用管理', description: '记录和管理各项费用支出', category: 'page', path: '/dashboard/expense', icon: 'money', priority: 1, keywords: ['费用', '支出', 'expense', '费用管理', '开销'] },
       { id: '5', title: '账单管理', description: '查看和管理所有账单记录', category: 'page', path: '/dashboard/bills', icon: 'document', priority: 1, keywords: ['账单', 'bill', '账单管理', '记账', '记录'] },
       { id: '6', title: '支付功能', description: '处理支付相关功能和记录', category: 'page', path: '/dashboard/payment', icon: 'credit-card', priority: 1, keywords: ['支付', 'payment', '付款', '支付功能', '交易'] },
       { id: '7', title: '统计分析', description: '查看数据统计和分析报告', category: 'page', path: '/dashboard/analytics', icon: 'trend-charts', priority: 1, keywords: ['统计', '分析', 'analytics', '数据', '图表'] },
@@ -55,7 +55,7 @@ class SearchService {
       
       // 功能搜索结果
       { id: '10', title: '创建账单', description: '快速创建新的账单记录', category: 'function', path: '/dashboard/bill/create', icon: 'plus', priority: 2, keywords: ['创建', '新增', 'create', '账单', '记录'] },
-      { id: '11', title: '添加费用', description: '记录新的费用支出项目', category: 'function', path: '/dashboard/expense/create', icon: 'plus', priority: 2, keywords: ['添加', '新增', 'add', '费用', '支出'] },
+      { id: '11', title: '添加费用', description: '记录新的费用支出项目', category: 'function', path: '/dashboard/expense', icon: 'plus', priority: 2, keywords: ['添加', '新增', 'add', '费用', '支出'] },
       { id: '12', title: '邀请成员', description: '邀请新成员加入系统', category: 'function', path: '/dashboard/member/invite', icon: 'user-plus', priority: 2, keywords: ['邀请', 'invite', '成员', '用户', '加入'] },
       { id: '13', title: '寝室设置', description: '配置寝室相关参数', category: 'function', path: '/dashboard/dorm/settings', icon: 'setting', priority: 2, keywords: ['设置', '配置', 'settings', '寝室', '参数'] },
       { id: '14', title: '个人中心', description: '查看和编辑个人信息', category: 'page', path: '/dashboard/profile', icon: 'user-filled', priority: 2, keywords: ['个人', 'profile', '信息', '资料', '账户'] },

@@ -192,6 +192,9 @@ let searchDebounceTimer: NodeJS.Timeout | null = null
 // 导航项配置
 const navItems = [
   { name: '仪表盘', path: '/dashboard' },
+  { name: '寝室管理', path: '/dashboard/dormitory' },
+  { name: '成员管理', path: '/dashboard/member' },
+  { name: '费用管理', path: '/dashboard/expense' },
   { name: '账单管理', path: '/dashboard/bills' },
   { name: '支付功能', path: '/dashboard/payment' },
   { name: '统计分析', path: '/dashboard/analytics' }

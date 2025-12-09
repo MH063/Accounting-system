@@ -1415,7 +1415,7 @@ watch(() => route.query.id, (newId, oldId) => {
 
 // 方法
 const handleBackToExpenses = (): void => {
-  router.push('/dashboard/expenses')
+  router.push('/dashboard/expense')
 }
 
 const loadExpenseData = (): void => {

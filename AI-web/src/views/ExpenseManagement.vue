@@ -12,7 +12,7 @@
         <el-button 
           type="primary" 
           :icon="Plus" 
-          @click="router.push('/dashboard/expense/create')"
+          @click="router.push('/dashboard/expense')"
           class="create-btn"
         >
           新建费用
@@ -564,7 +564,7 @@
             <el-button 
               v-if="!searchQuery && !statusFilter && !categoryFilter && !monthFilter"
               type="primary" 
-              @click="router.push('/dashboard/expense/create')"
+              @click="router.push('/dashboard/expense')"
             >
               创建费用
             </el-button>

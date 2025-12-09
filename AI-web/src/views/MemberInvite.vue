@@ -2,7 +2,7 @@
   <div class="member-invite">
     <div class="page-header">
       <div class="header-left">
-        <el-button @click="router.push('/dashboard/member/list')" style="margin-right: 20px;">
+        <el-button @click="router.push('/dashboard/member')" style="margin-right: 20px;">
           <el-icon><ArrowLeft /></el-icon>
           返回列表
         </el-button>

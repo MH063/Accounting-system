@@ -18,7 +18,7 @@
           <el-button 
             type="primary" 
             :icon="ArrowLeft" 
-            @click="$router.push('/dashboard/members')"
+            @click="$router.push('/dashboard/member')"
             class="back-btn"
           >
             返回

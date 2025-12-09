@@ -33,11 +33,11 @@
             <div class="link-icon">🏠</div>
             <span>寝室管理</span>
           </router-link>
-          <router-link to="/dashboard/members" class="quick-link">
+          <router-link to="/dashboard/member" class="quick-link">
             <div class="link-icon">👥</div>
             <span>成员管理</span>
           </router-link>
-          <router-link to="/dashboard/expenses" class="quick-link">
+          <router-link to="/dashboard/expense" class="quick-link">
             <div class="link-icon">💰</div>
             <span>费用管理</span>
           </router-link>
