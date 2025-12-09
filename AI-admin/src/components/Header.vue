@@ -3,7 +3,7 @@
     <div class="header-left">
       <div class="logo-container">
         <img src="../assets/admin-avatar.png" alt="Logo" class="logo" />
-        <span class="title">AI管理系统</span>
+        <span class="title">记账管理系统</span>
       </div>
     </div>
     <div class="header-right">

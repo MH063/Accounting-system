@@ -6,7 +6,7 @@
           <img src="/accounting-logo.png" alt="Logo" />
           <div class="logo-glow"></div>
         </div>
-        <span class="logo-text">记账系统</span>
+        <span class="logo-text">记账宝</span>
       </div>
       
       <!-- 搜索功能 -->

@@ -99,7 +99,7 @@ export const registerBiometricCredential = async (type: BiometricType): Promise<
       publicKey: {
         challenge,
         rp: {
-          name: '记账系统',
+          name: '记账宝',
           id: window.location.hostname
         },
         user: {

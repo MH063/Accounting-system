@@ -10,7 +10,7 @@
                 <path d="M12 2L13.09 8.26L19 7L17.74 12.9L24 14L17.74 15.1L19 21L13.09 19.74L12 26L10.91 19.74L5 21L6.26 15.1L0 14L6.26 12.9L5 7L10.91 8.26L12 2Z"/>
               </svg>
             </div>
-            <h1 class="brand-title">智能化记账系统</h1>
+            <h1 class="brand-title">智能化记账宝</h1>
             <p class="brand-subtitle">智能寝室生活管理，从这里开始</p>
           </div>
           

@@ -10,7 +10,7 @@
       <div class="hero-content">
         <div class="hero-inner">
           <h1 class="hero-title">
-            <span class="highlight">智能化</span>记账系统
+            <span class="highlight">智能化</span>记账宝
           </h1>
           <p class="hero-subtitle">让寝室财务管理变得简单、透明、高效</p>
           <div class="hero-buttons">
@@ -146,7 +146,7 @@ const steps = ref([
 
 // 页面加载动画
 onMounted(() => {
-  // 页面刷新后自动滚动到"智能化记账系统"标题位置
+  // 页面刷新后自动滚动到"智能化记账宝"标题位置
   const scrollToTitle = () => {
     const heroTitle = document.querySelector('.hero-title') as HTMLElement
     if (heroTitle) {

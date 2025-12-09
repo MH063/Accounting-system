@@ -3,7 +3,7 @@
     <div class="login-box">
       <div class="login-header">
         <h2>管理系统登录</h2>
-        <p>欢迎使用智能会计管理系统</p>
+        <p>欢迎使用记账管理系统</p>
       </div>
       
       <el-form 

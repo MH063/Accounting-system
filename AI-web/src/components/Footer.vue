@@ -4,7 +4,7 @@
       <div class="footer-content">
         <div class="footer-section">
           <h4>关于我们</h4>
-          <p>记账系统是一个智能化的寝室管理系统，为您提供便捷的生活服务。</p>
+          <p>记账宝是一个智能化的寝室管理系统，为您提供便捷的生活服务。</p>
         </div>
         <div class="footer-section">
           <h4>联系我们</h4>
@@ -13,7 +13,7 @@
         </div>
       </div>
       <div class="footer-bottom">
-        <p>&copy; {{ currentYear }} 记账系统. 保留所有权利。</p>
+        <p>&copy; {{ currentYear }} 记账宝. 保留所有权利。</p>
       </div>
     </div>
   </footer>

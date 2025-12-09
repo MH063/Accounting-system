@@ -1,4 +1,4 @@
-# AI管理系统
+# 记账管理系统
 
 基于Node.js 20 + Vue3 + Vite + TypeScript的现代化管理平台
 

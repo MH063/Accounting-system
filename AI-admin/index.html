@@ -2,9 +2,42 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI管理系统</title>
+    <link rel="icon" type="image/png" href="/admin-avatar.png" id="favicon" />
+    <title>记账管理系统</title>
+    <script>
+      // 动态生成圆形 favicon
+      window.addEventListener('DOMContentLoaded', () => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const size = 64;
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext('2d');
+          
+          // 绘制圆形裁剪路径
+          ctx.beginPath();
+          ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+          ctx.closePath();
+          ctx.clip();
+          
+          // 计算居中裁剪（假设头像在图片中心区域）
+          const sourceSize = Math.min(img.width, img.height);
+          const sx = (img.width - sourceSize) / 2;
+          const sy = (img.height - sourceSize) / 2;
+          
+          // 绘制图片
+          ctx.drawImage(img, sx, sy, sourceSize, sourceSize, 0, 0, size, size);
+          
+          // 更新 favicon
+          const favicon = document.getElementById('favicon');
+          favicon.href = canvas.toDataURL('image/png');
+        };
+        img.src = '/admin-avatar.png';
+      });
+    </script>
   </head>
   <body>
     <div id="app"></div>

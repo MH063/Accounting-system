@@ -11,13 +11,13 @@
         <div class="system-info">
           <div class="logo-section">
             <el-icon :size="64"><Setting /></el-icon>
-            <h2>记账系统</h2>
+            <h2>记账宝</h2>
             <p class="version">版本 1.0.0</p>
           </div>
           
           <div class="info-section">
             <el-descriptions :column="1" border>
-              <el-descriptions-item label="系统名称">记账系统</el-descriptions-item>
+              <el-descriptions-item label="系统名称">记账宝</el-descriptions-item>
               <el-descriptions-item label="版本号">v1.0.0 (Build 2024.01.01.001)</el-descriptions-item>
               <el-descriptions-item label="开发团队">记账系统开发团队</el-descriptions-item>
               <el-descriptions-item label="更新时间">2024-01-01</el-descriptions-item>
@@ -40,7 +40,7 @@
               </el-descriptions-item>
               <el-descriptions-item label="开发者信息">
                 <div class="developer-info">
-                  <p><strong>主开发者:</strong> 记账系统团队</p>
+                  <p><strong>主开发者:</strong> 记账宝团队</p>
                   <p><strong>联系邮箱:</strong> support@accountingsystem.com</p>
                   <p><strong>开发时间:</strong> 2024年</p>
                 </div>
@@ -120,7 +120,7 @@
             <div class="legal-disclaimer">
               <el-card class="disclaimer-card">
                 <h5>版权信息</h5>
-                <p>© 2024 记账系统. 保留所有权利。本系统的所有内容，包括但不限于文字、图片、音频、视频、软件、代码等，均受中华人民共和国著作权法及相关法律法规保护。</p>
+                <p>© 2024 记账宝. 保留所有权利。本系统的所有内容，包括但不限于文字、图片、音频、视频、软件、代码等，均受中华人民共和国著作权法及相关法律法规保护。</p>
                 
                 <h5>免责声明</h5>
                 <p>1. 本系统提供的所有信息和服务仅供用户参考，不构成任何形式的投资建议或财务建议。</p>
@@ -132,7 +132,7 @@
                 <p>我们高度重视用户数据的安全和隐私保护，采用行业标准的安全技术和措施保护用户信息。所有敏感数据均经过加密处理，确保用户信息安全。</p>
                 
                 <h5>知识产权</h5>
-                <p>本系统的商标、标识、软件、技术、设计等相关知识产权均归记账系统开发团队所有，未经许可不得擅自使用。</p>
+                <p>本系统的商标、标识、软件、技术、设计等相关知识产权均归记账宝开发团队所有，未经许可不得擅自使用。</p>
               </el-card>
             </div>
           </div>
