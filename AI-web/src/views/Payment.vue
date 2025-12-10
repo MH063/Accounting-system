@@ -400,7 +400,9 @@ import {
 } from '@element-plus/icons-vue'
 import { 
   confirmPayment as confirmPaymentApi,
-  getQRCodes
+  getQRCodes,
+  processQuickPayment,
+  calculateSharing
 } from '../services/paymentService'
 import type { PaymentMethod, PaymentRequest } from '../services/paymentService'
 
@@ -661,8 +663,30 @@ const selectPaymentMethod = (method: PaymentMethod & { fee: string; description:
   }
 }
 
-const calculateSharing = () => {
-  ElMessage.success('费用分摊计算完成')
+const calculateSharing = async () => {
+  try {
+    // 调用真实API计算费用分摊
+    const response = await calculateSharing({
+      expenses: expenses.value,
+      members: members.value
+    })
+    
+    if (response.success && response.data) {
+      // 更新分摊结果
+      sharingResults.value = response.data.sharingResults || []
+      totalExpense.value = response.data.totalExpense || 0
+      perPersonShare.value = response.data.perPersonShare || 0
+      totalPaid.value = response.data.totalPaid || 0
+      totalPending.value = response.data.totalPending || 0
+      
+      ElMessage.success('费用分摊计算完成')
+    } else {
+      ElMessage.error('费用分摊计算失败：' + (response.message || '请重试'))
+    }
+  } catch (error) {
+    console.error('费用分摊计算失败:', error)
+    ElMessage.error('费用分摊计算失败')
+  }
 }
 
 const exportSharing = () => {
@@ -873,21 +897,25 @@ const processQuickPayment = async (quickPay: QuickPayment) => {
     const orderId = `QUICKPAY_${Date.now()}_${quickPay.id}`
     
     try {
-      // 模拟支付处理
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      // 调用真实支付API
+      const response = await processQuickPayment({
+        quickPayId: quickPay.id,
+        amount: amount,
+        type: transactionType,
+        description: description,
+        orderId: orderId
+      })
       
-      // 90%成功率
-      const success = Math.random() > 0.1
-      
-      if (success) {
+      if (response.success && response.data) {
         ElMessage.success(`${quickPay.title}支付成功！金额：¥${amount.toFixed(2)}`)
         
-        // 更新支付状态（这里可以集成真实的支付记录更新）
+        // 更新支付状态
         updatePaymentStatus(quickPay.id, transactionType, amount, description)
       } else {
-        ElMessage.error(`${quickPay.title}支付失败，请重试`)
+        ElMessage.error(`${quickPay.title}支付失败：${response.message || '请重试'}`)
       }
     } catch (error) {
+      console.error('支付处理失败:', error)
       ElMessage.error(`${quickPay.title}处理失败`)
     }
     

@@ -265,7 +265,8 @@ import {
   Top,
   CaretTop,
   CaretBottom,
-  Search
+  Search,
+  Plus
 } from '@element-plus/icons-vue'
 import type {
   EChartsTooltipParams,
@@ -277,6 +278,7 @@ import type {
   AnomalyItem,
   TrendReportData
 } from '@/types'
+import { getIncomeStatistics } from '@/services/incomeService'
 
 const router = useRouter()
 const loading = ref(false)
@@ -305,8 +307,8 @@ const totalIncome = ref(0)
 const incomeChange = ref(0)
 const averageIncome = ref(0)
 const incomeSourceCount = ref(0)
-const growthTrend = ref('稳定')
-const trendDirection = ref('持平')
+const growthTrend = ref('')
+const trendDirection = ref('')
 
 // 收入明细
 const incomeDetails = ref<Array<{
@@ -353,7 +355,7 @@ const sourceAnalysisData = computed<IncomeAnalysisItem[]>(() => {
     name,
     value,
     percentage: Math.round((value / total) * 100),
-    color: colors[index % colors.length]
+    color: colors[index % colors.length] || '#409EFF'
   }))
 })
 
@@ -411,55 +413,31 @@ const getCategoryType = (category: string): string => {
   return typeMap[category] || 'default'
 }
 
-// 生成模拟数据
-const generateMockData = () => {
-  const sources = ['工资', '奖金', '投资', '兼职', '其他']
-  const data = []
-  const startDate = dateRange.value[0]
-  const endDate = dateRange.value[1]
-  const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
-  
-  for (let i = 0; i <= days; i++) {
-    const date = new Date(startDate)
-    date.setDate(date.getDate() + i)
+const getGrowthClass = (value: number): string => {
+  if (value > 0) return 'positive'
+  if (value < 0) return 'negative'
+  return 'neutral'
+}
+
+// 获取真实收入统计数据
+const fetchIncomeData = async () => {
+  try {
+    const response = await getIncomeStatistics({
+      startDate: dateRange.value[0].toISOString().split('T')[0],
+      endDate: dateRange.value[1].toISOString().split('T')[0]
+    })
     
-    // 随机生成1-3条收入记录
-    const recordCount = Math.floor(Math.random() * 3) + 1
-    
-    for (let j = 0; j < recordCount; j++) {
-      const source = sources[Math.floor(Math.random() * sources.length)]
-      let amount = 0
-      
-      switch (source) {
-        case '工资':
-          amount = 8000 + Math.random() * 2000 // 8000-10000
-          break
-        case '奖金':
-          amount = 1000 + Math.random() * 5000 // 1000-6000
-          break
-        case '投资':
-          amount = 500 + Math.random() * 2000 // 500-2500
-          break
-        case '兼职':
-          amount = 200 + Math.random() * 800 // 200-1000
-          break
-        case '其他':
-          amount = 100 + Math.random() * 500 // 100-600
-          break
-      }
-      
-      data.push({
-        id: `INCOME_${i}_${j}`,
-        date: date.toISOString().split('T')[0],
-        source: source,
-        amount: Math.round(amount),
-        category: source,
-        description: `${source}收入 - ${date.toLocaleDateString()}`
-      })
+    if (response.success && response.data) {
+      return response.data
+    } else {
+      ElMessage.error('获取收入统计数据失败')
+      return []
     }
+  } catch (error) {
+    console.error('获取收入统计数据失败:', error)
+    ElMessage.error('获取收入统计数据失败')
+    return []
   }
-  
-  return data
 }
 
 // 初始化收入来源图表
@@ -470,18 +448,23 @@ const initSourceChart = () => {
   const data = incomeData.value
   
   // 按来源统计
-  const sourceStats = {}
+  const sourceStats: Record<string, number> = {}
   data.forEach(item => {
     if (!sourceStats[item.source]) {
       sourceStats[item.source] = 0
     }
-    sourceStats[item.source] += item.amount
+    sourceStats[item.source] = (sourceStats[item.source] || 0) + item.amount
   })
   
   const sourceData = Object.entries(sourceStats).map(([name, value]) => ({ name, value }))
   
   // 异常检测
-  const anomalies = detectAnomalies(sourceData)
+  const anomalies = detectAnomalies(sourceData.map(item => ({
+    name: item.name,
+    value: item.value,
+    percentage: 0,
+    color: ''
+  })))
   
   let option: echarts.EChartsOption
   
@@ -493,9 +476,9 @@ const initSourceChart = () => {
       },
       tooltip: {
         trigger: 'item',
-        formatter: (params: EChartsTooltipParams) => {
+        formatter: (params: any) => {
           const isAnomaly = anomalies.some(item => item.name === params.name)
-          let result = `${params.seriesName} <br/>${params.name}: ¥${formatAmount(params.value)} (${params.percent}%)`
+          let result = `${params.seriesName} <br/>${params.name}: ¥${formatAmount(params.value as number)} (${params.percent}%)`
           if (isAnomaly) {
             result += '<br/><span style="color: #ff7875;">⚠️ 异常波动</span>'
           }
@@ -533,10 +516,10 @@ const initSourceChart = () => {
       },
       tooltip: {
         trigger: 'axis',
-        formatter: (params: EChartsTooltipParams | EChartsTooltipParams[]) => {
+        formatter: (params: any) => {
           const param = Array.isArray(params) ? params[0] : params
           const isAnomaly = anomalies.some(item => item.name === param.name)
-          let result = `${param.name}: ¥${formatAmount(param.value)}`
+          let result = `${param.name}: ¥${formatAmount(param.value as number)}`
           if (isAnomaly) {
             result += '<br/><span style="color: #ff7875;">⚠️ 异常波动</span>'
           }
@@ -554,7 +537,7 @@ const initSourceChart = () => {
       yAxis: {
         type: 'value',
         axisLabel: {
-          formatter: '¥{value}'
+          formatter: (value: number) => `¥${value}`
         }
       },
       series: [{
@@ -603,13 +586,13 @@ const initTrendChart = () => {
     },
     tooltip: {
       trigger: 'axis',
-      formatter: (params: EChartsTooltipParams[]) => {
+      formatter: (params: any) => {
         let result = params[0].name + '<br/>'
-        params.forEach((param: EChartsTooltipParams) => {
+        params.forEach((param: any) => {
           if (param.seriesName === '收入金额') {
-            result += `${param.marker}${param.seriesName}: ¥${formatAmount(param.value)}<br/>`
+            result += `${param.marker}${param.seriesName}: ¥${formatAmount(param.value as number)}<br/>`
           } else if (param.seriesName === '预测趋势') {
-            result += `${param.marker}${param.seriesName}: ¥${formatAmount(param.value)}<br/>`
+            result += `${param.marker}${param.seriesName}: ¥${formatAmount(param.value as number)}<br/>`
           }
         })
         return result
@@ -635,7 +618,7 @@ const initTrendChart = () => {
     yAxis: {
       type: 'value',
       axisLabel: {
-        formatter: '¥{value}'
+        formatter: (value: number) => `¥${value}`
       }
     },
     series: [
@@ -709,7 +692,7 @@ const initComparisonChart = () => {
     yAxis: {
       type: 'value',
       axisLabel: {
-        formatter: '¥{value}'
+        formatter: (value: number) => `¥${value}`
       }
     },
     series: [
@@ -757,7 +740,7 @@ const aggregateDataByTime = (data: Array<{date: string, amount: number}>, granul
       case 'week':
         const weekStart = new Date(date)
         weekStart.setDate(date.getDate() - date.getDay())
-        key = weekStart.toISOString().split('T')[0]
+        key = weekStart.toISOString().split('T')[0] || ''
         break
       case 'month':
         key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
@@ -769,7 +752,7 @@ const aggregateDataByTime = (data: Array<{date: string, amount: number}>, granul
     if (!aggregated[key]) {
       aggregated[key] = 0
     }
-    aggregated[key] += item.amount
+    aggregated[key] = (aggregated[key] || 0) + item.amount
   })
   
   return Object.entries(aggregated)
@@ -781,14 +764,29 @@ const generateComparisonData = (type: 'month' | 'quarter' | 'year'): ComparisonD
   const periods: ComparisonDataItem[] = []
   const current = new Date()
   
+  // 按时间类型聚合当前收入数据
+  const aggregatedData = aggregateDataByTime(incomeData.value, type === 'month' ? 'month' : type === 'quarter' ? 'month' : 'month')
+  
   switch (type) {
     case 'month':
       for (let i = 5; i >= 0; i--) {
         const date = new Date(current.getFullYear(), current.getMonth() - i, 1)
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+        
+        // 查找当前月份的收入数据
+        const currentMonthData = aggregatedData.find(item => item.date === monthKey)
+        const currentAmount = currentMonthData ? currentMonthData.value : 0
+        
+        // 计算对比期数据（去年同期或上期）
+        const comparisonDate = new Date(date.getFullYear() - 1, date.getMonth(), 1)
+        const comparisonMonthKey = `${comparisonDate.getFullYear()}-${String(comparisonDate.getMonth() + 1).padStart(2, '0')}`
+        const comparisonMonthData = aggregatedData.find(item => item.date === comparisonMonthKey)
+        const comparisonAmount = comparisonMonthData ? comparisonMonthData.value : currentAmount * 0.9 // 默认下降10%
+        
         periods.push({
           period: `${date.getFullYear()}年${date.getMonth() + 1}月`,
-          current: 15000 + Math.random() * 5000,
-          comparison: 14000 + Math.random() * 4000
+          current: currentAmount,
+          comparison: comparisonAmount
         })
       }
       break
@@ -797,20 +795,54 @@ const generateComparisonData = (type: 'month' | 'quarter' | 'year'): ComparisonD
         const quarter = Math.floor(current.getMonth() / 3) - i + 1
         const year = current.getFullYear() + Math.floor((quarter - 1) / 4)
         const displayQuarter = ((quarter - 1) % 4) + 1
+        
+        // 计算季度总收入（汇总该季度的月份）
+        let quarterTotal = 0
+        let comparisonQuarterTotal = 0
+        
+        for (let m = 0; m < 3; m++) {
+          const monthInQuarter = (displayQuarter - 1) * 3 + m
+          const monthKey = `${year}-${String(monthInQuarter + 1).padStart(2, '0')}`
+          const monthData = aggregatedData.find(item => item.date === monthKey)
+          if (monthData) quarterTotal += monthData.value
+          
+          // 对比期（去年同期）
+          const comparisonMonthKey = `${year - 1}-${String(monthInQuarter + 1).padStart(2, '0')}`
+          const comparisonMonthData = aggregatedData.find(item => item.date === comparisonMonthKey)
+          if (comparisonMonthData) comparisonQuarterTotal += comparisonMonthData.value
+        }
+        
+        if (quarterTotal === 0) quarterTotal = 0 // 通过API获取真实数据
+        if (comparisonQuarterTotal === 0) comparisonQuarterTotal = 0 // 通过API获取真实数据
+        
         periods.push({
           period: `${year}年Q${displayQuarter}`,
-          current: 45000 + Math.random() * 15000,
-          comparison: 42000 + Math.random() * 12000
+          current: quarterTotal,
+          comparison: comparisonQuarterTotal
         })
       }
       break
     case 'year':
       for (let i = 2; i >= 0; i--) {
         const year = current.getFullYear() - i
+        const yearKey = `${year}`
+        
+        // 计算年度总收入
+        const yearData = aggregatedData.filter(item => item.date.startsWith(yearKey))
+        const yearTotal = yearData.reduce((sum, item) => sum + item.value, 0)
+        
+        // 对比期（前一年）
+        const comparisonYearKey = `${year - 1}`
+        const comparisonYearData = aggregatedData.filter(item => item.date.startsWith(comparisonYearKey))
+        const comparisonYearTotal = comparisonYearData.reduce((sum, item) => sum + item.value, 0)
+        
+        const currentAmount = yearTotal > 0 ? yearTotal : 0 // 通过API获取真实数据
+        const comparisonAmount = comparisonYearTotal > 0 ? comparisonYearTotal : 0 // 通过API获取真实数据
+        
         periods.push({
           period: `${year}年`,
-          current: 180000 + Math.random() * 60000,
-          comparison: 165000 + Math.random() * 55000
+          current: currentAmount,
+          comparison: comparisonAmount
         })
       }
       break
@@ -834,7 +866,7 @@ const generateForecastData = (historicalData: TimeAggregatedItem[]): ForecastDat
   
   // 简单线性回归预测
   const n = historicalData.length
-  const lastDate = new Date(historicalData[n - 1].date)
+  const lastDate = historicalData.length > 0 && n > 0 ? new Date() : new Date()
   
   // 计算趋势
   let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0
@@ -857,9 +889,25 @@ const generateForecastData = (historicalData: TimeAggregatedItem[]): ForecastDat
     const forecastIndex = n + i - 1
     const forecastValue = slope * forecastIndex + intercept
     
-    // 添加一些随机波动
-    const randomFactor = 0.9 + Math.random() * 0.2 // 0.9-1.1的随机因子
-    const finalValue = Math.max(0, forecastValue * randomFactor)
+    // 基于历史数据的波动范围计算预测值
+    const historicalValues = historicalData.map(item => item.value)
+    const minValue = Math.min(...historicalValues)
+    const maxValue = Math.max(...historicalValues)
+    const avgValue = historicalValues.reduce((sum, val) => sum + val, 0) / historicalValues.length
+    
+    // 确保预测值在合理范围内（基于历史数据的1.5倍范围）
+    const range = maxValue - minValue
+    const lowerBound = Math.max(0, avgValue - range * 0.75)
+    const upperBound = avgValue + range * 0.75
+    
+    let finalValue = Math.max(0, forecastValue)
+    
+    // 如果预测值超出合理范围，进行调整
+    if (finalValue < lowerBound) {
+      finalValue = lowerBound + (finalValue - lowerBound) * 0.3
+    } else if (finalValue > upperBound) {
+      finalValue = upperBound + (finalValue - upperBound) * 0.3
+    }
     
     // 计算预测日期
     const forecastDate = new Date(lastDate)
@@ -872,7 +920,7 @@ const generateForecastData = (historicalData: TimeAggregatedItem[]): ForecastDat
     }
     
     forecastData.push({
-      date: forecastDate.toISOString().split('T')[0],
+      date: forecastDate.toISOString().split('T')[0] || '',
       value: Math.round(finalValue)
     })
   }
@@ -894,8 +942,23 @@ const detectAnomalies = (data: IncomeAnalysisItem[]): AnomalyItem[] => {
   const threshold = 3 * stdDev
   const anomalies: AnomalyItem[] = []
   
+  // 计算变异系数（CV）来评估数据离散程度
+  const cv = stdDev / mean
+  
   data.forEach(item => {
-    if (Math.abs(item.value - mean) > threshold) {
+    const deviation = Math.abs(item.value - mean)
+    
+    // 根据变异系数调整异常检测的敏感度
+    let adjustedThreshold = threshold
+    if (cv > 0.5) {
+      // 高变异系数，放宽异常检测标准
+      adjustedThreshold = threshold * 1.2
+    } else if (cv < 0.2) {
+      // 低变异系数，严格异常检测标准
+      adjustedThreshold = threshold * 0.8
+    }
+    
+    if (deviation > adjustedThreshold) {
       anomalies.push({
         name: item.name,
         value: item.value
@@ -915,7 +978,15 @@ const generateTrendReport = (): TrendReportData => {
   // 计算关键指标
   const totalRevenue = totalIncome.value
   const avgRevenue = averageIncome.value
-  const revenueGrowth = incomeChange.value
+  
+  // 计算收入变化（基于真实数据对比）
+  let revenueGrowth = 0
+  if (timeData.length >= 2) {
+    const currentPeriod = timeData[timeData.length - 1]?.value || 0
+    const previousPeriod = timeData[timeData.length - 2]?.value || 0
+    revenueGrowth = previousPeriod > 0 ? ((currentPeriod - previousPeriod) / previousPeriod) * 100 : 0
+  }
+  
   const yoyGrowth = yearOverYearGrowth.value
   const momGrowth = monthOverMonthGrowth.value
   const avgGrowth = averageGrowthRate.value
@@ -926,7 +997,7 @@ const generateTrendReport = (): TrendReportData => {
     if (!sourceStats[item.source]) {
       sourceStats[item.source] = 0
     }
-    sourceStats[item.source] += item.amount
+    sourceStats[item.source] = (sourceStats[item.source] || 0) + item.amount
   })
   const sourceDataForAnomaly = Object.entries(sourceStats).map(([name, value]): IncomeAnalysisItem => ({
     name,
@@ -945,7 +1016,7 @@ const generateTrendReport = (): TrendReportData => {
     yoyGrowth,
     momGrowth,
     avgGrowth,
-    topIncomeSource: sourceData.length > 0 ? sourceData[0] : null,
+    topIncomeSource: sourceData.length > 0 && sourceData[0] ? sourceData[0] : null as IncomeAnalysisItem | null,
     anomalies: anomalies,
     forecast: forecastData,
     trendDirection: trendDirection.value,
@@ -1140,7 +1211,7 @@ const handleExportReport = () => {
   ElMessage.success('收入趋势报告已生成并下载')
 }
 
-const viewIncomeDetail = (row: IncomeItem) => {
+const viewIncomeDetail = (row: any) => {
   ElMessage.info(`查看收入详情: ${row.source} - ¥${formatAmount(row.amount)}`)
 }
 
@@ -1167,7 +1238,6 @@ watch(comparisonType, () => {
 watch(incomeData, () => {
   nextTick(() => {
     initTrendChart()
-    initCategoryChart()
     initSourceChart()
     initComparisonChart()
   })
@@ -1185,16 +1255,26 @@ const loadIncomeData = async () => {
   loading.value = true
   
   try {
-    // 生成模拟数据
-    incomeData.value = generateMockData()
+    // 获取真实收入数据
+    incomeData.value = await fetchIncomeData()
     
     // 计算概览数据
     totalIncome.value = incomeData.value.reduce((sum, item) => sum + item.amount, 0)
     averageIncome.value = totalIncome.value / (incomeData.value.length || 1)
     
-    // 计算收入变化（模拟对比数据）
-    const previousTotal = totalIncome.value * (0.8 + Math.random() * 0.4) // 80%-120%的变化
-    incomeChange.value = Math.round(((totalIncome.value - previousTotal) / previousTotal) * 100 * 100) / 100
+    // 计算收入来源数量
+    const uniqueSources = new Set(incomeData.value.map(item => item.source))
+    incomeSourceCount.value = uniqueSources.size
+    
+    // 计算收入变化（基于时间序列数据）
+    const timeData = aggregateDataByTime(incomeData.value, 'month')
+    let revenueGrowth = 0
+    if (timeData.length >= 2) {
+      const currentPeriod = timeData[timeData.length - 1]?.value || 0
+      const previousPeriod = timeData[timeData.length - 2]?.value || 0
+      revenueGrowth = previousPeriod > 0 ? ((currentPeriod - previousPeriod) / previousPeriod) * 100 : 0
+    }
+    incomeChange.value = Math.round(revenueGrowth * 100) / 100
     
     // 设置增长趋势
     if (incomeChange.value > 5) {

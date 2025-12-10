@@ -5,7 +5,27 @@ export interface ApiResponse<T = unknown> {
   success: boolean
   data: T
   message?: string
-  code?: number
+  code?: string | number
+  timestamp?: string
+}
+
+// 分页响应类型 - 兼容后端格式
+export interface PaginatedResponse<T = unknown> {
+  items: T[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+  hasNext: boolean
+  hasPrev: boolean
+}
+
+// 分页查询参数
+export interface PaginationParams {
+  page?: number
+  pageSize?: number
+  sortBy?: string
+  sortOrder?: 'asc' | 'desc'
 }
 
 // 分页响应类型
@@ -17,19 +37,58 @@ export interface PaginatedResponse<T = unknown> {
   pages: number
 }
 
-// 用户类型
+// 用户类型 - 更新为更完整的定义
 export interface User {
   id: string
-  name: string
+  username: string
   email: string
-  role: string
+  phone?: string
   avatar?: string
+  role: UserRole
+  status: UserStatus
   permissions: string[]
   createdAt: string
   updatedAt: string
+  lastLoginAt?: string
 }
 
-// 路由元信息类型
+export enum UserRole {
+  ADMIN = 'admin',
+  STUDENT = 'student',
+  TEACHER = 'teacher',
+  GUEST = 'guest'
+}
+
+export enum UserStatus {
+  ACTIVE = 'active',
+  INACTIVE = 'inactive',
+  SUSPENDED = 'suspended',
+  PENDING = 'pending'
+}
+
+// 登录相关类型
+export interface LoginRequest {
+  username: string
+  password: string
+  rememberMe?: boolean
+}
+
+export interface LoginResponse {
+  accessToken: string
+  refreshToken: string
+  user: User
+  expiresIn: number
+}
+
+// 注册相关类型
+export interface RegisterRequest {
+  username: string
+  email: string
+  password: string
+  confirmPassword: string
+  phone?: string
+  role?: UserRole
+}
 export interface RouteMeta {
   title?: string
   requiresAuth?: boolean
@@ -38,7 +97,129 @@ export interface RouteMeta {
   keepAlive?: boolean
 }
 
-// 组件Props基础类型
+// 宿舍相关类型
+export interface Dorm {
+  id: string
+  name: string
+  building: string
+  floor: number
+  roomNumber: string
+  capacity: number
+  currentOccupancy: number
+  type: DormType
+  status: DormStatus
+  amenities: string[]
+  price: number
+  description?: string
+  images: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+export enum DormType {
+  MALE = 'male',
+  FEMALE = 'female',
+  MIXED = 'mixed'
+}
+
+export enum DormStatus {
+  AVAILABLE = 'available',
+  OCCUPIED = 'occupied',
+  MAINTENANCE = 'maintenance',
+  UNAVAILABLE = 'unavailable'
+}
+
+// 宿舍查询参数
+export interface DormQueryParams extends PaginationParams {
+  building?: string
+  floor?: number
+  type?: DormType
+  status?: DormStatus
+  minPrice?: number
+  maxPrice?: number
+  capacity?: number
+  search?: string
+}
+
+// 宿舍预订相关类型
+export interface DormBooking {
+  id: string
+  userId: string
+  dormId: string
+  startDate: string
+  endDate: string
+  status: BookingStatus
+  totalPrice: number
+  notes?: string
+  createdAt: string
+  updatedAt: string
+  user?: User
+  dorm?: Dorm
+}
+
+export enum BookingStatus {
+  PENDING = 'pending',
+  CONFIRMED = 'confirmed',
+  CANCELLED = 'cancelled',
+  COMPLETED = 'completed',
+  EXPIRED = 'expired'
+}
+// 维护相关类型
+export interface MaintenanceRequest {
+  id: string
+  userId: string
+  dormId: string
+  title: string
+  description: string
+  type: MaintenanceType
+  priority: MaintenancePriority
+  status: MaintenanceStatus
+  images?: string[]
+  scheduledDate?: string
+  completedDate?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+  user?: User
+  dorm?: Dorm
+}
+
+export enum MaintenanceType {
+  ELECTRICAL = 'electrical',
+  PLUMBING = 'plumbing',
+  HVAC = 'hvac',
+  STRUCTURAL = 'structural',
+  APPLIANCE = 'appliance',
+  CLEANING = 'cleaning',
+  OTHER = 'other'
+}
+
+export enum MaintenancePriority {
+  LOW = 'low',
+  MEDIUM = 'medium',
+  HIGH = 'high',
+  URGENT = 'urgent'
+}
+
+export enum MaintenanceStatus {
+  PENDING = 'pending',
+  APPROVED = 'approved',
+  IN_PROGRESS = 'in_progress',
+  COMPLETED = 'completed',
+  CANCELLED = 'cancelled'
+}
+
+// 维护查询参数
+export interface MaintenanceQueryParams extends PaginationParams {
+  type?: MaintenanceType
+  priority?: MaintenancePriority
+  status?: MaintenanceStatus
+  userId?: string
+  dormId?: string
+  startDate?: string
+  endDate?: string
+}
+
 export interface BaseProps {
   class?: string
   style?: string | Record<string, any>
@@ -52,6 +233,57 @@ export interface ValidationRule {
   pattern?: RegExp
   validator?: (rule: ValidationRule, value: unknown, callback: (error?: string | Error) => void) => void
   trigger?: string | string[]
+}
+
+// 文件上传相关类型
+export interface FileUploadResponse {
+  url: string
+  filename: string
+  originalName: string
+  size: number
+  mimeType: string
+  uploadedAt: string
+}
+
+// 统计相关类型
+export interface Statistics {
+  totalDorms: number
+  totalUsers: number
+  totalBookings: number
+  totalMaintenanceRequests: number
+  occupancyRate: number
+  revenue: number
+  pendingMaintenance: number
+  activeBookings: number
+}
+
+// 系统状态类型
+export interface SystemStatus {
+  status: 'healthy' | 'degraded' | 'unhealthy'
+  uptime: number
+  version: string
+  environment: string
+  database: {
+    status: 'connected' | 'disconnected'
+    latency: number
+  }
+  redis: {
+    status: 'connected' | 'disconnected'
+    latency: number
+  }
+  timestamp: string
+}
+
+// 缓存状态类型
+export interface CacheStatus {
+  enabled: boolean
+  hitRate: number
+  missRate: number
+  totalRequests: number
+  cacheHits: number
+  cacheMisses: number
+  memoryUsage: number
+  maxMemory: number
 }
 
 // 表格列配置类型

@@ -287,34 +287,24 @@ import {
   Delete
 } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
+import { expenseService, deleteExpense } from '@/services/expenseService'
+import type { 
+  ExpenseStatistics, 
+  ExpenseTrendItem, 
+  ExpenseCategoryItem, 
+  ExpenseMemberItem, 
+  ExpenseTimeItem,
+  ExpenseDetailItem,
+  ExpenseFilter
+} from '@/services/expenseService'
 
 // 路由
 const router = useRouter()
 
-// 类型定义
-interface ExpenseItem {
-  id: number
-  date: string
-  category: string
-  description: string
-  amount: number
-  payer: string
-}
-
-interface CategoryDetail {
-  category: string
-  amount: number
-  percentage: number
-}
-
+// 类型定义 - 使用服务中定义的类型
 interface SortInfo {
   prop: string
   order: 'ascending' | 'descending'
-}
-
-interface Member {
-  id: number
-  name: string
 }
 
 // 响应式数据
@@ -351,58 +341,25 @@ const timePeriods = [
 ]
 
 // 统计数据
-const statistics = reactive({
-  totalExpense: 15860.50,
-  totalTrend: 12.5,
-  dailyAverage: 528.68,
-  categoryCount: 8,
-  maxExpense: 2800.00,
-  maxExpenseCategory: '餐饮'
+const statistics = ref<ExpenseStatistics>({
+  totalExpense: 0,
+  dailyAverage: 0,
+  categoryCount: 0,
+  maxExpense: 0,
+  maxExpenseCategory: ''
 })
 
 // 表格数据
-const tableData = ref<ExpenseItem[]>([
-  {
-    id: 1,
-    date: '2024-01-15',
-    category: '餐饮',
-    description: '团队聚餐',
-    amount: 580.00,
-    payer: '张三'
-  },
-  {
-    id: 2,
-    date: '2024-01-14',
-    category: '交通',
-    description: '打车费用',
-    amount: 45.80,
-    payer: '李四'
-  },
-  {
-    id: 3,
-    date: '2024-01-13',
-    category: '生活用品',
-    description: '购买日用品',
-    amount: 128.50,
-    payer: '王五'
-  }
-])
+const tableData = ref<ExpenseDetailItem[]>([])
 
 // 成员列表
-const memberList = ref<Member[]>([
-  { id: 1, name: '张三' },
-  { id: 2, name: '李四' },
-  { id: 3, name: '王五' }
-])
+const memberList = ref<{id: number, name: string}[]>([])
 
 // 分类详情数据
-const categoryDetailData = ref<CategoryDetail[]>([
-  { category: '餐饮', amount: 6800.50, percentage: 42.9 },
-  { category: '交通', amount: 2450.30, percentage: 15.5 },
-  { category: '生活用品', amount: 1890.80, percentage: 11.9 },
-  { category: '娱乐', amount: 1560.20, percentage: 9.8 },
-  { category: '其他', amount: 3158.70, percentage: 19.9 }
-])
+const categoryDetailData = ref<{category: string, amount: number, percentage: number}[]>([])
+const categoryDetailVisible = ref(false)
+const currentCategory = ref('')
+const categoryDetailLoading = ref(false)
 
 // 计算属性
 const dateRangeText = computed(() => {
@@ -443,9 +400,12 @@ const paginatedTableData = computed(() => {
   return filteredTableData.value.slice(start, end)
 })
 
-// 更新总数
+/**
+ * 更新总数（用于分页）
+ */
 const updateTotal = () => {
-  total.value = filteredTableData.value.length
+  // 重新加载数据，让后端处理搜索和分页
+  loadExpenseData()
 }
 
 // 方法
@@ -455,60 +415,89 @@ const handleBack = () => {
 
 
 
-// 选择快捷时间周期
+/**
+ * 选择快捷时间周期
+ */
 const selectTimePeriod = (period: string) => {
   selectedTimePeriod.value = period
   
   console.log('选择快捷时间周期:', period)
   currentPage.value = 1
-  loadExpenseData()
-  updateStatisticsAndTable() // 只更新统计数据和表格，不影响图表
+  loadExpenseData() // 重新加载数据以更新所有图表和统计
 }
 
 // 加载支出数据
 const loadExpenseData = async () => {
   loading.value = true
   try {
-    // 模拟API调用
-    console.log('加载支出数据，时间周期:', selectedTimePeriod.value)
-    // 这里应该调用实际的API获取数据
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    console.log('开始加载支出统计数据...')
     
-    // 模拟数据更新
-    updateStatistics()
+    // 构建筛选参数
+    const filter: ExpenseFilter = {
+      startDate: timeRange.value[0],
+      endDate: timeRange.value[1],
+      page: currentPage.value,
+      pageSize: pageSize.value
+    }
+    
+    // 如果有搜索关键词，添加到筛选条件
+    if (searchKeyword.value) {
+      filter.keyword = searchKeyword.value
+    }
+    
+    // 调用真实API获取支出统计数据
+    const response = await expenseService.getExpenseStatistics(filter)
+    
+    if (response.success && response.data) {
+      console.log('支出统计数据加载成功:', response.data)
+      
+      // 使用真实数据更新统计
+      const stats = response.data.statistics || {}
+      const trendData = response.data.trendData || []
+      const categoryData = response.data.categoryData || []
+      const memberData = response.data.memberData || []
+      const timeData = response.data.timeData || []
+      const detailData = response.data.detailData || []
+      
+      // 更新统计数据
+      statistics.totalExpense = stats.totalExpense || 0
+      statistics.dailyAverage = stats.dailyAverage || 0
+      statistics.categoryCount = stats.categoryCount || 0
+      statistics.maxExpense = stats.maxExpense || 0
+      statistics.maxExpenseCategory = stats.maxExpenseCategory || ''
+      
+      // 更新表格数据
+      tableData.value = detailData
+      total.value = response.data.total || 0
+      
+      // 更新图表数据
+      if (trendData.length && trendChart.value) {
+        updateTrendChartWithRealData(trendData)
+      }
+      if (categoryData.length && categoryChart.value) {
+        updateCategoryChartWithRealData(categoryData)
+      }
+      if (memberData.length && memberChart.value) {
+        updateMemberChartWithRealData(memberData)
+      }
+      if (timeData.length && timeChart.value) {
+        updateTimeChartWithRealData(timeData)
+      }
+      
+      console.log('支出统计数据处理完成')
+    } else {
+      console.error('获取支出统计数据失败:', response.message)
+      ElMessage.error(response.message || '获取支出统计数据失败')
+    }
   } catch (error) {
-    console.error('加载数据失败:', error)
-    ElMessage.error('加载数据失败')
+    console.error('加载支出统计数据失败:', error)
+    ElMessage.error('加载支出统计数据失败')
   } finally {
     loading.value = false
   }
 }
 
-// 更新所有图表
-const updateAllCharts = () => {
-  console.log('更新所有图表，时间周期:', selectedTimePeriod.value)
-  updateStatistics()
-  
-  // 重新生成模拟数据（基于时间周期）
-  generateMockData()
-  
-  // 更新所有图表
-  if (trendChart.value) updateTrendChart()
-  if (categoryChart.value) updateCategoryChart()
-  if (memberChart.value) updateMemberChart()
-  if (timeChart.value) updateTimeChart()
-}
-
-// 只更新统计数据和表格，不影响图表
-const updateStatisticsAndTable = () => {
-  console.log('更新时间周期筛选数据，时间周期:', selectedTimePeriod.value)
-  
-  // 只重新生成表格数据，基于时间周期计算
-  generateTableDataByPeriod()
-  
-  // 只更新统计数据，不影响图表
-  updateStatistics()
-}
+// 移除模拟数据相关的函数，图表更新现在由loadExpenseData处理
 
 // 获取分类标签类型
 const getCategoryType = (category: string) => {
@@ -555,15 +544,11 @@ const updateTrendChart = () => {
   console.log('完成趋势分析模块图表更新')
 }
 
-// 只更新趋势图表（内部方法）
-const updateTrendChartOnly = () => {
+// 使用真实数据更新趋势图表
+const updateTrendChartWithRealData = (trendData: any[]) => {
   if (!trendChart.value) return
   
-  console.log('更新趋势图表，时间周期:', selectedTimePeriod.value)
-  
-  // 根据时间周期生成数据
-  const days = getDaysByPeriod(selectedTimePeriod.value)
-  const trendData = generateTrendDataByDays(days)
+  console.log('使用真实数据更新趋势图表，数据条数:', trendData.length)
   
   const option = {
     title: {
@@ -617,14 +602,14 @@ const updateTrendChartOnly = () => {
   trendChart.value.setOption(option, true)
 }
 
-// 更新分类图表
-const updateCategoryChart = () => {
+// 使用真实数据更新分类图表
+const updateCategoryChartWithRealData = (categoryData: any[]) => {
   if (!categoryChart.value) return
   
-  console.log('更新分类图表')
+  console.log('使用真实数据更新分类图表，数据条数:', categoryData.length)
   
-  const categoryData = generateCategoryData()
-  updateCategoryDetail(categoryData) // 同时更新分类详情数据
+  // 同时更新分类详情数据
+  updateCategoryDetail(categoryData)
   
   const option = {
     title: {
@@ -690,13 +675,11 @@ const updateCategoryDetail = (categoryData: any[]) => {
   console.log('更新分类详情数据:', updatedDetailData)
 }
 
-// 更新成员图表
-const updateMemberChart = () => {
+// 使用真实数据更新成员图表
+const updateMemberChartWithRealData = (memberData: any[]) => {
   if (!memberChart.value) return
   
-  console.log('更新成员图表')
-  
-  const memberData = generateMemberData()
+  console.log('使用真实数据更新成员图表，数据条数:', memberData.length)
   
   const option = {
     title: {
@@ -746,13 +729,11 @@ const updateMemberChart = () => {
   memberChart.value.setOption(option, true)
 }
 
-// 更新时段图表
-const updateTimeChart = () => {
+// 使用真实数据更新时段图表
+const updateTimeChartWithRealData = (timeData: any[]) => {
   if (!timeChart.value) return
   
-  console.log('更新时段图表')
-  
-  const timeData = generateTimeData()
+  console.log('使用真实数据更新时段图表，数据条数:', timeData.length)
   
   // 根据时间粒度设置不同的标题和样式
   let chartTitle = '支出时段分布'
@@ -807,7 +788,7 @@ const updateTimeChart = () => {
       axisPointer: {
         type: 'shadow'
       },
-      formatter: (params) => {
+      formatter: (params: any) => {
         const data = params[0]
         return `${data.name}<br/>支出金额: ¥${data.value}`
       }
@@ -863,20 +844,33 @@ const updateTimeChart = () => {
   console.log(`更新${timeGranularity.value}时段图表，数据点: ${timeData.length}个`)
 }
 
-// 显示分类详情
-const showCategoryDetail = () => {
+/**
+ * 显示分类详情
+ */
+const showCategoryDetail = (category: string) => {
+  currentCategory.value = category
   categoryDetailVisible.value = true
-  loadCategoryDetail()
+  loadCategoryDetail(category)
 }
 
-// 加载分类详情
-const loadCategoryDetail = async () => {
+/**
+ * 加载分类详情数据
+ */
+const loadCategoryDetail = async (category: string) => {
   try {
-    // 模拟API调用
-    console.log('加载分类详情数据')
-    // 这里应该调用实际的API获取分类详情数据
+    categoryDetailLoading.value = true
+    
+    console.log('加载分类详情:', category)
+    
+    // 调用真实的API接口获取分类详情数据
+    const response = await getExpenseCategoryDetail(category)
+    categoryDetailData.value = response.data
+    
   } catch (error) {
     console.error('加载分类详情失败:', error)
+    ElMessage.error('加载分类详情失败')
+  } finally {
+    categoryDetailLoading.value = false
   }
 }
 
@@ -914,8 +908,10 @@ const handleSortChange = (sortInfo: SortInfo) => {
   loadExpenseData()
 }
 
-// 编辑支出
-const handleEdit = (row: ExpenseItem) => {
+/**
+ * 编辑支出
+ */
+const handleEdit = (row: ExpenseDetailItem) => {
   console.log('编辑支出:', row)
   
   // 将当前行的数据传递给编辑页面
@@ -926,8 +922,10 @@ const handleEdit = (row: ExpenseItem) => {
   })
 }
 
-// 删除支出
-const handleDelete = async (row: ExpenseItem) => {
+/**
+ * 删除支出
+ */
+const handleDelete = async (row: ExpenseDetailItem) => {
   try {
     // 显示确认对话框
     const result = await ElMessageBox.confirm(
@@ -949,7 +947,7 @@ const handleDelete = async (row: ExpenseItem) => {
     
     console.log('删除支出:', row)
     
-    // 显示加载状态 - 修复API调用
+    // 显示加载状态
     const loadingMessage = ElMessage({
       message: '正在删除...',
       type: 'info',
@@ -957,8 +955,8 @@ const handleDelete = async (row: ExpenseItem) => {
     })
     
     try {
-      // 模拟API调用删除数据
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      // 调用真实的删除API
+      await deleteExpense(row.id)
       
       // 从本地数据中删除该项
       const index = tableData.value.findIndex(item => item.id === row.id)
@@ -968,8 +966,8 @@ const handleDelete = async (row: ExpenseItem) => {
         // 更新总数
         updateTotal()
         
-        // 重新生成统计数据
-        generateMockData()
+        // 重新加载数据以更新图表
+        await loadExpenseData()
         
         console.log('删除成功，更新本地数据')
         ElMessage.success('删除成功')
@@ -1010,20 +1008,20 @@ const handleCurrentChange = (page: number) => {
   // 不需要重新加载数据，只需要更新分页显示
 }
 
-// 数据导出
+/**
+ * 数据导出
+ */
 const handleExport = async () => {
   try {
     loading.value = true
     console.log('导出支出数据')
     
-    // 模拟导出过程
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    
-    // 这里应该调用实际的导出API
+    // 构建导出数据
     const exportData = {
       timePeriod: selectedTimePeriod.value,
-      statistics: statistics,
-      detailData: tableData.value
+      statistics: statistics.value,
+      detailData: tableData.value,
+      exportTime: new Date().toISOString()
     }
     
     // 创建下载链接
@@ -1033,6 +1031,9 @@ const handleExport = async () => {
     link.href = url
     link.download = `支出统计_${new Date().toISOString().split('T')[0]}.json`
     link.click()
+    
+    // 清理URL对象
+    setTimeout(() => URL.revokeObjectURL(url), 100)
     
     ElMessage.success('数据导出成功')
   } catch (error) {
@@ -1076,250 +1077,17 @@ const initCharts = () => {
   
   window.addEventListener('resize', handleResize)
   
-  // 初始化图表数据
-  updateAllCharts()
+  // 初始化图表数据 - 现在由loadExpenseData处理
+  // updateAllCharts() // 注释掉，避免重复初始化
 }
 
-// 根据时间周期获取天数
-const getDaysByPeriod = (period: string) => {
-  const periodDays: Record<string, number> = {
-    '7d': 7,
-    '30d': 30,
-    '90d': 90,
-    '6m': 180,
-    '1y': 365
-  }
-  return periodDays[period] || 30
-}
-
-// 生成趋势数据
-const generateTrendDataByDays = (days: number) => {
-  const data = []
-  const endDate = new Date()
-  
-  for (let i = days - 1; i >= 0; i--) {
-    const date = new Date(endDate)
-    date.setDate(date.getDate() - i)
-    data.push({
-      date: date.toISOString().split('T')[0],
-      amount: Math.floor(Math.random() * 500) + 200
-    })
-  }
-  return data
-}
-
-// 生成分类数据
-const generateCategoryData = () => {
-  // 基于趋势分析的时间范围计算总额
-  const days = getDaysByPeriod(chartTimeRange.value)
-  const baseAmount = 1000 // 每日基础金额
-  const totalAmount = baseAmount * days // 根据时间范围调整总额
-  
-  return [
-    { name: '餐饮', value: Math.floor(totalAmount * 0.3) },
-    { name: '交通', value: Math.floor(totalAmount * 0.25) },
-    { name: '生活用品', value: Math.floor(totalAmount * 0.2) },
-    { name: '娱乐', value: Math.floor(totalAmount * 0.15) },
-    { name: '其他', value: Math.floor(totalAmount * 0.1) }
-  ]
-}
-
-// 生成成员数据
-const generateMemberData = () => {
-  // 基于趋势分析的时间范围调整数据
-  const days = getDaysByPeriod(chartTimeRange.value)
-  const timeMultiplier = days / 30 // 以30天作为基准
-  
-  return [
-    { name: '张三', amount: Math.floor((Math.random() * 3000 + 2000) * timeMultiplier) },
-    { name: '李四', amount: Math.floor((Math.random() * 2500 + 1500) * timeMultiplier) },
-    { name: '王五', amount: Math.floor((Math.random() * 2000 + 1000) * timeMultiplier) },
-    { name: '赵六', amount: Math.floor((Math.random() * 1500 + 800) * timeMultiplier) }
-  ]
-}
-
-// 生成时段数据
-const generateTimeData = () => {
-  // 基于趋势分析的时间范围调整时段数据
-  const days = getDaysByPeriod(chartTimeRange.value)
-  const timeMultiplier = Math.sqrt(days / 30) // 使用平方根缩放，避免数值过大
-  
-  let timeData = []
-  
-  switch (timeGranularity.value) {
-    case 'hour':
-      // 按小时显示一天24小时
-      for (let hour = 0; hour < 24; hour++) {
-        const startHour = hour.toString().padStart(2, '0')
-        const endHour = ((hour + 1) % 24).toString().padStart(2, '0')
-        const label = `${startHour}:00-${endHour}:00`
-        
-        // 根据时间段调整基数
-        let baseAmount = 300
-        if (hour >= 6 && hour < 12) baseAmount = 800   // 上午
-        else if (hour >= 12 && hour < 18) baseAmount = 1500 // 下午
-        else if (hour >= 18 && hour < 24) baseAmount = 1200 // 晚上
-        else baseAmount = 200  // 深夜
-        
-        timeData.push({
-          period: label,
-          amount: Math.floor((Math.random() * baseAmount + baseAmount * 0.5) * timeMultiplier)
-        })
-      }
-      break
-      
-    case 'day':
-      // 按天显示一周7天
-      const dayNames = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
-      const dayMultipliers = [1.2, 1.1, 1.0, 1.1, 1.3, 1.8, 1.6] // 周末支出更高
-      
-      for (let day = 0; day < 7; day++) {
-        const baseAmount = 600 * dayMultipliers[day]
-        timeData.push({
-          period: dayNames[day],
-          amount: Math.floor((Math.random() * baseAmount + baseAmount * 0.3) * timeMultiplier)
-        })
-      }
-      break
-      
-    case 'week':
-      // 按周显示一个月4周
-      for (let week = 1; week <= 4; week++) {
-        const baseAmount = 2800 + (Math.random() - 0.5) * 800 // 第1-4周略有差异
-        timeData.push({
-          period: `第${week}周`,
-          amount: Math.floor((Math.random() * baseAmount + baseAmount * 0.4) * timeMultiplier)
-        })
-      }
-      break
-      
-    default:
-      // 默认按小时段显示
-      timeData = [
-        { period: '00-06', amount: Math.floor((Math.random() * 500 + 200) * timeMultiplier) },
-        { period: '06-12', amount: Math.floor((Math.random() * 1000 + 800) * timeMultiplier) },
-        { period: '12-18', amount: Math.floor((Math.random() * 2000 + 1500) * timeMultiplier) },
-        { period: '18-24', amount: Math.floor((Math.random() * 1800 + 1200) * timeMultiplier) }
-      ]
-  }
-  
-  console.log(`生成${timeGranularity.value}时段数据，共${timeData.length}个时间段`)
-  return timeData
-}
-
-// 生成模拟数据
-const generateMockData = () => {
-  const days = getDaysByPeriod(selectedTimePeriod.value)
-  const trendData = generateTrendDataByDays(days)
-  
-  // 生成表格数据
-  const mockTableData = []
-  for (let i = 0; i < Math.min(days, 20); i++) {
-    const date = new Date()
-    date.setDate(date.getDate() - i)
-    mockTableData.push({
-      id: i + 1,
-      date: date.toISOString().split('T')[0],
-      category: ['餐饮', '交通', '生活用品', '娱乐', '其他'][Math.floor(Math.random() * 5)],
-      description: '模拟支出项目',
-      amount: Math.floor(Math.random() * 500) + 100,
-      payer: ['张三', '李四', '王五', '赵六'][Math.floor(Math.random() * 4)]
-    })
-  }
-  
-  tableData.value = mockTableData.reverse()
-  
-  // 更新总数
-  updateTotal()
-  
-  // 更新统计数据
-  const totalExpense = trendData.reduce((sum, item) => sum + item.amount, 0)
-  statistics.totalExpense = totalExpense
-  statistics.dailyAverage = totalExpense / days
-  statistics.categoryCount = 5
-  statistics.maxExpense = Math.max(...mockTableData.map(item => item.amount))
-  statistics.maxExpenseCategory = '餐饮'
-}
-
-// 基于时间周期生成表格数据
-const generateTableDataByPeriod = () => {
-  const days = getDaysByPeriod(selectedTimePeriod.value)
-  
-  // 生成基于时间周期的表格数据
-  const mockTableData = []
-  for (let i = 0; i < Math.min(days, 20); i++) {
-    const date = new Date()
-    date.setDate(date.getDate() - i)
-    
-    // 基于时间周期调整数据范围
-    const timeMultiplier = days / 30 // 30天作为基准
-    const baseAmount = 100 * timeMultiplier
-    
-    mockTableData.push({
-      id: i + 1,
-      date: date.toISOString().split('T')[0],
-      category: ['餐饮', '交通', '生活用品', '娱乐', '其他'][Math.floor(Math.random() * 5)],
-      description: '基于时间周期数据',
-      amount: Math.floor(Math.random() * 300 * timeMultiplier) + baseAmount,
-      payer: ['张三', '李四', '王五', '赵六'][Math.floor(Math.random() * 4)]
-    })
-  }
-  
-  tableData.value = mockTableData.reverse()
-  
-  // 更新总数
-  updateTotal()
-  
-  console.log(`生成${days}天内的表格数据，共${mockTableData.length}条记录`)
-}
-
-// 更新统计数据（基于时间周期）
-const updateStatistics = () => {
-  const days = getDaysByPeriod(selectedTimePeriod.value)
-  
-  // 基于当前表格数据计算统计
-  const tableDataArray = tableData.value || []
-  const totalExpense = tableDataArray.reduce((sum, item) => sum + item.amount, 0)
-  const dailyAverage = tableDataArray.length > 0 ? totalExpense / Math.min(days, tableDataArray.length) : 0
-  
-  // 计算支出类别统计
-  const categoryMap = new Map()
-  tableDataArray.forEach(item => {
-    const count = categoryMap.get(item.category) || 0
-    categoryMap.set(item.category, count + 1)
-  })
-  const categoryCount = categoryMap.size
-  
-  // 计算单笔最高支出
-  let maxExpense = 0
-  let maxExpenseCategory = ''
-  tableDataArray.forEach(item => {
-    if (item.amount > maxExpense) {
-      maxExpense = item.amount
-      maxExpenseCategory = item.category
-    }
-  })
-  
-  // 更新统计数据
-  statistics.totalExpense = totalExpense
-  statistics.dailyAverage = dailyAverage
-  statistics.categoryCount = categoryCount
-  statistics.maxExpense = maxExpense
-  statistics.maxExpenseCategory = maxExpenseCategory
-  
-  console.log(`更新统计数据 - 总支出: ¥${totalExpense.toFixed(2)}, 日均: ¥${dailyAverage.toFixed(2)}, 类别数: ${categoryCount}, 最高单笔: ¥${maxExpense}(${maxExpenseCategory})`)
-}
+// 移除所有模拟数据相关函数 - 现在使用真实API数据
 
 // 监听筛选条件变化
 watch([timeGranularity], () => {
   console.log('时段粒度变化:', timeGranularity.value)
-  // 直接更新时段图表，而不是调用loadExpenseData
-  if (timeChart.value) {
-    updateTimeChart()
-  } else {
-    // 如果图表实例还没有创建，先调用loadExpenseData初始化数据
-    loadExpenseData()
-  }
+  // 重新加载数据以更新时段图表
+  loadExpenseData()
 })
 </script>
 

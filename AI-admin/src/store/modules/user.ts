@@ -12,6 +12,8 @@ export interface UserState {
   avatar?: string
   email?: string
   loginTime?: number // 添加登录时间戳
+  token?: string // 添加访问令牌
+  refreshToken?: string // 添加刷新令牌
 }
 
 // 初始状态
@@ -23,7 +25,9 @@ const state: UserState = {
   isLoggedIn: false,
   avatar: '',
   email: '',
-  loginTime: undefined
+  loginTime: undefined,
+  token: '',
+  refreshToken: ''
 }
 
 // getters
@@ -45,6 +49,14 @@ const mutations = {
     Object.assign(state, user)
     state.isLoggedIn = true
     state.loginTime = Date.now() // 设置登录时间戳
+    
+    // 如果包含令牌，保存到localStorage
+    if (user.token) {
+      localStorage.setItem('adminToken', user.token)
+    }
+    if (user.refreshToken) {
+      localStorage.setItem('adminRefreshToken', user.refreshToken)
+    }
   },
   
   CLEAR_USER(state: UserState) {
@@ -55,6 +67,12 @@ const mutations = {
     state.isLoggedIn = false
     state.avatar = ''
     state.email = ''
+    state.token = ''
+    state.refreshToken = ''
+    
+    // 清除令牌
+    localStorage.removeItem('adminToken')
+    localStorage.removeItem('adminRefreshToken')
   },
   
   UPDATE_USER_PERMISSIONS(state: UserState, permissions: string[]) {

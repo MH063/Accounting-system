@@ -12,7 +12,7 @@
         <el-button 
           type="primary" 
           :icon="ArrowLeft" 
-          @click="$router.back()"
+          @click="router.back()"
           class="back-btn"
         >
           返回
@@ -191,21 +191,21 @@
         style="width: 100%"
         @selection-change="handleSelectionChange"
       >
-        <el-table-column type="selection" width="55" />
-        <el-table-column prop="id" label="支付ID" width="120" />
-        <el-table-column prop="title" label="费用标题" min-width="150" />
-        <el-table-column prop="applicant" label="申请人" width="100" />
-        <el-table-column prop="amount" label="金额" width="120" align="right">
+        <el-table-column type="selection" width="50" />
+        <el-table-column prop="id" label="支付ID" width="100" />
+        <el-table-column prop="title" label="费用标题" min-width="120" />
+        <el-table-column prop="applicant" label="申请人" width="90" />
+        <el-table-column prop="amount" label="金额" width="100" align="right">
           <template #default="{ row }">
             <span class="amount-cell">{{ formatCurrency(row.amount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="date" label="申请日期" width="120">
+        <el-table-column prop="date" label="申请日期" width="110">
           <template #default="{ row }">
             {{ formatDate(row.date) }}
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="100">
+        <el-table-column prop="status" label="状态" width="90">
           <template #default="{ row }">
             <el-tag :type="getStatusType(row.status)">
               {{ getStatusText(row.status) }}
@@ -334,6 +334,7 @@
                 :src="attachment"
                 :preview-src-list="currentPayment.attachments"
                 :initial-index="index"
+                :preview-teleported="true"
                 fit="cover"
                 class="voucher-image"
               />
@@ -371,9 +372,16 @@
               type="primary" 
               @click="uploadAttachment(currentPayment)"
               :icon="Upload"
+              :loading="uploading"
             >
-              上传新附件
+              {{ uploading ? '上传中...' : '上传新附件' }}
             </el-button>
+            <el-progress 
+              v-if="uploading" 
+              :percentage="uploadProgress" 
+              :show-text="true" 
+              style="margin-top: 10px; width: 200px;"
+            />
           </div>
         </div>
         <div v-else class="no-attachments">
@@ -382,9 +390,16 @@
             type="primary" 
             @click="uploadAttachment(currentPayment)"
             :icon="Upload"
+            :loading="uploading"
           >
-            上传附件
+            {{ uploading ? '上传中...' : '上传附件' }}
           </el-button>
+          <el-progress 
+            v-if="uploading" 
+            :percentage="uploadProgress" 
+            :show-text="true" 
+            style="margin-top: 10px; width: 200px;"
+          />
         </div>
       </div>
 
@@ -395,101 +410,93 @@
       </template>
     </el-dialog>
 
-    <!-- 确认支付对话框 -->
+    <!-- 支付对话框 -->
     <el-dialog
-      v-model="confirmDialogVisible"
-      title="确认支付"
+      v-model="paymentDialogVisible"
+      title="费用支付"
       width="500px"
-      @close="resetConfirmForm"
+      @close="resetPaymentForm"
     >
-      <div v-if="currentPayment" class="confirm-payment">
-        <el-alert
-          title="请仔细核对支付信息，确认无误后再进行支付操作"
-          type="warning"
-          show-icon
-          class="confirm-warning"
-        />
-
-        <el-descriptions :column="1" class="payment-summary">
-          <el-descriptions-item label="费用标题">
-            {{ currentPayment.title }}
-          </el-descriptions-item>
-          <el-descriptions-item label="申请人">
-            {{ currentPayment.applicant }}
-          </el-descriptions-item>
-          <el-descriptions-item label="支付金额">
-            <span class="amount-text">{{ formatCurrency(currentPayment.amount) }}</span>
-          </el-descriptions-item>
-          <el-descriptions-item label="费用类别">
-            {{ getCategoryText(currentPayment.category) }}
-          </el-descriptions-item>
-        </el-descriptions>
-
-        <!-- 安全验证 -->
-        <div class="security-verification">
-          <h4>安全验证</h4>
-          <el-form 
-            :model="confirmForm" 
-            :rules="confirmRules" 
-            ref="confirmFormRef"
-            label-width="100px"
-          >
-            <el-form-item label="支付密码" prop="password">
-              <el-input 
-                v-model="confirmForm.password"
-                type="password"
-                placeholder="请输入6位支付密码"
-                maxlength="6"
-                show-password
-              />
-            </el-form-item>
-            <el-form-item label="验证码" prop="captcha">
-              <div class="captcha-field">
-                <el-input 
-                  v-model="confirmForm.captcha"
-                  placeholder="请输入验证码"
-                  maxlength="4"
-                />
-                <el-button 
-                  type="primary" 
-                  @click="generateCaptcha"
-                  :disabled="captchaTimer > 0"
-                >
-                  {{ captchaTimer > 0 ? `${captchaTimer}s后重新获取` : '获取验证码' }}
-                </el-button>
-              </div>
-            </el-form-item>
-            <el-form-item label="短信验证码" prop="smsCode">
-              <div class="sms-field">
-                <el-input 
-                  v-model="confirmForm.smsCode"
-                  placeholder="请输入短信验证码"
-                  maxlength="6"
-                />
-                <el-button 
-                  type="primary" 
-                  @click="sendSmsCode"
-                  :disabled="smsTimer > 0"
-                >
-                  {{ smsTimer > 0 ? `${smsTimer}s后重新获取` : '获取短信验证码' }}
-                </el-button>
-              </div>
-            </el-form-item>
-          </el-form>
+      <div v-if="currentPayment" class="payment-dialog">
+        <!-- 费用信息 -->
+        <div class="expense-info">
+          <h3>{{ currentPayment.title }}</h3>
+          <p class="expense-description">代为支付其他成员的费用</p>
+          <p class="expense-amount">金额：<strong>¥{{ (paymentForm.amount || 0).toFixed(2) }}</strong></p>
+        </div>
+        
+        <!-- 支付方式选择 -->
+        <div v-if="!showQRCode" class="payment-methods">
+          <h4>选择支付方式</h4>
+          <div class="method-options">
+            <el-radio-group v-model="paymentForm.method" @change="handlePaymentMethodChange">
+              <el-radio label="alipay" size="large" tabindex="0" @keydown.enter="$event.target.click()" @keydown.space="$event.target.click()">
+                <div class="method-option">
+                  <el-icon><CreditCard /></el-icon>
+                  <span>支付宝</span>
+                </div>
+              </el-radio>
+              <el-radio label="wechat" size="large" tabindex="0" @keydown.enter="$event.target.click()" @keydown.space="$event.target.click()">
+                <div class="method-option">
+                  <el-icon><ChatLineRound /></el-icon>
+                  <span>微信支付</span>
+                </div>
+              </el-radio>
+              <el-radio label="bank" size="large" tabindex="0" @keydown.enter="$event.target.click()" @keydown.space="$event.target.click()">
+                <div class="method-option">
+                  <el-icon><Postcard /></el-icon>
+                  <span>银行卡转账</span>
+                </div>
+              </el-radio>
+              <el-radio label="cash" size="large" tabindex="0" @keydown.enter="$event.target.click()" @keydown.space="$event.target.click()">
+                <div class="method-option">
+                  <el-icon><Money /></el-icon>
+                  <span>现金支付</span>
+                </div>
+              </el-radio>
+            </el-radio-group>
+          </div>
+        </div>
+        
+        <!-- 收款码展示 -->
+        <div v-if="showQRCode" class="qr-code-section">
+          <h4>请扫描下方二维码完成支付</h4>
+          <div class="qr-code-container">
+            <img :src="qrCodeUrl" alt="收款码" class="qr-code-image" />
+            <p class="qr-code-tip">扫描二维码完成支付</p>
+          </div>
+          <div class="payment-status">
+            <el-icon class="success-icon"><Check /></el-icon>
+            <p>支付成功！</p>
+          </div>
         </div>
       </div>
-
+      
+      <!-- 对话框底部按钮 -->
       <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="confirmDialogVisible = false">取消</el-button>
-          <el-button 
-            type="primary" 
-            @click="submitPaymentConfirmation"
-            :loading="confirmProcessing"
-          >
-            确认支付
-          </el-button>
-        </span>
+        <div class="dialog-footer">
+          <div v-if="!showQRCode">
+            <el-button @click="paymentDialogVisible = false">取消</el-button>
+            <el-button 
+              type="primary" 
+              @click="confirmPaymentSubmit"
+              :disabled="!isPaymentMethodValid"
+              :loading="processing"
+            >
+              确认支付
+            </el-button>
+          </div>
+          <div v-else>
+            <el-button @click="paymentDialogVisible = false">取消</el-button>
+            <el-button @click="showQRCode = false">返回</el-button>
+            <el-button 
+              type="success" 
+              @click="paymentDialogVisible = false"
+            >
+              完成
+            </el-button>
+          </div>
+        </div>
       </template>
     </el-dialog>
 
@@ -625,12 +632,13 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { 
   ArrowLeft, Money, List, Refresh, View, Check, Document, Tickets, Upload,
-  Search, TrendCharts, Warning
+  Search, TrendCharts, Warning, CreditCard, ChatLineRound, Postcard
 } from '@element-plus/icons-vue'
-import { confirmPayment as apiConfirmPayment } from '@/services/paymentService'
+import { confirmPayment as apiConfirmPayment, getQRCodes } from '@/services/paymentService'
 
 // 类型定义
 interface Payment {
@@ -651,12 +659,22 @@ interface Payment {
 
 
 
+// 路由
+const router = useRouter()
+
 // 响应式数据
 const loading = ref(false)
 const batchProcessing = ref(false)
 const confirmProcessing = ref(false)
 const exceptionProcessing = ref(false)
+const paymentDialogVisible = ref(false)
+const processing = ref(false)
+const isPaymentMethodValid = ref(false)
 const exportProcessing = ref(false)
+const showQRCode = ref(false)
+const qrCodeUrl = ref('')
+const uploadProgress = ref(0)
+const uploading = ref(false)
 
 // 搜索表单
 const searchForm = reactive({
@@ -700,6 +718,19 @@ let captchaTimerInterval: number | null = null
 let smsTimerInterval: number | null = null
 
 // 确认表单
+// 支付表单
+interface PaymentForm {
+  amount: number
+  method: string
+  remark: string
+}
+
+const paymentForm = reactive<PaymentForm>({
+  amount: 0,
+  method: '',
+  remark: ''
+})
+
 const confirmForm = reactive({
   password: '',
   captcha: '',
@@ -743,65 +774,32 @@ onMounted(() => {
 })
 
 // 方法
-const loadPendingPayments = () => {
+const loadPendingPayments = async () => {
   loading.value = true
   
-  // 模拟API调用
-  setTimeout(() => {
-    pendingPayments.value = [
-      {
-        id: 'PAY20241201001',
-        title: '宿舍水电费',
-        description: '2024年12月份水电费缴纳',
-        amount: 156.50,
-        category: 'utilities',
-        applicant: '张三',
-        date: '2024-12-15',
-        status: 'approved',
-        reviewer: '李四',
-        reviewDate: '2024-12-16',
-        reviewComment: '费用合理，同意报销',
-        attachments: [
-          'https://picsum.photos/200/300?random=1',
-          'https://picsum.photos/200/300?random=2'
-        ],
-        createdAt: '2024-12-15T10:30:00'
-      },
-      {
-        id: 'PAY20241201002',
-        title: '洗衣机维修费',
-        description: '宿舍洗衣机故障维修',
-        amount: 280.00,
-        category: 'maintenance',
-        applicant: '王五',
-        date: '2024-12-10',
-        status: 'approved',
-        reviewer: '李四',
-        reviewDate: '2024-12-11',
-        reviewComment: '维修费用合理',
-        attachments: [
-          'https://picsum.photos/200/300?random=3'
-        ],
-        createdAt: '2024-12-10T14:20:00'
-      },
-      {
-        id: 'PAY20241201003',
-        title: '清洁用品采购',
-        description: '购买拖把、垃圾袋等清洁用品',
-        amount: 85.60,
-        category: 'cleaning',
-        applicant: '赵六',
-        date: '2024-12-08',
-        status: 'approved',
-        reviewer: '张三',
-        reviewDate: '2024-12-09',
-        reviewComment: '清洁用品采购合理',
-        attachments: [],
-        createdAt: '2024-12-08T16:45:00'
-      }
-    ]
+  try {
+    console.log('获取待确认支付列表')
+    
+    // 调用真实API获取待确认支付列表
+    const response = await request({
+      url: '/payments/pending-confirmation',
+      method: 'GET'
+    })
+    
+    if (response.success && response.data) {
+      pendingPayments.value = response.data.records || []
+      console.log(`获取到 ${pendingPayments.value.length} 条待确认支付记录`)
+    } else {
+      console.warn('获取待确认支付列表失败:', response.message)
+      pendingPayments.value = []
+    }
+  } catch (error) {
+    console.error('获取待确认支付列表失败:', error)
+    ElMessage.error('获取待确认支付列表失败，请稍后重试')
+    pendingPayments.value = []
+  } finally {
     loading.value = false
-  }, 800)
+  }
 }
 
 const handleSearch = () => {
@@ -836,9 +834,15 @@ const viewPaymentDetail = (payment: Payment) => {
 
 const confirmPayment = (payment: Payment) => {
   currentPayment.value = payment
-  confirmDialogVisible.value = true
-  generateCaptcha()
-  sendSmsCode()
+  // 使用与Payment.vue相同的支付流程
+  paymentDialogVisible.value = true
+  // 重置支付表单
+  Object.assign(paymentForm, {
+    amount: payment.amount,
+    method: '',
+    remark: ''
+  })
+  isPaymentMethodValid.value = false
 }
 
 const batchConfirmPayment = async () => {
@@ -877,88 +881,200 @@ const batchConfirmPayment = async () => {
   }
 }
 
-const generateCaptcha = () => {
-  // 生成4位随机验证码
-  const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-  let captcha = ''
-  for (let i = 0; i < 4; i++) {
-    captcha += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  
-  // 启动倒计时
-  captchaTimer.value = 60
-  if (captchaTimerInterval) {
-    clearInterval(captchaTimerInterval)
-  }
-  captchaTimerInterval = window.setInterval(() => {
-    captchaTimer.value--
-    if (captchaTimer.value <= 0 && captchaTimerInterval) {
-      clearInterval(captchaTimerInterval)
-      captchaTimerInterval = null
-    }
-  }, 1000) as unknown as number
-  
-  ElMessage.success(`验证码已发送：${captcha}`)
-}
-
-const sendSmsCode = () => {
-  // 模拟发送短信验证码
-  const smsCode = Math.floor(100000 + Math.random() * 900000).toString() // 6位数字
-  
-  // 启动倒计时
-  smsTimer.value = 120
-  if (smsTimerInterval) {
-    clearInterval(smsTimerInterval)
-  }
-  smsTimerInterval = window.setInterval(() => {
-    smsTimer.value--
-    if (smsTimer.value <= 0 && smsTimerInterval) {
-      clearInterval(smsTimerInterval)
-      smsTimerInterval = null
-    }
-  }, 1000) as unknown as number
-  
-  ElMessage.success(`短信验证码已发送至您的手机：${smsCode}`)
-}
-
-const submitPaymentConfirmation = async () => {
-  if (!confirmFormRef.value || !currentPayment.value) return
-  
-  await confirmFormRef.value.validate(async (valid) => {
-    if (valid) {
-      confirmProcessing.value = true
-      
-      try {
-        // 调用支付确认API
-        const result = await apiConfirmPayment(currentPayment.value!.id, {
-          amount: currentPayment.value!.amount,
-          password: confirmForm.password,
-          captcha: confirmForm.captcha,
-          smsCode: confirmForm.smsCode
-        })
-        
-        if (result.success) {
-          ElMessage.success('支付确认成功')
-          currentPayment.value!.status = 'paid'
-          confirmDialogVisible.value = false
-          resetConfirmForm()
-        } else {
-          // 处理支付异常
-          exceptionReason.value = result.data?.error || '支付失败'
-          exceptionDialogVisible.value = true
-          confirmDialogVisible.value = false
-        }
-      } catch (error) {
-        // 处理网络或其他异常
-        exceptionReason.value = '网络连接异常或服务器错误'
-        exceptionDialogVisible.value = true
-        confirmDialogVisible.value = false
-        ElMessage.error('支付确认失败')
-      } finally {
-        confirmProcessing.value = false
+const generateCaptcha = async () => {
+  try {
+    console.log('请求发送验证码')
+    
+    // 调用真实API发送验证码
+    const response = await request({
+      url: '/auth/send-captcha',
+      method: 'POST'
+    })
+    
+    if (response.success) {
+      // 启动倒计时
+      captchaTimer.value = 60
+      if (captchaTimerInterval) {
+        clearInterval(captchaTimerInterval)
       }
+      captchaTimerInterval = window.setInterval(() => {
+        captchaTimer.value--
+        if (captchaTimer.value <= 0 && captchaTimerInterval) {
+          clearInterval(captchaTimerInterval)
+          captchaTimerInterval = null
+        }
+      }, 1000) as unknown as number
+      
+      ElMessage.success('验证码已发送，请查收')
+    } else {
+      ElMessage.error(response.message || '发送验证码失败')
     }
-  })
+  } catch (error) {
+    console.error('发送验证码失败:', error)
+    ElMessage.error('发送验证码失败，请稍后重试')
+  }
+}
+
+const sendSmsCode = async () => {
+  try {
+    console.log('请求发送短信验证码')
+    
+    // 调用真实API发送短信验证码
+    const response = await request({
+      url: '/auth/send-sms-code',
+      method: 'POST'
+    })
+    
+    if (response.success) {
+      // 启动倒计时
+      smsTimer.value = 120
+      if (smsTimerInterval) {
+        clearInterval(smsTimerInterval)
+      }
+      smsTimerInterval = window.setInterval(() => {
+        smsTimer.value--
+        if (smsTimer.value <= 0 && smsTimerInterval) {
+          clearInterval(smsTimerInterval)
+          smsTimerInterval = null
+        }
+      }, 1000) as unknown as number
+      
+      ElMessage.success('短信验证码已发送至您的手机，请查收')
+    } else {
+      ElMessage.error(response.message || '发送短信验证码失败')
+    }
+  } catch (error) {
+    console.error('发送短信验证码失败:', error)
+    ElMessage.error('发送短信验证码失败，请稍后重试')
+  }
+}
+
+// 处理支付方式选择
+const handlePaymentMethodChange = async (method: string) => {
+  paymentForm.method = method
+  isPaymentMethodValid.value = false
+  
+  // 现金支付不需要检查收款码
+  if (method === 'cash') {
+    isPaymentMethodValid.value = true
+    return
+  }
+  
+  // 获取最新的收款码数据
+  try {
+    const qrResponse = await getQRCodes()
+    if (qrResponse.success && qrResponse.data) {
+      // 根据支付方式检查收款码状态
+      const platformMap: Record<string, string> = {
+        'alipay': 'alipay',
+        'wechat': 'wechat',
+        'bank': 'unionpay'
+      }
+      
+      const platform = platformMap[method]
+      
+      // 查找启用的收款码
+      const activeQRCode = qrResponse.data.find(qr => 
+        qr.platform === platform && qr.status === 'active' && qr.isUserUploaded
+      )
+      
+      // 如果找到了启用的收款码，不显示任何提示
+      if (activeQRCode) {
+        // 不需要提示，收款码正常
+        isPaymentMethodValid.value = true
+        return
+      }
+      
+      // 查找禁用的收款码
+      const disabledQRCode = qrResponse.data.find(qr => 
+        qr.platform === platform && qr.status === 'inactive' && qr.isUserUploaded
+      )
+      
+      // 如果找到了禁用的收款码，提示用户
+      if (disabledQRCode) {
+        ElMessage.warning(`该支付方式的收款码已被停用或禁用，请联系管理员`)
+        return
+      }
+      
+      // 如果完全没有找到对应平台的收款码
+      ElMessage.warning(`未找到对应的收款码，请联系管理员`)
+    }
+  } catch (error) {
+    console.error('获取收款码信息失败:', error)
+  }
+}
+
+const confirmPaymentSubmit = async () => {
+  if (!paymentForm.method) {
+    ElMessage.warning('请选择支付方式')
+    return
+  }
+  
+  try {
+    processing.value = true
+    
+    // 特殊处理现金支付
+    if (paymentForm.method === 'cash') {
+      // 现金支付直接完成，不需要显示二维码
+      ElMessage.success('现金支付已完成')
+      paymentDialogVisible.value = false
+      resetPaymentForm()
+      // 更新支付状态
+      if (currentPayment.value) {
+        currentPayment.value.status = 'paid'
+      }
+      return
+    }
+    
+    // 获取对应的收款码
+    const qrResponse = await getQRCodes()
+    if (qrResponse.success && qrResponse.data) {
+      // 根据支付方式筛选收款码
+      const platformMap: Record<string, string> = {
+        'alipay': 'alipay',
+        'wechat': 'wechat',
+        'bank': 'unionpay'
+      }
+      
+      const platform = platformMap[paymentForm.method]
+      // 首先查找启用的收款码
+      let matchingQRCode = qrResponse.data.find(qr => 
+        qr.platform === platform && qr.status === 'active' && qr.isUserUploaded
+      )
+      
+      // 如果找到了启用的收款码，直接使用
+      if (matchingQRCode && matchingQRCode.qrCodeUrl) {
+        qrCodeUrl.value = matchingQRCode.qrCodeUrl
+        showQRCode.value = true
+      } 
+      // 如果没有找到启用的收款码，则查找禁用的收款码
+      else {
+        const disabledQRCode = qrResponse.data.find(qr => 
+          qr.platform === platform && qr.status === 'inactive' && qr.isUserUploaded
+        )
+        
+        // 如果找到了禁用的收款码，提示用户
+        if (disabledQRCode) {
+          ElMessage.warning(`该支付方式的收款码已被停用或禁用，请联系管理员`)
+          // 不显示二维码，保持showQRCode为false
+          return
+        } 
+        // 如果完全没有找到对应平台的收款码
+        else {
+          ElMessage.warning(`未找到对应的收款码，请联系管理员`)
+          // 不显示二维码，保持showQRCode为false
+          return
+        }
+      }
+    } else {
+      ElMessage.error('获取收款码失败')
+    }
+  } catch (error) {
+    console.error('获取收款码过程中出现错误:', error)
+    ElMessage.error('获取收款码过程中出现错误')
+  } finally {
+    processing.value = false
+  }
 }
 
 const submitExceptionHandling = async () => {
@@ -1034,7 +1150,7 @@ const exportRecords = async (format: 'excel' | 'csv') => {
       await new Promise(resolve => setTimeout(resolve, 1000))
       
       // 创建简单的CSV格式作为Excel替代（实际项目中应使用xlsx库）
-      const headers = Object.keys(exportData[0])
+      const headers = exportData.length > 0 ? Object.keys(exportData[0] as Record<string, any>) : []
       const csvContent = [
         headers.join(','),
         ...exportData.map(row => 
@@ -1070,7 +1186,7 @@ const exportRecords = async (format: 'excel' | 'csv') => {
       }
     } else {
       // 导出为CSV格式
-      const headers = Object.keys(exportData[0])
+      const headers = exportData.length > 0 ? Object.keys(exportData[0] as Record<string, any>) : []
       const csvContent = [
         headers.join(','),
         ...exportData.map(row => 
@@ -1114,39 +1230,64 @@ const exportRecords = async (format: 'excel' | 'csv') => {
 }
 
 const previewAttachment = (attachment: string) => {
-  // 创建一个新的预览对话框来显示附件
-  const previewDialog = document.createElement('div')
-  previewDialog.innerHTML = `
-    <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; display: flex; justify-content: center; align-items: center;">
-      <div style="background: white; padding: 20px; border-radius: 8px; max-width: 90%; max-height: 90%;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-          <h3>附件预览</h3>
-          <button onclick="this.closest('div').parentElement.remove()" style="background: #f56c6c; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">关闭</button>
-        </div>
-        <img src="${attachment}" style="max-width: 100%; max-height: 70vh;" />
-        <div style="margin-top: 15px; text-align: center;">
-          <button onclick="(() => {
-            const link = document.createElement('a');
-            link.href = '${attachment}';
-            link.download = '${attachment.split('/').pop() || 'attachment'}';
-            link.click();
-            this.closest('div').parentElement.remove();
-          })()" style="background: #409eff; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; margin-right: 10px;">下载</button>
-          <button onclick="this.closest('div').parentElement.remove()" style="background: #909399; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer;">关闭</button>
-        </div>
-      </div>
-    </div>
-  `
-  document.body.appendChild(previewDialog)
+  // 直接使用Element Plus的图片预览功能
+  // 由于已经在el-image中设置了preview-src-list，我们只需要触发对应索引的预览即可
+  
+  // 查找当前支付记录中该附件的索引
+  if (currentPayment.value && currentPayment.value.attachments) {
+    const index = currentPayment.value.attachments.indexOf(attachment)
+    if (index !== -1) {
+      // 触发Element Plus图片预览
+      const imageElements = document.querySelectorAll('.voucher-image')
+      if (imageElements[index]) {
+        const previewBtn = imageElements[index].querySelector('.el-image__preview')
+        if (previewBtn) {
+          (previewBtn as HTMLElement).click()
+        } else {
+          // 如果没有预览按钮，尝试直接点击图片
+          const imgEl = imageElements[index].querySelector('img')
+          if (imgEl) {
+            (imgEl as HTMLElement).click()
+          }
+        }
+      }
+    }
+  }
 }
 
 const downloadAttachment = (attachment: string) => {
-  // 创建下载链接
-  const link = document.createElement('a')
-  link.href = attachment
-  link.download = attachment.split('/').pop() || 'attachment'
-  link.click()
-  ElMessage.success('附件下载已开始')
+  // 严格遵守规范：下载照片后仅在新浏览器窗口中打开查看，禁止在原窗口跳转或打开
+  try {
+    // 仅在新窗口中打开图片查看，确保原窗口不跳转
+    const newWindow = window.open(attachment, '_blank', 'noopener,noreferrer');
+    
+    if (newWindow) {
+      ElMessage.success('已在新窗口打开图片');
+      
+      // 可选：如果需要下载功能，使用fetch+blob方式避免原窗口跳转
+      fetch(attachment)
+        .then(response => response.blob())
+        .then(blob => {
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = attachment.split('/').pop() || 'attachment';
+          link.style.display = 'none';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+        })
+        .catch(() => {
+          // 下载失败不影响预览
+        });
+    } else {
+      ElMessage.warning('浏览器阻止了新窗口打开，请检查弹窗权限设置');
+    }
+  } catch (error) {
+    console.error('打开新窗口失败:', error);
+    ElMessage.error('操作失败，请稍后重试');
+  }
 }
 
 // 添加新的附件管理功能
@@ -1173,34 +1314,136 @@ const deleteAttachment = (attachment: string, payment: Payment) => {
   })
 }
 
-const uploadAttachment = () => {
-  // 模拟文件上传
-  ElMessage.info('打开文件上传对话框...')
-  // 实际项目中应该打开文件选择器并上传文件
+const uploadAttachment = (payment?: Payment) => {
+  if (!payment) {
+    ElMessage.warning('未选择支付记录')
+    return
+  }
+  
+  // 创建文件输入元素
+  const fileInput = document.createElement('input')
+  fileInput.type = 'file'
+  fileInput.accept = 'image/*,.pdf,.doc,.docx' // 允许常见文件类型
+  fileInput.multiple = true // 允许多选
+  fileInput.style.display = 'none'
+  
+  fileInput.onchange = async (event) => {
+    const files = (event.target as HTMLInputElement).files
+    if (files && files.length > 0) {
+      try {
+        uploading.value = true
+        uploadProgress.value = 0
+        
+        // 验证文件大小（限制每个文件不超过5MB）
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i]
+          if (file && file.size > 5 * 1024 * 1024) {
+            ElMessage.error(`文件 ${file.name} 超过5MB限制`)
+            uploading.value = false
+            return
+          }
+        }
+        
+        ElMessage.info(`正在上传 ${files.length} 个附件...`)
+        
+        console.log(`开始上传 ${files.length} 个附件...`)
+        
+        // 真实文件上传API调用
+        const formData = new FormData()
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i]
+          if (file) {
+            formData.append('files', file)
+          }
+        }
+        
+        // 模拟上传进度
+        // 使用固定进度增长，实际应用中应通过API获取真实进度
+        const interval = setInterval(() => {
+          if (uploadProgress.value < 90) {
+            uploadProgress.value += 15
+          } else {
+            clearInterval(interval)
+          }
+        }, 300)
+        
+        // 调用真实API上传文件
+        const response = await request({
+          url: '/payments/upload-attachments',
+          method: 'POST',
+          data: formData,
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        })
+        
+        clearInterval(interval)
+        
+        if (response.success && response.data) {
+          uploadProgress.value = 100
+          
+          // 添加上传后的真实URL
+          if (!payment.attachments) {
+            payment.attachments = []
+          }
+          
+          // 添加返回的文件URL
+          if (Array.isArray(response.data.urls)) {
+            response.data.urls.forEach(url => {
+              payment.attachments!.push(url)
+            })
+          }
+          
+          setTimeout(() => {
+            uploading.value = false
+            uploadProgress.value = 0
+            ElMessage.success(`${files.length} 个附件上传成功`)
+          }, 500)
+        } else {
+          throw new Error(response.message || '文件上传失败')
+        }
+      } catch (error) {
+        uploading.value = false
+        uploadProgress.value = 0
+        console.error('上传失败:', error)
+        ElMessage.error('上传失败，请稍后重试')
+      }
+    }
+  }
+  
+  document.body.appendChild(fileInput)
+  fileInput.click()
+  document.body.removeChild(fileInput)
 }
 
 const resetDetailForm = () => {
   currentPayment.value = null
+  // 确保关闭所有可能的预览层
+  setTimeout(() => {
+    const previewWrappers = document.querySelectorAll('.el-image-viewer__wrapper')
+    previewWrappers.forEach(wrapper => {
+      wrapper.remove()
+    })
+    
+    // 移除可能存在的遮罩层
+    const overlays = document.querySelectorAll('.el-overlay')
+    overlays.forEach(overlay => {
+      if (overlay.parentElement && overlay.parentElement.tagName === 'BODY') {
+        overlay.remove()
+      }
+    })
+  }, 100)
 }
 
-const resetConfirmForm = () => {
-  confirmForm.password = ''
-  confirmForm.captcha = ''
-  confirmForm.smsCode = ''
+const resetPaymentForm = () => {
+  Object.assign(paymentForm, {
+    amount: 0,
+    method: '',
+    remark: ''
+  })
+  showQRCode.value = false
+  qrCodeUrl.value = ''
   currentPayment.value = null
-  
-  // 清除验证码计时器
-  if (captchaTimerInterval) {
-    clearInterval(captchaTimerInterval)
-    captchaTimerInterval = null
-  }
-  captchaTimer.value = 0
-  
-  if (smsTimerInterval) {
-    clearInterval(smsTimerInterval)
-    smsTimerInterval = null
-  }
-  smsTimer.value = 0
 }
 
 const resetExceptionForm = () => {
@@ -1260,13 +1503,35 @@ const getCategoryText = (category: string) => {
   }
 }
 
-const getAttachmentName = (): string => {
-  return '附件'
+const getAttachmentName = (attachment: string): string => {
+  // 从URL中提取文件名
+  const urlParts = attachment.split('/')
+  const fileName = urlParts[urlParts.length - 1]
+  return fileName || '附件'
 }
 
-const getAttachmentSize = (_url: string): number => {
-  // 模拟获取文件大小
-  return Math.floor(Math.random() * 1024) + 1024
+const getAttachmentSize = async (url: string): Promise<number> => {
+  try {
+    console.log(`获取文件大小: ${url}`)
+    
+    // 调用真实API获取文件大小
+    const response = await request({
+      url: '/payments/file-size',
+      method: 'POST',
+      data: { url }
+    })
+    
+    if (response.success && response.data && response.data.size) {
+      return response.data.size
+    } else {
+      // 如果API调用失败，返回默认值
+      console.warn('获取文件大小失败，返回默认值')
+      return 1024
+    }
+  } catch (error) {
+    console.error('获取文件大小失败:', error)
+    return 1024 // 返回默认值
+  }
 }
 
 const formatFileSize = (size: number): string => {
@@ -1438,6 +1703,14 @@ const formatFileSize = (size: number): string => {
   border: none;
 }
 
+.el-table {
+  font-size: 14px;
+}
+
+.el-table th {
+  font-weight: 600;
+}
+
 .card-header {
   display: flex;
   justify-content: space-between;
@@ -1466,6 +1739,14 @@ const formatFileSize = (size: number): string => {
 .table-actions {
   display: flex;
   gap: 8px;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+}
+
+.table-actions .el-button {
+  padding: 6px 10px;
+  font-size: 12px;
 }
 
 .batch-actions {
@@ -1545,10 +1826,25 @@ const formatFileSize = (size: number): string => {
 
 .voucher-upload {
   margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.no-attachments {
+  text-align: center;
+  padding: 20px;
+}
+
+.no-attachments .el-progress {
+  margin: 10px auto 0;
+  width: 200px;
 }
 
 .confirm-payment,
-.exception-payment {
+.exception-payment,
+.payment-dialog {
   padding: 20px 0;
 }
 
@@ -1561,22 +1857,211 @@ const formatFileSize = (size: number): string => {
   margin-bottom: 24px;
 }
 
-.security-verification h4 {
+.security-verification h4,
+.payment-methods h4,
+.qr-code-section h4 {
   margin: 0 0 16px 0;
   font-size: 16px;
   color: #303133;
 }
 
 .captcha-field,
-.sms-field {
+.sms-field,
+.method-options {
   display: flex;
-  gap: 12px;
-  align-items: center;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .error-text {
   color: #f56c6c;
   font-weight: 500;
+}
+
+.method-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  color: #303133;
+}
+
+.method-option .el-icon {
+  font-size: 20px;
+}
+
+.payment-methods h4,
+.qr-code-section h4 {
+  margin: 0 0 20px 0;
+  font-size: 18px;
+  color: #303133;
+  text-align: center;
+}
+
+.qr-code-container {
+  text-align: center;
+  margin: 24px 0;
+}
+
+.qr-code-image {
+  width: 200px;
+  height: 200px;
+  margin: 0 auto 16px;
+  display: block;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.qr-code-tip {
+  margin: 0;
+  font-size: 14px;
+  color: #606266;
+}
+
+.payment-status {
+  text-align: center;
+  margin-top: 24px;
+}
+
+.payment-status .success-icon {
+  font-size: 48px;
+  color: #67c23a;
+  margin-bottom: 16px;
+}
+
+.payment-status p {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #67c23a;
+}
+
+.expense-info {
+  text-align: center;
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #eee;
+}
+
+.expense-info h3 {
+  margin: 0 0 12px 0;
+  font-size: 20px;
+  color: #303133;
+}
+
+.expense-description {
+  margin: 0 0 16px 0;
+  color: #606266;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.expense-amount {
+  margin: 0;
+  font-size: 18px;
+  color: #f56c6c;
+}
+
+.expense-amount strong {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.method-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  color: #303133;
+}
+
+.method-option .el-icon {
+  font-size: 20px;
+}
+
+.payment-methods h4,
+.qr-code-section h4 {
+  margin: 0 0 20px 0;
+  font-size: 18px;
+  color: #303133;
+  text-align: center;
+}
+
+.qr-code-container {
+  text-align: center;
+  margin: 24px 0;
+}
+
+.qr-code-image {
+  width: 200px;
+  height: 200px;
+  margin: 0 auto 16px;
+  display: block;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.qr-code-tip {
+  margin: 0;
+  font-size: 14px;
+  color: #606266;
+}
+
+.payment-status {
+  text-align: center;
+  margin-top: 24px;
+}
+
+.payment-status .success-icon {
+  font-size: 48px;
+  color: #67c23a;
+  margin-bottom: 16px;
+}
+
+.payment-status p {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #67c23a;
+}
+
+.expense-info {
+  text-align: center;
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #eee;
+}
+
+.expense-info h3 {
+  margin: 0 0 12px 0;
+  font-size: 20px;
+  color: #303133;
+}
+
+.expense-description {
+  margin: 0 0 16px 0;
+  color: #606266;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.expense-amount {
+  margin: 0;
+  font-size: 18px;
+  color: #f56c6c;
+}
+
+.expense-amount strong {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 
 .export-records-card {

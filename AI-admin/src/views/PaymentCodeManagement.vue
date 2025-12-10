@@ -804,12 +804,12 @@ const handleBatchCheck = async () => {
     ElMessage.success('批量安全检查完成')
     
     // 更新选中行的安全状态
-    selectedRows.value.forEach((row: any) => {
-      const index = tableData.value.findIndex(item => item.id === row.id)
-      if (index !== -1) {
-        // 随机设置安全状态
+    selectedRows.value.forEach((row: any, index: number) => {
+      const dataIndex = tableData.value.findIndex(item => item.id === row.id)
+      if (dataIndex !== -1) {
+        // 使用固定规则设置安全状态，实际应用中应通过API获取真实安全状态
         const statuses = ['safe', 'risk', 'abnormal']
-        tableData.value[index].securityStatus = statuses[Math.floor(Math.random() * statuses.length)]
+        tableData.value[dataIndex].securityStatus = statuses[index % statuses.length]
       }
     })
   }, 2000)

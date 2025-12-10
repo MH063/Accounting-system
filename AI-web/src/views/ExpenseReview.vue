@@ -1042,10 +1042,7 @@ const getFileNameFromPath = (filePathOrAttachment: string | { url?: string; name
   return filePath
 }
 
-const getRandomFileSize = (): string => {
-  const sizes = ['125KB', '256KB', '512KB', '1.2MB', '2.4MB', '3.8MB', '5.1MB']
-  return sizes[Math.floor(Math.random() * sizes.length)]
-}
+// 移除模拟文件大小生成函数，使用真实数据
 
 // 路由
 const route = useRoute()
@@ -1161,176 +1158,8 @@ const canResubmit = computed((): boolean => {
          resubmissionForm.updatedDescription.trim().length > 0
 })
 
-// 费用数据
-const pendingExpenses = ref<ExpenseItem[]>([
-  {
-    id: '1',
-    title: '宿舍水电费',
-    description: '2024年12月份水电费缴纳，包含电费120.50元和水费36.00元',
-    amount: 156.50,
-    category: 'utilities',
-    applicant: '张三',
-    applicantId: 'user1',
-    status: 'pending',
-    createdAt: '2024-12-15T10:30:00',
-    updatedAt: '2024-12-15T10:30:00',
-    isUrgent: false,
-    attachments: [
-      {
-        id: 'att1',
-        name: '水电费发票.jpg',
-        url: 'https://picsum.photos/800/600?random=1',
-        size: 256000,
-        type: 'image/jpeg',
-        uploadedAt: '2024-12-15T10:30:00'
-      }
-    ],
-    reviewHistory: [
-      {
-        id: 'history1',
-        reviewer: '张三',
-        reviewerId: 'user1',
-        action: 'resubmitted',
-        comment: '',
-        createdAt: '2024-12-15T10:30:00'
-      }
-    ],
-    createdAt: '2024-12-15T10:30:00',
-    updatedAt: '2024-12-16T14:20:00'
-  },
-  {
-    id: '2',
-    title: '办公室清洁费',
-    description: '年终大扫除清洁用品采购及清洁服务费',
-    amount: 850.00,
-    category: 'cleaning',
-    applicant: '李四',
-    applicantId: 'user2',
-    status: 'pending',
-    createdAt: '2024-12-18T09:15:00',
-    updatedAt: '2024-12-18T09:15:00',
-    isUrgent: true,
-    attachments: [
-      {
-        id: 'att2',
-        name: '清洁用品清单.pdf',
-        url: 'https://picsum.photos/800/600?random=2',
-        size: 512000,
-        type: 'application/pdf',
-        uploadedAt: '2024-12-18T09:15:00'
-      }
-    ],
-    reviewHistory: [
-      {
-        id: 'history2',
-        reviewer: '李四',
-        reviewerId: 'user2',
-        action: 'resubmitted',
-        comment: '',
-        createdAt: '2024-12-18T09:15:00'
-      }
-    ]
-  },
-  {
-    id: '3',
-    title: '会议室设备维修',
-    description: '投影仪灯泡更换及音响设备检修费用',
-    amount: 320.00,
-    category: 'maintenance',
-    applicant: '王五',
-    applicantId: 'user3',
-    status: 'pending',
-    createdAt: '2024-12-20T14:20:00',
-    updatedAt: '2024-12-20T14:20:00',
-    isUrgent: false,
-    attachments: [
-      {
-        id: 'att3',
-        name: '维修报价单.pdf',
-        url: 'https://picsum.photos/800/600?random=3',
-        size: 384000,
-        type: 'application/pdf',
-        uploadedAt: '2024-12-20T14:20:00'
-      }
-    ],
-    reviewHistory: [
-      {
-        id: 'history3',
-        reviewer: '王五',
-        reviewerId: 'user3',
-        action: 'resubmitted',
-        comment: '',
-        createdAt: '2024-12-20T14:20:00'
-      }
-    ]
-  },
-  {
-    id: '4',
-    title: '员工宿舍床位费',
-    description: '新员工入职宿舍床位费用及押金',
-    amount: 450.00,
-    category: 'accommodation',
-    applicant: '赵六',
-    applicantId: 'user4',
-    status: 'pending',
-    createdAt: '2024-12-21T10:45:00',
-    updatedAt: '2024-12-21T10:45:00',
-    isUrgent: false,
-    attachments: [
-      {
-        id: 'att4',
-        name: '宿舍管理协议.pdf',
-        url: 'https://picsum.photos/800/600?random=4',
-        size: 768000,
-        type: 'application/pdf',
-        uploadedAt: '2024-12-21T10:45:00'
-      }
-    ],
-    reviewHistory: [
-      {
-        id: 'history4',
-        reviewer: '赵六',
-        reviewerId: 'user4',
-        action: 'resubmitted',
-        comment: '',
-        createdAt: '2024-12-21T10:45:00'
-      }
-    ]
-  },
-  {
-    id: '5',
-    title: '节日活动用品',
-    description: '春节活动装饰用品及礼品采购费用',
-    amount: 1280.00,
-    category: 'other',
-    applicant: '钱七',
-    applicantId: 'user5',
-    status: 'pending',
-    createdAt: '2024-12-22T16:30:00',
-    updatedAt: '2024-12-22T16:30:00',
-    isUrgent: false,
-    attachments: [
-      {
-        id: 'att5',
-        name: '活动方案.pdf',
-        url: 'https://picsum.photos/800/600?random=5',
-        size: 1024000,
-        type: 'application/pdf',
-        uploadedAt: '2024-12-22T16:30:00'
-      }
-    ],
-    reviewHistory: [
-      {
-        id: 'history5',
-        reviewer: '钱七',
-        reviewerId: 'user5',
-        action: 'resubmitted',
-        comment: '',
-        createdAt: '2024-12-22T16:30:00'
-      }
-    ]
-  }
-])
+// 费用数据 - 初始化为空数组，通过API获取真实数据
+const pendingExpenses = ref<ExpenseItem[]>([])
 
 // 计算属性
 const canSubmit = computed(() => {
@@ -1421,34 +1250,43 @@ const handleBackToExpenses = (): void => {
 const loadExpenseData = (): void => {
   loading.value = true
   
-  // 模拟API调用
-  setTimeout(() => {
-    // 只有在明确指定ID参数时才跳转到审核详情页面
-    const expenseId = route.query.id
-    if (expenseId && typeof expenseId === 'string') {
-      const idNumber = parseInt(expenseId)
-      const foundExpense = pendingExpenses.value.find(expense => expense.id === String(idNumber))
-      if (foundExpense) {
-        selectedExpense.value = foundExpense
-        currentView.value = 'review'
+  // 调用真实的API接口获取待审核费用数据
+  getPendingExpenses()
+    .then(response => {
+      pendingExpenses.value = response.data
+      
+      // 只有在明确指定ID参数时才跳转到审核详情页面
+      const expenseId = route.query.id
+      if (expenseId && typeof expenseId === 'string') {
+        const idNumber = parseInt(expenseId)
+        const foundExpense = pendingExpenses.value.find(expense => expense.id === String(idNumber))
+        if (foundExpense) {
+          selectedExpense.value = foundExpense
+          currentView.value = 'review'
+        } else {
+          // 如果找不到指定ID的费用，保持在列表视图
+          selectedExpense.value = null
+          currentView.value = 'list'
+          ElMessage.warning('未找到指定的费用记录')
+        }
+      } else if (isBatchMode.value) {
+        // 批量模式：显示列表视图，提示用户选择费用
+        currentView.value = 'list'
+        ElMessage.info('批量审核模式：请选择需要审核的费用记录')
       } else {
-        // 如果找不到指定ID的费用，保持在列表视图
+        // 默认显示列表视图，不自动跳转到详情页面
         selectedExpense.value = null
         currentView.value = 'list'
-        ElMessage.warning('未找到指定的费用记录')
       }
-    } else if (isBatchMode.value) {
-      // 批量模式：显示列表视图，提示用户选择费用
-      currentView.value = 'list'
-      ElMessage.info('批量审核模式：请选择需要审核的费用记录')
-    } else {
-      // 默认显示列表视图，不自动跳转到详情页面
-      selectedExpense.value = null
-      currentView.value = 'list'
-    }
-    expenseData.value = selectedExpense.value
-    loading.value = false
-  }, 800)
+      expenseData.value = selectedExpense.value
+    })
+    .catch(error => {
+      console.error('加载待审核费用数据失败:', error)
+      ElMessage.error('加载数据失败，请稍后重试')
+    })
+    .finally(() => {
+      loading.value = false
+    })
 }
 
 // 费用列表相关方法
@@ -1636,8 +1474,8 @@ const handleBatchApprove = async (): Promise<void> => {
     // 批量处理
     for (const expense of selectedExpenses.value) {
       await performQuickApproval(expense)
-      // 模拟处理延迟
-      await new Promise(resolve => setTimeout(resolve, 200))
+      // 连续处理，避免服务器压力
+      await new Promise(resolve => setTimeout(resolve, 100))
     }
 
     ElMessage.success(`成功批量通过 ${selectedExpenses.value.length} 条费用申请！`)
@@ -2127,7 +1965,16 @@ const handleSaveDraft = async (): Promise<void> => {
   saving.value = true
   
   try {
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    // 调用真实API接口保存草稿
+    await saveExpenseDraft({
+      expenseId: selectedExpense.value?.id,
+      title: expenseData.value?.title,
+      description: expenseData.value?.description,
+      amount: expenseData.value?.amount,
+      category: expenseData.value?.category,
+      status: 'draft'
+    })
+    
     ElMessage.success('草稿保存成功')
   } catch (error) {
     ElMessage.error('保存失败，请检查网络连接或稍后重试')
@@ -2152,8 +1999,13 @@ const handleApprove = async (): Promise<void> => {
     
     submitting.value = true
     
-    // 模拟API调用
-    await new Promise(resolve => setTimeout(resolve, 1500))
+    // 调用真实API接口提交审核结果
+    await submitExpenseReview({
+      expenseId: selectedExpense.value?.id,
+      status: 'approved',
+      comment: reviewForm.value.comment,
+      suggestion: reviewForm.value.suggestion
+    })
     
     ElMessage.success('费用申请已通过审核')
     router.push('/dashboard/bills')
@@ -2180,8 +2032,13 @@ const handleReject = async (): Promise<void> => {
     
     submitting.value = true
     
-    // 模拟API调用
-    await new Promise(resolve => setTimeout(resolve, 1500))
+    // 调用真实API接口提交审核结果
+    await submitExpenseReview({
+      expenseId: selectedExpense.value?.id,
+      status: 'rejected',
+      comment: reviewForm.value.comment,
+      suggestion: reviewForm.value.suggestion
+    })
     
     ElMessage.success('费用申请已拒绝')
     router.push('/dashboard/bills')
@@ -2276,8 +2133,13 @@ const submitQuickApproval = async (): Promise<void> => {
   submitting.value = true
   
   try {
-    // 模拟API调用
-    await new Promise(resolve => setTimeout(resolve, 1500))
+    // 调用真实API接口提交审核结果
+    await submitExpenseReview({
+      expenseId: selectedExpense.value.id,
+      status: reviewForm.value.status,
+      comment: reviewForm.value.comment,
+      suggestion: reviewForm.value.suggestion
+    })
     
     // 更新本地数据状态
     if (selectedExpense.value) {

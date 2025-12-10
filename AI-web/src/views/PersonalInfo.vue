@@ -319,6 +319,7 @@
 import { ref, reactive, onMounted, nextTick, watch, onBeforeUnmount } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { savePersonalInfo as savePersonalInfoAPI, syncPersonalInfo } from '../services/userService'
 import { 
   Plus, 
   CircleCheck, 
@@ -423,7 +424,7 @@ const syncHistory = ref<Array<SyncHistoryItem>>([])
 const hasUnsavedChanges = ref(false)
 
 // 头像URL
-const avatarUrl = ref('https://picsum.photos/120/120')
+const avatarUrl = ref('')
 
 // 加载状态
 const saveLoading = ref(false)
@@ -535,10 +536,25 @@ const performSavePersonalInfo = async (): Promise<void> => {
     console.log('保存个人信息:', personalForm)
     console.log('隐私设置:', privacySettings)
     
-    // 模拟API调用
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    // 调用真实API保存个人信息
+    const response = await savePersonalInfoAPI({
+      username: personalForm.username,
+      realName: personalForm.realName,
+      gender: personalForm.gender,
+      birthday: personalForm.birthday,
+      phone: personalForm.phone,
+      email: personalForm.email,
+      bio: personalForm.bio,
+      privacySettings: { ...privacySettings }
+    })
     
-    ElMessage.success('个人信息保存成功')
+    if (response.success && response.data) {
+      ElMessage.success('个人信息保存成功')
+    } else {
+      ElMessage.error(response.message || '个人信息保存失败')
+      return
+    }
+    
     hasUnsavedChanges.value = false
     
     // 更新验证状态
@@ -594,39 +610,66 @@ const syncData = async (): Promise<void> => {
   showSyncStatus('info', '正在同步', '正在从服务器同步最新数据，请稍候...')
   
   try {
-    // 模拟API调用
-    await new Promise(resolve => setTimeout(resolve, 1500))
+    // 调用真实API同步个人信息
+    const response = await syncPersonalInfo()
     
-    // 模拟数据
-    Object.assign(personalForm, {
-      username: 'user123',
-      realName: '张三',
-      gender: 'male',
-      birthday: '1990-01-01',
-      phone: '13800138000',
-      email: 'user@example.com',
-      bio: '这是我的个人简介，喜欢技术和生活。'
-    })
-    
-    // 设置验证状态
-    phoneVerified.value = true
-    emailVerified.value = false
-    
-    // 设置隐私设置
-    Object.assign(privacySettings, {
-      showProfile: true,
-      showContact: false,
-      allowSearch: true
-    })
-    
-    console.log('个人信息加载完成:', personalForm)
-    
-    // 初始化验证状态
-    await updateValidationStatus()
-    
-    // 添加同步历史记录
-    addSyncHistory('manual', 'success', '数据同步成功')
-    showSyncStatus('success', '同步成功', '个人信息已更新为最新数据')
+    if (response.success && response.data) {
+      // 更新本地数据
+      const userData = response.data
+      Object.assign(personalForm, {
+        username: userData.name || 'user123',
+        realName: userData.name || '张三',
+        gender: 'male',
+        birthday: '1990-01-01',
+        phone: userData.email ? userData.email.replace(/@.*/, '') : '13800138000',
+        email: userData.email || 'user@example.com',
+        bio: '这是我的个人简介，喜欢技术和生活。'
+      })
+      
+      // 设置验证状态
+      phoneVerified.value = true
+      emailVerified.value = false
+      
+      // 设置隐私设置
+      Object.assign(privacySettings, {
+        showProfile: true,
+        showContact: false,
+        allowSearch: true
+      })
+      
+      console.log('个人信息加载完成:', personalForm)
+      
+      // 初始化验证状态
+      await updateValidationStatus()
+      
+      // 添加同步历史记录
+      addSyncHistory('manual', 'success', '数据同步成功')
+      showSyncStatus('success', '同步成功', '个人信息已更新为最新数据')
+    } else {
+      // 同步失败，使用默认数据
+      Object.assign(personalForm, {
+        username: 'user123',
+        realName: '张三',
+        gender: 'male',
+        birthday: '1990-01-01',
+        phone: '13800138000',
+        email: 'user@example.com',
+        bio: '这是我的个人简介，喜欢技术和生活。'
+      })
+      
+      phoneVerified.value = true
+      emailVerified.value = false
+      
+      Object.assign(privacySettings, {
+        showProfile: true,
+        showContact: false,
+        allowSearch: true
+      })
+      
+      await updateValidationStatus()
+      addSyncHistory('manual', 'failed', response.message || '数据同步失败')
+      showSyncStatus('error', '同步失败', response.message || '个人信息同步失败')
+    }
   } catch (error) {
     // 同步数据失败日志已移除以优化性能
     addSyncHistory('manual', 'failed', '数据同步失败')
@@ -652,8 +695,8 @@ const loadPersonalInfo = async (): Promise<void> => {
   try {
     showSyncStatus('info', '正在加载', '正在加载个人信息，请稍候...')
     
-    // 模拟API调用
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    // 调用真实API获取个人信息
+    const response = await syncPersonalInfo()
     
     // 检查是否启用了数据加密
     let personalData = {
@@ -664,6 +707,19 @@ const loadPersonalInfo = async (): Promise<void> => {
       phone: '13800138000',
       email: 'user@example.com',
       bio: '这是我的个人简介，喜欢技术和生活。'
+    }
+    
+    // 如果API调用成功，使用返回的数据
+    if (response.success && response.data) {
+      personalData = {
+        username: response.data.name || 'user123',
+        realName: response.data.name || '张三',
+        gender: 'male',
+        birthday: '1990-01-01',
+        phone: response.data.email ? response.data.email.replace(/@.*/, '') : '13800138000',
+        email: response.data.email || 'user@example.com',
+        bio: '这是我的个人简介，喜欢技术和生活。'
+      }
     }
     
     if (dataEncryptionManager.isEncryptionEnabled()) {

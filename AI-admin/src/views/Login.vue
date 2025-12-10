@@ -60,6 +60,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
 import store from '@/store'
+import { adminAuthApi } from '@/api/adminAuth'
 
 // 路由和状态管理实例
 const router = useRouter()
@@ -96,31 +97,80 @@ const handleLogin = async () => {
       loading.value = true
       
       try {
-        // 模拟API调用
-        // 实际项目中这里应该是调用后端登录接口
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        // 调用管理员登录API
+        console.log('正在调用管理员登录接口...', { username: loginForm.username })
         
-        // 模拟登录成功
-        const userData = {
-          id: 1,
-          name: loginForm.username,
-          role: 'admin',
-          permissions: ['*'],
-          avatar: '',
-          email: `${loginForm.username}@example.com`,
-          loginTime: Date.now() // 添加登录时间戳
+        const response = await adminAuthApi.adminLogin({
+          username: loginForm.username,
+          password: loginForm.password
+        })
+        
+        console.log('管理员登录接口响应:', response)
+        
+        // 检查响应数据结构
+        if (response.data && response.data.success) {
+          const adminData = response.data.data
+          
+          // 构建管理员用户数据
+          const userData = {
+            id: adminData.id || adminData.userId,
+            name: adminData.username || adminData.name || loginForm.username,
+            role: 'admin',
+            permissions: adminData.permissions || ['*'],
+            avatar: adminData.avatar || '',
+            email: adminData.email || `${loginForm.username}@example.com`,
+            loginTime: Date.now(),
+            token: adminData.token,
+            refreshToken: adminData.refreshToken
+          }
+          
+          console.log('管理员登录成功，用户数据:', userData)
+          
+          // 调用Vuex的login action
+          store.dispatch('user/login', userData)
+          
+          // 如果选择了记住我，保存用户名
+          if (rememberMe.value) {
+            localStorage.setItem('savedUsername', loginForm.username)
+          } else {
+            localStorage.removeItem('savedUsername')
+          }
+          
+          ElMessage.success('管理员登录成功')
+          
+          // 跳转到首页
+          router.push('/')
+        } else {
+          throw new Error(response.data?.message || '登录失败')
+        }
+      } catch (error: any) {
+        console.error('管理员登录失败:', error)
+        
+        // 处理不同类型的错误
+        let errorMessage = '登录失败'
+        if (error.response) {
+          // 服务器响应错误
+          const errorData = error.response.data
+          if (errorData && errorData.message) {
+            errorMessage = errorData.message
+          } else if (error.response.status === 401) {
+            errorMessage = '用户名或密码错误'
+          } else if (error.response.status === 403) {
+            errorMessage = '权限不足或账户被锁定'
+          } else if (error.response.status === 429) {
+            errorMessage = '登录尝试过于频繁，请稍后再试'
+          } else {
+            errorMessage = `登录失败 (${error.response.status})`
+          }
+        } else if (error.request) {
+          // 网络错误
+          errorMessage = '网络连接失败，请检查服务器状态'
+        } else {
+          // 其他错误
+          errorMessage = error.message || '登录失败'
         }
         
-        // 调用Vuex的login action
-        store.dispatch('user/login', userData)
-        
-        ElMessage.success('登录成功')
-        
-        // 跳转到首页
-        router.push('/')
-      } catch (error: any) {
-        console.error('登录失败:', error)
-        ElMessage.error('登录失败: ' + (error.response?.data?.message || error.message || '未知错误'))
+        ElMessage.error(errorMessage)
       } finally {
         loading.value = false
       }

@@ -498,12 +498,13 @@ const searchUsers = (query: string) => {
     userSearchLoading.value = true
     setTimeout(() => {
       userSearchLoading.value = false
-      // 模拟搜索结果
-      userList.value = [
+      // 使用固定用户列表，实际应用中应通过API获取真实搜索结果
+      const allUsers = [
         { id: 1, name: '张三' },
         { id: 2, name: '李四' },
         { id: 3, name: '王五' }
-      ].filter(item => item.name.includes(query))
+      ]
+      userList.value = allUsers.filter(item => item.name.includes(query))
     }, 200)
   } else {
     userList.value = []

@@ -62,9 +62,9 @@ const router = useRouter()
 
 // 用户信息
 const userInfo = ref({
-  name: '用户名',
-  email: 'user@example.com',
-  avatar: 'https://picsum.photos/100/100'
+  name: '',
+  email: '',
+  avatar: ''
 })
 
 // 组件映射

@@ -196,7 +196,7 @@ const handleSearch = () => {
 }
 
 // 分类切换
-const activeCategory = ref('tutorial')
+const activeCategory = ref('')
 const activeTutorial = ref('')
 const activeFaq = ref('')
 

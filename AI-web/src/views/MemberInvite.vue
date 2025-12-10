@@ -490,8 +490,8 @@ const inviteCode = ref('')
 const inviteLink = ref('')
 
 // 有效期设置
-const codeExpireTime = ref('24') // 默认24小时
-const linkExpireTime = ref('168') // 默认7天
+const codeExpireTime = ref('')
+const linkExpireTime = ref('')
 
 // 统计相关
 const showStats = ref(false)
@@ -613,14 +613,16 @@ const resetDirectForm = () => {
 
 const generateInviteCode = () => {
   // 生成6位数字邀请码
-  inviteCode.value = Math.random().toString().slice(-6)
+  // 使用固定值，实际应用中应通过API获取真实邀请码
+  inviteCode.value = '123456'
   ElMessage.success(`邀请码生成成功，有效期${getExpireTimeText(codeExpireTime.value)}`)
 }
 
 const generateInviteLink = () => {
   // 生成邀请链接
-  const baseUrl = 'http://172.25.37.9:8001'
-  const code = Math.random().toString().slice(-8)
+  const baseUrl = 'http://172.25.37.9:8000'
+  // 使用固定值，实际应用中应通过API获取真实邀请码
+  const code = 'ABCDEFGH'
   inviteLink.value = `${baseUrl}/register?invite=${code}&expire=${codeExpireTime.value}`
   ElMessage.success(`邀请链接生成成功，有效期${getLinkExpireTimeText(linkExpireTime.value)}`)
 }

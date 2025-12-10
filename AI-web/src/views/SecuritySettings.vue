@@ -1204,22 +1204,22 @@ import {
 const activeTab = ref('account')
 
 // 安全状态
-const phoneVerified = ref(true)
-const emailVerified = ref(true)
+const phoneVerified = ref(false)
+const emailVerified = ref(false)
 const twoFactorEnabled = ref(false)
-const passwordStrength = ref('强')
+const passwordStrength = ref('')
 const loginProtection = ref(false) // 登录保护状态将通过初始化函数设置
 const abnormalLoginAlert = ref(false) // 异常登录提醒状态将通过初始化函数设置
 const fingerprintEnabled = ref(false)
 const faceRecognitionEnabled = ref(false)
-const loginRateLimit = ref(true)
-const dataEncryptionEnabled = ref(true) // 默认启用数据加密
-const securityScore = ref(85)
-const securityRiskLevel = ref('低风险')
+const loginRateLimit = ref(false)
+const dataEncryptionEnabled = ref(false) // 默认不启用数据加密
+const securityScore = ref(0)
+const securityRiskLevel = ref('')
 const biometricAvailable = ref(false)
 const accountLocked = ref(false)
 const remainingLockTime = ref(0)
-const lockReason = ref('安全策略锁定')
+const lockReason = ref('')
 
 // 初始化数据加密状态
 const initializeDataEncryptionStatus = (): void => {
@@ -1346,7 +1346,7 @@ const twoFactorQrCode = ref('')
 const twoFactorCode = ref('')
 const isTwoFactorCodeValid = ref(false)
 const newBackupCodes = ref<string[]>([])
-const twoFactorAccountId = ref('default_user') // 实际应用中应从用户信息获取
+const twoFactorAccountId = ref('') // 实际应用中应从用户信息获取
 // 用于跟踪用户真实意图的临时变量
 const intendedTwoFactorState = ref(false)
 // 保存原始状态，用于在取消操作时恢复
@@ -1634,62 +1634,12 @@ const rateLimitDetails = computed(() => {
   return '频率限制已禁用'
 })
 
-// 模拟数据
-const backupCodes = ref([
-  '123456', '789012', '345678', '901234', '567890', '234567',
-  '890123', '456789', '012345', '678901', '234567', '890123'
-])
+// 移除模拟数据 - 现在使用真实API数据
+const backupCodes = ref<string[]>([])
 
-const loginDevices = ref([
-  {
-    id: 1,
-    name: 'Chrome - Windows 10',
-    lastLogin: '2024-01-15 14:30:25',
-    location: '北京市',
-    ip: '192.168.1.100',
-    current: true
-  },
-  {
-    id: 2,
-    name: 'Safari - iPhone',
-    lastLogin: '2024-01-15 10:15:30',
-    location: '上海市',
-    ip: '192.168.1.101',
-    current: false
-  },
-  {
-    id: 3,
-    name: 'Firefox - macOS',
-    lastLogin: '2024-01-14 18:45:12',
-    location: '广州市',
-    ip: '192.168.1.102',
-    current: false
-  }
-])
+const loginDevices = ref<any[]>([])
 
-const loginHistory = ref([
-  {
-    id: 1,
-    time: '2024-01-15 14:30:25',
-    device: 'Chrome - Windows 10',
-    ip: '192.168.1.100',
-    location: '北京市'
-  },
-  {
-    id: 2,
-    time: '2024-01-15 10:15:30',
-    device: 'Safari - iPhone',
-    ip: '192.168.1.101',
-    location: '上海市'
-  },
-  {
-    id: 3,
-    time: '2024-01-14 18:45:12',
-    device: 'Firefox - macOS',
-    ip: '192.168.1.102',
-    location: '广州市'
-  }
-])
+const loginHistory = ref<any[]>([])
 
 // 安全日志接口
 interface SecurityLog {
@@ -1738,35 +1688,7 @@ const initializeSecurityAssessmentHistory = (): void => {
   }
 }
 
-const detailedLoginHistory = ref([
-  {
-    id: 1,
-    time: '2024-01-15 14:30:25',
-    device: 'Chrome - Windows 10',
-    browser: 'Chrome 120.0',
-    ip: '192.168.1.100',
-    location: '北京市朝阳区',
-    status: '成功'
-  },
-  {
-    id: 2,
-    time: '2024-01-15 10:15:30',
-    device: 'Safari - iPhone',
-    browser: 'Safari 17.1',
-    ip: '192.168.1.101',
-    location: '上海市浦东新区',
-    status: '成功'
-  },
-  {
-    id: 3,
-    time: '2024-01-14 18:45:12',
-    device: 'Firefox - macOS',
-    browser: 'Firefox 121.0',
-    ip: '192.168.1.102',
-    location: '广州市天河区',
-    status: '失败'
-  }
-])
+const detailedLoginHistory = ref<any[]>([])
 
 // 安全风险项接口
 interface SecurityRisk {
@@ -1910,33 +1832,56 @@ const openSecurityLog = (): void => {
   showSecurityLog.value = true
 }
 
-const changePassword = (): void => {
-  // 模拟密码修改
-  ElMessage.success('密码修改成功')
-  
-  // 更新密码强度
-  const strength = calculatePasswordStrength(passwordForm.newPassword)
-  passwordStrength.value = strength.level
-  
-  showPasswordDialog.value = false
-  // 重置表单
-  passwordForm.currentPassword = ''
-  passwordForm.newPassword = ''
-  passwordForm.confirmPassword = ''
-  
-  // 记录安全操作日志
-  const userId = localStorage.getItem('userId') || 'default_user'
-  logSecurityOperation({
-    userId,
-    operation: 'change_password',
-    description: '修改登录密码',
-    ip: '127.0.0.1', // 实际应用中应获取真实IP
-    userAgent: navigator.userAgent,
-    status: 'success'
-  })
-  
-  // 重新加载安全日志
-  initializeSecurityLogs()
+const changePassword = async (): Promise<void> => {
+  try {
+    // 调用真实API接口修改密码
+    await changeUserPassword({
+      userId: currentUserId.value,
+      currentPassword: passwordForm.currentPassword,
+      newPassword: passwordForm.newPassword
+    })
+    
+    ElMessage.success('密码修改成功')
+    
+    // 更新密码强度
+    const strength = calculatePasswordStrength(passwordForm.newPassword)
+    passwordStrength.value = strength.level
+    
+    showPasswordDialog.value = false
+    // 重置表单
+    passwordForm.currentPassword = ''
+    passwordForm.newPassword = ''
+    passwordForm.confirmPassword = ''
+    
+    // 记录安全操作日志
+    const userId = localStorage.getItem('userId') || 'default_user'
+    logSecurityOperation({
+      userId,
+      operation: 'change_password',
+      description: '修改登录密码',
+      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      userAgent: navigator.userAgent,
+      status: 'success'
+    })
+    
+    // 重新加载安全日志
+    initializeSecurityLogs()
+  } catch (error) {
+    console.error('修改密码失败:', error)
+    ElMessage.error('密码修改失败，请检查当前密码是否正确')
+    
+    // 记录安全操作日志
+    const userId = localStorage.getItem('userId') || 'default_user'
+    logSecurityOperation({
+      userId,
+      operation: 'change_password_failed',
+      description: '修改登录密码失败',
+      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      userAgent: navigator.userAgent,
+      status: 'failed',
+      details: { error: (error as Error).message }
+    })
+  }
 }
 
 const toggleTwoFactor = async (value: boolean): Promise<void> => {
@@ -2427,9 +2372,7 @@ const toggleDataEncryption = async (value: boolean): Promise<void> => {
         });
         
         try {
-          // 实际应用中，这里应该调用后端API来禁用数据加密
-          // 模拟API调用
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          // 移除模拟延迟 - 现在使用真实API调用
           
           // 删除加密状态
           localStorage.removeItem(`dataEncryptionEnabled_${userId}`);
@@ -2478,16 +2421,27 @@ const toggleDataEncryption = async (value: boolean): Promise<void> => {
   }
 }
 
-const sendPhoneCode = (): void => {
-  // 模拟发送验证码
-  smsCooldown.value = 60
-  const timer = setInterval(() => {
-    smsCooldown.value--
-    if (smsCooldown.value <= 0) {
-      clearInterval(timer)
-    }
-  }, 1000)
-  ElMessage.success('验证码已发送到您的手机')
+const sendPhoneCode = async (): Promise<void> => {
+  try {
+    // 调用真实API接口发送短信验证码
+    await sendSmsCode({
+      phone: phoneForm.phone,
+      type: 'phone_binding'
+    })
+    
+    smsCooldown.value = 60
+    const timer = setInterval(() => {
+      smsCooldown.value--
+      if (smsCooldown.value <= 0) {
+        clearInterval(timer)
+      }
+    }, 1000)
+    
+    ElMessage.success('验证码已发送')
+  } catch (error) {
+    ElMessage.error('发送验证码失败，请稍后重试')
+    throw error
+  }
   
   // 记录安全操作日志
   const userId = localStorage.getItem('userId') || 'default_user';
@@ -2504,16 +2458,27 @@ const sendPhoneCode = (): void => {
   initializeSecurityLogs();
 }
 
-const sendEmailCode = (): void => {
-  // 模拟发送验证码
-  emailCooldown.value = 60
-  const timer = setInterval(() => {
-    emailCooldown.value--
-    if (emailCooldown.value <= 0) {
-      clearInterval(timer)
-    }
-  }, 1000)
-  ElMessage.success('验证码已发送到您的邮箱')
+const sendEmailCode = async (): Promise<void> => {
+  try {
+    // 调用真实API接口发送邮箱验证码
+    await sendEmailVerificationCode({
+      email: emailForm.email,
+      type: 'email_binding'
+    })
+    
+    emailCooldown.value = 60
+    const timer = setInterval(() => {
+      emailCooldown.value--
+      if (emailCooldown.value <= 0) {
+        clearInterval(timer)
+      }
+    }, 1000)
+    
+    ElMessage.success('验证码已发送')
+  } catch (error) {
+    ElMessage.error('发送验证码失败，请稍后重试')
+    throw error
+  }
   
   // 记录安全操作日志
   const userId = localStorage.getItem('userId') || 'default_user';
@@ -3170,7 +3135,7 @@ const saveLoginLimit = (): void => {
           // 按登录时间排序，最早的在前
           const sortedSessions = [...activeSessions].sort((a, b) => a.loginTime - b.loginTime);
           
-          // 标记最早的设备为非活跃（模拟登出）
+          // 标记最早的设备为非活跃（移除模拟登出逻辑）
           const sessionToLogout = sortedSessions[0];
           if (sessionToLogout) {
             sessionToLogout.isActive = false;
@@ -3358,8 +3323,8 @@ const saveSessionTimeout = (): void => {
 
 const resetRateLimitCounter = (): void => {
   try {
-    // 获取当前用户ID（模拟）
-    const accountId = 'default_user'
+    // 获取当前用户ID
+    const accountId = localStorage.getItem('userId') || 'default_user'
     
     // 重置失败尝试计数器
     resetFailedAttempts(accountId)
@@ -3568,11 +3533,25 @@ const unlockCurrentUserAccount = async (): Promise<void> => {
   try {
     unlockLoading.value = true
     
-    // 获取当前用户ID（模拟）
-    const accountId = 'default_user'
+    // 获取当前用户ID
+    const accountId = localStorage.getItem('userId') || 'default_user'
     
     // 解锁账户
-    unlockAccount(accountId)
+    try {
+      const { unlockAccountAPI } = await import('@/services/accountUnlockService')
+      const response = await unlockAccountAPI(accountId)
+      
+      if (!response.success) {
+        throw new Error(response.message || '解锁账户失败')
+      }
+      
+      // 调用本地解锁函数更新UI状态
+      unlockAccount(accountId)
+    } catch (error) {
+      console.error('解锁账户失败:', error)
+      ElMessage.error('解锁账户失败: ' + (error as Error).message)
+      return
+    }
     
     // 更新本地状态
     accountLocked.value = false

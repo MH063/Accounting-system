@@ -79,7 +79,7 @@ const loading = ref(false)
 const submitting = ref(false)
 
 // 当前用户ID（实际应用中应从用户信息获取）
-const currentUserId = ref('default_user')
+const currentUserId = ref('')
 
 // 选中的问题
 const selectedQuestions = ref([

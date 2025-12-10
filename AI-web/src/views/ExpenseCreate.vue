@@ -12,13 +12,13 @@
         <el-button 
           type="primary" 
           :icon="ArrowLeft" 
-          @click="$router.back()"
+          @click="router.back()"
           class="back-btn"
         >
           返回
         </el-button>
         <el-button 
-          @click="$router.back()"
+          @click="router.back()"
           class="cancel-btn"
         >
           取消
@@ -84,36 +84,17 @@
                   style="width: 100%"
                   filterable
                 >
-                  <el-optgroup label="住宿费用">
-                    <el-option label="房租租金" value="rent" />
-                    <el-option label="住宿押金" value="deposit" />
-                    <el-option label="住宿管理费" value="management_fee" />
-                  </el-optgroup>
-                  <el-optgroup label="生活费用">
-                    <el-option label="水费" value="water_fee" />
-                    <el-option label="电费" value="electricity_fee" />
-                    <el-option label="燃气费" value="gas_fee" />
-                    <el-option label="网费" value="internet_fee" />
-                    <el-option label="有线电视费" value="tv_fee" />
-                  </el-optgroup>
-                  <el-optgroup label="维护费用">
-                    <el-option label="设备维修" value="equipment_repair" />
-                    <el-option label="家具维修" value="furniture_repair" />
-                    <el-option label="电器维修" value="appliance_repair" />
-                    <el-option label="门窗维修" value="door_window_repair" />
-                    <el-option label="管道疏通" value="plumbing" />
-                  </el-optgroup>
-                  <el-optgroup label="清洁费用">
-                    <el-option label="日常清洁" value="daily_cleaning" />
-                    <el-option label="深度清洁" value="deep_cleaning" />
-                    <el-option label="杀虫除害" value="pest_control" />
-                    <el-option label="垃圾处理" value="waste_disposal" />
-                  </el-optgroup>
-                  <el-optgroup label="其他费用">
-                    <el-option label="保险费用" value="insurance" />
-                    <el-option label="中介服务费" value="agency_fee" />
-                    <el-option label="法律咨询费" value="legal_fee" />
-                    <el-option label="其他杂费" value="miscellaneous" />
+                  <el-optgroup 
+                    v-for="group in expenseCategories" 
+                    :key="group.label"
+                    :label="group.label"
+                  >
+                    <el-option 
+                      v-for="option in group.options" 
+                      :key="option.value" 
+                      :label="option.label" 
+                      :value="option.value" 
+                    />
                   </el-optgroup>
                 </el-select>
               </el-form-item>
@@ -322,23 +303,36 @@
           </div>
 
           <el-form-item label="相关票据">
-            <el-upload
-              v-model:file-list="fileList"
-              action="#"
-              :auto-upload="false"
-              :on-change="handleFileChange"
-              :on-remove="handleFileRemove"
-              :on-exceed="handleFileExceed"
-              :limit="5"
-              accept=".jpg,.jpeg,.png,.pdf,.doc,.docx"
-              class="upload-area"
-            >
-              <div class="upload-button">
-                <el-icon class="upload-icon"><Plus /></el-icon>
-                <span class="upload-text">上传票据照片或文件</span>
-                <span class="upload-hint">支持 JPG、PNG、PDF、DOC 格式，单个文件不超过 5MB</span>
+            <div class="upload-container">
+              <!-- 上传进度条 -->
+              <div v-if="uploading" class="upload-progress-container">
+                <el-progress 
+                  :percentage="uploadProgress" 
+                  :stroke-width="12" 
+                  striped 
+                  striped-flow
+                  :duration="10"
+                />
               </div>
-            </el-upload>
+              
+              <el-upload
+                v-model:file-list="fileList"
+                action="#"
+                :auto-upload="false"
+                :on-change="handleFileChange"
+                :on-remove="handleFileRemove"
+                :on-exceed="handleFileExceed"
+                :limit="5"
+                accept=".jpg,.jpeg,.png,.pdf,.doc,.docx"
+                class="upload-area"
+              >
+                <div class="upload-button">
+                  <el-icon class="upload-icon"><Plus /></el-icon>
+                  <span class="upload-text">上传票据照片或文件</span>
+                  <span class="upload-hint">支持 JPG、PNG、PDF、DOC 格式，单个文件不超过 5MB</span>
+                </div>
+              </el-upload>
+            </div>
           </el-form-item>
 
           <!-- 审核相关 -->
@@ -537,13 +531,28 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { 
   ArrowLeft, Plus, Document, User, UserFilled, Paperclip, DocumentChecked,
   Check, DocumentCopy, TrendCharts, Search, CircleCheck, Select, Refresh
 } from '@element-plus/icons-vue'
-import { ElMessage, type UploadUserFile } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import type { FormInstance, FormRules, UploadUserFile } from 'element-plus'
+
+// 组件挂载时初始化数据
+onMounted(async () => {
+  try {
+    // 并行加载成员列表和用户房间信息
+    await Promise.all([
+      loadMembers(),
+      initCurrentUserRoom()
+    ])
+    console.log('费用创建页面初始化完成')
+  } catch (error) {
+    console.error('初始化失败:', error)
+  }
+})
 
 // 路由
 const router = useRouter()
@@ -557,18 +566,17 @@ const submitting = ref(false)
 // 文件列表
 const fileList = ref<UploadUserFile[]>([])
 
+// 上传状态
+const uploading = ref(false)
+const uploadProgress = ref(0)
+
 // 智能金额输入
 const amountDisplay = ref('')
-const amountSuggestions = ref<number[]>([100, 200, 300, 500, 1000, 1500, 2000, 3000])
+const amountSuggestions = ref<number[]>([])
 
 // 分摊方式相关
 const showSplitDetails = ref(false)
-const splitDetails = ref([
-  { name: '张三', amount: 100.50 },
-  { name: '李四', amount: 100.50 },
-  { name: '王五', amount: 100.50 },
-  { name: '赵六', amount: 100.50 }
-])
+const splitDetails = ref<{ name: string; amount: number }[]>([])
 
 // 类型定义
 interface Member {
@@ -586,40 +594,104 @@ const memberSearchQuery = ref('')
 const selectedMembers = ref<Member[]>([])
 
 // 获取当前用户的房间信息
-const getCurrentUserRoom = () => {
-  // 模拟获取当前用户的房间信息
-  // 在实际项目中，这里应该从用户状态管理或API获取
-  const currentUsername = localStorage.getItem('username') || '张三'
-  
-  // 根据当前用户名返回对应的房间
-  const userRoomMap: { [key: string]: string } = {
-    '张三': 'A-101',
-    '李四': 'A-101', 
-    '王五': 'A-101',
-    '赵六': 'A-102',
-    '钱七': 'A-102',
-    '孙八': 'A-103',
-    '周九': 'A-103'
+const getCurrentUserRoom = async () => {
+  try {
+    // 从用户服务获取当前用户房间信息
+    const { userService } = await import('@/services/userService')
+    const userInfo = await userService.getCurrentUser()
+    return userInfo.room || ''
+  } catch (error) {
+    console.error('获取当前用户房间信息失败:', error)
+    ElMessage.error('获取用户信息失败')
+    return ''
   }
-  
-  return userRoomMap[currentUsername] || 'A-101'
 }
 
 // 当前用户房间
-const currentUserRoom = ref(getCurrentUserRoom())
+const currentUserRoom = ref('')
 
-const allMembers = ref<Member[]>([
-  { id: 1, name: '张三', room: 'A-101', avatar: 'https://picsum.photos/40/40?random=1', role: 'dorm_leader', status: 'active' },
-  { id: 2, name: '李四', room: 'A-101', avatar: 'https://picsum.photos/40/40?random=2', role: 'member', status: 'active' },
-  { id: 3, name: '王五', room: 'A-101', avatar: 'https://picsum.photos/40/40?random=3', role: 'member', status: 'active' },
-  { id: 4, name: '赵六', room: 'A-102', avatar: 'https://picsum.photos/40/40?random=4', role: 'member', status: 'active' },
-  { id: 5, name: '钱七', room: 'A-102', avatar: 'https://picsum.photos/40/40?random=5', role: 'member', status: 'away' },
-  { id: 6, name: '孙八', room: 'A-103', avatar: 'https://picsum.photos/40/40?random=6', role: 'member', status: 'inactive' },
-  { id: 7, name: '周九', room: 'A-103', avatar: 'https://picsum.photos/40/40?random=7', role: 'admin', status: 'active' }
-])
+// 初始化当前用户房间信息
+const initCurrentUserRoom = async () => {
+  try {
+    const room = await getCurrentUserRoom()
+    currentUserRoom.value = room
+  } catch (error) {
+    console.error('初始化用户房间信息失败:', error)
+  }
+}
+
+const allMembers = ref<Member[]>([])
+
+// 加载成员列表
+const loadMembers = async () => {
+  try {
+    const { userService } = await import('@/services/userService')
+    const response = await userService.getMembers()
+    if (response.success) {
+      allMembers.value = response.data
+    } else {
+      throw new Error(response.message || '获取成员列表失败')
+    }
+  } catch (error) {
+    console.error('加载成员列表失败:', error)
+    ElMessage.error('加载成员列表失败')
+    // 设置默认空数组
+    allMembers.value = []
+  }
+}
 
 // 草稿保存相关
 let draftSaveTimer: NodeJS.Timeout | null = null
+
+// 费用类别数据
+const expenseCategories = [
+  {
+    label: '住宿费用',
+    options: [
+      { label: '房租租金', value: 'rent' },
+      { label: '住宿押金', value: 'deposit' },
+      { label: '住宿管理费', value: 'management_fee' }
+    ]
+  },
+  {
+    label: '生活费用',
+    options: [
+      { label: '水费', value: 'water_fee' },
+      { label: '电费', value: 'electricity_fee' },
+      { label: '燃气费', value: 'gas_fee' },
+      { label: '网费', value: 'internet_fee' },
+      { label: '有线电视费', value: 'tv_fee' }
+    ]
+  },
+  {
+    label: '维护费用',
+    options: [
+      { label: '设备维修', value: 'equipment_repair' },
+      { label: '家具维修', value: 'furniture_repair' },
+      { label: '电器维修', value: 'appliance_repair' },
+      { label: '门窗维修', value: 'door_window_repair' },
+      { label: '管道疏通', value: 'plumbing' }
+    ]
+  },
+  {
+    label: '清洁费用',
+    options: [
+      { label: '日常清洁', value: 'daily_cleaning' },
+      { label: '深度清洁', value: 'deep_cleaning' },
+      { label: '杀虫除害', value: 'pest_control' },
+      { label: '垃圾处理', value: 'waste_disposal' }
+    ]
+  },
+  {
+    label: '其他费用',
+    options: [
+      { label: '保险费用', value: 'insurance' },
+      { label: '中介服务费', value: 'agency_fee' },
+      { label: '法律咨询费', value: 'legal_fee' },
+      { label: '其他杂费', value: 'miscellaneous' }
+    ]
+  }
+]
 
 // 表单数据
 const formData = reactive({
@@ -908,14 +980,92 @@ const disabledDate = (date: Date) => {
   return date.getTime() > today.getTime()
 }
 
-const handleFileChange = (file: UploadUserFile) => {
+const handleFileChange = async (file: UploadUserFile) => {
   // 文件变化处理
   console.log('File changed:', file)
+  
+  // 显示上传状态
+  uploading.value = true
+  uploadProgress.value = 0
+  
+  // 验证文件大小（限制每个文件不超过5MB）
+  if (file.raw) {
+    if (file.raw.size > 5 * 1024 * 1024) {
+      ElMessage.error(`文件 ${file.name} 超过5MB限制`)
+      // 从文件列表中移除
+      const index = fileList.value.findIndex(f => f.uid === file.uid)
+      if (index > -1) {
+        fileList.value.splice(index, 1)
+      }
+      uploading.value = false
+      return
+    }
+    
+    try {
+      // 设置上传状态
+      file.status = 'uploading'
+      file.percentage = 0
+      
+      // 使用文件上传服务
+      const { fileService } = await import('@/services/fileService')
+      const formData = new FormData()
+      formData.append('file', file.raw)
+      
+      // 模拟进度更新
+      const progressInterval = setInterval(() => {
+        if (uploadProgress.value < 90) {
+          uploadProgress.value += 10
+        }
+      }, 100)
+      
+      // 调用文件上传API
+      const response = await fileService.uploadFile(formData, (progress) => {
+        file.percentage = progress
+        uploadProgress.value = progress
+      })
+      
+      clearInterval(progressInterval)
+      
+      if (response.success) {
+        file.status = 'success'
+        file.percentage = 100
+        uploadProgress.value = 100
+        
+        // 添加到文件列表（如果不在列表中）
+        if (!fileList.value.find(f => f.uid === file.uid)) {
+          fileList.value.push(file)
+        }
+        
+        ElMessage.success(`文件 ${file.name} 上传成功`)
+        
+        // 2秒后清除进度状态
+        setTimeout(() => {
+          uploadProgress.value = 0
+        }, 2000)
+      } else {
+        throw new Error(response.message || '上传失败')
+      }
+    } catch (error) {
+      console.error('文件上传失败:', error)
+      file.status = 'fail'
+      uploadProgress.value = 0
+      ElMessage.error(`文件 ${file.name} 上传失败`)
+      
+      // 从文件列表中移除失败的文件
+      const index = fileList.value.findIndex(f => f.uid === file.uid)
+      if (index > -1) {
+        fileList.value.splice(index, 1)
+      }
+    } finally {
+      uploading.value = false
+    }
+  }
 }
 
 const handleFileRemove = (file: UploadUserFile) => {
   // 文件移除处理
   console.log('File removed:', file)
+  ElMessage.info(`文件 ${file.name} 已移除`)
 }
 
 const handleFileExceed = () => {
@@ -927,9 +1077,25 @@ const handleFileExceed = () => {
 
 const handleSaveDraft = async () => {
   try {
-    // 保存草稿逻辑
-    ElMessage.success('草稿保存成功')
+    const draftData = {
+      ...formData,
+      selectedMembers: selectedMembers.value,
+      amountDisplay: amountDisplay.value,
+      attachments: fileList.value,
+      timestamp: new Date().toISOString()
+    }
+
+    // 调用草稿保存服务
+    const { expenseService } = await import('@/services/expenseService')
+    const response = await expenseService.saveDraft(draftData)
+
+    if (response.success) {
+      ElMessage.success('草稿保存成功')
+    } else {
+      throw new Error(response.message || '保存失败')
+    }
   } catch (error) {
+    console.error('草稿保存失败:', error)
     ElMessage.error('草稿保存失败')
   }
 }
@@ -941,14 +1107,33 @@ const handleSubmit = async () => {
     await formRef.value.validate()
     submitting.value = true
 
-    // 提交费用逻辑
-    setTimeout(() => {
+    // 构建提交数据
+    const submitData = {
+      ...formData,
+      participants: selectedMembers.value,
+      attachments: fileList.value.map(f => ({
+        name: f.name,
+        url: f.url || '',
+        size: f.size
+      }))
+    }
+
+    // 调用费用创建服务
+    const { expenseService } = await import('@/services/expenseService')
+    const response = await expenseService.createExpense(submitData)
+
+    if (response.success) {
       ElMessage.success('费用提交成功，等待审核')
+      // 清除草稿
+      localStorage.removeItem('expense_draft')
       router.back()
-      submitting.value = false
-    }, 2000)
+    } else {
+      throw new Error(response.message || '提交失败')
+    }
   } catch (error) {
-    ElMessage.error('表单验证失败，请检查输入内容')
+    console.error('费用提交失败:', error)
+    ElMessage.error(`费用提交失败: ${error.message || '请稍后重试'}`)
+  } finally {
     submitting.value = false
   }
 }
@@ -1097,8 +1282,16 @@ const handleSubmit = async () => {
   font-size: 14px;
 }
 
-/* 上传区域 */
-.upload-area {
+/* 上传区域样式 */
+.upload-container {
+  width: 100%;
+}
+
+.upload-progress-container {
+  margin-bottom: 16px;
+}
+
+.upload-area :deep(.el-upload) {
   width: 100%;
 }
 
@@ -1111,8 +1304,9 @@ const handleSubmit = async () => {
   height: 120px;
   border: 2px dashed #d9d9d9;
   border-radius: 8px;
+  background-color: #fafafa;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.3s ease;
 }
 
 .upload-button:hover {
@@ -1122,13 +1316,13 @@ const handleSubmit = async () => {
 
 .upload-icon {
   font-size: 32px;
-  color: #d9d9d9;
+  color: #909399;
   margin-bottom: 8px;
 }
 
 .upload-text {
   font-size: 16px;
-  color: #303133;
+  color: #606266;
   margin-bottom: 4px;
 }
 

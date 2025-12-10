@@ -683,7 +683,9 @@ import {
   CreditCard, ChatLineRound, Money as BankIcon, SuccessFilled, Picture
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { confirmPayment, getQRCodes } from '@/services/paymentService'
+import { expenseService } from '@/services/expenseService'
+import { withLoading } from '@/utils/loadingUtils'
+import { handleApiError } from '@/utils/errorUtils'
 
 // 类型定义
 interface Expense {
@@ -855,10 +857,8 @@ const handleSelectPaymentMethod = async (method: string) => {
   
   // 获取最新的收款码数据
   try {
-    const qrResponse = await getQRCodes()
-    if (qrResponse.success && qrResponse.data) {
-      qrCodesData.value = qrResponse.data
-      
+    const response = await expenseService.getQRCodes()
+    if (response.success && response.data) {
       // 根据支付方式检查收款码状态
       const platformMap: Record<string, string> = {
         'alipay': 'alipay',
@@ -869,19 +869,18 @@ const handleSelectPaymentMethod = async (method: string) => {
       const platform = platformMap[method]
       
       // 查找启用的收款码
-      const activeQRCode = qrResponse.data.find(qr => 
+      const activeQRCode = response.data.find(qr => 
         qr.platform === platform && qr.status === 'active' && qr.isUserUploaded
       )
       
       // 如果找到了启用的收款码，不显示任何提示
       if (activeQRCode) {
-        // 不需要提示，收款码正常
         isPaymentMethodValid.value = true
         return
       }
       
       // 查找禁用的收款码
-      const disabledQRCode = qrResponse.data.find(qr => 
+      const disabledQRCode = response.data.find(qr => 
         qr.platform === platform && qr.status === 'inactive' && qr.isUserUploaded
       )
       
@@ -895,8 +894,7 @@ const handleSelectPaymentMethod = async (method: string) => {
       ElMessage.warning(`未找到对应的收款码，请联系管理员`)
     }
   } catch (error) {
-    ElMessage.error('获取收款码信息失败，请检查网络连接或联系管理员')
-    console.error('获取收款码信息失败:', error)
+    handleApiError(error, '获取收款码信息失败')
   }
 }
 
@@ -909,23 +907,32 @@ const handleConfirmPayment = async () => {
     return
   }
   
-  // 直接显示二维码，不需要调用支付服务（因为是线下扫码支付）
-  try {
-    // 特殊处理现金支付
-    if (selectedPaymentMethod.value === 'cash') {
-      // 现金支付直接完成，不需要显示二维码
-      currentExpense.value.status = 'paid'
-      ElMessage.success('现金支付已完成')
-      // 关闭支付对话框
-      setTimeout(() => {
+  // 现金支付直接完成
+  if (selectedPaymentMethod.value === 'cash') {
+    try {
+      const response = await expenseService.confirmPayment({
+        expenseId: currentExpense.value.id,
+        paymentMethod: selectedPaymentMethod.value,
+        amount: currentExpense.value.amount
+      })
+      
+      if (response.success) {
+        ElMessage.success('现金支付已完成')
         handleClosePaymentDialog()
-      }, 1000)
-      return
+        await loadExpenses()
+      } else {
+        ElMessage.error(response.message || '支付确认失败')
+      }
+    } catch (error) {
+      handleApiError(error, '现金支付处理失败')
     }
-    
-    // 获取对应的收款码
-    const qrResponse = await getQRCodes()
-    if (qrResponse.success && qrResponse.data) {
+    return
+  }
+  
+  // 其他支付方式获取收款码
+  try {
+    const response = await expenseService.getQRCodes()
+    if (response.success && response.data) {
       // 根据支付方式筛选收款码
       const platformMap: Record<string, string> = {
         'alipay': 'alipay',
@@ -934,43 +941,32 @@ const handleConfirmPayment = async () => {
       }
       
       const platform = platformMap[selectedPaymentMethod.value]
-      // 首先查找启用的收款码
-      let matchingQRCode = qrResponse.data.find(qr => 
+      
+      // 查找启用的收款码
+      const activeQRCode = response.data.find(qr => 
         qr.platform === platform && qr.status === 'active' && qr.isUserUploaded
       )
       
-      // 如果找到了启用的收款码，直接使用
-      if (matchingQRCode && matchingQRCode.qrCodeUrl) {
-        qrCodeUrl.value = matchingQRCode.qrCodeUrl
+      if (activeQRCode && activeQRCode.qrCodeUrl) {
+        qrCodeUrl.value = activeQRCode.qrCodeUrl
         showQRCode.value = true
-      } 
-      // 如果没有找到启用的收款码，则查找禁用的收款码
-      else {
-        const disabledQRCode = qrResponse.data.find(qr => 
+      } else {
+        // 查找禁用的收款码
+        const disabledQRCode = response.data.find(qr => 
           qr.platform === platform && qr.status === 'inactive' && qr.isUserUploaded
         )
         
-        // 如果找到了禁用的收款码，提示用户
         if (disabledQRCode) {
           ElMessage.warning(`该支付方式的收款码已被停用或禁用，请联系管理员`)
-          // 不显示二维码，保持showQRCode为false
-          return
-        } 
-        // 如果完全没有找到对应平台的收款码
-        else {
+        } else {
           ElMessage.warning(`未找到对应的收款码，请联系管理员`)
-          // 不显示二维码，保持showQRCode为false
-          return
         }
       }
-      
-      // 更新费用状态为已支付（这里简化处理，实际应该调用API更新状态）
-      currentExpense.value.status = 'paid'
     } else {
       ElMessage.error('获取收款码失败')
     }
   } catch (error) {
-    ElMessage.error('获取收款码过程中出现错误，请稍后重试或联系技术支持')
+    handleApiError(error, '获取收款码失败')
   }
 }
 
@@ -1030,6 +1026,16 @@ const getStatusIcon = (status: 'pending' | 'approved' | 'rejected' | string) => 
   }
 }
 
+// 获取状态颜色
+const getStatusColor = (status: 'pending' | 'approved' | 'rejected' | string) => {
+  switch (status) {
+    case 'pending': return '#e6a23c'
+    case 'approved': return '#67c23a'
+    case 'rejected': return '#f56c6c'
+    default: return '#909399'
+  }
+}
+
 // 视图模式控制
 const viewMode = ref<'table' | 'card'>('table')
 const refreshing = ref(false)
@@ -1047,15 +1053,10 @@ const handleRefresh = async () => {
   
   refreshing.value = true
   try {
-    // 模拟API调用刷新数据
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    // 重新加载费用数据
     await loadExpenses()
     ElMessage.success('数据刷新成功')
   } catch (error) {
-    console.error('刷新失败:', error)
-    ElMessage.error('数据刷新失败，请检查网络连接或稍后重试')
+    ElMessage.error('数据刷新失败')
   } finally {
     refreshing.value = false
   }
@@ -1067,43 +1068,26 @@ const handleLoadMore = async () => {
   
   loadingMore.value = true
   try {
-    // 模拟API调用加载更多数据
-    await new Promise(resolve => setTimeout(resolve, 800))
-    
-    // 模拟加载更多费用数据
-    const moreExpenses: Expense[] = [
-      {
-        id: 5,
-        title: '宿舍门锁维修',
-        description: '更换门锁锁芯',
-        amount: 150.00,
-        category: 'maintenance' as 'maintenance',
-        applicant: '孙八',
-        date: '2024-12-01',
-        status: 'pending' as 'pending',
-        createdAt: '2024-12-01T11:20:00'
-      },
-      {
-        id: 6,
-        title: '窗户玻璃更换',
-        description: '更换破损的窗户玻璃',
-        amount: 320.00,
-        category: 'maintenance' as 'maintenance',
-        applicant: '周九',
-        date: '2024-11-28',
-        status: 'approved' as 'approved',
-        reviewer: '张三',
-        reviewDate: '2024-11-29',
-        reviewComment: '窗户维修必要，同意报销',
-        createdAt: '2024-11-28T08:30:00'
+    // 从API获取更多费用数据
+    try {
+      const response = await expenseService.getExpenses({
+        page: currentPage.value + 1,
+        pageSize: pageSize.value,
+        search: searchQuery.value,
+        status: statusFilter.value,
+        category: categoryFilter.value,
+        month: monthFilter.value
+      })
+      
+      if (response.success && response.data) {
+        expenses.value.push(...response.data.items)
+        currentPage.value += 1
+      } else {
+        ElMessage.info('没有更多数据了')
       }
-    ]
-    
-    expenses.value.push(...moreExpenses)
-    ElMessage.success('已加载更多数据')
-  } catch (error) {
-    console.error('加载更多失败:', error)
-    ElMessage.error('加载更多失败，请检查网络连接或稍后重试')
+    } catch (error) {
+       handleApiError(error, '加载更多费用数据失败')
+     }
   } finally {
     loadingMore.value = false
   }
@@ -1172,11 +1156,19 @@ const handleDelete = async (row: Expense) => {
       }
     )
     
-    // 这里应该调用API删除费用
-    expenses.value = expenses.value.filter(e => e.id !== row.id)
-    ElMessage.success('费用删除成功')
-  } catch {
-    // 用户取消删除
+    // 调用API删除费用
+    const response = await expenseService.deleteExpense(row.id)
+    if (response.success) {
+      expenses.value = expenses.value.filter(e => e.id !== row.id)
+      ElMessage.success('费用删除成功')
+    } else {
+      ElMessage.error(response.message || '删除费用失败')
+    }
+  } catch (error) {
+    // 用户取消删除或API调用失败
+    if (error !== 'cancel') {
+      handleApiError(error, '删除费用失败')
+    }
   }
 }
 
@@ -1289,69 +1281,20 @@ const exportExpenses = async (format: 'csv' | 'xlsx' = 'csv') => {
   }
 }
 
-// 模拟数据加载
-const loadExpenses = () => {
-  loading.value = true
-  
-  // 模拟API调用
-  setTimeout(() => {
-    expenses.value = [
-      {
-        id: 1,
-        title: '宿舍水电费',
-        description: '2024年12月份水电费缴纳',
-        amount: 156.50,
-        category: 'utilities' as 'utilities',
-        applicant: '张三',
-        date: '2024-12-15',
-        status: 'approved' as 'approved',
-        reviewer: '李四',
-        reviewDate: '2024-12-16',
-        reviewComment: '费用合理，同意报销',
-        createdAt: '2024-12-15T10:30:00'
-      },
-      {
-        id: 2,
-        title: '洗衣机维修费',
-        description: '宿舍洗衣机故障维修',
-        amount: 280.00,
-        category: 'maintenance' as 'maintenance',
-        applicant: '王五',
-        date: '2024-12-10',
-        status: 'pending' as 'pending',
-        createdAt: '2024-12-10T14:20:00'
-      },
-      {
-        id: 3,
-        title: '清洁用品采购',
-        description: '购买拖把、垃圾袋等清洁用品',
-        amount: 85.60,
-        category: 'cleaning' as 'cleaning',
-        applicant: '赵六',
-        date: '2024-12-08',
-        status: 'approved' as 'approved',
-        reviewer: '张三',
-        reviewDate: '2024-12-09',
-        reviewComment: '清洁用品采购合理',
-        createdAt: '2024-12-08T16:45:00'
-      },
-      {
-        id: 4,
-        title: '网费缴纳',
-        description: '2024年12月份宿舍网络费用',
-        amount: 120.00,
-        category: 'utilities' as 'utilities',
-        applicant: '钱七',
-        date: '2024-12-05',
-        status: 'rejected' as 'rejected',
-        reviewer: '李四',
-        reviewDate: '2024-12-06',
-        reviewComment: '网费应该由学校承担，不予报销',
-        createdAt: '2024-12-05T09:15:00'
+// 使用expenseService获取费用数据
+const loadExpenses = async () => {
+  await withLoading(loading, async () => {
+    try {
+      const response = await expenseService.getExpenseList()
+      if (response.success && response.data) {
+        expenses.value = response.data
+      } else {
+        ElMessage.error('获取费用数据失败')
       }
-    ]
-    loading.value = false
-  }, 800)
+    } catch (error) {
+      handleApiError(error, '获取费用数据失败')
+    }
+  })
 }
 
 // 生命周期
@@ -1366,6 +1309,8 @@ const quickFilter = ref('')
 
 // 批量操作方法
 const handleBatchApprove = async () => {
+// 批量审核通过
+const handleBatchApprove = async () => {
   // 获取所有待审核的记录
   const pendingItems = expenses.value.filter(item => item.status === 'pending')
   
@@ -1374,13 +1319,23 @@ const handleBatchApprove = async () => {
     return
   }
   
-  // 如果有待审核记录，跳转到费用审核页面进行批量处理
-  if (pendingItems.length > 0) {
-    router.push('/dashboard/expense/review?batch=true')
-    return
+  try {
+    batchProcessing.value = true
+    const response = await expenseService.batchApproveExpenses(pendingItems.map(item => item.id))
+    if (response.success) {
+      ElMessage.success(`批量审核通过 ${pendingItems.length} 条费用记录`)
+      await loadExpenses()
+    } else {
+      ElMessage.error(response.message || '批量审核失败')
+    }
+  } catch (error) {
+    handleApiError(error, '批量审核失败')
+  } finally {
+    batchProcessing.value = false
   }
 }
 
+// 批量拒绝
 const handleBatchReject = async () => {
   if (selectedItems.value.length === 0) return
   
@@ -1402,30 +1357,25 @@ const handleBatchReject = async () => {
     )
     
     batchProcessing.value = true
+    const response = await expenseService.batchRejectExpenses(pendingItems.map(item => item.id))
     
-    // 模拟批量拒绝API调用
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    
-    // 更新费用状态
-    pendingItems.forEach(item => {
-      item.status = 'rejected'
-      item.reviewer = '当前用户'
-      item.reviewDate = new Date().toISOString().split('T')[0]
-      item.reviewComment = '批量拒绝审核'
-    })
-    
-    // 清空选择
-    clearSelection()
-    ElMessage.success(`成功拒绝 ${pendingItems.length} 条记录`)
+    if (response.success) {
+      clearSelection()
+      ElMessage.success(`成功拒绝 ${pendingItems.length} 条记录`)
+      await loadExpenses()
+    } else {
+      ElMessage.error(response.message || '批量拒绝失败')
+    }
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('批量拒绝失败，请重试')
+      handleApiError(error, '批量拒绝失败')
     }
   } finally {
     batchProcessing.value = false
   }
 }
 
+// 批量删除
 const handleBatchDelete = async () => {
   if (selectedItems.value.length === 0) return
   
@@ -1441,20 +1391,18 @@ const handleBatchDelete = async () => {
     )
     
     batchProcessing.value = true
+    const response = await expenseService.batchDeleteExpenses(selectedItems.value.map(item => item.id))
     
-    // 模拟批量删除API调用
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    
-    // 删除选中的费用
-    const selectedIds = selectedItems.value.map(item => item.id)
-    expenses.value = expenses.value.filter(item => !selectedIds.includes(item.id))
-    
-    // 清空选择
-    clearSelection()
-    ElMessage.success(`成功删除 ${selectedItems.value.length} 条记录`)
+    if (response.success) {
+      clearSelection()
+      ElMessage.success(`成功删除 ${selectedItems.value.length} 条记录`)
+      await loadExpenses()
+    } else {
+      ElMessage.error(response.message || '批量删除失败')
+    }
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('批量删除失败，请重试')
+      handleApiError(error, '批量删除失败')
     }
   } finally {
     batchProcessing.value = false
@@ -1476,14 +1424,32 @@ const handleSearch = () => {
 }
 
 // 更多操作相关方法
-const handleQuickExport = () => {
-  exportExpenses()
+const handleQuickExport = async () => {
+  try {
+    const response = await expenseService.exportExpenses()
+    if (response.success && response.data) {
+      // 处理文件下载
+      const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `费用记录_${new Date().toISOString().split('T')[0]}.xlsx`
+      link.click()
+      window.URL.revokeObjectURL(url)
+      ElMessage.success('导出成功')
+    } else {
+      ElMessage.error(response.message || '导出失败')
+    }
+  } catch (error) {
+    handleApiError(error, '导出失败')
+  }
 }
 
 const handleStatisticsView = () => {
   router.push('/dashboard/expense-statistics')
 }
 
+// 清空所有记录
 const handleClearAll = async () => {
   if (expenses.value.length === 0) {
     ElMessage.warning('没有数据可以清空')
@@ -1501,14 +1467,16 @@ const handleClearAll = async () => {
       }
     )
     
-    // 模拟清空API调用
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    expenses.value = []
-    ElMessage.success('所有费用记录已清空')
+    const response = await expenseService.clearAllExpenses()
+    if (response.success) {
+      expenses.value = []
+      ElMessage.success('所有费用记录已清空')
+    } else {
+      ElMessage.error(response.message || '清空失败')
+    }
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('清空失败，请重试')
+      handleApiError(error, '清空失败')
     }
   }
 }

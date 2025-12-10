@@ -298,6 +298,7 @@ import {
 } from '@element-plus/icons-vue'
 import { getCurrentUser } from '@/services/userService'
 import { dormService } from '@/services/dormService'
+import memberService from '@/services/memberService'
 import type { UserInfo } from '@/services/userService'
 import type { DormInfo } from '@/services/dormService'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -367,108 +368,63 @@ const loadCurrentUserAndDorm = async () => {
   }
 }
 
-// 成员数据 - 增强版
-const members = ref<Member[]>([
-  {
-    id: 1,
-    studentId: '2021010101',
-    name: '张三',
-    room: 'A-101',
-    role: 'dorm_leader',
-    status: 'online',
-    joinDate: '2024-09-01',
-    phone: '13812345678',
-    onlineStatus: 'online',
-    lastActive: new Date().toISOString()
-  },
-  {
-    id: 2,
-    studentId: '2021010102',
-    name: '李四',
-    room: 'A-101',
-    role: 'admin',
-    status: 'active',
-    joinDate: '2024-09-01',
-    phone: '13912345678',
-    onlineStatus: 'online',
-    lastActive: new Date(Date.now() - 300000).toISOString()
-  },
-  {
-    id: 3,
-    studentId: '2021010103',
-    name: '王五',
-    room: 'A-102',
-    role: 'member',
-    status: 'away',
-    joinDate: '2024-09-15',
-    phone: '13712345678',
-    onlineStatus: 'away',
-    lastActive: new Date(Date.now() - 3600000).toISOString()
-  },
-  {
-    id: 4,
-    studentId: '2021010104',
-    name: '赵六',
-    room: 'A-102',
-    role: 'member',
-    status: 'inactive',
-    joinDate: '2024-10-01',
-    phone: '13612345678',
-    onlineStatus: 'offline',
-    lastActive: new Date(Date.now() - 86400000).toISOString()
-  },
-  {
-    id: 5,
-    studentId: '2021010105',
-    name: '钱七',
-    room: 'A-101',
-    role: 'member',
-    status: 'active',
-    joinDate: '2024-09-10',
-    phone: '13512345678',
-    onlineStatus: 'online',
-    lastActive: new Date(Date.now() - 600000).toISOString()
-  },
-  {
-    id: 6,
-    studentId: '2021010106',
-    name: '孙八',
-    room: 'A-103',
-    role: 'member',
-    status: 'away',
-    joinDate: '2024-09-20',
-    phone: '13412345678',
-    onlineStatus: 'away',
-    lastActive: new Date(Date.now() - 7200000).toISOString()
-  },
-  // 待审核成员示例
-  {
-    id: 7,
-    studentId: '2021010107',
-    name: '周九',
-    room: '', // 待分配
-    appliedRoom: 'A-101', // 申请加入的房间
-    role: 'member',
-    status: 'inactive',
-    joinDate: '',
-    phone: '13312345678',
-    onlineStatus: 'offline',
-    isPending: true // 标记为待审核成员
-  },
-  {
-    id: 8,
-    studentId: '2021010108',
-    name: '吴十',
-    room: '', // 待分配
-    appliedRoom: 'A-102', // 申请加入的房间
-    role: 'member',
-    status: 'inactive',
-    joinDate: '',
-    phone: '13212345678',
-    onlineStatus: 'offline',
-    isPending: true // 标记为待审核成员
+// 成员数据 - 从API加载
+const members = ref<Member[]>([])
+
+// 加载成员列表
+const loadMembers = async () => {
+  try {
+    loading.value = true
+    console.log('开始加载成员列表...')
+    
+    const response = await memberService.getMembers({
+      room: currentUserRoom.value,
+      page: currentPage.value,
+      pageSize: pageSize.value,
+      search: searchQuery.value,
+      status: statusFilter.value,
+      role: roleFilter.value
+    })
+    
+    if (response.success) {
+      members.value = response.data.records
+    } else {
+      ElMessage.error(response.message || '加载成员列表失败')
+      members.value = []
+    }
+    
+    console.log(`成功加载 ${members.value.length} 个成员`)
+  } catch (error) {
+    console.error('加载成员列表失败:', error)
+    ElMessage.error('加载成员列表失败')
+    members.value = []
+  } finally {
+    loading.value = false
   }
-])
+}
+
+// 加载待审核成员
+const loadPendingMembers = async () => {
+  try {
+    console.log('开始加载待审核成员...')
+    
+    const response = await memberService.getPendingMembers(currentUserRoom.value)
+    
+    if (response.success) {
+      // 将待审核成员添加到成员列表中
+      members.value = [...members.value, ...response.data.map(member => ({
+        ...member,
+        isPending: true
+      }))]
+    } else {
+      ElMessage.error(response.message || '加载待审核成员失败')
+    }
+    
+    console.log('成功加载待审核成员')
+  } catch (error) {
+    console.error('加载待审核成员失败:', error)
+  }
+}
 
 // 计算属性
 const filteredMembers = computed(() => {
@@ -610,20 +566,29 @@ const handleQuickMessage = async (member: Member) => {
   }
 }
 
-const sendMessageToMember = (member: Member, message: string) => {
-  // 模拟消息发送过程
-  ElMessage.info('正在发送消息...')
-  
-  setTimeout(() => {
-    // 模拟消息发送成功
-    member.lastMessage = message
-    ElMessage.success(`消息已发送给 ${member.name}`)
+const sendMessageToMember = async (member: Member, message: string) => {
+  try {
+    ElMessage.info('正在发送消息...')
+    console.log(`发送消息给 ${member.name}: ${message}`)
     
-    // 如果成员在线，可以模拟实时显示
-    if (member.onlineStatus === 'online') {
-      ElMessage.info(`${member.name} 已查看消息`)
+    const response = await memberService.sendMessage({
+      memberId: member.id,
+      message: message,
+      timestamp: new Date().toISOString()
+    })
+    
+    if (response.success) {
+      // 更新本地消息记录
+      member.lastMessage = message
+      ElMessage.success(`消息已发送给 ${member.name}`)
+      console.log(`消息发送成功: ${member.name}`)
+    } else {
+      ElMessage.error(response.message || '发送消息失败')
     }
-  }, 1000)
+  } catch (error) {
+    console.error('发送消息失败:', error)
+    ElMessage.error('发送消息失败，请重试')
+  }
 }
 
 
@@ -646,10 +611,16 @@ const handleQuickDelete = async (member: Member) => {
 }
 
 const handleDeleteMember = async (member: Member) => {
-  const index = members.value.findIndex(m => m.id === member.id)
-  if (index > -1) {
-    members.value.splice(index, 1)
-    ElMessage.success(`成员 ${member.name} 已删除`)
+  const response = await memberService.deleteMember(member.id)
+  
+  if (response.success) {
+    const index = members.value.findIndex(m => m.id === member.id)
+    if (index > -1) {
+      members.value.splice(index, 1)
+      ElMessage.success(`成员 ${member.name} 已删除`)
+    }
+  } else {
+    ElMessage.error(response.message || '删除成员失败')
   }
 }
 
@@ -723,22 +694,28 @@ const approveMember = async (member: Member) => {
       }
     )
     
-    // 执行审核通过操作
-    const index = members.value.findIndex(m => m.id === member.id)
-    if (index > -1) {
-      // 更新成员信息
-      members.value[index] = {
-        ...members.value[index],
-        isPending: false,
-        room: member.appliedRoom || 'A-101', // 分配到申请的房间
-        joinDate: new Date().toISOString().split('T')[0], // 设置加入日期
-        status: 'active',
-        onlineStatus: 'online'
+    const response = await memberService.approveMember(member.id)
+    
+    if (response.success) {
+      // 执行审核通过操作
+      const index = members.value.findIndex(m => m.id === member.id)
+      if (index > -1) {
+        // 更新成员信息
+        members.value[index] = {
+          ...members.value[index],
+          isPending: false,
+          room: member.appliedRoom || 'A-101', // 分配到申请的房间
+          joinDate: new Date().toISOString().split('T')[0] || '', // 设置加入日期
+          status: 'active',
+          onlineStatus: 'online'
+        }
+        
+        ElMessage.success(`${member.name} 已成功加入寝室`)
+        
+        // 可以在这里添加通知或其他后续操作
       }
-      
-      ElMessage.success(`${member.name} 已成功加入寝室`)
-      
-      // 可以在这里添加通知或其他后续操作
+    } else {
+      ElMessage.error(response.message || '审核通过失败')
     }
   } catch {
     // 用户取消
@@ -757,11 +734,17 @@ const rejectMember = async (member: Member) => {
       }
     )
     
-    // 执行拒绝操作
-    const index = members.value.findIndex(m => m.id === member.id)
-    if (index > -1) {
-      members.value.splice(index, 1)
-      ElMessage.success(`已拒绝 ${member.name} 的加入申请`)
+    const response = await memberService.rejectMember(member.id)
+    
+    if (response.success) {
+      // 执行拒绝操作
+      const index = members.value.findIndex(m => m.id === member.id)
+      if (index > -1) {
+        members.value.splice(index, 1)
+        ElMessage.success(`已拒绝 ${member.name} 的加入申请`)
+      }
+    } else {
+      ElMessage.error(response.message || '拒绝申请失败')
     }
   } catch {
     // 用户取消
@@ -790,29 +773,22 @@ const getStatusText = (status: string) => {
 }
 
 // 生命周期
-onMounted(() => {
-  // 加载当前用户和寝室信息
-  loadCurrentUserAndDorm()
-  
-  loading.value = true
-  // 模拟加载
-  setTimeout(() => {
-    loading.value = false
-  }, 800)
-  
-  // 模拟实时状态更新
-  const statusInterval = setInterval(() => {
-    members.value.forEach(member => {
-      if (Math.random() > 0.95) {
-        const statuses = ['online', 'away', 'offline'] as const
-        member.onlineStatus = statuses[Math.floor(Math.random() * statuses.length)]
-      }
-    })
-  }, 30000)
-  
-  onUnmounted(() => {
-    clearInterval(statusInterval)
-  })
+onMounted(async () => {
+  try {
+    // 加载当前用户和寝室信息
+    await loadCurrentUserAndDorm()
+    
+    // 加载成员列表
+    await loadMembers()
+    
+    // 加载待审核成员
+    await loadPendingMembers()
+    
+    console.log('MemberList 组件初始化完成')
+  } catch (error) {
+    console.error('初始化失败:', error)
+    ElMessage.error('初始化失败，请刷新页面重试')
+  }
 })
 </script>
 

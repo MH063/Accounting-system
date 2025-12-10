@@ -665,6 +665,7 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ExpenseItem, Participant, User as UserType } from '@/types'
+import { expenseService } from '@/services/expenseService'
 
 // 路由
 const route = useRoute()
@@ -741,20 +742,20 @@ const pendingAmount = computed(() => {
 })
 
 const lastPaymentDate = computed(() => {
-  // 模拟获取最近一次支付时间
+  // 基于真实数据获取最近一次支付时间
   if (!expenseData.value?.participants) return null
   
   const paidParticipants = expenseData.value.participants.filter((p: Participant) => p.paid)
   if (paidParticipants.length === 0) return null
   
-  // 假设取最后一个支付的时间
-  const mockPaymentDates = paidParticipants.map((_: Participant, index: number) => {
-    const date = new Date(expenseData.value!.reviewDate!)
-    date.setDate(date.getDate() + index + 1)
-    return date.toISOString()
-  })
+  // 获取已支付参与者的支付时间，按时间倒序排序
+  const paymentDates = paidParticipants
+    .filter(p => p.paidAt) // 确保有支付时间
+    .map(p => new Date(p.paidAt!))
+    .sort((a, b) => b.getTime() - a.getTime())
   
-  return mockPaymentDates[mockPaymentDates.length - 1]
+  // 返回最新的支付时间
+  return paymentDates.length > 0 ? paymentDates[0].toISOString() : null
 })
 
 // 生命周期
@@ -763,76 +764,28 @@ onMounted(() => {
 })
 
 // 方法
-const loadExpenseDetail = () => {
+const loadExpenseDetail = async () => {
   loading.value = true
   
-  // 模拟API调用
-  setTimeout(() => {
-    expenseData.value = {
-      id: route.params.id || 1,
-      title: '宿舍水电费',
-      description: '2024年12月份水电费缴纳，包含电费120.50元和水费36.00元',
-      amount: 156.50,
-      category: 'utilities',
-      applicant: '张三',
-      phone: '13800138001',
-      department: '学生处',
-      position: '宿舍管理员',
-      date: '2024-12-15',
-      status: 'approved',
-      reviewer: '李四',
-      reviewDate: '2024-12-16',
-      reviewComment: '费用合理，同意报销',
-      isUrgent: false,
-      splitType: 'equal',
-      participants: [
-        {
-          name: '张三',
-          role: '申请人',
-          amount: 39.13,
-          percentage: 25,
-          paid: true,
-          avatar: ''
-        },
-        {
-          name: '李四',
-          role: '审核员',
-          amount: 39.13,
-          percentage: 25,
-          paid: false,
-          avatar: ''
-        },
-        {
-          name: '王五',
-          role: '成员',
-          amount: 39.12,
-          percentage: 25,
-          paid: true,
-          avatar: ''
-        },
-        {
-          name: '赵六',
-          role: '成员',
-          amount: 39.12,
-          percentage: 25,
-          paid: false,
-          avatar: ''
-        }
-      ],
-      attachments: [
-        '水电费发票.jpg',
-        '缴费凭证.pdf'
-      ],
-      createdAt: '2024-12-15T10:30:00',
-      updatedAt: '2024-12-16T14:20:00'
+  try {
+    // 从API获取费用详情
+    const response = await expenseService.getExpenseById(Number(route.params.id))
+    if (response.success && response.data) {
+      expenseData.value = response.data
+      
+      // 加载评论数据
+      loadComments()
+      // 加载状态流转历史
+      loadStatusHistory()
+    } else {
+      ElMessage.error('获取费用详情失败')
     }
-
-    // 加载评论数据
-    loadComments()
-    // 加载状态流转历史
-    loadStatusHistory()
+  } catch (error) {
+    console.error('获取费用详情失败:', error)
+    ElMessage.error('获取费用详情失败')
+  } finally {
     loading.value = false
-  }, 800)
+  }
 }
 
 const formatCurrency = (amount: number): string => {
@@ -935,48 +888,19 @@ const getTotalPending = (): number => {
 }
 
 // 评论相关方法
-const loadComments = () => {
-  // 模拟评论数据
-  comments.value = [
-    {
-      id: 1,
-      content: '这个费用申请看起来很合理，水电费确实是必要的支出。',
-      author: {
-        id: 2,
-        name: '李四',
-        role: '审核员',
-        avatar: ''
-      },
-      createdAt: '2024-12-15T14:20:00',
-      read: false,
-      replies: [
-        {
-          id: 11,
-          content: '谢谢审核员的认可，确实是必要的费用支出。',
-          author: {
-            id: 1,
-            name: '张三',
-            role: '申请人',
-            avatar: ''
-          },
-          createdAt: '2024-12-15T15:30:00'
-        }
-      ]
-    },
-    {
-      id: 2,
-      content: '建议下次可以提供更详细的费用明细，这样审核会更高效。',
-      author: {
-        id: 3,
-        name: '王五',
-        role: '成员',
-        avatar: ''
-      },
-      createdAt: '2024-12-15T16:45:00',
-      read: true,
-      replies: []
+const loadComments = async () => {
+  try {
+    // 从API获取评论数据
+    const response = await expenseService.getExpenseComments(expenseData.value.id)
+    if (response.success && response.data) {
+      comments.value = response.data
+    } else {
+      comments.value = []
     }
-  ]
+  } catch (error) {
+    handleApiError(error, '获取评论数据失败')
+    comments.value = []
+  }
 }
 
 const addComment = async () => {
@@ -1225,65 +1149,18 @@ const logPermissionCheck = (action: string, result: boolean) => {
 }
 
 // 状态流转历史相关方法
-const loadStatusHistory = () => {
-  // 模拟状态流转历史数据
-  statusHistory.value = [
-    {
-      id: 1,
-      status: 'pending',
-      description: '费用申请已创建，等待审核',
-      operator: expenseData.value.applicant,
-      timestamp: expenseData.value.createdAt,
-      ipAddress: '192.168.1.100',
-      details: {
-        '操作类型': '创建',
-        '来源IP': '192.168.1.100',
-        '用户代理': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
-    },
-    {
-      id: 2,
-      status: 'approved',
-      description: '费用申请已通过审核',
-      operator: expenseData.value.reviewer,
-      timestamp: expenseData.value.reviewDate,
-      ipAddress: '192.168.1.101',
-      details: {
-        '审核结果': '通过',
-        '审核意见': expenseData.value.reviewComment || '费用合理，同意报销',
-        '审批流程': '标准审批',
-        '来源IP': '192.168.1.101'
-      }
-    },
-    {
-      id: 3,
-      status: 'payment_progress',
-      description: '费用已分配给参与成员',
-      operator: expenseData.value.applicant,
-      timestamp: new Date(new Date(expenseData.value.reviewDate).getTime() + 3600000).toISOString(),
-      ipAddress: '192.168.1.100',
-      details: {
-        '分摊方式': expenseData.value.splitType === 'equal' ? '平均分摊' : '自定义分摊',
-        '参与人数': expenseData.value.participants?.length || 0,
-        '总金额': `¥${expenseData.value.amount}`,
-        '来源IP': '192.168.1.100'
-      }
-    },
-    {
-      id: 4,
-      status: 'partially_paid',
-      description: '部分成员已完成费用支付',
-      operator: '系统自动',
-      timestamp: new Date(new Date(expenseData.value.reviewDate).getTime() + 86400000).toISOString(),
-      ipAddress: '192.168.1.50',
-      details: {
-        '已支付人数': expenseData.value.participants?.filter((p: Participant) => p.paid).length || 0,
-        '待支付人数': expenseData.value.participants?.filter((p: Participant) => !p.paid).length || 0,
-        '已支付金额': `¥${paidAmount.value}`,
-        '待支付金额': `¥${pendingAmount.value}`
-      }
+const loadStatusHistory = async () => {
+  try {
+    // 从API获取状态流转历史
+    const response = await expenseService.getExpenseHistory(Number(route.params.id))
+    if (response.success && response.data) {
+      statusHistory.value = response.data
+    } else {
+      console.error('获取状态流转历史失败')
     }
-  ]
+  } catch (error) {
+    console.error('获取状态流转历史失败:', error)
+  }
 }
 
 const toggleHistoryDetails = () => {

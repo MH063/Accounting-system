@@ -202,6 +202,9 @@
 import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import authService from '@/services/authService'
+import { withLoading } from '@/utils/loadingUtils'
+import { handleApiError } from '@/utils/errorUtils'
 
 // 表单验证规则接口
 interface ValidationRule {
@@ -325,26 +328,23 @@ const rules = reactive<FormRules>({
 const handleRegister = async (): Promise<void> => {
   if (!registerFormRef.value) return
   
-  await registerFormRef.value.validate((valid) => {
+  await registerFormRef.value.validate(async (valid) => {
     if (valid) {
-      loading.value = true
-      
-      // 模拟注册请求
-      setTimeout(() => {
-        // 简单的模拟注册验证
-        console.log('注册数据:', {
-          username: registerForm.username,
-          email: registerForm.email,
-          password: registerForm.password
+      try {
+        await withLoading(async () => {
+          const response = await authService.register({
+            username: registerForm.username,
+            email: registerForm.email,
+            password: registerForm.password
+          })
+          
+          console.log('注册成功:', response)
+          ElMessage.success('注册成功！请登录')
+          router.push('/login')
         })
-        
-        ElMessage.success('注册成功！请登录')
-        
-        // 跳转到登录页面
-        router.push('/login')
-        
-        loading.value = false
-      }, 1500)
+      } catch (error) {
+        handleApiError(error, '注册失败')
+      }
     }
   })
 }

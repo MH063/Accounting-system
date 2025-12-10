@@ -15,26 +15,33 @@ export interface UserInfo {
 }
 
 /**
- * 模拟获取用户信息
+ * 获取用户信息
  * @param username 用户名
  * @param email 邮箱
  * @returns 用户信息或null
  */
 export const getUserInfo = async (username: string, email: string): Promise<UserInfo | null> => {
   try {
-    // 模拟API调用延迟
-    await new Promise(resolve => setTimeout(resolve, 500))
+    // 调用真实的API获取用户信息
+    const response = await fetch('/api/users/info', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ username, email })
+    });
     
-    // 模拟用户数据库查询
-    // 在实际应用中，这里应该调用后端API来验证用户信息
-    // 硬编码测试凭证已移除以避免安全风险
-    // 实际项目中应通过后端API验证用户凭证
+    if (response.ok) {
+      const data = await response.json();
+      if (data.success && data.user) {
+        return data.user;
+      }
+    }
     
-    // 模拟用户不存在的情况
-    return null
+    return null;
   } catch (error) {
     console.error('获取用户信息失败:', error)
-    return null
+    return null;
   }
 }
 
@@ -45,19 +52,36 @@ export const getUserInfo = async (username: string, email: string): Promise<User
  */
 export const sendResetCode = async (userInfo: UserInfo): Promise<boolean> => {
   try {
-    // 模拟API调用延迟
-    await new Promise(resolve => setTimeout(resolve, 800))
+    // 调用真实的API发送验证码
+    const response = await fetch('/api/auth/send-reset-code', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        userId: userInfo.id,
+        username: userInfo.username, 
+        email: userInfo.email 
+      })
+    });
     
-    // 模拟发送验证码到用户邮箱或手机
-    console.log(`向用户 ${userInfo.username} 发送密码重置验证码到 ${userInfo.email}`)
-    
-    // 在实际应用中，这里应该调用后端API发送验证码
-    ElMessage.success(`密码重置验证码已发送到您的邮箱 ${userInfo.email}`)
-    return true
+    if (response.ok) {
+      const data = await response.json();
+      if (data.success) {
+        ElMessage.success(`密码重置验证码已发送到您的邮箱 ${userInfo.email}`);
+        return true;
+      } else {
+        ElMessage.error(data.message || '发送验证码失败');
+        return false;
+      }
+    } else {
+      ElMessage.error('发送验证码失败，请稍后重试');
+      return false;
+    }
   } catch (error) {
-    console.error('发送验证码失败:', error)
-    ElMessage.error('发送验证码失败，请稍后重试')
-    return false
+    console.error('发送验证码失败:', error);
+    ElMessage.error('发送验证码时发生错误');
+    return false;
   }
 }
 
@@ -69,19 +93,28 @@ export const sendResetCode = async (userInfo: UserInfo): Promise<boolean> => {
  */
 export const verifyResetCode = async (userInfo: UserInfo, code: string): Promise<boolean> => {
   try {
-    // 模拟API调用延迟
-    await new Promise(resolve => setTimeout(resolve, 500))
+    // 调用真实的API验证验证码
+    const response = await fetch('/api/auth/verify-reset-code', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        userId: userInfo.id,
+        username: userInfo.username, 
+        code: code 
+      })
+    });
     
-    // 在实际应用中，这里应该调用后端API验证验证码
-    // 简单验证：验证码为6位数字
-    if (/^\d{6}$/.test(code)) {
-      return true
+    if (response.ok) {
+      const data = await response.json();
+      return data.success || false;
     }
     
-    return false
+    return false;
   } catch (error) {
-    console.error('验证验证码失败:', error)
-    return false
+    console.error('验证验证码失败:', error);
+    return false;
   }
 }
 
@@ -93,9 +126,6 @@ export const verifyResetCode = async (userInfo: UserInfo, code: string): Promise
  */
 export const resetPassword = async (userInfo: UserInfo, newPassword: string): Promise<boolean> => {
   try {
-    // 模拟API调用延迟
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
     // 验证密码强度
     if (newPassword.length < 6) {
       ElMessage.error('密码长度不能少于6位')
@@ -110,54 +140,36 @@ export const resetPassword = async (userInfo: UserInfo, newPassword: string): Pr
       return false
     }
     
-    // 检查新密码是否与旧密码相同
-    const oldPassword = localStorage.getItem(`user_password_${userInfo.username}`);
-    if (oldPassword && oldPassword === newPassword) {
-      ElMessage.error('新密码不能与旧密码相同')
-      return false
+    // 调用真实的API重置密码
+    const response = await fetch('/api/auth/reset-password', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        userId: userInfo.id,
+        username: userInfo.username, 
+        newPassword: newPassword 
+      })
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      if (data.success) {
+        ElMessage.success('密码重置成功，请使用新密码登录');
+        return true;
+      } else {
+        ElMessage.error(data.message || '密码重置失败');
+        return false;
+      }
+    } else {
+      ElMessage.error('密码重置失败，请稍后重试');
+      return false;
     }
-    
-    // 在实际应用中，这里应该调用后端API重置密码
-    // 模拟密码重置成功
-    console.log(`用户 ${userInfo.username} 的密码已重置`)
-    
-    // 保存到localStorage（模拟）
-    localStorage.setItem(`user_password_${userInfo.username}`, newPassword)
-    
-    // 记录密码重置日志
-    const resetLog = {
-      userId: userInfo.id,
-      username: userInfo.username,
-      timestamp: new Date().toISOString(),
-      ip: '127.0.0.1' // 模拟IP地址
-    };
-    localStorage.setItem(`password_reset_log_${userInfo.username}`, JSON.stringify(resetLog));
-    
-    // 记录安全事件日志
-    const securityLog = {
-      userId: userInfo.id,
-      username: userInfo.username,
-      eventType: 'password_reset',
-      timestamp: new Date().toISOString(),
-      details: 'Password reset successful'
-    };
-    const securityLogsStr = localStorage.getItem('security_events');
-    let securityLogs: any[] = [];
-    if (securityLogsStr) {
-      securityLogs = JSON.parse(securityLogsStr);
-    }
-    securityLogs.push(securityLog);
-    if (securityLogs.length > 100) {
-      securityLogs = securityLogs.slice(-100);
-    }
-    localStorage.setItem('security_events', JSON.stringify(securityLogs));
-    
-    ElMessage.success('密码重置成功，请使用新密码登录')
-    return true
   } catch (error) {
-    console.error('重置密码失败:', error)
-    ElMessage.error('重置密码失败，请稍后重试')
-    return false
+    console.error('重置密码失败:', error);
+    ElMessage.error('重置密码时发生错误');
+    return false;
   }
 }
 
@@ -183,19 +195,38 @@ export const checkSecurityQuestions = (username: string): boolean => {
  */
 export const sendResetNotification = async (userInfo: UserInfo, method: string = 'email'): Promise<void> => {
   try {
-    // 模拟发送通知
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // 调用真实的API发送通知
+    const response = await fetch('/api/auth/send-reset-notification', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        userId: userInfo.id,
+        username: userInfo.username, 
+        email: userInfo.email,
+        phone: userInfo.phone,
+        method: method
+      })
+    });
     
-    if (method === 'email') {
-      console.log(`密码重置通知已发送到邮箱: ${userInfo.email}`);
-      ElMessage.info(`密码重置通知已发送到您的邮箱 ${userInfo.email}`);
-    } else if (method === 'sms' && userInfo.phone) {
-      console.log(`密码重置通知已发送到手机: ${userInfo.phone}`);
-      ElMessage.info(`密码重置通知已发送到您的手机 ${userInfo.phone}`);
+    if (response.ok) {
+      const data = await response.json();
+      if (data.success) {
+        if (method === 'email') {
+          ElMessage.info(`密码重置通知已发送到您的邮箱 ${userInfo.email}`);
+        } else if (method === 'sms' && userInfo.phone) {
+          ElMessage.info(`密码重置通知已发送到您的手机 ${userInfo.phone}`);
+        }
+      } else {
+        ElMessage.error(data.message || '发送通知失败');
+      }
+    } else {
+      ElMessage.error('发送通知失败');
     }
   } catch (error) {
     console.error('发送密码重置通知失败:', error);
-    ElMessage.error('发送通知失败');
+    ElMessage.error('发送通知时发生错误');
   }
 }
 

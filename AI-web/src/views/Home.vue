@@ -44,7 +44,13 @@
         <div class="feature-card" v-for="feature in features" :key="feature.title">
           <div class="feature-icon-wrapper">
             <div class="feature-icon">
-              <component :is="feature.icon" :size="32" />
+              <component 
+                :is="feature.icon === 'House' ? House : 
+                     feature.icon === 'User' ? User : 
+                     feature.icon === 'Money' ? Money : 
+                     feature.icon === 'DataAnalysis' ? DataAnalysis : 'div'" 
+                :size="32" 
+              />
             </div>
             <div class="icon-glow"></div>
           </div>
@@ -81,8 +87,6 @@
       </div>
     </div>
     
-
-    
     <div class="cta-section">
       <div class="cta-container">
         <div class="cta-content">
@@ -99,28 +103,28 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, shallowRef } from 'vue'
 import { House, User, Money, DataAnalysis, ArrowRight } from '@element-plus/icons-vue'
 
 // 功能数据
 const features = ref([
   {
-    icon: House,
+    icon: 'House',
     title: '寝室管理',
     description: '便捷的寝室信息管理，让生活更有序，支持多人协作'
   },
   {
-    icon: User,
+    icon: 'User',
     title: '成员管理',
     description: '轻松管理寝室成员信息，增进室友关系，提升沟通效率'
   },
   {
-    icon: Money,
+    icon: 'Money',
     title: '费用管理',
     description: '透明化费用记录，精准费用管理，让每一笔支出都清晰可见'
   },
   {
-    icon: DataAnalysis,
+    icon: 'DataAnalysis',
     title: '统计分析',
     description: '可视化数据分析，洞察生活消费，帮助合理规划预算'
   }
@@ -142,7 +146,13 @@ const steps = ref([
   }
 ])
 
-
+// 图标映射
+const iconComponents = {
+  House,
+  User,
+  Money,
+  DataAnalysis
+}
 
 // 页面加载动画
 onMounted(() => {
@@ -1357,5 +1367,4 @@ onMounted(() => {
     width: 60px;
     height: 60px;
   }
-}
-</style>
+}</style>

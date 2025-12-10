@@ -500,6 +500,7 @@ import {
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getQRCodes } from '@/services/paymentService'
 import { formatLocalDate } from '@/utils/timeUtils'
+import { billService } from '@/services/billService'
 
 // 账单类型定义
 interface Bill {
@@ -667,157 +668,45 @@ const getProgressColor = (bill: Bill): string => {
  */
 const loadBillList = async () => {
   loading.value = true
+  console.log('[BillManagement] 开始加载账单列表', searchForm)
+  
   try {
-    // 模拟API调用
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    // 调用真实API
+    const response = await billService.getBillList({
+      page: pagination.page,
+      size: pagination.size,
+      ...searchForm
+    })
     
-    // 模拟数据
-    const mockBills: Bill[] = [
-      {
-        id: '1',
-        title: '2024年1月住宿费',
-        status: 'paid',
-        totalAmount: 1200.00,
-        paidAmount: 1200.00,
-        billDate: '2024-01-31',
-        payerName: '张三',
-        type: 'monthly',
-        description: '1月份宿舍住宿费用，包含水电网费'
-      },
-      {
-        id: '2',
-        title: '水电费账单',
-        status: 'pending',
-        totalAmount: 280.50,
-        paidAmount: 0,
-        billDate: '2024-02-15',
-        payerName: '李四',
-        type: 'expense',
-        description: '2月份水电费用分摊'
-      },
-      {
-        id: '3',
-        title: '设备维修费',
-        status: 'partial',
-        totalAmount: 500.00,
-        paidAmount: 300.00,
-        billDate: '2024-02-20',
-        payerName: '王五',
-        type: 'temporary',
-        description: '洗衣机维修费用'
-      },
-      {
-        id: '4',
-        title: '网费账单',
-        status: 'pending',
-        totalAmount: 150.00,
-        paidAmount: 0,
-        billDate: '2024-02-28',
-        payerName: '赵六',
-        type: 'monthly',
-        description: '2月份网络费用'
-      },
-      {
-        id: '5',
-        title: '门锁维修',
-        status: 'overdue',
-        totalAmount: 200.00,
-        paidAmount: 0,
-        billDate: '2024-01-15',
-        payerName: '钱七',
-        type: 'temporary',
-        description: '门锁维修费用'
-      },
-      {
-        id: '6',
-        title: '空调清洁费',
-        status: 'paid',
-        totalAmount: 80.00,
-        paidAmount: 80.00,
-        billDate: '2024-01-20',
-        payerName: '孙八',
-        type: 'expense',
-        description: '空调清洁保养'
-      },
-      {
-        id: '7',
-        title: '2024年2月住宿费',
-        status: 'pending',
-        totalAmount: 1200.00,
-        paidAmount: 0,
-        billDate: '2024-02-29',
-        payerName: '周九',
-        type: 'monthly',
-        description: '2月份宿舍住宿费用，包含水电网费'
-      },
-      {
-        id: '8',
-        title: '洗衣机修理费',
-        status: 'partial',
-        totalAmount: 350.00,
-        paidAmount: 200.00,
-        billDate: '2024-02-10',
-        payerName: '吴十',
-        type: 'temporary',
-        description: '洗衣机故障维修'
-      }
-    ]
-    
-    // 根据搜索条件进行筛选
-    let filteredBills = [...mockBills]
-    
-    // 关键词搜索
-    if (searchForm.keyword.trim()) {
-      const keyword = searchForm.keyword.trim().toLowerCase()
-      filteredBills = filteredBills.filter(bill => 
-        bill.title.toLowerCase().includes(keyword) ||
-        bill.payerName.toLowerCase().includes(keyword) ||
-        bill.description.toLowerCase().includes(keyword)
-      )
-    }
-    
-    // 状态筛选
-    if (searchForm.status) {
-      filteredBills = filteredBills.filter(bill => bill.status === searchForm.status)
-    }
-    
-    // 类型筛选
-    if (searchForm.type) {
-      filteredBills = filteredBills.filter(bill => bill.type === searchForm.type)
-    }
-    
-    // 月份筛选
-    if (searchForm.month) {
-      filteredBills = filteredBills.filter(bill => bill.billDate.startsWith(searchForm.month))
-    }
-    
-    // 打印筛选信息
-    // 搜索条件和筛选结果日志已移除以优化性能
-    
-    // 分页处理
-    const start = (pagination.page - 1) * pagination.size
-    const end = start + pagination.size
-    const paginatedBills = filteredBills.slice(start, end)
-    
-    billList.value = paginatedBills
-    pagination.total = filteredBills.length
-    
-    // 更新统计信息（基于筛选后的数据）
-    billStats.pending = filteredBills.filter(bill => bill.status === 'pending').length
-    billStats.paid = filteredBills.filter(bill => bill.status === 'paid').length
-    billStats.overdue = filteredBills.filter(bill => bill.status === 'overdue').length
-    billStats.totalAmount = filteredBills.reduce((sum, bill) => sum + bill.totalAmount, 0)
-    
-    // 如果有筛选条件，显示结果提示
-    const hasFilters = searchForm.keyword.trim() || searchForm.status || searchForm.type || searchForm.month
-    if (hasFilters && filteredBills.length === 0) {
-      ElMessage.warning('未找到符合条件的账单')
+    if (response.success) {
+      billList.value = response.data.list
+      pagination.total = response.data.total
+      
+      // 更新统计信息
+      billStats.pending = response.data.stats?.pending || 0
+      billStats.paid = response.data.stats?.paid || 0
+      billStats.overdue = response.data.stats?.overdue || 0
+      billStats.totalAmount = response.data.stats?.totalAmount || 0
+      
+      console.log('[BillManagement] 账单列表加载成功:', {
+        page: pagination.page,
+        size: pagination.size,
+        total: pagination.total,
+        currentPageCount: response.data.list.length,
+        stats: billStats
+      })
+    } else {
+      throw new Error(response.message || '获取账单列表失败')
     }
     
   } catch (error) {
-    ElMessage.error('加载账单列表失败，请检查网络连接或稍后重试')
+    console.error('[BillManagement] 加载账单列表失败:', error)
+    ElMessage.error(error instanceof Error ? error.message : '加载账单列表失败，请检查网络连接或稍后重试')
+    billList.value = []
+    pagination.total = 0
   } finally {
     loading.value = false
+    console.log('[BillManagement] 账单列表加载完成')
   }
 }
 
@@ -1016,8 +905,36 @@ const exportBills = async (format: 'csv' | 'xlsx' = 'csv') => {
       '更新时间': formatLocalDate(bill.updatedAt || new Date().toISOString())
     }))
 
-    // 模拟处理时间
-    await new Promise(resolve => setTimeout(resolve, 800))
+    // 处理导出数据
+    const exportData = selectedBills.length > 0 
+      ? billList.value.filter(bill => selectedBills.includes(bill.id)).map(bill => ({
+          '账单ID': bill.id,
+          '账单标题': bill.title,
+          '状态': getStatusText(bill.status),
+          '总金额': bill.totalAmount.toFixed(2),
+          '已付金额': bill.paidAmount.toFixed(2),
+          '剩余金额': (bill.totalAmount - bill.paidAmount).toFixed(2),
+          '账单日期': formatLocalDate(bill.billDate),
+          '付款人': bill.payerName,
+          '账单类型': getTypeText(bill.type),
+          '创建时间': formatLocalDate(bill.createdAt || new Date().toISOString()),
+          '更新时间': formatLocalDate(bill.updatedAt || new Date().toISOString())
+        }))
+      : billList.value.map(bill => ({
+          '账单ID': bill.id,
+          '账单标题': bill.title,
+          '状态': getStatusText(bill.status),
+          '总金额': bill.totalAmount.toFixed(2),
+          '已付金额': bill.paidAmount.toFixed(2),
+          '剩余金额': (bill.totalAmount - bill.paidAmount).toFixed(2),
+          '账单日期': formatLocalDate(bill.billDate),
+          '付款人': bill.payerName,
+          '账单类型': getTypeText(bill.type),
+          '创建时间': formatLocalDate(bill.createdAt || new Date().toISOString()),
+          '更新时间': formatLocalDate(bill.updatedAt || new Date().toISOString())
+        }))
+
+    console.log('[BillManagement] 开始导出账单记录，格式:', format, '数据条数:', exportData.length)
 
     const timestamp = new Date().toISOString().split('T')[0]
     
@@ -1231,9 +1148,22 @@ const handleConfirmPayment = async () => {
         }
       }
       
-      // 更新账单状态为已支付（这里简化处理，实际应该调用API更新状态）
+      // 调用API更新账单状态
       if (currentBill.value) {
-        currentBill.value.status = 'paid'
+        const response = await billService.updateBillStatus(currentBill.value.id, {
+          status: 'paid',
+          paidAmount: currentBill.value.totalAmount,
+          paymentMethod: selectedPaymentMethod.value,
+          paymentTime: new Date().toISOString()
+        })
+        
+        if (response.success) {
+          currentBill.value.status = 'paid'
+          console.log('[BillManagement] 账单状态更新成功:', currentBill.value.id)
+        } else {
+          ElMessage.error('更新账单状态失败: ' + (response.message || '未知错误'))
+          return
+        }
       }
     } else {
       ElMessage.error('获取收款码失败')
@@ -1259,12 +1189,21 @@ const handleClosePaymentDialog = () => {
  */
 const saveReminderSettings = async () => {
   try {
-    // 模拟保存提醒设置
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    ElMessage.success('提醒设置保存成功')
-    reminderSettingsVisible.value = false
+    // 调用真实API保存提醒设置
+    const response = await billService.updateReminderSettings({
+      ...reminderSettings.value
+    })
+    
+    if (response.success) {
+      ElMessage.success('提醒设置保存成功')
+      reminderSettingsVisible.value = false
+      console.log('[BillManagement] 提醒设置保存成功:', reminderSettings.value)
+    } else {
+      throw new Error(response.message || '保存提醒设置失败')
+    }
   } catch (error) {
-    ElMessage.error('保存提醒设置失败')
+    console.error('[BillManagement] 保存提醒设置失败:', error)
+    ElMessage.error(error instanceof Error ? error.message : '保存提醒设置失败')
   }
 }
 
@@ -1286,8 +1225,15 @@ const handleCurrentChange = (page: number) => {
 }
 
 // 组件挂载时加载数据
-onMounted(() => {
-  loadBillList()
+onMounted(async () => {
+  console.log('[BillManagement] 开始初始化组件')
+  try {
+    await loadBillList()
+    console.log('[BillManagement] 组件初始化完成')
+  } catch (error) {
+    console.error('[BillManagement] 组件初始化失败:', error)
+    ElMessage.error('页面初始化失败，请刷新页面重试')
+  }
 })
 </script>
 

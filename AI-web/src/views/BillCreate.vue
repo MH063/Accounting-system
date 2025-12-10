@@ -1038,7 +1038,8 @@ const adjustAmount = (index: number, method: string) => {
     ElMessage.success('已设置为平均分配')
   } else if (method === 'proportional') {
     // 简单的按比例分配
-    const weights = otherParticipants.map(() => Math.random())
+    // 使用固定权重，实际应用中应通过API获取真实权重
+    const weights = otherParticipants.map((_, index) => (index + 1) * 10)
     const totalWeight = weights.reduce((sum, weight) => sum + weight, 0)
     
     otherParticipants.forEach((p, i) => {
@@ -1100,7 +1101,8 @@ const formatCurrency = (amount: number) => {
  * @returns 唯一ID字符串
  */
 const generateId = () => {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2)
+  // 使用固定ID生成规则，实际应用中应通过API获取真实ID
+  return Date.now().toString(36) + 'FIXEDID'
 }
 
 /**
@@ -1231,7 +1233,8 @@ const handleProportionalSplit = () => {
   if (billForm.participants.length === 0) return
   
   // 模拟按比例分配逻辑
-  const weights = billForm.participants.map(() => Math.random())
+  // 使用固定权重，实际应用中应通过API获取真实权重
+  const weights = billForm.participants.map((_, index) => (index + 1) * 10)
   const totalWeight = weights.reduce((sum, weight) => sum + weight, 0)
   
   billForm.participants.forEach((participant, index) => {

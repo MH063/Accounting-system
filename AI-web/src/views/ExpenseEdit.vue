@@ -12,13 +12,13 @@
         <el-button 
           type="primary" 
           :icon="ArrowLeft" 
-          @click="$router.back()"
+          @click="router.back()"
           class="back-btn"
         >
           返回
         </el-button>
         <el-button 
-          @click="$router.back()"
+          @click="router.back()"
           class="cancel-btn"
         >
           取消
@@ -197,25 +197,42 @@
           </div>
 
           <el-form-item label="相关票据">
-            <el-upload
-              v-model:file-list="fileList"
-              class="upload-demo"
-              drag
-              action="#"
-              multiple
-              :auto-upload="false"
-              list-type="text"
-            >
-              <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
-              <div class="el-upload__text">
-                将文件拖到此处，或<em>点击上传</em>
+            <div class="upload-container">
+              <!-- 上传进度条 -->
+              <div v-if="uploading" class="upload-progress-container">
+                <el-progress 
+                  :percentage="uploadProgress" 
+                  :stroke-width="12" 
+                  striped 
+                  striped-flow
+                  :duration="10"
+                />
               </div>
-              <template #tip>
-                <div class="el-upload__tip">
-                  支持 pdf/jpg/png/gif 文件，单个文件不超过 10MB
+              
+              <el-upload
+                v-model:file-list="fileList"
+                class="upload-demo"
+                drag
+                action="#"
+                multiple
+                :auto-upload="false"
+                list-type="text"
+                :on-change="handleFileChange"
+                :on-remove="handleFileRemove"
+                :on-exceed="handleFileExceed"
+                :limit="5"
+              >
+                <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+                <div class="el-upload__text">
+                  将文件拖到此处，或<em>点击上传</em>
                 </div>
-              </template>
-            </el-upload>
+                <template #tip>
+                  <div class="el-upload__tip">
+                    支持 pdf/jpg/png/gif 文件，单个文件不超过 10MB
+                  </div>
+                </template>
+              </el-upload>
+            </div>
           </el-form-item>
         </el-form>
       </el-card>
@@ -231,6 +248,7 @@ import {
   ArrowLeft, Document, User, Paperclip, Edit,
   DocumentCopy, Check, UploadFilled
 } from '@element-plus/icons-vue'
+import expenseService from '@/services/expenseService'
 
 const route = useRoute()
 const router = useRouter()
@@ -277,7 +295,14 @@ const formRules = {
 }
 
 // 文件列表
-const fileList = ref([])
+const fileList = ref<any[]>([])
+
+// 上传状态
+const uploading = ref(false)
+const uploadProgress = ref(0)
+
+// 加载状态
+const loading = ref(false)
 
 // 提交状态
 const submitting = ref(false)
@@ -294,6 +319,7 @@ const disabledDate = (time: Date) => {
 const loadExpenseData = async () => {
   try {
     const expenseId = route.params.id as string
+    loading.value = true
     
     // 检查是否有传入的数据（从路由query或state中获取）
     let passedData = null
@@ -302,8 +328,8 @@ const loadExpenseData = async () => {
       // 先解码URL编码的数据，再解析JSON
       const decodedData = decodeURIComponent(route.query.data as string)
       passedData = JSON.parse(decodedData)
-    } else if (route.state?.expenseData) {
-      passedData = route.state.expenseData
+    } else if ((route as any).state?.expenseData) {
+      passedData = (route as any).state.expenseData
     }
     
     console.log(`加载费用数据，ID: ${expenseId}`, passedData)
@@ -326,38 +352,42 @@ const loadExpenseData = async () => {
       }
       console.log('使用传入的数据加载表单:', formData.value)
     } else {
-      // 模拟API调用获取数据
-      setTimeout(() => {
-        // 模拟数据
-        const mockData = {
-          title: '办公室清洁费用',
-          category: 'cleaning',
-          amount: 300.00,
-          date: '2024-12-15',
-          description: '月度办公室清洁服务，包括地面清洁、垃圾清理等',
-          applicant: '张三',
-          phone: '13800138000',
-          department: '行政部门',
-          position: '清洁员'
-        }
-        
-        formData.value = { ...mockData }
-        console.log('使用默认模拟数据加载表单')
-      }, 500)
+      // 直接调用真实API获取费用详情
+      const expenseId = route.params.id as string
+      const response = await expenseService.getExpenseById(expenseId)
+      if (response.success) {
+        formData.value = response.data
+        fileList.value = response.data.attachments || []
+        console.log('费用数据加载成功:', response.data)
+      } else {
+        throw new Error(response.message || '获取费用详情失败')
+      }
     }
     
   } catch (error) {
     console.error('加载费用数据失败:', error)
-    ElMessage.error('加载费用数据失败')
+    ElMessage.error('加载费用数据失败，请重试')
+  } finally {
+    loading.value = false
   }
 }
 
 // 保存草稿
 const handleSaveDraft = async () => {
   try {
-    ElMessage.success('草稿保存成功')
+    console.log('保存草稿:', formData.value)
+    
+    // 调用真实API保存草稿
+    const response = await expenseService.saveDraft(formData.value)
+    if (response.success) {
+      ElMessage.success('草稿保存成功')
+    } else {
+      throw new Error(response.message || '保存失败')
+    }
+    
   } catch (error) {
-    ElMessage.error('保存草稿失败')
+    console.error('保存草稿失败:', error)
+    ElMessage.error('保存草稿失败，请重试')
   }
 }
 
@@ -368,23 +398,119 @@ const handleSubmit = async () => {
     if (!valid) return
     
     submitting.value = true
+    console.log('开始提交费用修改:', formData.value)
     
-    // 模拟API调用
-    setTimeout(() => {
+    // 调用真实API更新费用记录
+    const expenseId = route.params.id as string
+    const response = await expenseService.updateExpense(expenseId, formData.value)
+    if (response.success) {
       ElMessage.success('费用修改成功')
-      router.push(`/dashboard/expense/detail/${route.params.id}`)
-      submitting.value = false
-    }, 1000)
+      router.push(`/dashboard/expense/detail/${expenseId}`)
+    } else {
+      throw new Error(response.message || '提交失败')
+    }
     
   } catch (error) {
     console.error('提交失败:', error)
     ElMessage.error('提交失败，请检查表单信息')
+  } finally {
     submitting.value = false
   }
 }
 
-onMounted(() => {
-  loadExpenseData()
+// 文件变化处理
+const handleFileChange = async (file: any) => {
+  try {
+    console.log('File changed:', file)
+    
+    // 验证文件大小（限制每个文件不超过10MB）
+    if (file.raw) {
+      if (file.raw.size > 10 * 1024 * 1024) {
+        ElMessage.error(`文件 ${file.name} 超过10MB限制`)
+        // 从文件列表中移除
+        const index = fileList.value.findIndex((f: any) => f.uid === file.uid)
+        if (index > -1) {
+          fileList.value.splice(index, 1)
+        }
+        return
+      }
+      
+      // 验证文件类型
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf']
+      if (!allowedTypes.includes(file.raw.type)) {
+        ElMessage.error(`文件 ${file.name} 格式不支持，请选择 pdf/jpg/png/gif 格式的文件`)
+        const index = fileList.value.findIndex((f: any) => f.uid === file.uid)
+        if (index > -1) {
+          fileList.value.splice(index, 1)
+        }
+        return
+      }
+    }
+    
+    // 显示上传状态
+    uploading.value = true
+    uploadProgress.value = 0
+    file.status = 'uploading'
+    
+    // 调用真实的文件上传API
+    const formDataObj = new FormData()
+    formDataObj.append('file', file.raw)
+    formDataObj.append('expenseId', route.params.id as string)
+    
+    // 调用真实的文件上传API
+    const response = await expenseService.uploadFile(formDataObj)
+    if (response.success) {
+      file.status = 'success'
+      file.url = response.data.fileUrl
+      ElMessage.success(`文件 ${file.name} 上传成功`)
+    } else {
+      throw new Error(response.message || '上传失败')
+    }
+    
+  } catch (error) {
+    console.error('文件上传失败:', error)
+    file.status = 'error'
+    uploading.value = false
+    uploadProgress.value = 0
+    ElMessage.error(`文件 ${file.name} 上传失败，请重试`)
+  }
+}
+
+// 文件移除处理
+const handleFileRemove = async (file: any) => {
+  try {
+    console.log('File removed:', file)
+    
+    // 调用真实的文件删除API
+    if (file.url) {
+      const response = await expenseService.deleteFile(file.url)
+      if (!response.success) {
+        throw new Error(response.message || '删除文件失败')
+      }
+    }
+    
+    ElMessage.info(`文件 ${file.name} 已移除`)
+    console.log('文件移除成功:', file.name)
+    
+  } catch (error) {
+    console.error('移除文件失败:', error)
+    ElMessage.error('移除文件失败，请重试')
+  }
+}
+
+// 文件超出限制处理
+const handleFileExceed = () => {
+  ElMessage.warning('最多只能上传 5 个文件')
+}
+
+onMounted(async () => {
+  try {
+    console.log('开始初始化费用编辑页面')
+    await loadExpenseData()
+  } catch (error) {
+    console.error('初始化费用编辑页面失败:', error)
+    ElMessage.error('页面初始化失败')
+  }
 })
 </script>
 
@@ -512,12 +638,20 @@ onMounted(() => {
   color: #909399;
 }
 
-/* 上传组件样式 */
-.upload-demo {
+/* 上传区域样式 */
+.upload-container {
   width: 100%;
 }
 
-.el-upload-dragger {
+.upload-progress-container {
+  margin-bottom: 16px;
+}
+
+.upload-demo :deep(.el-upload) {
+  width: 100%;
+}
+
+.upload-demo :deep(.el-upload-dragger) {
   width: 100%;
   height: 120px;
 }

@@ -542,8 +542,8 @@ const {
 // 状态管理
 const loading = ref(false)
 const settingsVisible = ref(false)
-const activeSettingsTab = ref('general')
-const selectedCategory = ref('all')
+const activeSettingsTab = ref('')
+const selectedCategory = ref('')
 const filterType = ref<'all' | 'unread' | 'important'>('all')
 const sortBy = ref<'time-desc' | 'time-asc' | 'importance'>('time-desc')
 const selectedNotifications = ref<number[]>([])
@@ -840,12 +840,40 @@ const resetSettings = () => {
   })
 }
 
-const saveSettings = () => {
-  // 保存通知偏好设置
+const saveSettings = async () => {
+  // 保存通知偏好设置到localStorage
   saveNotificationPreferences()
   
-  // TODO: 这里可以调用API保存设置到后端
-  ElMessage.success('设置已保存')
+  // 调用真实API保存设置到后端
+  try {
+    const { saveNotificationSettings } = await import('@/services/notificationSettingsService')
+    
+    // 构造设置对象
+    const settings = {
+      systemNotifications: notificationSettings.value.systemNotifications,
+      emailNotifications: notificationSettings.value.emailNotifications,
+      smsNotifications: notificationSettings.value.smsNotifications,
+      pushNotifications: notificationSettings.value.pushNotifications,
+      soundEnabled: notificationSettings.value.soundEnabled,
+      vibrationEnabled: notificationSettings.value.vibrationEnabled,
+      billReminder: notificationSettings.value.billReminder,
+      reminderTime: notificationSettings.value.reminderTime.toISOString(),
+      categories: notificationSettings.value.categories,
+      quietHours: notificationSettings.value.quietHours
+    }
+    
+    const response = await saveNotificationSettings(settings)
+    
+    if (response.success) {
+      ElMessage.success('设置已保存')
+    } else {
+      ElMessage.error(response.message || '保存设置失败')
+    }
+  } catch (error) {
+    console.error('保存设置到后端失败:', error)
+    ElMessage.error('保存设置到后端失败: ' + (error as Error).message)
+  }
+  
   settingsVisible.value = false
 }
 

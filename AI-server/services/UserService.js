@@ -14,6 +14,8 @@ const {
   refreshAccessToken, 
   revokeTokenPair 
 } = require('../config/jwtManager');
+const { User, Admin, Role, Permission } = require('../models');
+const AdminAuthService = require('./AdminAuthService');
 
 class UserService extends BaseService {
   constructor() {
@@ -1260,6 +1262,52 @@ class UserService extends BaseService {
       logger.error('[UserService] 检查邮箱可用性失败', { 
         error: error.message,
         email 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 管理员登录
+   * @param {Object} loginData - 登录数据
+   * @returns {Promise<Object>} 登录结果
+   */
+  async adminLogin(loginData) {
+    try {
+      // 创建管理员认证服务实例
+      const adminAuthService = new AdminAuthService();
+      
+      // 调用管理员认证服务进行登录验证
+      const result = await adminAuthService.adminLogin(loginData);
+      
+      return result;
+    } catch (error) {
+      logger.error('[UserService] 管理员登录失败', { 
+        error: error.message,
+        username: loginData.username
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 获取管理员资料
+   * @param {number} userId - 用户ID
+   * @returns {Promise<Object>} 管理员资料
+   */
+  async getAdminProfile(userId) {
+    try {
+      // 创建管理员认证服务实例
+      const adminAuthService = new AdminAuthService();
+      
+      // 调用管理员认证服务获取资料
+      const adminProfile = await adminAuthService.getAdminProfile(userId);
+      
+      return adminProfile;
+    } catch (error) {
+      logger.error('[UserService] 获取管理员资料失败', { 
+        error: error.message,
+        userId
       });
       throw error;
     }

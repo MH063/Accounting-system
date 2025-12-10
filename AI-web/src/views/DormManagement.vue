@@ -119,11 +119,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, Document } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import type { DormManagementItem, EditingDorm } from '@/types'
+import { dormitoryService } from '@/services/dormitoryService'
+import { withLoading } from '@/utils/loadingUtils'
+import { handleApiError } from '@/utils/errorUtils'
 
 const router = useRouter()
 
@@ -210,31 +213,36 @@ const handleSaveEdit = async () => {
   
   try {
     await editFormRef.value.validate()
-    saving.value = true
     
-    // 模拟保存延迟
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    // 查找并更新宿舍信息
-    const index = dormList.value.findIndex(item => item.id === editingDorm.id)
-    if (index !== -1) {
-      dormList.value[index] = {
-        ...dormList.value[index],
+    await withLoading(async () => {
+      const response = await dormitoryService.updateDormitory(editingDorm.id, {
         name: editingDorm.name,
         address: editingDorm.address,
         memberCount: editingDorm.memberCount,
         status: editingDorm.status,
         remark: editingDorm.remark
+      })
+      
+      console.log('宿舍信息更新成功:', response)
+      
+      // 更新本地数据
+      const index = dormList.value.findIndex(item => item.id === editingDorm.id)
+      if (index !== -1) {
+        dormList.value[index] = {
+          ...dormList.value[index],
+          name: editingDorm.name,
+          address: editingDorm.address,
+          memberCount: editingDorm.memberCount,
+          status: editingDorm.status,
+          remark: editingDorm.remark
+        }
       }
       
       ElMessage.success('宿舍信息更新成功！')
       editDialogVisible.value = false
-    }
+    })
   } catch (error) {
-    console.error('表单验证失败:', error)
-    ElMessage.error('请检查输入信息是否正确')
-  } finally {
-    saving.value = false
+    handleApiError(error, '宿舍信息更新失败')
   }
 }
 
@@ -288,6 +296,21 @@ const getDormNumberShort = (dormNumber: string) => {
   if (!dormNumber) return ''
   return dormNumber.slice(-4)
 }
+
+// 生命周期钩子
+onMounted(async () => {
+  try {
+    await withLoading(async () => {
+      const response = await dormitoryService.getDormitoryList()
+      console.log('获取宿舍列表成功:', response)
+      if (response.success && response.data) {
+        dormList.value = response.data
+      }
+    })
+  } catch (error) {
+    handleApiError(error, '获取宿舍列表失败')
+  }
+})
 </script>
 
 <style scoped>

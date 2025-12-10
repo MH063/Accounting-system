@@ -1,3 +1,7 @@
+import type { ApiResponse } from '@/types'
+// 导入请求函数
+import { request } from '@/utils/request'
+
 /**
  * 维护模式服务
  * 提供维护模式状态检查和相关功能
@@ -13,18 +17,21 @@ export interface MaintenanceStatus {
   countdownMinutes: number; // 倒计时分钟数
 }
 
-// 模拟维护状态存储
-let maintenanceStatus: MaintenanceStatus | null = null
-
 /**
  * 获取维护模式状态
  */
 export const getMaintenanceStatus = async (): Promise<MaintenanceStatus | null> => {
-  // 模拟网络延迟
-  await new Promise(resolve => setTimeout(resolve, 300))
-  
-  // 返回当前维护状态
-  return maintenanceStatus
+  try {
+    console.log('获取维护模式状态')
+    
+    // 调用真实API获取维护状态
+    const response = await request<MaintenanceStatus>('/maintenance/status')
+    
+    return response
+  } catch (error) {
+    console.error('获取维护状态失败:', error)
+    return null
+  }
 }
 
 /**
@@ -36,69 +43,56 @@ export const startMaintenance = async (
   countdownMinutes: number, 
   message: string
 ): Promise<boolean> => {
-  // 模拟网络延迟
-  await new Promise(resolve => setTimeout(resolve, 500))
-  
-  const now = new Date()
-  const effectiveTime = new Date(now.getTime() + countdownMinutes * 60 * 1000)
-  
-  // 设置维护状态
-  maintenanceStatus = {
-    enabled: true,
-    active: false,  // 初始为倒计时状态
-    startTime: now.toISOString(),
-    effectiveTime: effectiveTime.toISOString(),
-    message,
-    countdownMinutes
+  try {
+    console.log('启动维护模式:', countdownMinutes, message)
+    
+    // 调用真实API启动维护模式
+    const response = await request<{ success: boolean }>('/maintenance/start', {
+      method: 'POST',
+      data: { countdownMinutes, message }
+    })
+    
+    return response.success
+  } catch (error) {
+    console.error('启动维护模式失败:', error)
+    return false
   }
-  
-  // 倒计时结束后真正激活维护模式
-  setTimeout(() => {
-    if (maintenanceStatus) {
-      maintenanceStatus.active = true
-    }
-  }, countdownMinutes * 60 * 1000)
-  
-  return true
 }
 
 /**
  * 取消维护模式
  */
 export const cancelMaintenance = async (): Promise<boolean> => {
-  // 模拟网络延迟
-  await new Promise(resolve => setTimeout(resolve, 500))
-  
-  // 取消维护状态
-  maintenanceStatus = null
-  
-  return true
+  try {
+    console.log('取消维护模式')
+    
+    // 调用真实API取消维护模式
+    const response = await request<{ success: boolean }>('/maintenance/cancel', {
+      method: 'POST'
+    })
+    
+    return response.success
+  } catch (error) {
+    console.error('取消维护模式失败:', error)
+    return false
+  }
 }
 
 /**
  * 获取维护历史记录
  */
 export const getMaintenanceHistory = async (): Promise<any[]> => {
-  // 模拟网络延迟
-  await new Promise(resolve => setTimeout(resolve, 500))
-  
-  // 返回模拟的历史记录
-  return [
-    {
-      id: 1,
-      startTime: '2023-11-15T02:00:00Z',
-      endTime: '2023-11-15T02:30:00Z',
-      message: '系统例行维护',
-      status: 'completed'
-    },
-    {
-      id: 2,
-      startTime: '2023-11-01T03:00:00Z',
-      endTime: '2023-11-01T04:15:00Z',
-      message: '数据库优化维护',
-      status: 'completed'
-    }
-  ]
+  try {
+    console.log('获取维护历史记录')
+    
+    // 调用真实API获取维护历史
+    const response = await request<any[]>('/maintenance/history')
+    
+    return response
+  } catch (error) {
+    console.error('获取维护历史失败:', error)
+    return []
+  }
 }
 
 // 默认导出服务对象

@@ -26,6 +26,7 @@
       <div class="section-header">
         <h2>收款码列表</h2>
         <div class="section-actions">
+          <el-button @click="openReminderDialog" :icon="Timer">收款提醒</el-button>
           <el-select v-model="filterPlatform" placeholder="支付平台" style="width: 120px" @change="filterQRCodes">
             <el-option label="全部平台" value="all" />
             <el-option label="支付宝" value="alipay" />
@@ -353,8 +354,8 @@ interface ReminderSettings {
 // 响应式数据
 const qrCodes = ref<QRCode[]>([])
 const loading = ref(false)
-const filterStatus = ref('all')
-const filterPlatform = ref('all')
+const filterStatus = ref('')
+const filterPlatform = ref('')
 
 // 安全检测相关数据
 const securityCheckLoading = ref(false)
@@ -367,6 +368,22 @@ const securityCheckHistory = ref<any[]>([])
 const activeQRCodes = computed(() => {
   return qrCodes.value.filter(qr => qr.status === 'active').length
 })
+
+// 加载统计数据
+const loadStatistics = async () => {
+  try {
+    const { getPaymentStatistics } = await import('../services/paymentService')
+    const response = await getPaymentStatistics()
+    
+    if (response.success && response.data) {
+      statistics.totalIncome = response.data.totalIncome || 0
+      statistics.todayIncome = response.data.todayIncome || 0
+      statistics.totalTransactions = response.data.totalTransactions || 0
+    }
+  } catch (error) {
+    console.error('加载统计数据失败:', error)
+  }
+}
 
 const filteredQRCodes = computed(() => {
   let filtered = qrCodes.value.filter(qr => qr.isUserUploaded === true)
@@ -393,25 +410,15 @@ const filteredQRCodes = computed(() => {
 
 // 统计数据
 const statistics = reactive({
-  totalIncome: 15850.50,
-  todayIncome: 320.00,
-  totalTransactions: 89
+  totalIncome: 0,
+  todayIncome: 0,
+  totalTransactions: 0
 })
 
 // 统计数据
-const incomeTrend = ref<IncomeTrendItem[]>([
-  { month: '10月', amount: 120 },
-  { month: '11月', amount: 180 },
-  { month: '12月', amount: 140 },
-  { month: '1月', amount: 200 },
-  { month: '2月', amount: 160 }
-])
+const incomeTrend = ref<IncomeTrendItem[]>([])
 
-const methodDistribution = ref<MethodDistributionItem[]>([
-  { name: '微信支付', amount: 8950.30, percentage: 56.4 },
-  { name: '支付宝', amount: 5230.80, percentage: 33.0 },
-  { name: '银行卡', amount: 1669.40, percentage: 10.6 }
-])
+const methodDistribution = ref<MethodDistributionItem[]>([])
 
 // 安全检测结果
 const securityChecks = ref<SecurityChecks>({
@@ -420,14 +427,56 @@ const securityChecks = ref<SecurityChecks>({
   permissions: 'success'
 })
 
+// 加载安全检测数据
+const loadSecurityData = async () => {
+  try {
+    const response = await performSecurityCheck()
+    
+    if (response.success && response.data) {
+      securityCheckResult.value = response.data
+      
+      // 更新显示的检测结果
+      securityChecks.value = {
+        qrCodeStatus: response.data.qrCodeStatus,
+        usageAnalysis: response.data.usageAnalysis,
+        permissions: response.data.permissions
+      }
+      
+      // 获取安全检测历史
+      const historyResponse = await getSecurityCheckHistory(30)
+      if (historyResponse.success) {
+        securityCheckHistory.value = historyResponse.data
+      }
+    }
+  } catch (error) {
+    console.error('加载安全检测数据失败:', error)
+  }
+}
+
 // 提醒设置
 const reminderForm = ref<ReminderSettings>({
-  enabled: true,
-  methods: ['email', 'push'],
+  enabled: false,
+  methods: [],
   intervalMinutes: 30
 })
 
-const sortBy = ref('createdAt')
+// 加载提醒设置
+const loadReminderSettings = async () => {
+  try {
+    // 这里应该调用获取提醒设置的API
+    // const response = await getReminderSettingsApi()
+    // if (response.success && response.data) {
+    //   reminderForm.value = response.data
+    // }
+    
+    // 暂时使用默认值，等待后端API实现
+    console.log('提醒设置功能待后端API实现')
+  } catch (error) {
+    console.error('加载提醒设置失败:', error)
+  }
+}
+
+const sortBy = ref('')
 const statisticsDialogVisible = ref(false)
 const securityDialogVisible = ref(false)
 const reminderDialogVisible = ref(false)
@@ -473,8 +522,31 @@ const getQRPlatformText = (platform: 'alipay' | 'wechat' | 'unionpay'): string =
   return platformMap[platform] || platform
 }
 
-const openStatisticsDialog = (): void => {
-  statisticsDialogVisible.value = true
+const openReminderDialog = (): void => {
+  reminderDialogVisible.value = true
+}
+
+const openStatisticsDialog = async (): Promise<void> => {
+  try {
+    // 加载收入趋势数据
+    const { getIncomeTrend } = await import('../services/paymentService')
+    const trendResponse = await getIncomeTrend()
+    if (trendResponse.success && trendResponse.data) {
+      incomeTrend.value = trendResponse.data
+    }
+    
+    // 加载支付方式分布数据
+    const { getPaymentMethodDistribution } = await import('../services/paymentService')
+    const methodResponse = await getPaymentMethodDistribution()
+    if (methodResponse.success && methodResponse.data) {
+      methodDistribution.value = methodResponse.data
+    }
+    
+    statisticsDialogVisible.value = true
+  } catch (error) {
+    console.error('加载统计数据失败:', error)
+    ElMessage.error('加载统计数据失败')
+  }
 }
 
 const openSecurityCheck = async (): Promise<void> => {
@@ -575,9 +647,26 @@ const sortQRCodes = (): void => {
   // 排序逻辑已在 computed 中实现
 }
 
-const saveReminderSettings = (): void => {
-  ElMessage.success('提醒设置已保存')
-  reminderDialogVisible.value = false
+const saveReminderSettings = async (): Promise<void> => {
+  try {
+    // 这里应该调用保存提醒设置的API
+    // const response = await saveReminderSettingsApi(reminderForm.value)
+    // if (response.success) {
+    //   ElMessage.success('提醒设置已保存')
+    //   reminderDialogVisible.value = false
+    // }
+    
+    // 调用保存提醒设置的API
+    const { saveReminderSettings: saveReminderSettingsApi } = await import('../services/paymentService')
+    const response = await saveReminderSettingsApi(reminderForm.value)
+    if (response.success) {
+      ElMessage.success('提醒设置已保存')
+      reminderDialogVisible.value = false
+    }
+  } catch (error) {
+    console.error('保存提醒设置失败:', error)
+    ElMessage.error('保存提醒设置失败')
+  }
 }
 
 const uploadForm = reactive({
@@ -654,8 +743,11 @@ const handleUploadQRCode = async (): Promise<void> => {
 }
 
 // 生命周期
-onMounted(() => {
-  getQRCodesList()
+onMounted(async () => {
+  await getQRCodesList()
+  await loadStatistics()
+  await loadSecurityData()
+  await loadReminderSettings()
 })
 </script>
 

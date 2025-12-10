@@ -380,13 +380,22 @@ export const recordNewDevice = (accountId: string, userAgent: string, ipAddress:
 };
 
 /**
- * 获取客户端IP地址（模拟）
+ * 获取客户端IP地址
  * 在实际应用中，应该从服务器获取真实IP
  */
 export const getClientIpAddress = (): string => {
   // 在实际应用中，应该从服务器获取真实IP
-  // 这里返回一个模拟的IP地址
-  return '192.168.1.100';
+  // 这里我们尝试从常见的HTTP头中获取IP地址
+  // 注意：在客户端JavaScript中无法直接获取真实IP地址，需要服务器端支持
+  
+  // 如果在Node.js环境中，可以通过环境变量获取
+  if (typeof process !== 'undefined' && process.env.CLIENT_IP) {
+    return process.env.CLIENT_IP;
+  }
+  
+  // 在浏览器环境中，通常需要服务器端通过HTTP头传递真实IP
+  // 这里返回一个占位符，实际应用中应该由服务器提供
+  return '0.0.0.0';
 };
 
 /**

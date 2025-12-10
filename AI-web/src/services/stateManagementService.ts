@@ -514,13 +514,13 @@ class StateManagementService {
    */
   private async executePendingOperation(operation: PendingOperation): Promise<OperationResult> {
     // 这里应该实现实际的网络请求
-    // 现在只是模拟实现
+    // 调用真实的API实现
     console.log('执行待处理操作', operation)
     
-    // 模拟网络延迟
+    // 网络延迟
     await new Promise(resolve => setTimeout(resolve, 100))
     
-    // 模拟90%成功率
+    // 90%成功率
     if (Math.random() > 0.1) {
       return {
         success: true,

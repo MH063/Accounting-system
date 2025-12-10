@@ -83,7 +83,7 @@ import { hasSecurityQuestions as checkHasSecurityQuestions } from '@/services/se
 const router = useRouter()
 
 // 当前用户ID（实际应用中应从用户信息获取）
-const currentUserId = ref('default_user')
+const currentUserId = ref('')
 
 // 是否已设置安全问题
 const hasSecurityQuestionsValue = ref(false)

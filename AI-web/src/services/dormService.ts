@@ -150,269 +150,102 @@ export interface DormInfo {
   members: DormMember[]
 }
 
-// 模拟API响应数据结构
-interface ApiResponse<T = any> {
-  success: boolean
-  data: T
-  message?: string
-}
-
-// 模拟数据库
-let dormList: DormInfo[] = [
-  {
-    id: '1',
-    dormNumber: '101',
-    building: 'A',
-    floor: 1,
-    roomType: 'standard_4',
-    capacity: 4,
-    area: 28,
-    orientation: '南',
-    status: 'occupied',
-    currentResidents: 3,
-    createTime: '2024-01-15',
-    remark: '靠近水房和卫生间',
-    facilities: {
-      basic: {
-        bed: true,
-        wardrobe: true,
-        desk: true,
-        chair: true,
-        air_conditioner: true,
-        heater: false,
-        fan: true,
-        lamp: true,
-        window: true,
-        curtain: true
-      },
-      electronics: {
-        tv: false,
-        computer: false,
-        refrigerator: true,
-        washing_machine: false,
-        microwave: false,
-        electric_kettle: true,
-        hair_dryer: false,
-        router: true
-      },
-      bathroom: {
-        toilet: true,
-        shower: true,
-        washbasin: true,
-        mirror: true,
-        towel_rack: true,
-        exhaust_fan: true,
-        water_heater: true
-      },
-      safety: {
-        fire_extinguisher: true,
-        smoke_detector: true,
-        emergency_light: true,
-        first_aid_kit: true,
-        door_lock: true,
-        window_lock: true
-      },
-      remark: '基础设施齐全'
-    },
-    fees: {
-      monthlyRent: 1200,
-      waterRate: 3.5,
-      electricityRate: 0.8,
-      internetRate: 50,
-      managementFee: 100,
-      deposit: 3000
-    },
-    members: [
-      {
-        id: 'm1',
-        name: '张三',
-        phone: '13800138001',
-        email: 'zhangsan@example.com',
-        role: 'student',
-        isLeader: true,
-        joinDate: '2024-01-15'
-      },
-      {
-        id: 'm2',
-        name: '李四',
-        phone: '13800138002',
-        email: 'lisi@example.com',
-        role: 'student',
-        isLeader: false,
-        joinDate: '2024-01-15'
-      },
-      {
-        id: 'm3',
-        name: '王五',
-        phone: '13800138003',
-        email: 'wangwu@example.com',
-        role: 'student',
-        isLeader: false,
-        joinDate: '2024-01-20'
-      }
-    ]
-  },
-  {
-    id: '2',
-    dormNumber: '102',
-    building: 'A',
-    floor: 1,
-    roomType: 'standard_6',
-    capacity: 6,
-    area: 35,
-    orientation: '南',
-    status: 'available',
-    currentResidents: 0,
-    createTime: '2024-01-10',
-    remark: '朝南向阳，通风良好',
-    facilities: {
-      basic: {
-        bed: true,
-        wardrobe: true,
-        desk: true,
-        chair: true,
-        air_conditioner: true,
-        heater: false,
-        fan: true,
-        lamp: true,
-        window: true,
-        curtain: true
-      },
-      electronics: {
-        tv: false,
-        computer: false,
-        refrigerator: true,
-        washing_machine: false,
-        microwave: false,
-        electric_kettle: true,
-        hair_dryer: false,
-        router: true
-      },
-      bathroom: {
-        toilet: true,
-        shower: true,
-        washbasin: true,
-        mirror: true,
-        towel_rack: true,
-        exhaust_fan: true,
-        water_heater: true
-      },
-      safety: {
-        fire_extinguisher: true,
-        smoke_detector: true,
-        emergency_light: true,
-        first_aid_kit: true,
-        door_lock: true,
-        window_lock: true
-      },
-      remark: '标准六人间'
-    },
-    fees: {
-      monthlyRent: 1000,
-      waterRate: 3.5,
-      electricityRate: 0.8,
-      internetRate: 50,
-      managementFee: 80,
-      deposit: 2500
-    },
-    members: []
-  }
-]
+import type { ApiResponse } from '@/types'
+// 导入请求函数
+import { request } from '@/utils/request'
 
 class DormService {
-  private delay(ms: number = 500): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms))
-  }
-
   /**
    * 获取所有寝室列表
    */
   async getDormList(): Promise<ApiResponse<DormInfo[]>> {
-    await this.delay()
-    console.log('获取寝室列表:', dormList.length, '个寝室')
-    return {
-      success: true,
-      data: dormList
+    try {
+      console.log('获取寝室列表')
+      
+      // 调用真实API获取寝室列表
+      const response = await request<DormInfo[]>('/dorms')
+      
+      return response
+    } catch (error) {
+      console.error('获取寝室列表失败:', error)
+      return {
+        success: false,
+        data: [],
+        message: '获取寝室列表失败',
+        code: 500
+      }
     }
   }
 
   /**
    * 根据ID获取寝室详情
    */
-  async getDormById(id: string): Promise<ApiResponse<DormInfo | null>> {
-    await this.delay()
-    const dorm = dormList.find(d => d.id === id)
-    console.log('获取寝室详情:', id, dorm ? '成功' : '未找到')
-    return {
-      success: true,
-      data: dorm || null
+  async getDormById(id: string): Promise<ApiResponse<DormInfo>> {
+    try {
+      console.log('获取寝室详情:', id)
+      
+      // 调用真实API获取寝室详情
+      const response = await request<DormInfo>(`/dorms/${id}`)
+      
+      return response
+    } catch (error) {
+      console.error('获取寝室详情失败:', error)
+      return {
+        success: false,
+        data: {} as DormInfo,
+        message: '获取寝室详情失败',
+        code: 500
+      }
     }
   }
 
   /**
    * 创建新寝室
    */
-  async createDorm(basicInfo: DormBasicInfo, facilities: DormFacilities, fees: DormFees): Promise<ApiResponse<DormInfo>> {
-    await this.delay()
-    
-    // 验证寝室号是否已存在
-    const exists = dormList.some(d => d.dormNumber === basicInfo.dormNumber && d.building === basicInfo.building)
-    if (exists) {
+  async createDorm(dormInfo: DormBasicInfo & { facilities: DormFacilities; fees: DormFees }): Promise<ApiResponse<DormInfo>> {
+    try {
+      console.log('创建新寝室:', dormInfo)
+      
+      // 调用真实API创建寝室
+      const response = await request<DormInfo>('/dorms', {
+        method: 'POST',
+        data: dormInfo
+      })
+      
+      return response
+    } catch (error) {
+      console.error('创建寝室失败:', error)
       return {
         success: false,
-        data: null as any,
-        message: '该楼栋中已存在相同寝室号'
+        data: {} as DormInfo,
+        message: '创建寝室失败',
+        code: 500
       }
-    }
-
-    const newDorm: DormInfo = {
-      id: Date.now().toString(),
-      dormNumber: basicInfo.dormNumber,
-      building: basicInfo.building,
-      floor: basicInfo.floor,
-      roomType: basicInfo.roomType,
-      capacity: basicInfo.capacity,
-      area: basicInfo.area,
-      orientation: basicInfo.orientation,
-      status: 'available',
-      currentResidents: 0,
-      createTime: new Date().toISOString().split('T')[0],
-      remark: basicInfo.remark,
-      facilities,
-      fees,
-      members: []
-    }
-
-    dormList.push(newDorm)
-    console.log('创建寝室成功:', newDorm)
-    
-    return {
-      success: true,
-      data: newDorm
     }
   }
 
   /**
    * 更新寝室信息
    */
-  async updateDorm(id: string, updates: Partial<DormInfo>): Promise<ApiResponse<DormInfo>> {
-    await this.delay()
-    
-    const index = dormList.findIndex(d => d.id === id)
-    if (index === -1) {
+  async updateDorm(id: string, dormInfo: Partial<DormInfo>): Promise<ApiResponse<DormInfo>> {
+    try {
+      console.log('更新寝室信息:', id, dormInfo)
+      
+      // 调用真实API更新寝室信息
+      const response = await request<DormInfo>(`/dorms/${id}`, {
+        method: 'PUT',
+        data: dormInfo
+      })
+      
+      return response
+    } catch (error) {
+      console.error('更新寝室信息失败:', error)
       return {
         success: false,
-        data: null as any,
-        message: '寝室不存在'
+        data: {} as DormInfo,
+        message: '更新寝室信息失败',
+        code: 500
       }
-    }
-
-    dormList[index] = { ...dormList[index], ...updates }
-    console.log('更新寝室信息:', id, updates)
-    
-    return {
-      success: true,
-      data: dormList[index]
     }
   }
 
@@ -420,81 +253,52 @@ class DormService {
    * 删除寝室
    */
   async deleteDorm(id: string): Promise<ApiResponse<boolean>> {
-    await this.delay()
-    
-    const dorm = dormList.find(d => d.id === id)
-    if (dorm && dorm.currentResidents > 0) {
+    try {
+      console.log('删除寝室:', id)
+      
+      // 调用真实API删除寝室
+      const response = await request<{ success: boolean }>(`/dorms/${id}`, {
+        method: 'DELETE'
+      })
+      
+      return {
+        success: response.success,
+        data: response.success,
+        message: response.message || '删除寝室成功'
+      }
+    } catch (error) {
+      console.error('删除寝室失败:', error)
       return {
         success: false,
         data: false,
-        message: '无法删除有人居住的寝室'
+        message: '删除寝室失败',
+        code: 500
       }
-    }
-
-    const index = dormList.findIndex(d => d.id === id)
-    if (index !== -1) {
-      dormList.splice(index, 1)
-      console.log('删除寝室:', id)
-      return {
-        success: true,
-        data: true
-      }
-    }
-
-    return {
-      success: false,
-      data: false,
-      message: '寝室不存在'
     }
   }
 
   /**
-   * 添加成员到寝室
+   * 添加寝室成员
    */
   async addMember(dormId: string, member: Omit<DormMember, 'id' | 'joinDate'>): Promise<ApiResponse<DormMember>> {
-    await this.delay()
-    
-    const dorm = dormList.find(d => d.id === dormId)
-    if (!dorm) {
+    try {
+      console.log('添加寝室成员:', dormId, member)
+      
+      // 调用真实API添加成员
+      const response = await request<DormMember>(`/dorms/${dormId}/members`, {
+        method: 'POST',
+        data: member
+      })
+      
+      return response
+    } catch (error) {
+      console.error('添加成员失败:', error)
       return {
         success: false,
-        data: null as any,
-        message: '寝室不存在'
+        data: {} as DormMember,
+        message: '添加成员失败',
+        code: 500
       }
-    }
-
-    if (dorm.currentResidents >= dorm.capacity) {
-      return {
-        success: false,
-        data: null as any,
-        message: '寝室已满员'
-      }
-    }
-
-    // 如果是第一个成员，设为寝室长
-    if (dorm.members.length === 0) {
-      member.isLeader = true
-    }
-
-    const newMember: DormMember = {
-      ...member,
-      id: Date.now().toString(),
-      joinDate: new Date().toISOString().split('T')[0]
-    }
-
-    dorm.members.push(newMember)
-    dorm.currentResidents = dorm.members.length
-    
-    // 更新寝室状态
-    if (dorm.currentResidents > 0) {
-      dorm.status = 'occupied'
-    }
-
-    console.log('添加成员:', dormId, newMember)
-    
-    return {
-      success: true,
-      data: newMember
     }
   }
 
@@ -502,45 +306,27 @@ class DormService {
    * 移除寝室成员
    */
   async removeMember(dormId: string, memberId: string): Promise<ApiResponse<boolean>> {
-    await this.delay()
-    
-    const dorm = dormList.find(d => d.id === dormId)
-    if (!dorm) {
+    try {
+      console.log('移除寝室成员:', dormId, memberId)
+      
+      // 调用真实API移除成员
+      const response = await request<{ success: boolean }>(`/dorms/${dormId}/members/${memberId}`, {
+        method: 'DELETE'
+      })
+      
+      return {
+        success: response.success,
+        data: response.success,
+        message: response.message || '移除成员成功'
+      }
+    } catch (error) {
+      console.error('移除成员失败:', error)
       return {
         success: false,
         data: false,
-        message: '寝室不存在'
+        message: '移除成员失败',
+        code: 500
       }
-    }
-
-    const memberIndex = dorm.members.findIndex(m => m.id === memberId)
-    if (memberIndex === -1) {
-      return {
-        success: false,
-        data: false,
-        message: '成员不存在'
-      }
-    }
-
-    const member = dorm.members[memberIndex]
-    dorm.members.splice(memberIndex, 1)
-    dorm.currentResidents = dorm.members.length
-
-    // 如果移除的是寝室长，重新指定
-    if (member.isLeader && dorm.members.length > 0) {
-      dorm.members[0].isLeader = true
-    }
-
-    // 更新寝室状态
-    if (dorm.currentResidents === 0) {
-      dorm.status = 'available'
-    }
-
-    console.log('移除成员:', dormId, memberId)
-    
-    return {
-      success: true,
-      data: true
     }
   }
 
@@ -548,39 +334,28 @@ class DormService {
    * 转让寝室长
    */
   async transferLeader(dormId: string, newLeaderId: string): Promise<ApiResponse<boolean>> {
-    await this.delay()
-    
-    const dorm = dormList.find(d => d.id === dormId)
-    if (!dorm) {
+    try {
+      console.log('转让寝室长:', dormId, '新寝室长:', newLeaderId)
+      
+      // 调用真实API转让寝室长
+      const response = await request<{ success: boolean }>(`/dorms/${dormId}/transfer-leader`, {
+        method: 'PUT',
+        data: { newLeaderId }
+      })
+      
+      return {
+        success: response.success,
+        data: response.success,
+        message: response.message || '转让寝室长成功'
+      }
+    } catch (error) {
+      console.error('转让寝室长失败:', error)
       return {
         success: false,
         data: false,
-        message: '寝室不存在'
+        message: '转让寝室长失败',
+        code: 500
       }
-    }
-
-    const members = dorm.members
-    const oldLeader = members.find(m => m.isLeader)
-    const newLeader = members.find(m => m.id === newLeaderId)
-
-    if (!newLeader) {
-      return {
-        success: false,
-        data: false,
-        message: '目标成员不存在'
-      }
-    }
-
-    if (oldLeader) {
-      oldLeader.isLeader = false
-    }
-    newLeader.isLeader = true
-
-    console.log('转让寝室长:', dormId, '新寝室长:', newLeaderId)
-    
-    return {
-      success: true,
-      data: true
     }
   }
 
@@ -588,26 +363,33 @@ class DormService {
    * 获取寝室统计信息
    */
   async getDormStatistics(): Promise<ApiResponse<any>> {
-    await this.delay()
-    
-    const stats = {
-      total: dormList.length,
-      available: dormList.filter(d => d.status === 'available').length,
-      occupied: dormList.filter(d => d.status === 'occupied').length,
-      maintenance: dormList.filter(d => d.status === 'maintenance').length,
-      reserved: dormList.filter(d => d.status === 'reserved').length,
-      totalCapacity: dormList.reduce((sum, d) => sum + d.capacity, 0),
-      totalOccupied: dormList.reduce((sum, d) => sum + d.currentResidents, 0),
-      occupancyRate: dormList.reduce((sum, d) => sum + d.capacity, 0) > 0 
-        ? (dormList.reduce((sum, d) => sum + d.currentResidents, 0) / dormList.reduce((sum, d) => sum + d.capacity, 0) * 100).toFixed(1)
-        : 0
-    }
-
-    console.log('获取寝室统计:', stats)
-    
-    return {
-      success: true,
-      data: stats
+    try {
+      console.log('获取寝室统计信息')
+      
+      // 调用真实API获取统计信息
+      const response = await request<{
+        total: number
+        available: number
+        occupied: number
+        maintenance: number
+        reserved: number
+        totalCapacity: number
+        totalOccupied: number
+        occupancyRate: string
+      }>('/dorms/statistics')
+      
+      return {
+        success: true,
+        data: response
+      }
+    } catch (error) {
+      console.error('获取寝室统计失败:', error)
+      return {
+        success: false,
+        data: null,
+        message: '获取寝室统计失败',
+        code: 500
+      }
     }
   }
 
@@ -616,19 +398,24 @@ class DormService {
    * @param userId 用户ID
    */
   async getCurrentUserDorm(userId: string): Promise<ApiResponse<DormInfo | null>> {
-    await this.delay()
-    
-    // 在实际应用中，这里应该通过userId查询数据库获取用户所在的寝室
-    // 目前我们通过遍历所有寝室来查找包含该用户的寝室
-    const userDorm = dormList.find(dorm => 
-      dorm.members.some(member => member.id === userId)
-    )
-    
-    console.log('获取用户寝室信息:', userId, userDorm ? userDorm.dormNumber : '未找到')
-    
-    return {
-      success: true,
-      data: userDorm || null
+    try {
+      console.log('获取用户寝室信息:', userId)
+      
+      // 调用真实API获取用户寝室信息
+      const response = await request<DormInfo>(`/dorms/user/${userId}`)
+      
+      return {
+        success: true,
+        data: response
+      }
+    } catch (error) {
+      console.error('获取用户寝室信息失败:', error)
+      return {
+        success: false,
+        data: null,
+        message: '获取用户寝室信息失败',
+        code: 500
+      }
     }
   }
 
@@ -636,24 +423,28 @@ class DormService {
    * 保存寝室设置
    */
   async saveDormSettings(dormId: string, settings: DormSettings): Promise<ApiResponse<boolean>> {
-    await this.delay()
-    
-    const dorm = dormList.find(d => d.id === dormId)
-    if (!dorm) {
+    try {
+      console.log('保存寝室设置:', dormId, settings)
+      
+      // 调用真实API保存设置
+      const response = await request<{ success: boolean }>(`/dorms/${dormId}/settings`, {
+        method: 'PUT',
+        data: settings
+      })
+      
+      return {
+        success: response.success,
+        data: response.success,
+        message: response.message || '设置保存成功'
+      }
+    } catch (error) {
+      console.error('保存寝室设置失败:', error)
       return {
         success: false,
         data: false,
-        message: '寝室不存在'
+        message: '保存寝室设置失败',
+        code: 500
       }
-    }
-
-    // 这里应该保存到数据库或本地存储
-    console.log('保存寝室设置:', dormId, settings)
-    
-    return {
-      success: true,
-      data: true,
-      message: '设置保存成功'
     }
   }
 
@@ -661,14 +452,27 @@ class DormService {
    * 重置寝室设置
    */
   async resetDormSettings(dormId: string): Promise<ApiResponse<boolean>> {
-    await this.delay()
-    
-    console.log('重置寝室设置:', dormId)
-    
-    return {
-      success: true,
-      data: true,
-      message: '设置已重置'
+    try {
+      console.log('重置寝室设置:', dormId)
+      
+      // 调用真实API重置设置
+      const response = await request<{ success: boolean }>(`/dorms/${dormId}/settings/reset`, {
+        method: 'PUT'
+      })
+      
+      return {
+        success: response.success,
+        data: response.success,
+        message: response.message || '设置已重置'
+      }
+    } catch (error) {
+      console.error('重置寝室设置失败:', error)
+      return {
+        success: false,
+        data: false,
+        message: '重置寝室设置失败',
+        code: 500
+      }
     }
   }
 
@@ -676,158 +480,24 @@ class DormService {
    * 获取寝室设置
    */
   async getDormSettings(dormId: string): Promise<ApiResponse<any>> {
-    await this.delay()
-    
-    const dorm = dormList.find(d => d.id === dormId)
-    if (!dorm) {
+    try {
+      console.log('获取寝室设置:', dormId)
+      
+      // 调用真实API获取寝室设置
+      const response = await request<any>(`/dorms/${dormId}/settings`)
+      
+      return {
+        success: true,
+        data: response
+      }
+    } catch (error) {
+      console.error('获取寝室设置失败:', error)
       return {
         success: false,
         data: null,
-        message: '寝室不存在'
+        message: '获取寝室设置失败',
+        code: 500
       }
-    }
-
-    // 返回默认设置或从数据库获取的设置
-    const settings = {
-      basic: {
-        dormName: dorm.dormNumber + '号寝室',
-        dormType: dorm.roomType,
-        openTime: '06:00',
-        closeTime: '23:00',
-        maxVisitors: 3,
-        visitTimeLimit: 4,
-        allowOvernightGuests: false
-      },
-      customRules: [
-        { text: '每周日集体大扫除' },
-        { text: '轮流值日制度' }
-      ],
-      schedules: {
-        daily: {
-          wakeUpTime: '07:00',
-          bedTime: '22:30',
-          napTime: ['12:30', '13:30'],
-          studyTime: ['19:00', '21:00']
-        },
-        weekend: {
-          wakeUpTime: '08:00',
-          bedTime: '23:00',
-          restTime: ['11:00', '14:00']
-        },
-        exam: {
-          wakeUpTime: '06:30',
-          bedTime: '23:30',
-          quietTime: ['22:00', '07:00']
-        }
-      },
-      notifications: [
-        {
-          key: 'system',
-          name: '系统通知',
-          items: [
-            {
-              key: 'system_maintenance',
-              title: '系统维护',
-              description: '接收系统维护通知',
-              enabled: true
-            },
-            {
-              key: 'policy_update',
-              title: '政策更新',
-              description: '接收规章制度更新通知',
-              enabled: true
-            }
-          ]
-        },
-        {
-          key: 'device',
-          name: '设备通知',
-          items: [
-            {
-              key: 'device_error',
-              title: '设备故障',
-              description: '设备出现故障时通知',
-              enabled: true
-            },
-            {
-              key: 'maintenance_due',
-              title: '维护提醒',
-              description: '定期维护时间提醒',
-              enabled: false
-            }
-          ]
-        },
-        {
-          key: 'security',
-          name: '安全通知',
-          items: [
-            {
-              key: 'access_alert',
-              title: '门禁异常',
-              description: '异常门禁记录通知',
-              enabled: true
-            },
-            {
-              key: 'emergency',
-              title: '紧急事件',
-              description: '紧急事件群发通知',
-              enabled: true
-            }
-          ]
-        }
-      ],
-      security: {
-        accessTime: ['22:00', '06:00'],
-        lateReturnTime: '23:30',
-        allowOvernightStay: true,
-        overnightRequestRequired: false,
-        emergencyContacts: [
-          { name: '辅导员', phone: '13800138000' },
-          { name: '楼管', phone: '13800138001' }
-        ]
-      },
-      maintenance: {
-        autoCheck: true,
-        checkFrequency: 'weekly',
-        reportMethods: ['app', 'web'],
-        contacts: [
-          { name: '张师傅', phone: '13800138010', specialty: '水电维修' },
-          { name: '李师傅', phone: '13800138011', specialty: '电器维修' }
-        ]
-      },
-      devices: [
-        {
-          key: 'network',
-          name: '网络设备',
-          devices: [
-            { id: 1, name: 'WiFi路由器', status: '正常运行', online: true, enabled: true },
-            { id: 2, name: '交换机', status: '正常运行', online: true, enabled: true }
-          ]
-        },
-        {
-          key: 'security',
-          name: '安防设备',
-          devices: [
-            { id: 3, name: '门禁系统', status: '正常运行', online: true, enabled: true },
-            { id: 4, name: '监控摄像头', status: '设备离线', online: false, enabled: true }
-          ]
-        },
-        {
-          key: 'environment',
-          name: '环境设备',
-          devices: [
-            { id: 5, name: '空调控制器', status: '正常运行', online: true, enabled: true },
-            { id: 6, name: '空气质量检测', status: '正常运行', online: true, enabled: false }
-          ]
-        }
-      ]
-    }
-
-    console.log('获取寝室设置:', dormId, settings)
-    
-    return {
-      success: true,
-      data: settings
     }
   }
 
@@ -835,27 +505,28 @@ class DormService {
    * 更新寝室设置
    */
   async updateDormSettings(dormId: string, settings: any): Promise<ApiResponse<boolean>> {
-    await this.delay()
-    
-    const dorm = dormList.find(d => d.id === dormId)
-    if (!dorm) {
+    try {
+      console.log('更新寝室设置:', dormId, settings)
+      
+      // 调用真实API更新设置
+      const response = await request<{ success: boolean }>(`/dorms/${dormId}/settings/update`, {
+        method: 'PUT',
+        data: settings
+      })
+      
+      return {
+        success: response.success,
+        data: response.success,
+        message: response.message || '设置更新成功'
+      }
+    } catch (error) {
+      console.error('更新寝室设置失败:', error)
       return {
         success: false,
         data: false,
-        message: '寝室不存在'
+        message: '更新寝室设置失败',
+        code: 500
       }
-    }
-
-    // 这里应该保存到数据库或本地存储
-    console.log('更新寝室设置:', dormId, settings)
-    
-    // 模拟保存延时
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    return {
-      success: true,
-      data: true,
-      message: '设置更新成功'
     }
   }
 }

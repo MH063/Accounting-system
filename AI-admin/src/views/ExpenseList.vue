@@ -297,73 +297,8 @@ import {
 // 路由实例
 const router = useRouter()
 
-// 响应式数据
-const expenses = ref([
-  {
-    id: 1,
-    title: '10月份电费分摊',
-    description: '10月份宿舍电费分摊费用',
-    amount: 120,
-    category: 'utilities',
-    applicant: '张三',
-    date: '2023-10-15',
-    status: 'approved',
-    reviewer: '李四',
-    reviewDate: '2023-10-16',
-    createdAt: '2023-10-15T10:30:00Z'
-  },
-  {
-    id: 2,
-    title: '寝室清洁用品采购',
-    description: '购买清洁用品',
-    amount: 85,
-    category: 'cleaning',
-    applicant: '王五',
-    date: '2023-10-10',
-    status: 'pending',
-    createdAt: '2023-10-10T14:20:00Z'
-  },
-  {
-    id: 3,
-    title: '网费分摊',
-    description: '10月份网费分摊',
-    amount: 50,
-    category: 'other',
-    applicant: '赵六',
-    date: '2023-10-05',
-    status: 'rejected',
-    reviewer: '李四',
-    reviewDate: '2023-10-06',
-    reviewComment: '费用过高，请重新核算',
-    createdAt: '2023-10-05T09:15:00Z'
-  },
-  {
-    id: 4,
-    title: '水费分摊',
-    description: '10月份水费分摊',
-    amount: 45,
-    category: 'utilities',
-    applicant: '钱七',
-    date: '2023-10-01',
-    status: 'approved',
-    reviewer: '李四',
-    reviewDate: '2023-10-02',
-    createdAt: '2023-10-01T11:45:00Z'
-  },
-  {
-    id: 5,
-    title: '维修费',
-    description: '修理损坏的水龙头',
-    amount: 30,
-    category: 'maintenance',
-    applicant: '孙八',
-    date: '2023-09-28',
-    status: 'approved',
-    reviewer: '李四',
-    reviewDate: '2023-09-29',
-    createdAt: '2023-09-28T16:30:00Z'
-  }
-])
+// 响应式数据 - 初始化为空数组，通过API获取真实数据
+const expenses = ref([])
 
 const searchQuery = ref('')
 const statusFilter = ref('')

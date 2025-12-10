@@ -701,13 +701,14 @@ const refreshServiceStatus = () => {
   // 模拟刷新过程
   setTimeout(() => {
     // 随机更新一些服务状态
-    serviceStatus.value.forEach(service => {
-      if (Math.random() > 0.8) {
+    // 使用固定状态更新规则，实际应用中应通过API获取真实服务状态
+    serviceStatus.value.forEach((service, index) => {
+      if (index % 5 === 0) {
         service.status = '异常'
       } else {
         service.status = '正常'
       }
-      service.responseTime = Math.floor(Math.random() * 100) + 10 + 'ms'
+      service.responseTime = (index * 20 + 50) + 'ms'
     })
     ElMessage.success('服务状态刷新完成')
   }, 1000)

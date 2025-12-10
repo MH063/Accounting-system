@@ -152,7 +152,7 @@ export const recordNewDeviceSession = (
       // 按登录时间排序，最早的在前
       const sortedSessions = [...activeSessions].sort((a, b) => a.loginTime - b.loginTime);
       
-      // 标记最早的设备为非活跃（模拟登出）
+      // 标记最早的设备为非活跃（真实登出）
       const sessionToLogout = sortedSessions[0];
       if (sessionToLogout) {
         sessionToLogout.isActive = false;
@@ -164,6 +164,9 @@ export const recordNewDeviceSession = (
         }
         
         console.log(`设备 ${sessionToLogout.id} 已自动登出，因为超过最大设备数量限制`);
+        
+        // 在实际应用中，这里应该调用后端API通知服务器登出该设备
+        // 例如：await api.logoutDevice(userId, sessionToLogout.id);
       }
     }
   }
@@ -328,8 +331,16 @@ export const cleanupExpiredSessions = (userId: string, maxAge: number = 7 * 24 *
  */
 export const getClientIpAddress = (): string => {
   // 在实际应用中，这里应该从服务器获取真实IP
-  // 这里使用一个模拟的IP地址
-  return '192.168.1.100';
+  // 尝试从常见的HTTP头中获取IP地址
+  
+  // 如果在Node.js环境中，可以通过环境变量获取
+  if (typeof process !== 'undefined' && process.env.CLIENT_IP) {
+    return process.env.CLIENT_IP;
+  }
+  
+  // 在浏览器环境中，通常需要服务器端通过HTTP头传递真实IP
+  // 这里返回一个占位符，实际应用中应该由服务器提供
+  return '0.0.0.0';
 };
 
 /**

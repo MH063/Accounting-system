@@ -203,63 +203,8 @@ import { Document } from '@element-plus/icons-vue'
 // 路由实例
 const router = useRouter()
 
-// 响应式数据
-const pendingExpenses = ref([
-  {
-    id: 1,
-    title: '10月份电费分摊',
-    description: '10月份宿舍电费分摊费用，共使用300度电，单价0.8元/度',
-    amount: 240,
-    category: 'utilities',
-    applicant: '张三',
-    date: '2023-10-15',
-    createdAt: '2023-10-15T09:15:00Z',
-    participants: [
-      { id: 1, name: '张三', amount: 60, percentage: 25 },
-      { id: 2, name: '李四', amount: 60, percentage: 25 },
-      { id: 3, name: '王五', amount: 60, percentage: 25 },
-      { id: 4, name: '赵六', amount: 60, percentage: 25 }
-    ],
-    attachments: [
-      { id: 1, name: '电费账单.pdf', size: 102400 },
-      { id: 2, name: '用电明细.xlsx', size: 51200 }
-    ]
-  },
-  {
-    id: 2,
-    title: '寝室清洁用品采购',
-    description: '购买清洁用品：拖把、扫帚、清洁剂等',
-    amount: 85,
-    category: 'cleaning',
-    applicant: '王五',
-    date: '2023-10-10',
-    createdAt: '2023-10-10T14:20:00Z',
-    participants: [
-      { id: 1, name: '张三', amount: 21.25, percentage: 25 },
-      { id: 2, name: '李四', amount: 21.25, percentage: 25 },
-      { id: 3, name: '王五', amount: 21.25, percentage: 25 },
-      { id: 4, name: '赵六', amount: 21.25, percentage: 25 }
-    ],
-    attachments: []
-  },
-  {
-    id: 3,
-    title: '网费分摊',
-    description: '10月份网费分摊',
-    amount: 50,
-    category: 'other',
-    applicant: '赵六',
-    date: '2023-10-05',
-    createdAt: '2023-10-05T09:15:00Z',
-    participants: [
-      { id: 1, name: '张三', amount: 12.5, percentage: 25 },
-      { id: 2, name: '李四', amount: 12.5, percentage: 25 },
-      { id: 3, name: '王五', amount: 12.5, percentage: 25 },
-      { id: 4, name: '赵六', amount: 12.5, percentage: 25 }
-    ],
-    attachments: []
-  }
-])
+// 响应式数据 - 初始化为空数组，通过API获取真实数据
+const pendingExpenses = ref([])
 
 const selectedExpenses = ref<any[]>([])
 const batchProcessing = ref(false)

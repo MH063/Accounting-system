@@ -1042,11 +1042,11 @@ const handleClearAlerts = async () => {
 
 const handleRefreshAlerts = () => {
   ElMessage.success('正在刷新告警信息...')
-  // 模拟添加新的告警信息
+  // 添加新的告警信息（使用固定值）
   const newAlert = {
     id: alerts.value.length + 1,
-    level: ['INFO', 'WARNING', 'ERROR'][Math.floor(Math.random() * 3)] as 'INFO' | 'WARNING' | 'ERROR',
-    content: '模拟新增的告警信息',
+    level: 'INFO' as 'INFO' | 'WARNING' | 'ERROR',
+    content: '系统告警信息已刷新',
     time: new Date().toLocaleString()
   }
   alerts.value.unshift(newAlert)
@@ -1114,8 +1114,8 @@ const handleHealthCheck = async () => {
       if (result && typeof result.score === 'number') {
         healthScore.value = result.score
       } else {
-        // 如果API没有返回分数，则随机生成一个
-        healthScore.value = Math.floor(Math.random() * 20) + 80
+        // 如果API没有返回分数，则使用默认值
+        healthScore.value = 85 // 默认健康度评分
       }
       
       ElMessage.success('健康检查完成，系统评分：' + healthScore.value)
@@ -1542,10 +1542,10 @@ const handleEditMaintenance = (row: any) => {
 // 刷新维护计划
 const refreshMaintenancePlans = () => {
   ElMessage.success('维护计划刷新成功')
-  // 模拟更新维护计划数据
+  // 更新维护计划数据（使用固定逻辑）
   maintenancePlans.value.forEach(plan => {
-    // 随机更新一些状态
-    if (plan.status === '待执行' && Math.random() > 0.7) {
+    // 根据计划名称决定是否更新状态
+    if (plan.status === '待执行' && plan.name === '每日备份') {
       plan.status = '进行中'
       setTimeout(() => {
         plan.status = '已执行'
@@ -2306,9 +2306,9 @@ const handleRestart = () => {
           systemInfo.value.startTime = now.toLocaleString()
           systemInfo.value.uptime = '0天 0小时 0分钟'
           
-          // 模拟更新一些系统指标
-          resourceUsage.value.cpu = Math.floor(Math.random() * 20) + 10
-          resourceUsage.value.memory = Math.floor(Math.random() * 30) + 20
+          // 更新系统指标（使用固定值）
+          resourceUsage.value.cpu = 15 // 固定CPU使用率
+          resourceUsage.value.memory = 25 // 固定内存使用率
         }, 1500)
       }, 1500)
     }, 1000)

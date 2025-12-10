@@ -356,7 +356,7 @@
               <el-select 
                 v-model="trendPeriod" 
                 placeholder="选择趋势周期" 
-                @change="updateTrendChart"
+                @change="async () => await updateTrendChart()"
                 size="small"
                 class="period-selector"
               >
@@ -552,24 +552,20 @@ import {
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as echarts from 'echarts'
 import { useRouter } from 'vue-router'
+import { 
+  getBudgetList, 
+  createBudget, 
+  updateBudget, 
+  deleteBudget, 
+  getBudgetHistory, 
+  checkBudgetAlerts as checkBudgetAlertsAPI
+} from '@/services/budgetService'
+import type { BudgetItem } from '@/services/budgetService'
 
 // 路由实例
 const router = useRouter()
 
-// 类型定义
-interface BudgetItem {
-  id: number
-  name: string
-  category: string
-  amount: number
-  used: number
-  remaining: number
-  utilization: number
-  period: string
-  startDate: string
-  endDate: string
-  remark?: string
-}
+// 类型定义已移动到 @/services/budgetService
 
 interface BudgetAdvice {
   title: string
@@ -614,7 +610,7 @@ const budgetForm = reactive({
 })
 
 // 趋势分析周期
-const trendPeriod = ref('3m')
+const trendPeriod = ref('')
 
 // 预算提醒设置
 const reminderSettings = reactive({
@@ -657,47 +653,10 @@ const budgetRules = {
 }
 
 // 历史对比周期
-const historyPeriod = ref('3m')
+const historyPeriod = ref('')
 
 // 预算数据
-const budgetList = ref<BudgetItem[]>([
-  {
-    id: 1,
-    name: '餐饮预算',
-    category: 'food',
-    amount: 2000,
-    used: 1500,
-    remaining: 500,
-    utilization: 75,
-    period: '月度',
-    startDate: '2024-01-01',
-    endDate: '2024-01-31'
-  },
-  {
-    id: 2,
-    name: '交通预算',
-    category: 'transport',
-    amount: 800,
-    used: 900,
-    remaining: -100,
-    utilization: 112.5,
-    period: '月度',
-    startDate: '2024-01-01',
-    endDate: '2024-01-31'
-  },
-  {
-    id: 3,
-    name: '娱乐预算',
-    category: 'entertainment',
-    amount: 500,
-    used: 300,
-    remaining: 200,
-    utilization: 60,
-    period: '月度',
-    startDate: '2024-01-01',
-    endDate: '2024-01-31'
-  }
-])
+const budgetList = ref<BudgetItem[]>([])
 
 // 计算属性
 const totalBudget = computed(() => {
@@ -819,6 +778,50 @@ const checkBudgetAlerts = (budget: BudgetItem) => {
   }
 }
 
+// 全局预算预警检查函数
+const checkBudgetAlertsGlobal = async () => {
+  try {
+    console.log('开始全局预算预警检查...')
+    
+    // 调用后端API进行全局预算预警检查
+    const response = await checkBudgetAlertsAPI()
+    
+    if (response.success && response.data) {
+      console.log('全局预算预警检查结果:', response.data)
+      
+      // 按使用率从高到低排序
+      const alerts = response.data.sort((a: any, b: any) => b.utilization - a.utilization)
+      
+      // 显示预警信息
+      alerts.forEach((alert: any) => {
+        if (alert.utilization > 100) {
+          // 超支预警
+          showBudgetAlert(`${alert.name}预算超支`, 
+            `您的${alert.name}预算已超支¥${alert.overspendAmount.toFixed(2)}，请尽快调整支出计划。`, 
+            'danger');
+        } else if (alert.utilization > reminderSettings.threshold) {
+          // 高使用率预警
+          showBudgetAlert(`${alert.name}预算使用率提醒`, 
+            `您的${alert.name}预算使用率已达${alert.utilization}%，请控制支出以免超支。`, 
+            'warning');
+        }
+      })
+      
+      // 将预警信息推送到仪表盘
+      if (alerts.length > 0) {
+        pushNotificationToDashboard(alerts)
+      }
+      
+    } else {
+      console.error('全局预算预警检查失败:', response.message)
+    }
+  } catch (error) {
+    console.error('全局预算预警检查失败:', error)
+  }
+}
+
+// 全局预算预警检查（调用后端API） - 已合并到上面的函数中
+
 // 显示预算提醒
 const showBudgetAlert = (title: string, message: string, type: 'warning' | 'danger' | 'info') => {
   // 检查提醒方式
@@ -899,6 +902,9 @@ const checkAllBudgets = () => {
     // 检查是否需要触发提醒
     checkBudgetAlerts(budget);
   });
+  
+  // 同时调用后端API进行全局预算预警检查
+  checkBudgetAlertsGlobal();
 }
 
 const handleCreateBudget = () => {
@@ -921,24 +927,42 @@ const handleEdit = (row: BudgetItem) => {
   budgetDialogVisible.value = true
 }
 
-const handleDelete = (row: BudgetItem) => {
-  ElMessageBox.confirm(
-    `确定要删除预算"${row.name}"吗？此操作不可恢复。`,
-    '删除确认',
-    {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    }
-  ).then(() => {
-    budgetList.value = budgetList.value.filter(budget => budget.id !== row.id)
-    ElMessage.success('删除成功')
+const handleDelete = async (row: BudgetItem) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除预算"${row.name}"吗？此操作不可恢复。`,
+      '删除确认',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
     
-    // 后续处理
-    postDeleteBudget();
-  }).catch(() => {
-    // 用户取消删除
-  })
+    console.log('开始删除预算:', row.id)
+    
+    // 调用真实API删除预算
+    const response = await deleteBudget(row.id)
+    
+    if (response.success) {
+      ElMessage.success('删除成功')
+      
+      // 重新加载预算列表
+      await loadBudgetList()
+      
+      // 后续处理
+      postDeleteBudget();
+      
+      console.log('预算删除成功:', row.id)
+    } else {
+      ElMessage.error(response.message || '删除失败')
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('删除预算失败:', error)
+      ElMessage.error('删除预算失败')
+    }
+  }
 }
 
 // 在预算数据变化时检查提醒
@@ -947,6 +971,9 @@ const checkBudgetAlertsOnUpdate = () => {
   setTimeout(() => {
     checkAllBudgets();
   }, 100);
+  
+  // 同时调用后端API进行全局预算预警检查
+  checkBudgetAlertsGlobal();
 }
 
 // 保存预算后的处理
@@ -996,48 +1023,42 @@ const saveBudget = async () => {
     await budgetFormRef.value.validate()
     
     saving.value = true
+    console.log('开始保存预算...')
     
-    // 模拟保存过程
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    // 构建预算数据
+    const budgetData = {
+      name: budgetForm.name,
+      category: budgetForm.category,
+      amount: budgetForm.amount,
+      period: budgetForm.period,
+      startDate: budgetForm.startDate,
+      endDate: budgetForm.endDate,
+      remark: budgetForm.remark
+    }
     
-    let savedBudget: BudgetItem;
+    let response: any
+    let savedBudget: BudgetItem
     
     if (editingBudget.value) {
       // 编辑预算
-      const index = budgetList.value.findIndex(budget => budget.id === editingBudget.value!.id)
-      if (index !== -1) {
-        savedBudget = {
-          ...budgetList.value[index],
-          name: budgetForm.name,
-          category: budgetForm.category,
-          amount: budgetForm.amount,
-          period: budgetForm.period === 'monthly' ? '月度' : budgetForm.period === 'quarterly' ? '季度' : '年度',
-          startDate: budgetForm.startDate,
-          endDate: budgetForm.endDate,
-          remark: budgetForm.remark,
-          remaining: budgetForm.amount - budgetList.value[index].used,
-          utilization: Math.round((budgetList.value[index].used / budgetForm.amount) * 100)
-        }
-        budgetList.value[index] = savedBudget
+      response = await updateBudget(editingBudget.value.id, budgetData)
+      if (response.success && response.data) {
+        savedBudget = response.data
+        ElMessage.success('预算更新成功')
+      } else {
+        ElMessage.error(response.message || '预算更新失败')
+        return
       }
-      ElMessage.success('预算更新成功')
     } else {
       // 新建预算
-      savedBudget = {
-        id: Date.now(),
-        name: budgetForm.name,
-        category: budgetForm.category,
-        amount: budgetForm.amount,
-        used: 0,
-        remaining: budgetForm.amount,
-        utilization: 0,
-        period: budgetForm.period === 'monthly' ? '月度' : budgetForm.period === 'quarterly' ? '季度' : '年度',
-        startDate: budgetForm.startDate,
-        endDate: budgetForm.endDate,
-        remark: budgetForm.remark
+      response = await createBudget(budgetData)
+      if (response.success && response.data) {
+        savedBudget = response.data
+        ElMessage.success('预算创建成功')
+      } else {
+        ElMessage.error(response.message || '预算创建失败')
+        return
       }
-      budgetList.value.push(savedBudget)
-      ElMessage.success('预算创建成功')
     }
     
     // 检查是否需要触发提醒
@@ -1045,10 +1066,16 @@ const saveBudget = async () => {
     
     budgetDialogVisible.value = false
     
+    // 重新加载预算列表
+    await loadBudgetList()
+    
     // 后续处理
     postSaveBudget();
+    
+    console.log('预算保存成功:', savedBudget)
   } catch (error) {
     console.error('保存预算失败:', error)
+    ElMessage.error('保存预算失败')
   } finally {
     saving.value = false
   }
@@ -1065,26 +1092,163 @@ const handleCurrentChange = (page: number) => {
   loadBudgetList()
 }
 
-const loadBudgetList = () => {
-  loading.value = true
-  // 模拟API调用
-  setTimeout(() => {
+const loadBudgetList = async () => {
+  try {
+    loading.value = true
+    console.log('开始加载预算列表...')
+    
+    // 调用真实API获取预算列表
+    const response = await getBudgetList(currentPage.value, pageSize.value)
+    
+    if (response.success && response.data) {
+      // 更新预算列表数据
+      budgetList.value = response.data.records.map((budget: any) => ({
+        ...budget,
+        period: budget.period === 'monthly' ? '月度' : budget.period === 'quarterly' ? '季度' : '年度',
+        status: budget.utilization > 100 ? 'danger' : budget.utilization > 80 ? 'warning' : 'normal'
+      }))
+      
+      total.value = response.data.total
+      console.log('预算列表加载成功:', response.data)
+    } else {
+      console.error('获取预算列表失败:', response.message)
+      ElMessage.error(response.message || '获取预算列表失败')
+    }
+  } catch (error) {
+    console.error('加载预算列表失败:', error)
+    ElMessage.error('加载预算列表失败')
+  } finally {
     loading.value = false
-  }, 500)
+  }
 }
 
-const loadHistoryData = () => {
-  // 强制重新渲染图表以播放动画
-  if (historyChart && historyChartRef.value) {
-    // 先销毁再重新创建图表以确保动画重新播放
-    historyChart.dispose()
-    historyChart = echarts.init(historyChartRef.value)
+const loadHistoryData = async () => {
+  try {
+    console.log('开始加载预算历史数据...')
     
-    // 使用 setTimeout 确保重新创建图表后再更新数据
-    setTimeout(() => {
-      updateHistoryChart()
-    }, 10)
+    // 调用真实API获取预算历史数据
+    const response = await getBudgetHistory(historyPeriod.value)
+    
+    if (response.success && response.data) {
+      console.log('预算历史数据加载成功:', response.data)
+      
+      // 使用真实数据更新图表
+      if (historyChart && historyChartRef.value) {
+        // 先销毁再重新创建图表以确保动画重新播放
+        historyChart.dispose()
+        historyChart = echarts.init(historyChartRef.value)
+        
+        // 使用真实数据更新图表
+        updateHistoryChartWithRealData(response.data)
+      }
+    } else {
+      console.error('获取预算历史数据失败:', response.message)
+      ElMessage.error(response.message || '获取预算历史数据失败')
+    }
+  } catch (error) {
+    console.error('加载预算历史数据失败:', error)
+    ElMessage.error('加载预算历史数据失败')
   }
+}
+
+// 使用真实数据更新历史图表
+const updateHistoryChartWithRealData = (historyData: any) => {
+  if (!historyChart) return
+  
+  const months = historyData.months || []
+  const budgetData = historyData.budgetData || []
+  const expenseData = historyData.expenseData || []
+  
+  // 计算在预算内的支出和超支部分
+  const withinBudgetData = expenseData.map((expense: number, index: number) => {
+    return Math.min(expense, budgetData[index] || 0)
+  })
+  
+  const overspendData = expenseData.map((expense: number, index: number) => {
+    return Math.max(0, expense - (budgetData[index] || 0))
+  })
+  
+  const option = {
+    tooltip: {
+      trigger: 'axis',
+      formatter: (params: any) => {
+        const month = params[0].name
+        const budget = budgetData[params[0].dataIndex] || 0
+        const expense = expenseData[params[0].dataIndex] || 0
+        const withinBudget = withinBudgetData[params[0].dataIndex] || 0
+        const overspend = overspendData[params[0].dataIndex] || 0
+        
+        let tooltip = `${month}<br/>`
+        tooltip += `预算金额: ¥${budget.toLocaleString()}<br/>`
+        tooltip += `实际支出: ¥${expense.toLocaleString()}<br/>`
+        
+        if (overspend > 0) {
+          tooltip += `<span style="display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:#67C23A;"></span>`
+          tooltip += `预算内支出: ¥${withinBudget.toLocaleString()}<br/>`
+          tooltip += `<span style="display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:#F56C6C;"></span>`
+          tooltip += `超支金额: ¥${overspend.toLocaleString()}<br/>`
+        } else {
+          tooltip += `<span style="display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:#67C23A;"></span>`
+          tooltip += `支出金额: ¥${expense.toLocaleString()}<br/>`
+        }
+        
+        return tooltip
+      }
+    },
+    legend: {
+      data: ['预算金额', '预算内支出', '超支金额']
+    },
+    xAxis: {
+      type: 'category',
+      data: months
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: {
+        formatter: '¥{value}'
+      }
+    },
+    animation: true,
+    animationDuration: 2000,
+    animationEasing: 'quarticInOut',
+    series: [
+      {
+        name: '预算金额',
+        type: 'bar',
+        data: budgetData,
+        itemStyle: {
+          color: '#409EFF'
+        },
+        barGap: '0%',
+        animationDelay: (idx: number) => idx * 50
+      },
+      {
+        name: '预算内支出',
+        type: 'bar',
+        stack: '实际支出',
+        data: withinBudgetData,
+        itemStyle: {
+          color: '#67C23A'
+        },
+        barGap: '0%',
+        animationDelay: (idx: number) => idx * 50 + 500
+      },
+      {
+        name: '超支金额',
+        type: 'bar',
+        stack: '实际支出',
+        data: overspendData,
+        itemStyle: {
+          color: '#F56C6C'
+        },
+        barGap: '0%',
+        animationDelay: (idx: number) => idx * 50 + 1500
+      }
+    ]
+  }
+  
+  // 使用 setOption 并设置 notMerge 为 true 以确保完全重新渲染
+  historyChart.setOption(option, { notMerge: true })
 }
 
 const initHistoryChart = () => {
@@ -1099,113 +1263,109 @@ const initHistoryChart = () => {
   updateHistoryChart()
 }
 
-const updateHistoryChart = () => {
+// 获取历史预算数据
+const fetchHistoryData = async () => {
+  try {
+    const response = await getBudgetHistory({
+      period: historyPeriod.value,
+      startDate: dateRange.value[0],
+      endDate: dateRange.value[1]
+    })
+    
+    if (response.success && response.data) {
+      return response.data
+    } else {
+      ElMessage.error('获取历史预算数据失败')
+      return { months: [], budgetData: [], expenseData: [] }
+    }
+  } catch (error) {
+    console.error('获取历史预算数据失败:', error)
+    ElMessage.error('获取历史预算数据失败')
+    return { months: [], budgetData: [], expenseData: [] }
+  }
+}
+
+const updateHistoryChart = async () => {
   if (!historyChart) return
   
-  // 根据选择的时间范围生成不同的数据
-  let months: string[] = []
-  let budgetData: number[] = []
-  let expenseData: number[] = []
+  // 获取真实历史数据
+  const historyData = await fetchHistoryData()
   
-  const now = new Date()
-  const currentYear = now.getFullYear()
-  const currentMonth = now.getMonth() + 1 // getMonth() 返回 0-11，所以需要 +1
+  let months: string[] = historyData.months || []
+  let budgetData: number[] = historyData.budgetData || []
+  let expenseData: number[] = historyData.expenseData || []
   
-  switch (historyPeriod.value) {
-    case '3m':
-      // 近3个月
-      months = []
-      budgetData = []
-      expenseData = []
-      for (let i = 2; i >= 0; i--) {
-        const month = currentMonth - i
-        const year = currentYear
-        if (month <= 0) {
-          // 去年的月份
-          months.push(`${year - 1}年${12 + month}月`)
-        } else {
-          months.push(`${year}年${month}月`)
+  // 如果数据为空，使用默认数据
+  if (months.length === 0) {
+    const now = new Date()
+    const currentYear = now.getFullYear()
+    const currentMonth = now.getMonth() + 1
+    
+    switch (historyPeriod.value) {
+      case '3m':
+        months = []
+        budgetData = []
+        expenseData = []
+        for (let i = 2; i >= 0; i--) {
+          const month = currentMonth - i
+          const year = currentYear
+          if (month <= 0) {
+            months.push(`${year - 1}年${12 + month}月`)
+          } else {
+            months.push(`${year}年${month}月`)
+          }
+          budgetData.push(3000 + i * 100)
+          expenseData.push(i === 1 ? 3300 + i * 100 : 2800 + i * 50)
         }
-        // 生成模拟数据
-        budgetData.push(3000 + i * 100)
-        // 为了让某些月份超支，我们特意设置一些月份的实际支出超过预算
-        if (i === 1) {
-          // 中间月份设置为超支
-          expenseData.push(3000 + i * 100 + 300)
-        } else {
+        break
+      case '6m':
+        months = []
+        budgetData = []
+        expenseData = []
+        for (let i = 5; i >= 0; i--) {
+          const month = currentMonth - i
+          const year = currentYear
+          if (month <= 0) {
+            months.push(`${year - 1}年${12 + month}月`)
+          } else {
+            months.push(`${year}年${month}月`)
+          }
+          budgetData.push(2800 + i * 100)
+          expenseData.push(i % 2 === 1 ? 3000 + i * 100 + 200 : 2600 + i * 80)
+        }
+        break
+      case '12m':
+        months = []
+        budgetData = []
+        expenseData = []
+        for (let i = 11; i >= 0; i--) {
+          const month = currentMonth - i
+          const year = currentYear
+          if (month <= 0) {
+            months.push(`${year - 1}年${12 + month}月`)
+          } else {
+            months.push(`${year}年${month}月`)
+          }
+          budgetData.push(2500 + i * 80)
+          expenseData.push(i % 3 === 0 ? 2900 + i * 80 + 400 : 2400 + i * 70)
+        }
+        break
+      default:
+        months = []
+        budgetData = []
+        expenseData = []
+        for (let i = 2; i >= 0; i--) {
+          const month = currentMonth - i
+          const year = currentYear
+          if (month <= 0) {
+            months.push(`${year - 1}年${12 + month}月`)
+          } else {
+            months.push(`${year}年${month}月`)
+          }
+          budgetData.push(3000 + i * 100)
           expenseData.push(2800 + i * 50)
         }
-      }
-      break
-    case '6m':
-      // 近6个月
-      months = []
-      budgetData = []
-      expenseData = []
-      for (let i = 5; i >= 0; i--) {
-        const month = currentMonth - i
-        const year = currentYear
-        if (month <= 0) {
-          // 去年的月份
-          months.push(`${year - 1}年${12 + month}月`)
-        } else {
-          months.push(`${year}年${month}月`)
-        }
-        // 生成模拟数据
-        budgetData.push(2800 + i * 100)
-        // 设置某些月份超支
-        if (i % 2 === 1) {
-          // 奇数月份设置为超支
-          expenseData.push(2800 + i * 100 + 200)
-        } else {
-          expenseData.push(2600 + i * 80)
-        }
-      }
-      break
-    case '12m':
-      // 近12个月
-      months = []
-      budgetData = []
-      expenseData = []
-      for (let i = 11; i >= 0; i--) {
-        const month = currentMonth - i
-        const year = currentYear
-        if (month <= 0) {
-          // 去年的月份
-          months.push(`${year - 1}年${12 + month}月`)
-        } else {
-          months.push(`${year}年${month}月`)
-        }
-        // 生成模拟数据
-        budgetData.push(2500 + i * 80)
-        // 设置某些月份超支
-        if (i % 3 === 0) {
-          // 每3个月设置一次超支
-          expenseData.push(2500 + i * 80 + 400)
-        } else {
-          expenseData.push(2400 + i * 70)
-        }
-      }
-      break
-    default:
-      // 默认显示近3个月
-      months = []
-      budgetData = []
-      expenseData = []
-      for (let i = 2; i >= 0; i--) {
-        const month = currentMonth - i
-        const year = currentYear
-        if (month <= 0) {
-          // 去年的月份
-          months.push(`${year - 1}年${12 + month}月`)
-        } else {
-          months.push(`${year}年${month}月`)
-        }
-        // 生成模拟数据
-        budgetData.push(3000 + i * 100)
-        // 默认情况下不超支
-        expenseData.push(2800 + i * 50)
-      }
+    }
   }
   
   // 计算在预算内的支出和超支部分
@@ -1324,177 +1484,153 @@ const initTrendChart = () => {
   updateTrendChart()
 }
 
-const updateTrendChart = () => {
+const updateTrendChart = async () => {
   if (!trendChart) return
   
-  // 生成模拟的趋势数据
-  const now = new Date()
-  let dates: string[] = []
-  let budgetData: number[] = []
-  let expenseData: number[] = []
-  
-  // 根据选择的时间范围生成数据
-  const period = trendPeriod.value
-  let days = 30
-  
-  switch (period) {
-    case '1m':
-      days = 30
-      break
-    case '3m':
-      days = 90
-      break
-    case '6m':
-      days = 180
-      break
-    case '1y':
-      days = 365
-      break
-  }
-  
-  // 生成日期和数据
-  for (let i = days; i >= 0; i--) {
-    const date = new Date(now)
-    date.setDate(date.getDate() - i)
-    dates.push(`${date.getMonth() + 1}-${date.getDate()}`)
+  try {
+    console.log('开始加载趋势图表数据...')
     
-    // 生成模拟数据（可以根据实际需求调整）
-    const baseBudget = 100 + Math.sin(i / 10) * 20
-    const baseExpense = 80 + Math.cos(i / 8) * 25
+    // 调用真实API获取趋势数据
+    const response = await getBudgetHistory('trend')
     
-    // 添加一些随机波动
-    const budget = Math.max(50, baseBudget + (Math.random() * 20 - 10))
-    const expense = Math.max(30, baseExpense + (Math.random() * 30 - 15))
-    
-    budgetData.push(parseFloat(budget.toFixed(2)))
-    expenseData.push(parseFloat(expense.toFixed(2)))
+    if (response.success && response.data) {
+      console.log('趋势数据加载成功:', response.data)
+      
+      const dates = response.data.dates || []
+      const budgetData = response.data.budgetData || []
+      const expenseData = response.data.expenseData || []
+      
+      const option = {
+        tooltip: {
+          trigger: 'axis',
+          formatter: (params: any) => {
+            const date = params[0].name
+            const budget = params[0].value
+            const expense = params[1].value
+            
+            return `${date}<br/>
+                    预算金额: ¥${budget}<br/>
+                    实际支出: ¥${expense}<br/>
+                    差额: ¥${(budget - expense).toFixed(2)}`
+          }
+        },
+        legend: {
+          data: ['预算金额', '实际支出']
+        },
+        xAxis: {
+          type: 'category',
+          data: dates,
+          boundaryGap: false
+        },
+        yAxis: {
+          type: 'value',
+          axisLabel: {
+            formatter: '¥{value}'
+          }
+        },
+        series: [
+          {
+            name: '预算金额',
+            type: 'line',
+            data: budgetData,
+            smooth: true,
+            itemStyle: { color: '#409EFF' },
+            areaStyle: { opacity: 0.3 }
+          },
+          {
+            name: '实际支出',
+            type: 'line',
+            data: expenseData,
+            smooth: true,
+            itemStyle: { color: '#67C23A' },
+            areaStyle: { opacity: 0.3 }
+          }
+        ]
+      }
+      
+      trendChart.setOption(option, { notMerge: true })
+    } else {
+      console.error('获取趋势数据失败:', response.message)
+      ElMessage.error(response.message || '获取趋势数据失败')
+    }
+  } catch (error) {
+    console.error('加载趋势数据失败:', error)
+    ElMessage.error('加载趋势数据失败')
   }
-  
-  const option = {
-    tooltip: {
-      trigger: 'axis',
-      formatter: (params: any) => {
-        const date = params[0].name
-        const budget = params[0].value
-        const expense = params[1].value
-        
-        return `${date}<br/>
-                预算金额: ¥${budget}<br/>
-                实际支出: ¥${expense}<br/>
-                差额: ¥${(budget - expense).toFixed(2)}`
-      }
-    },
-    legend: {
-      data: ['预算金额', '实际支出']
-    },
-    xAxis: {
-      type: 'category',
-      data: dates,
-      boundaryGap: false
-    },
-    yAxis: {
-      type: 'value',
-      axisLabel: {
-        formatter: '¥{value}'
-      }
-    },
-    series: [
-      {
-        name: '预算金额',
-        type: 'line',
-        data: budgetData,
-        smooth: true,
-        itemStyle: { color: '#409EFF' },
-        areaStyle: { opacity: 0.3 }
-      },
-      {
-        name: '实际支出',
-        type: 'line',
-        data: expenseData,
-        smooth: true,
-        itemStyle: { color: '#67C23A' },
-        areaStyle: { opacity: 0.3 }
-      }
-    ]
-  }
-  
-  trendChart.setOption(option, { notMerge: true })
 }
 
-const updateCategoryChart = () => {
+const updateCategoryChart = async () => {
   if (!categoryChart) return
   
-  // 按分类统计预算数据
-  const categoryStats: Record<string, { budget: number; expense: number }> = {}
-  
-  budgetList.value.forEach(budget => {
-    const category = budget.category
-    if (!categoryStats[category]) {
-      categoryStats[category] = { budget: 0, expense: 0 }
-    }
-    categoryStats[category].budget += budget.amount
-    categoryStats[category].expense += budget.used
-  })
-  
-  // 转换为图表数据
-  const categories = Object.keys(categoryStats)
-  const budgetData = categories.map(cat => categoryStats[cat].budget)
-  const expenseData = categories.map(cat => categoryStats[cat].expense)
-  const categoryNames = categories.map(cat => getCategoryText(cat))
-  
-  // 计算总预算和总支出用于百分比计算
-  const totalBudget = budgetData.reduce((sum, val) => sum + val, 0)
-  const totalExpense = expenseData.reduce((sum, val) => sum + val, 0)
-  
-  // 颜色配置
-  const colors = ['#409EFF', '#67C23A', '#E6A23C', '#F56C6C', '#909399', '#34C759', '#FF9F43', '#48C774']
-  
-  const option = {
-    tooltip: {
-      trigger: 'item',
-      formatter: (params: any) => {
-        const { name, value } = params
-        // 计算百分比
-        const percent = totalBudget > 0 ? ((value / totalBudget) * 100).toFixed(1) : '0.0'
-        return `${name}<br/>金额: ¥${value.toLocaleString()}<br/>占比: ${percent}%`
-      }
-    },    legend: {
-      bottom: '5%',
-      left: 'center',
-      data: categoryNames
-    },
-    series: [
-      {
-        name: '预算金额',
-        type: 'pie',
-        radius: ['40%', '70%'],
-        center: ['25%', '50%'],
-        avoidLabelOverlap: false,
-        itemStyle: {
-          borderRadius: 10,
-          borderColor: '#fff',
-          borderWidth: 2
+  try {
+    console.log('开始加载分类统计图表数据...')
+    
+    // 调用真实API获取分类统计数据
+    const response = await getBudgetHistory('category')
+    
+    if (response.success && response.data) {
+      console.log('分类统计数据加载成功:', response.data)
+      
+      const categoryData = response.data.categoryData || {}
+      const categories = Object.keys(categoryData)
+      const budgetData = categories.map(cat => categoryData[cat].budget || 0)
+      const expenseData = categories.map(cat => categoryData[cat].expense || 0)
+      const categoryNames = categories.map(cat => getCategoryText(cat))
+      
+      // 计算总预算和总支出用于百分比计算
+      const totalBudget = budgetData.reduce((sum, val) => sum + val, 0)
+      const totalExpense = expenseData.reduce((sum, val) => sum + val, 0)
+      
+      // 颜色配置
+      const colors = ['#409EFF', '#67C23A', '#E6A23C', '#F56C6C', '#909399', '#34C759', '#FF9F43', '#48C774']
+      
+      const option = {
+        tooltip: {
+          trigger: 'item',
+          formatter: (params: any) => {
+            const { name, value } = params
+            // 计算百分比
+            const percent = totalBudget > 0 ? ((value / totalBudget) * 100).toFixed(1) : '0.0'
+            return `${name}<br/>金额: ¥${value.toLocaleString()}<br/>占比: ${percent}%`
+          }
         },
-        label: {
-          show: false,
-          position: 'center'
+        legend: {
+          bottom: '5%',
+          left: 'center',
+          data: categoryNames
         },
-        emphasis: {
-          label: {
-            show: true,
-            fontSize: '14',
-            fontWeight: 'bold',
-            formatter: (params: any) => {
-              return `{title|预算金额}\n{value|¥${params.value.toLocaleString()}}`
+        series: [
+          {
+            name: '预算金额',
+            type: 'pie',
+            radius: ['40%', '70%'],
+            center: ['25%', '50%'],
+            avoidLabelOverlap: false,
+            itemStyle: {
+              borderRadius: 10,
+              borderColor: '#fff',
+              borderWidth: 2
             },
-            rich: {
-              title: {
-                color: '#666',
-                fontSize: 14,
-                lineHeight: 20
-              },
-              value: {
-                color: '#333',
+            label: {
+              show: false,
+              position: 'center'
+            },
+            emphasis: {
+              label: {
+                show: true,
+                fontSize: '14',
+                fontWeight: 'bold',
+                formatter: (params: any) => {
+                  return `{title|预算金额}\n{value|¥${params.value.toLocaleString()}}`
+                },
+                rich: {
+                  title: {
+                    color: '#666',
+                    fontSize: 14,
+                    lineHeight: 20
+                  },
+                  value: {
+                    color: '#333',
                 fontSize: 16,
                 fontWeight: 'bold',
                 lineHeight: 30
@@ -1507,7 +1643,7 @@ const updateCategoryChart = () => {
         },
         data: categories.map((cat, index) => ({
           name: getCategoryText(cat),
-          value: categoryStats[cat].budget,
+          value: categoryData[cat].budget || 0,
           itemStyle: { color: colors[index % colors.length] }
         }))
       },
@@ -1554,7 +1690,7 @@ const updateCategoryChart = () => {
         },
         data: categories.map((cat, index) => ({
           name: getCategoryText(cat),
-          value: categoryStats[cat].expense,
+          value: categoryData[cat].expense || 0,
           itemStyle: { color: colors[index % colors.length] }
         }))
       },
@@ -1568,8 +1704,8 @@ const updateCategoryChart = () => {
           borderRadius: [0, 5, 5, 0],
           color: (params: any) => {
             const index = params.dataIndex
-            const budget = categoryStats[categories[index]].budget
-            const expense = categoryStats[categories[index]].expense
+            const budget = categoryData[categories[index]].budget || 0
+            const expense = categoryData[categories[index]].expense || 0
             const utilization = budget > 0 ? (expense / budget) * 100 : 0
             // 根据使用率设置颜色
             if (utilization > 100) {
@@ -1586,15 +1722,15 @@ const updateCategoryChart = () => {
           position: 'right',
           formatter: (params: any) => {
             const index = params.dataIndex
-            const budget = categoryStats[categories[index]].budget
-            const expense = categoryStats[categories[index]].expense
+            const budget = categoryData[categories[index]].budget || 0
+            const expense = categoryData[categories[index]].expense || 0
             const utilization = budget > 0 ? ((expense / budget) * 100).toFixed(1) : '0'
             return `${utilization}%`
           }
         },
         data: categories.map(cat => {
-          const budget = categoryStats[cat].budget
-          const expense = categoryStats[cat].expense
+          const budget = categoryData[cat].budget || 0
+          const expense = categoryData[cat].expense || 0
           return {
             value: expense,
             budget: budget

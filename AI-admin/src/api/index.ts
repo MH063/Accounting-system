@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { adminAuthApi } from './adminAuth'
 
 // 创建axios实例
 const api = axios.create({
@@ -13,6 +14,14 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     console.log('🚀 API请求:', config.method?.toUpperCase(), config.url)
+    
+    // 添加管理员令牌到请求头
+    const adminToken = localStorage.getItem('adminToken')
+    if (adminToken) {
+      config.headers = config.headers || {}
+      config.headers.Authorization = `Bearer ${adminToken}`
+    }
+    
     return config
   },
   (error) => {
@@ -44,12 +53,52 @@ api.interceptors.response.use(
     
     return response
   },
-  (error) => {
+  async (error) => {
     console.error('❌ API响应错误:', error.config?.url, error.response?.status, error.message)
     
     // 处理网络错误
     if (!error.response) {
-      console.error('�� 网络连接失败，请检查后端服务是否启动')
+      console.error('🌐 网络连接失败，请检查后端服务是否启动')
+      return Promise.reject(error)
+    }
+    
+    // 处理401未授权错误 - 尝试刷新令牌
+    if (error.response.status === 401 && !error.config._retry) {
+      error.config._retry = true
+      
+      try {
+        const refreshToken = localStorage.getItem('adminRefreshToken')
+        if (refreshToken) {
+          console.log('🔄 尝试刷新管理员令牌...')
+          const response = await adminAuthApi.refreshAdminToken()
+          
+          if (response.token) {
+            // 更新本地存储的令牌
+            localStorage.setItem('adminToken', response.token)
+            if (response.refreshToken) {
+              localStorage.setItem('adminRefreshToken', response.refreshToken)
+            }
+            
+            // 更新请求头的Authorization
+            error.config.headers.Authorization = `Bearer ${response.token}`
+            
+            console.log('✅ 令牌刷新成功，重试原请求')
+            // 重试原请求
+            return api.request(error.config)
+          }
+        }
+      } catch (refreshError) {
+        console.error('❌ 令牌刷新失败，需要重新登录')
+        // 清除本地存储并跳转到登录页
+        localStorage.removeItem('adminToken')
+        localStorage.removeItem('adminRefreshToken')
+        localStorage.removeItem('adminUser')
+        
+        // 可以在这里添加跳转到登录页的逻辑
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login'
+        }
+      }
     }
     
     return Promise.reject(error)

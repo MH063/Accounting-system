@@ -9,7 +9,7 @@
         </h1>
       </div>
       <div class="header-right">
-        <el-button :icon="ArrowLeft" @click="$router.go(-1)" text>返回</el-button>
+        <el-button :icon="ArrowLeft" @click="goBack" text>返回</el-button>
       </div>
     </div>
 
@@ -247,6 +247,8 @@ import {
 
 // 引入支付服务
 import { confirmPayment as apiConfirmPayment } from '@/services/paymentService'
+// 引入二维码识别服务
+import { scanQRCodeFromCamera, scanQRCodeFromFile } from '@/services/qrCodeService'
 
 // 相机状态
 const cameraPermissionGranted = ref(false)
@@ -255,6 +257,10 @@ const cameraActive = ref(false)
 const startingCamera = ref(false)
 const availableCameras = ref<MediaDeviceInfo[]>([])
 const currentCameraIndex = ref(0)
+
+// 扫描状态
+const isScanning = ref(false)
+const scanningStatus = ref('')
 
 // DOM 元素
 const videoElement = ref<HTMLVideoElement>()
@@ -306,6 +312,7 @@ const paymentResult = reactive({
 // 定时器
 let scanTimer: NodeJS.Timeout | null = null
 let stream: MediaStream | null = null
+let scanCount = 0
 
 // 初始化
 onMounted(() => {
@@ -421,48 +428,57 @@ const switchCamera = () => {
 
 // 开始扫描
 const startScanning = () => {
-  if (scanTimer) {
-    clearInterval(scanTimer)
-  }
+  if (isScanning.value) return
   
+  isScanning.value = true
+  scanCount = 0
+  
+  // 启动扫描定时器
   scanTimer = setInterval(() => {
-    scanFrame()
+    scanCount++
+    // 更新扫描状态
+    scanningStatus.value = `扫描中... (${scanCount})`
+    
+    // 这里应该集成实际的二维码识别库
+    // 为了演示，我们移除模拟数据，改为真实API调用
+    detectQRCode()
   }, 100)
 }
 
-// 扫描帧
-const scanFrame = () => {
-  if (!videoElement.value || !canvasElement.value || !cameraActive.value) return
-  
-  const video = videoElement.value
-  const canvas = canvasElement.value
-  const context = canvas.getContext('2d')
-  
-  if (!context) return
-  
-  canvas.width = video.videoWidth
-  canvas.height = video.videoHeight
-  context.drawImage(video, 0, 0, canvas.width, canvas.height)
-  
-  // 这里应该集成实际的二维码识别库
-  // 为了演示，模拟扫描结果
-  simulateQRCodeDetection()
-}
-
-// 模拟二维码检测
-const simulateQRCodeDetection = () => {
-  // 模拟检测到支付二维码
-  if (Math.random() < 0.02) { // 2% 概率触发
-    const mockQRCode = JSON.stringify({
-      merchantId: 'merchant_123',
-      merchantName: '宿舍管理系统',
-      amount: 50.00,
-      description: '水电费缴费',
-      timestamp: new Date().toISOString()
-    })
-    
-    handleScanResult(mockQRCode)
-    stopScanning()
+// 检测二维码（真实API调用）
+const detectQRCode = async () => {
+  try {
+    if (scanCount % 50 === 0) { // 每50次检测触发一次
+      // 获取视频帧并转换为图像数据
+      if (videoElement.value && canvasElement.value) {
+        const canvas = canvasElement.value
+        const video = videoElement.value
+        const context = canvas.getContext('2d')
+        
+        // 设置画布尺寸与视频相同
+        canvas.width = video.videoWidth
+        canvas.height = video.videoHeight
+        
+        // 将视频帧绘制到画布上
+        context?.drawImage(video, 0, 0, canvas.width, canvas.height)
+        
+        // 将图像转换为base64数据
+        const imageData = canvas.toDataURL('image/jpeg')
+        
+        // 调用真实API进行二维码识别
+        const response = await scanQRCodeFromCamera({ imageData })
+        
+        if (response.success) {
+          const qrCodeData = JSON.stringify(response.data)
+          handleScanResult(qrCodeData)
+          stopScanning()
+        } else {
+          console.error('二维码识别失败:', response.message)
+        }
+      }
+    }
+  } catch (error) {
+    console.error('二维码检测失败:', error)
   }
 }
 
@@ -480,30 +496,22 @@ const scanFromFile = () => {
 }
 
 // 处理文件选择
-const handleFileSelect = (event: Event) => {
+const handleFileSelect = async (event: Event) => {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
   
   if (!file) return
   
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    const img = new Image()
-    img.onload = () => {
-      // 这里应该集成实际的二维码识别库
-      // 为了演示，模拟扫描结果
-      const mockQRCode = JSON.stringify({
-        merchantId: 'merchant_123',
-        merchantName: '宿舍管理系统',
-        amount: 25.50,
-        description: '网费缴费',
-        timestamp: new Date().toISOString()
-      })
-      handleScanResult(mockQRCode)
-    }
-    img.src = e.target?.result as string
+  // 调用真实API进行二维码识别
+  const response = await scanQRCodeFromFile({ file })
+  
+  if (response.success) {
+    const qrCodeData = JSON.stringify(response.data)
+    handleScanResult(qrCodeData)
+  } else {
+    console.error('文件二维码识别失败:', response.message)
+    ElMessage.error('二维码识别失败')
   }
-  reader.readAsDataURL(file)
 }
 
 // 处理扫描结果
@@ -636,7 +644,7 @@ const confirmPaymentPassword = async () => {
     if (result.success) {
       ElMessage.success('支付成功，收款码已记录收入')
     } else {
-      ElMessage.error('支付失败：' + (result.data.error || '未知错误'))
+      ElMessage.error('支付失败：' + (result.data.message || '未知错误'))
     }
     
   } catch (error) {
@@ -651,7 +659,7 @@ const confirmPaymentPassword = async () => {
 const extractQRCodeId = (merchantId: string): number | undefined => {
   // 模拟从商户ID中提取收款码ID
   // 在真实应用中，二维码会包含实际的收款码ID
-  const qrCodeId = parseInt(merchantId.replace(/[^\d]/g, '').slice(-2)) || undefined
+  const qrCodeId = parseInt(merchantId.replace(/[^\d]/g, '').slice(-2)) || 0
   return qrCodeId > 0 ? qrCodeId : undefined
 }
 
@@ -698,6 +706,12 @@ const formatCurrency = (amount: number) => {
 const formatDateTime = (timestamp: string) => {
   return new Date(timestamp).toLocaleString('zh-CN')
 }
+
+const goBack = () => {
+  // 使用浏览器历史记录返回上一页
+  window.history.go(-1)
+}
+
 </script>
 
 <style scoped>

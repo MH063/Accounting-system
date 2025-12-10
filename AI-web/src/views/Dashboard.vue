@@ -23,7 +23,7 @@
         <el-col :span="6">
           <el-card class="stat-card">
             <div class="stat-content">
-              <div class="stat-number">1</div>
+              <div class="stat-number">{{ dashboardData.dormitoryCount || 0 }}</div>
               <div class="stat-label">宿舍数量</div>
             </div>
           </el-card>
@@ -31,7 +31,7 @@
         <el-col :span="6">
           <el-card class="stat-card">
             <div class="stat-content">
-              <div class="stat-number">4</div>
+              <div class="stat-number">{{ dashboardData.memberCount || 0 }}</div>
               <div class="stat-label">成员数量</div>
             </div>
           </el-card>
@@ -39,7 +39,7 @@
         <el-col :span="6">
           <el-card class="stat-card">
             <div class="stat-content">
-              <div class="stat-number">¥1,250</div>
+              <div class="stat-number">¥{{ dashboardData.monthlyExpense || 0 }}</div>
               <div class="stat-label">本月支出</div>
             </div>
           </el-card>
@@ -47,7 +47,7 @@
         <el-col :span="6">
           <el-card class="stat-card">
             <div class="stat-content">
-              <div class="stat-number">¥3,400</div>
+              <div class="stat-number">¥{{ dashboardData.totalBudget || 0 }}</div>
               <div class="stat-label">总预算</div>
             </div>
           </el-card>
@@ -206,7 +206,7 @@
                   :min="10" 
                   :max="300" 
                   :step="10"
-                  :format-tooltip="(val) => val + '秒'"
+                  :format-tooltip="(val: number) => val + '秒'"
                   show-stops
                 />
               </div>
@@ -249,7 +249,6 @@ import { ref, computed, onMounted, onUnmounted, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
-  TrendingUp, 
   User, 
   Wallet, 
   Document,
@@ -270,6 +269,9 @@ import {
 import { formatRelativeTime } from '@/utils/timeUtils'
 import { useNotifications } from '../services/notificationService'
 import type { Notification } from '../services/notificationService'
+import dashboardService from '@/services/dashboardService'
+import { withLoading } from '@/utils/loadingUtils'
+import { handleApiError } from '@/utils/errorUtils'
 
 // 路由实例
 const route = useRoute()
@@ -294,7 +296,7 @@ const loading = ref(false)
 const autoRefreshEnabled = ref(true)
 const refreshInterval = ref<NodeJS.Timeout | null>(null)
 const lastUpdateTime = ref(new Date())
-const enabledWidgets = ref(['stats', 'smart-notifications', 'activities'])
+const enabledWidgets = ref<string[]>([])
 const widgetSettings = reactive({
   autoRefresh: true,
   refreshInterval: 30, // 秒
@@ -302,57 +304,43 @@ const widgetSettings = reactive({
   layout: 'default' // default, compact, detailed
 })
 
-// 活动历史数据
-const activityHistory = ref<Activity[]>([
-  {
-    id: 1,
-    title: '支付电费',
-    description: '张同学支付了宿舍电费',
-    time: new Date(Date.now() - 2 * 60 * 60 * 1000),
-    type: 'payment',
-    amount: 120,
-    user: '张同学'
-  },
-  {
-    id: 2,
-    title: '创建支出记录',
-    description: '李同学创建了新的支出记录',
-    time: new Date(Date.now() - 5 * 60 * 60 * 1000),
-    type: 'expense',
-    user: '李同学'
-  },
-  {
-    id: 3,
-    title: '更新宿舍设置',
-    description: '王同学更新了宿舍设置',
-    time: new Date(Date.now() - 8 * 60 * 60 * 1000),
-    type: 'setting',
-    user: '王同学'
-  },
-  {
-    id: 4,
-    title: '新成员加入',
-    description: '赵同学加入了宿舍',
-    time: new Date(Date.now() - 12 * 60 * 60 * 1000),
-    type: 'member',
-    user: '赵同学'
-  },
-  {
-    id: 5,
-    title: '生成月度账单',
-    description: '系统生成了本月的集体账单',
-    time: new Date(Date.now() - 24 * 60 * 60 * 1000),
-    type: 'bill'
-  },
-  {
-    id: 6,
-    title: '预算调整',
-    description: '陈同学调整了本月的餐饮预算',
-    time: new Date(Date.now() - 48 * 60 * 60 * 1000),
-    type: 'setting',
-    user: '陈同学'
+// 仪表盘数据
+const dashboardData = reactive({
+  dormitoryCount: 0,
+  memberCount: 0,
+  monthlyExpense: 0,
+  totalBudget: 0
+})
+
+// 活动历史数据 - 改为从真实API获取
+const activityHistory = ref<Activity[]>([])
+
+// 加载活动历史数据
+const loadActivityHistory = async () => {
+  try {
+    console.log('加载活动历史数据...')
+    
+    const response = await dashboardService.getActivityHistory(10)
+    
+    if (response.success) {
+      activityHistory.value = response.data.map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        description: item.description,
+        time: new Date(item.time),
+        type: item.type,
+        user: item.userName
+      }))
+    } else {
+      console.error('加载活动历史失败:', response.message)
+      activityHistory.value = []
+    }
+    
+  } catch (error) {
+    console.error('加载活动历史失败:', error)
+    activityHistory.value = []
   }
-])
+}
 
 // 智能提醒数据 - 改为从通知服务获取
 const smartNotifications = computed(() => {
@@ -377,7 +365,7 @@ const recentActivities = computed(() => {
 
 // 设置对话框
 const widgetSettingsVisible = ref(false)
-const activeSettingsTab = ref('widgets')
+const activeSettingsTab = ref('')
 
 // 计算属性
 const hasNewNotifications = computed(() => {
@@ -397,8 +385,9 @@ const toggleAutoRefresh = () => {
 const startAutoRefresh = () => {
   stopAutoRefresh()
   refreshInterval.value = setInterval(() => {
-    // 模拟数据更新
+    // 自动刷新仪表盘数据
     updateDashboardData()
+    loadActivityHistory() // 同时刷新活动历史
     lastUpdateTime.value = new Date()
   }, widgetSettings.refreshInterval * 1000)
 }
@@ -410,9 +399,21 @@ const stopAutoRefresh = () => {
   }
 }
 
-const updateDashboardData = () => {
-  // 这里可以调用实际的API来更新数据
-  console.log('数据已更新:', new Date().toLocaleTimeString())
+const updateDashboardData = async () => {
+  try {
+    const response = await dashboardService.getDashboardStats()
+    console.log('仪表盘数据更新成功:', response)
+    
+    // 更新仪表盘数据
+    if (response.success && response.data) {
+      dashboardData.dormitoryCount = response.data.dormitoryCount || 0
+      dashboardData.memberCount = response.data.memberCount || 0
+      dashboardData.monthlyExpense = response.data.monthlyExpense || 0
+      dashboardData.totalBudget = response.data.totalBudget || 0
+    }
+  } catch (error) {
+    handleApiError(error, '数据更新失败')
+  }
 }
 
 
@@ -509,14 +510,24 @@ const toggleWidget = (widgetType: string) => {
 }
 
 // 组件挂载和卸载生命周期
-onMounted(() => {
+onMounted(async () => {
   loading.value = true
-  setTimeout(() => {
-    loading.value = false
+  try {
+    // 加载仪表盘统计数据
+    await updateDashboardData()
+    
+    // 加载活动历史数据
+    await loadActivityHistory()
+    
+    // 启动自动刷新
     if (widgetSettings.autoRefresh) {
       startAutoRefresh()
     }
-  }, 800)
+  } catch (error) {
+    console.error('初始化仪表盘失败:', error)
+  } finally {
+    loading.value = false
+  }
 })
 
 onUnmounted(() => {

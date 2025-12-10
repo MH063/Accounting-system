@@ -144,6 +144,7 @@ app.use('/api/system', routeConfigManager.getRouter());
 // 向后兼容：现有路由保持不变，但增加版本支持
 // 这些路由将通过版本化中间件自动支持版本识别
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', require('./routes/adminAuth')); // 管理端认证路由
 app.use('/api/db', dbRoutes);
 app.use('/api/db', require('./routes/dbHealth'));
 app.use('/api/upload', uploadRoutes);

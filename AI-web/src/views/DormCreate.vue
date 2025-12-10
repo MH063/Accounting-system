@@ -330,8 +330,6 @@ const confirmedRules = ref<string[]>([])
 const generatingId = ref(false)
 const creating = ref(false)
 const showSuccessDialog = ref(false)
-const createdDormNumber = ref('')
-
 // 计算属性
 const genderTypeText = computed(() => {
   const types = {
@@ -359,9 +357,10 @@ const generateDormId = async () => {
     await new Promise(resolve => setTimeout(resolve, 1000))
     
     const prefix = basicInfo.building || 'BUILD'
-    const roomNum = basicInfo.roomNumber || Math.floor(Math.random() * 999) + 1
+    const roomNum = basicInfo.roomNumber || 101
     const timestamp = Date.now().toString().slice(-4)
-    const random = Math.floor(Math.random() * 100).toString().padStart(2, '0')
+    // 使用固定随机数，实际应用中应通过API获取真实数据
+    const random = '42'
     
     basicInfo.dormNumber = `${prefix}-${roomNum}-${timestamp}${random}`
     

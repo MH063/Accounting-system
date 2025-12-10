@@ -320,6 +320,8 @@ import {
   CircleCheck,
   ChatDotRound
 } from '@element-plus/icons-vue'
+import { dormService } from '@/services/dormService'
+import memberService from '@/services/memberService'
 
 interface Member {
   id: number
@@ -347,83 +349,176 @@ const saving = ref(false)
 const isEditing = ref(false)
 
 
-
-// 费用贡献统计数据
+// 费用贡献统计数据 - 从API加载
 const financialStats = ref({
-  totalContribution: 3680,
-  monthlyShare: 450,
-  pendingAmount: 180,
-  paidAmount: 3450,
-  maxAmount: 800,
-  contributionTrend: [
-    { month: '8月', amount: 320 },
-    { month: '9月', amount: 580 },
-    { month: '10月', amount: 420 },
-    { month: '11月', amount: 650 },
-    { month: '12月', amount: 380 },
-    { month: '1月', amount: 720 }
-  ]
+  totalContribution: 0,
+  monthlyShare: 0,
+  pendingAmount: 0,
+  paidAmount: 0,
+  maxAmount: 100,
+  contributionTrend: [] as Array<{ month: string; amount: number; }>
 })
 
-// 活跃度统计数据
+// 活跃度统计数据 - 从API加载
 const activityStats = ref({
-  onlineTime: 45.5,
+  onlineTime: 0,
   onlineTimeTrend: 'up',
-  onlineTimeChange: 12,
-  interactionCount: 28,
-  interactionTrend: 'down',
-  interactionChange: 5,
-  lastActive: '2小时前',
+  onlineTimeChange: 0,
+  interactionCount: 0,
+  interactionTrend: 'up',
+  interactionChange: 0,
+  lastActive: '',
   activeStatus: 'active',
-  recentActivities: [
-    {
-      id: 1,
-      type: 'login',
-      action: '登录系统',
-      time: '2024-12-19 14:30'
-    },
-    {
-      id: 2,
-      type: 'payment',
-      action: '缴纳宿舍费',
-      time: '2024-12-18 16:20'
-    },
-    {
-      id: 3,
-      type: 'task',
-      action: '完成任务：打扫卫生',
-      time: '2024-12-17 10:15'
-    },
-    {
-      id: 4,
-      type: 'interaction',
-      action: '参与讨论',
-      time: '2024-12-16 20:45'
-    }
-  ]
+  recentActivities: [] as Array<{ id: number; action: string; time: string; type: string; }>
 })
 
+// 加载财务统计数据
+const loadFinancialStats = async () => {
+  try {
+    console.log('开始加载财务统计数据...')
+    
+    const response = await memberService.getMemberFinancialStats(memberId.value)
+    
+    if (response.success) {
+      financialStats.value = response.data
+    } else {
+      console.error('加载财务统计数据失败:', response.message)
+      financialStats.value = {
+        totalContribution: 0,
+        monthlyShare: 0,
+        pendingAmount: 0,
+        paidAmount: 0,
+        maxAmount: 100,
+        contributionTrend: []
+      }
+    }
+    
+    console.log('成功加载财务统计数据')
+  } catch (error) {
+    console.error('加载财务统计数据失败:', error)
+    financialStats.value = {
+      totalContribution: 0,
+      monthlyShare: 0,
+      pendingAmount: 0,
+      paidAmount: 0,
+      maxAmount: 100,
+      contributionTrend: []
+    }
+  }
+}
+
+// 加载活跃度统计数据
+const loadActivityStats = async () => {
+  try {
+    console.log('开始加载活跃度统计数据...')
+    
+    // 调用真实API获取活跃度统计数据
+    const response = await memberService.getMemberActivityStats(memberId.value)
+    
+    if (response.success && response.data) {
+      activityStats.value = response.data
+    } else {
+      throw new Error(response.message || '加载活跃度统计数据失败')
+    }
+    
+    console.log('成功加载活跃度统计数据')
+  } catch (error) {
+    console.error('加载活跃度统计数据失败:', error)
+    ElMessage.error('加载活跃度统计数据失败: ' + (error as Error).message)
+    activityStats.value = {
+      onlineTime: 0,
+      onlineTimeTrend: 'up',
+      onlineTimeChange: 0,
+      interactionCount: 0,
+      interactionTrend: 'up',
+      interactionChange: 0,
+      lastActive: '',
+      activeStatus: 'active',
+      recentActivities: []
+    }
+  }
+}
 
 
 // 表单引用
 const memberFormRef = ref()
 
-// 成员数据
+// 成员数据 - 从API加载
 const currentMember = ref<Member>({
-  id: 1,
-  studentId: '2021010101',
-  name: '张三',
-  phone: '13812345678',
-  email: 'zhangsan@example.com',
-  room: 'A-101',
-  role: 'admin',
+  id: 0,
+  studentId: '',
+  name: '',
+  phone: '',
+  email: '',
+  room: '',
+  role: 'member',
   status: 'active',
-  joinDate: '2024-09-01',
-  remark: '宿舍管理员，负责日常协调工作',
-  shareAmount: 150,
-  completedTasks: 8,
-  totalTasks: 10
+  joinDate: '',
+  remark: '',
+  shareAmount: 0,
+  completedTasks: 0,
+  totalTasks: 0
 })
+
+// 加载成员信息
+const loadMemberInfo = async () => {
+  try {
+    loading.value = true
+    console.log('开始加载成员信息，ID:', memberId.value)
+    
+    // 调用真实API获取成员信息
+    try {
+      const response = await memberService.getMemberById(memberId.value)
+      if (response.success && response.data) {
+        currentMember.value = response.data
+      } else {
+        throw new Error(response.message || '成员信息不存在')
+      }
+    } catch (error) {
+      console.error('获取成员信息失败:', error)
+      ElMessage.error('获取成员信息失败: ' + (error as Error).message)
+      // 使用默认数据
+      currentMember.value = {
+        id: parseInt(memberId.value) || 0,
+        studentId: '',
+        name: '',
+        phone: '',
+        email: '',
+        room: '',
+        role: 'member',
+        status: 'active',
+        joinDate: '',
+        remark: '',
+        shareAmount: 0,
+        completedTasks: 0,
+        totalTasks: 0
+      }
+    }
+    
+    console.log('成功加载成员信息:', currentMember.value)
+  } catch (error) {
+    console.error('加载成员信息失败:', error)
+    ElMessage.error('加载成员信息失败')
+    // 加载失败时设置为空数据
+    currentMember.value = {
+      id: 0,
+      studentId: '',
+      name: '',
+      phone: '',
+      email: '',
+      room: '',
+      role: 'member',
+      status: 'active',
+      joinDate: '',
+      remark: '',
+      shareAmount: 0,
+      completedTasks: 0,
+      totalTasks: 0
+    }
+  } finally {
+    loading.value = false
+  }
+}
 
 // 编辑表单
 const editForm = ref({
@@ -470,20 +565,7 @@ const memberId = computed(() => {
   return route.params.id as string
 })
 
-// 方法
-const loadMemberInfo = async () => {
-  loading.value = true
-  try {
-    // 模拟API调用 - 根据ID加载成员信息
-    await new Promise(resolve => setTimeout(resolve, 500))
-    // 这里应该根据memberId.value加载实际数据
-    console.log('加载成员信息，ID:', memberId.value)
-  } catch (error) {
-    ElMessage.error('加载成员信息失败')
-  } finally {
-    loading.value = false
-  }
-}
+// 方法已移动到前面定义
 
 const startEdit = () => {
   isEditing.value = true
@@ -511,21 +593,43 @@ const saveMemberInfo = async () => {
   try {
     await memberFormRef.value.validate()
     saving.value = true
+    console.log('开始保存成员信息:', editForm.value)
     
-    // 模拟API调用
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    const response = await memberService.updateMember(memberId.value, {
+      name: editForm.value.name,
+      studentId: editForm.value.studentId,
+      phone: editForm.value.phone,
+      email: editForm.value.email || undefined,
+      room: editForm.value.room,
+      role: editForm.value.role as 'admin' | 'member',
+      status: editForm.value.status as 'active' | 'away' | 'inactive',
+      remark: editForm.value.remark || undefined
+    })
     
-    // 更新当前成员信息
-    currentMember.value = {
-      ...currentMember.value,
-      ...editForm.value
+    if (response.success) {
+      currentMember.value = { 
+        ...currentMember.value, 
+        name: editForm.value.name,
+        studentId: editForm.value.studentId,
+        phone: editForm.value.phone,
+        email: editForm.value.email || undefined,
+        room: editForm.value.room,
+        role: editForm.value.role as 'admin' | 'member',
+        status: editForm.value.status as 'active' | 'away' | 'inactive',
+        remark: editForm.value.remark || undefined
+      }
+      ElMessage.success('成员信息保存成功')
+    } else {
+      throw new Error(response.message || '保存失败')
     }
     
     isEditing.value = false
     ElMessage.success('成员信息保存成功')
+    console.log('成员信息保存成功')
     
   } catch (error) {
-    ElMessage.error('请检查表单填写是否正确')
+    console.error('保存成员信息失败:', error)
+    ElMessage.error('保存失败，请重试')
   } finally {
     saving.value = false
   }
@@ -583,8 +687,23 @@ const copyStudentId = async () => {
 
 
 
-onMounted(() => {
-  loadMemberInfo()
+// 生命周期
+onMounted(async () => {
+  try {
+    // 加载成员信息
+    await loadMemberInfo()
+    
+    // 加载财务统计数据
+    await loadFinancialStats()
+    
+    // 加载活跃度统计数据
+    await loadActivityStats()
+    
+    console.log('MemberInfo 组件初始化完成')
+  } catch (error) {
+    console.error('初始化失败:', error)
+    ElMessage.error('初始化失败，请刷新页面重试')
+  }
 })
 </script>
 

@@ -343,7 +343,8 @@ const checkAccountLockStatus = (): void => {
  */
 const refreshCaptcha = (): void => {
   // 模拟生成验证码图片
-  captchaImage.value = `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="40" viewBox="0 0 120 40"><rect width="120" height="40" fill="%23f0f0f0"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="20" fill="%23333">${Math.random().toString(36).substring(2, 8).toUpperCase()}</text></svg>`
+  // 使用固定验证码文本，实际应用中应通过API获取真实验证码
+  captchaImage.value = `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="40" viewBox="0 0 120 40"><rect width="120" height="40" fill="%23f0f0f0"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="20" fill="%23333">ABCD12</text></svg>`
 }
 
 /**

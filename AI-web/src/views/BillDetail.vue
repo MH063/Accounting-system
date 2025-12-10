@@ -753,6 +753,7 @@ import {
   Printer, Delete, User, Plus, List, Clock, View, Upload, Paperclip, DataAnalysis, ScaleToOriginal
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { billService } from '@/services/billService'
 
 // 定义账单数据接口
 interface PaymentRecord {
@@ -883,8 +884,8 @@ const isOverdue = computed(() => {
 })
 
 const canEditBill = computed(() => {
-  // 根据用户权限判断是否可以编辑账单
-  return true // 模拟权限
+  // 根据用户权限和账单状态判断是否可以编辑账单
+  return billData.value?.status !== 'paid'
 })
 
 const canProcessPayment = computed(() => {
@@ -894,17 +895,19 @@ const canProcessPayment = computed(() => {
 
 const canManageParticipants = computed(() => {
   // 根据用户权限判断是否可以管理成员
-  return true // 模拟权限
+  // 这里可以根据实际权限逻辑进行判断
+  return true
 })
 
 const canAddExpenses = computed(() => {
-  // 根据用户权限判断是否可以添加费用
-  return true // 模拟权限
+  // 根据用户权限和账单状态判断是否可以添加费用
+  return billData.value?.status !== 'paid'
 })
 
 const canUploadAttachments = computed(() => {
   // 根据用户权限判断是否可以上传附件
-  return true // 模拟权限
+  // 这里可以根据实际权限逻辑进行判断
+  return true
 })
 
 // 费用分类统计
@@ -1241,75 +1244,19 @@ const compareVersions = async () => {
   
   comparing.value = true
   try {
-    // 模拟API调用
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    console.log('[BillDetail] 开始版本对比', selectedVersionA.value, selectedVersionB.value)
     
-    // 模拟对比结果
-    versionComparison.value = {
-      basicInfo: {
-        title: {
-          a: '2024年2月宿舍费用账单',
-          b: '2024年2月宿舍费用账单(更新)',
-          changed: true
-        },
-        totalAmount: {
-          a: 1580.00,
-          b: 1680.00,
-          changed: true
-        },
-        description: {
-          a: '包含2月份房租、水电费、网费等各项费用',
-          b: '包含2月份房租、水电费、网费等各项费用(更新)',
-          changed: true
-        }
-      },
-      expenses: [
-        {
-          id: '1',
-          title: '房租',
-          a: { amount: 1200.00, category: 'rent' },
-          b: { amount: 1200.00, category: 'rent' },
-          changed: false,
-          diff: 0,
-          status: 'unchanged'
-        },
-        {
-          id: '2',
-          title: '水电费',
-          a: { amount: 280.00, category: 'utilities' },
-          b: { amount: 380.00, category: 'utilities' },
-          changed: true,
-          diff: 100.00,
-          status: 'modified'
-        },
-        {
-          id: '3',
-          title: '网费',
-          a: { amount: 100.00, category: 'utilities' },
-          b: undefined,
-          changed: true,
-          diff: -100.00,
-          status: 'removed'
-        },
-        {
-          id: '4',
-          title: '清洁费',
-          a: undefined,
-          b: { amount: 100.00, category: 'cleaning' },
-          changed: true,
-          diff: 100.00,
-          status: 'added'
-        }
-      ],
-      summary: {
-        addedCount: 1,
-        removedCount: 1,
-        changedCount: 2,
-        totalDiff: 100.00
-      }
+    // 调用真实API进行版本对比
+    const response = await billService.compareBillVersions(billId, selectedVersionA.value, selectedVersionB.value)
+    
+    if (response.success) {
+      versionComparison.value = response.data
+      console.log('[BillDetail] 版本对比成功:', versionComparison.value)
+    } else {
+      throw new Error(response.message || '版本对比失败')
     }
   } catch (error) {
-    console.error('版本对比失败:', error)
+    console.error('[BillDetail] 版本对比失败:', error)
     ElMessage.error('版本对比失败')
   } finally {
     comparing.value = false
@@ -1330,168 +1277,75 @@ const tableRowClassName = ({ row }: { row: { status?: string } }) => {
   return ''
 }
 
+
+    
+// 组件挂载时加载数据
+onMounted(() => {
+  loadBillDetail()
+  
+  // 初始化图表
+  nextTick(() => {
+    if (chartRef.value) {
+      chartInstance = echarts.init(chartRef.value)
+      updateChart()
+    }
+  })
+})
+
 /**
- * 加载账单详情
+ * 加载账单详情数据
  */
 const loadBillDetail = async () => {
   loading.value = true
   try {
-    // 模拟API调用
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    console.log('[BillDetail] 开始加载账单详情', billId)
     
-    // 模拟账单详情数据
-    billData.value = {
-      id: billId,
-      title: '2024年2月宿舍费用账单',
-      type: 'monthly',
-      status: 'partial',
-      totalAmount: 1580.00,
-      paidAmount: 900.00,
-      billDate: '2024-02-28',
-      dueDate: '2024-03-15',
-      payerName: '张三',
-      description: '包含2月份房租、水电费、网费等各项费用',
-      paymentRecords: [
-        {
-          id: '1',
-          amount: 500.00,
-          paymentDate: '2024-02-15',
-          payerName: '张三',
-          method: 'alipay',
-          note: '部分付款'
-        },
-        {
-          id: '2',
-          amount: 400.00,
-          paymentDate: '2024-02-20',
-          payerName: '李四',
-          method: 'wechat',
-          note: '转账付款'
+    // 调用真实API获取账单详情
+    const response = await billService.getBillDetail(billId)
+    
+    if (response.success) {
+      billData.value = response.data
+      console.log('[BillDetail] 账单详情加载成功:', billData.value)
+      
+      // 更新图表
+      nextTick(() => {
+        if (chartInstance && billData.value) {
+          updateChart()
         }
-      ],
-      participants: [
-        {
-          id: '1',
-          name: '张三',
-          amount: 395.00,
-          paymentStatus: 'paid',
-          avatar: 'https://picsum.photos/40/40?random=1'
-        },
-        {
-          id: '2',
-          name: '李四',
-          amount: 395.00,
-          paymentStatus: 'paid',
-          avatar: 'https://picsum.photos/40/40?random=2'
-        },
-        {
-          id: '3',
-          name: '王五',
-          amount: 395.00,
-          paymentStatus: 'pending',
-          avatar: 'https://picsum.photos/40/40?random=3'
-        },
-        {
-          id: '4',
-          name: '赵六',
-          amount: 395.00,
-          paymentStatus: 'pending',
-          avatar: 'https://picsum.photos/40/40?random=4'
-        }
-      ],
-      expenses: [
-        {
-          id: '1',
-          title: '房租',
-          category: 'rent',
-          amount: 1200.00,
-          date: '2024-02-01'
-        },
-        {
-          id: '2',
-          title: '水电费',
-          category: 'utilities',
-          amount: 280.00,
-          date: '2024-02-28'
-        },
-        {
-          id: '3',
-          title: '网费',
-          category: 'utilities',
-          amount: 100.00,
-          date: '2024-02-01'
-        }
-      ],
-      history: [
-        {
-          id: '1',
-          action: 'create',
-          timestamp: '2024-02-28T10:00:00',
-          operator: '张三',
-          description: '创建账单'
-        },
-        {
-          id: '2',
-          action: 'payment',
-          timestamp: '2024-02-15T14:30:00',
-          operator: '张三',
-          description: '支付500元'
-        },
-        {
-          id: '3',
-          action: 'payment',
-          timestamp: '2024-02-20T16:45:00',
-          operator: '李四',
-          description: '支付400元'
-        },
-        {
-          id: '4',
-          action: 'update',
-          timestamp: '2024-02-25T09:15:00',
-          operator: '管理员',
-          description: '更新账单信息'
-        }
-      ],
-      attachments: [
-        {
-          id: '1',
-          name: '费用清单.pdf',
-          size: 1024000,
-          url: '#'
-        },
-        {
-          id: '2',
-          name: '付款凭证.jpg',
-          size: 512000,
-          url: '#'
-        }
-      ]
+      })
+      
+      // 加载账单版本数据
+      await loadBillVersions()
+    } else {
+      throw new Error(response.message || '获取账单详情失败')
     }
-    
-    // 模拟账单版本数据
-    billVersions.value = [
-      {
-        id: 'v1',
-        version: 1,
-        createTime: '2024-02-28T10:00:00',
-        title: '2024年2月宿舍费用账单',
-        totalAmount: 1580.00,
-        description: '包含2月份房租、水电费、网费等各项费用'
-      },
-      {
-        id: 'v2',
-        version: 2,
-        createTime: '2024-02-25T09:15:00',
-        title: '2024年2月宿舍费用账单(更新)',
-        totalAmount: 1680.00,
-        description: '包含2月份房租、水电费、网费等各项费用(更新)'
-      }
-    ]
   } catch (error) {
-    console.error('加载账单详情失败:', error)
+    console.error('[BillDetail] 加载账单详情失败:', error)
     ElMessage.error('加载账单详情失败')
   } finally {
     loading.value = false
+  }
+}
+
+/**
+ * 加载账单版本数据
+ */
+const loadBillVersions = async () => {
+  try {
+    console.log('[BillDetail] 开始加载账单版本', billId)
+    
+    // 调用真实API获取账单版本
+    const response = await billService.getBillVersions(billId)
+    
+    if (response.success) {
+      billVersions.value = response.data
+      console.log('[BillDetail] 账单版本加载成功:', billVersions.value)
+    } else {
+      throw new Error(response.message || '获取账单版本失败')
+    }
+  } catch (error) {
+    console.error('[BillDetail] 加载账单版本失败:', error)
+    // 不显示错误提示，版本数据不是必需的
   }
 }
 

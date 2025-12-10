@@ -91,26 +91,26 @@ export const clearIgnoredVersion = (): void => {
 
 /**
  * 检查是否有新版本
- * 模拟API调用，在实际应用中应该连接到服务器获取最新版本信息
+ * API调用，在实际应用中应该连接到服务器获取最新版本信息
  */
 export const checkForUpdates = async (): Promise<VersionCheckResponse> => {
   try {
-    // 模拟网络延迟
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
     // 获取当前版本
     const currentVersion = getCurrentVersion();
     
-    // 模拟从服务器获取最新版本信息
-    // 在实际应用中，这里应该是真实的API调用
-    const latestVersion: AppVersion = {
-      version: '1.2.0', // 模拟的新版本号
-      buildNumber: '2024.12.05.001',
-      releaseDate: '2024-12-05',
-      releaseNotes: '1. 新增预算分析功能\n2. 优化用户界面\n3. 修复已知问题\n4. 提升系统性能',
-      downloadUrl: 'https://example.com/download/v1.2.0',
-      checksum: 'xyz789uvw012'
-    };
+    // 调用真实的API获取最新版本信息
+    const response = await fetch('/api/version/latest', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`获取版本信息失败: ${response.status}`);
+    }
+    
+    const latestVersion: AppVersion = await response.json();
     
     // 检查用户是否已忽略此版本
     if (isVersionIgnored(latestVersion.version)) {
@@ -147,22 +147,34 @@ export const checkForUpdates = async (): Promise<VersionCheckResponse> => {
  */
 export const downloadUpdate = async (version: AppVersion): Promise<void> => {
   try {
-    // 模拟下载过程
     console.log(`开始下载版本 ${version.version}...`);
     
-    // 在实际应用中，这里应该是真实的下载逻辑
+    // 调用真实的下载逻辑
     // 可能包括：
     // 1. 显示下载进度
     // 2. 验证文件完整性
     // 3. 触发安装流程
     
-    // 模拟下载进度
-    for (let i = 0; i <= 100; i += 10) {
-      await new Promise(resolve => setTimeout(resolve, 200));
-      console.log(`下载进度: ${i}%`);
+    // 检查downloadUrl是否存在
+    if (!version.downloadUrl) {
+      throw new Error('下载URL不存在');
     }
     
-    console.log('下载完成');
+    try {
+      const response = await fetch(version.downloadUrl, {
+        method: 'GET',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`下载失败: ${response.status}`);
+      }
+      
+      // 这里应该处理实际的文件下载和保存
+      console.log('下载完成');
+    } catch (error) {
+      console.error('下载更新失败:', error);
+      throw new Error('下载更新失败');
+    }
   } catch (error) {
     console.error('下载更新失败:', error);
     throw new Error('下载更新失败');
