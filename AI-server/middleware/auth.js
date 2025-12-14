@@ -20,7 +20,7 @@ const logger = require('../config/logger');
  * @param {Object} res - Express响应对象
  * @param {Function} next - Express下一个中间件函数
  */
-const authenticateToken = (req, res, next) => {
+const authenticateToken = async (req, res, next) => {
   // 从请求头获取令牌
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
@@ -38,36 +38,19 @@ const authenticateToken = (req, res, next) => {
   }
   
   try {
-    // 使用JWT管理器验证令牌并检查黑名单（支持密钥轮换、双令牌和黑名单）
-    const result = verifyTokenWithBlacklist(token);
-    
-    if (!result.valid) {
-      logger.security(req, 'JWT认证失败', { 
-        reason: result.reason,
-        timestamp: new Date().toISOString()
-      });
-      return res.status(401).json({
-        success: false,
-        message: result.reason
-      });
-    }
-    
-    const user = result.payload;
-    
-    // 将用户信息添加到请求对象
+    const payload = await verifyTokenWithBlacklist(token);
+    const user = { ...payload, id: payload.userId };
     req.user = user;
     req.tokenInfo = {
-      type: user.type,
-      jti: user.jti,
-      isRevoked: result.isRevoked
+      type: payload.type,
+      jti: payload.jti || payload.jwtid,
+      isRevoked: false
     };
-    
     logger.security(req, 'JWT认证成功', { 
-      userId: user.userId || user.id,
-      tokenType: user.type,
+      userId: user.id,
+      tokenType: payload.type,
       timestamp: new Date().toISOString()
     });
-    
     next();
   } catch (err) {
     let message = '令牌验证失败';

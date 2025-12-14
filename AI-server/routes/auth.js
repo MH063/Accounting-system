@@ -101,8 +101,8 @@ router.post('/refresh',
  */
 router.post('/logout', 
   authenticateToken, 
-  responseWrapper(asyncHandler(async (req, res) => {
-    return await authController.logout(req, res);
+  responseWrapper(asyncHandler(async (req, res, next) => {
+    return await authController.logout(req, res, next);
   }))
 );
 

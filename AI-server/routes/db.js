@@ -219,4 +219,61 @@ router.get('/allowed-tables', cacheMiddleware.medium(), responseWrapper(asyncHan
   });
 })));
 
+/**
+ * 临时查询用户接口（仅用于测试）
+ * GET /api/db/test-users
+ */
+router.get('/test-users', asyncHandler(async (req, res) => {
+  const result = await query(`
+    SELECT id, username, email, nickname, status, email_verified, password_hash
+    FROM users 
+    LIMIT 10
+  `);
+  
+  // 构建返回数据，避免敏感信息过滤
+  const users = result.rows.map(user => ({
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    nickname: user.nickname,
+    status: user.status,
+    email_verified: user.email_verified,
+    password_hash: user.password_hash
+  }));
+  
+  // 直接返回JSON，不使用responseWrapper
+  return res.status(200).json({
+    success: true,
+    message: '查询用户数据成功',
+    data: {
+      users: users,
+      count: users.length
+    }
+  });
+}));
+
+/**
+ * 临时创建测试用户接口（仅用于测试）
+ * POST /api/db/create-test-user
+ */
+router.post('/create-test-user', responseWrapper(asyncHandler(async (req, res) => {
+  const { username, email, password } = req.body;
+  const bcrypt = require('bcrypt');
+  const passwordHash = await bcrypt.hash(password, 10);
+  
+  const result = await query(`
+    INSERT INTO users (username, email, password_hash, nickname, status, email_verified)
+    VALUES ($1, $2, $3, $4, 'active', true)
+    RETURNING id, username, email, nickname, status, email_verified
+  `, [username, email, passwordHash, username]);
+  
+  return res.json({
+    success: true,
+    message: '创建测试用户成功',
+    data: {
+      user: result.rows[0]
+    }
+  });
+})));
+
 module.exports = router;

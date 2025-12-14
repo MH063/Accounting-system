@@ -9,21 +9,30 @@ class UserModel {
     this.username = data.username || '';
     this.email = data.email || '';
     this.passwordHash = data.password_hash || '';
+    this.nickname = data.nickname || '';
+    this.phone = data.phone || '';
+    this.avatarUrl = data.avatar_url || '';
+    
+    // 账户状态
+    this.status = data.status || 'active';
+    this.emailVerified = data.email_verified !== undefined ? data.email_verified : false;
+    this.phoneVerified = data.phone_verified !== undefined ? data.phone_verified : false;
+    
+    // 安全相关
+    this.lastLoginAt = data.last_login_at || null;
+    this.lastLoginIp = data.last_login_ip || null;
+    this.passwordChangedAt = data.password_changed_at || new Date();
+    this.failedLoginAttempts = data.failed_login_attempts !== undefined ? data.failed_login_attempts : 0;
+    this.lockedUntil = data.locked_until || null;
+    
+    // 时间戳
     this.createdAt = data.created_at || new Date();
     this.updatedAt = data.updated_at || new Date();
-    this.isActive = data.is_active !== undefined ? data.is_active : true;
+    
+    // 兼容旧版本字段
+    this.isActive = this.status === 'active';
     this.role = data.role || 'user';
     this.permissions = data.permissions || [];
-    // 新增邮箱验证相关字段
-    this.emailVerified = data.email_verified !== undefined ? data.email_verified : false;
-    this.verificationToken = data.verification_token || null;
-    this.verificationTokenExpires = data.verification_token_expires || null;
-    // 新增密码重置相关字段
-    this.resetToken = data.reset_token || null;
-    this.resetTokenExpires = data.reset_token_expires || null;
-    // QQ验证相关字段
-    this.qqNumber = data.qq_number || null;
-    this.qqVerified = data.qq_verified !== undefined ? data.qq_verified : false;
   }
 
   /**
@@ -49,13 +58,24 @@ class UserModel {
       errors.push('邮箱不能为空');
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.email)) {
       errors.push('邮箱格式不正确');
-    } else if (this.email.length > 100) {
-      errors.push('邮箱长度不能超过100个字符');
+    } else if (this.email.length > 255) {
+      errors.push('邮箱长度不能超过255个字符');
+    }
+
+    // 验证手机号（可选）
+    if (this.phone && !/^\+?[1-9]\d{1,14}$/.test(this.phone)) {
+      errors.push('手机号格式不正确');
     }
 
     // 验证密码哈希（仅在创建时验证）
     if (!this.id && (!this.passwordHash || this.passwordHash.length === 0)) {
       errors.push('密码不能为空');
+    }
+
+    // 验证状态
+    const validStatuses = ['active', 'inactive', 'pending', 'banned'];
+    if (this.status && !validStatuses.includes(this.status)) {
+      errors.push('无效的账户状态');
     }
 
     // 验证角色
@@ -79,19 +99,21 @@ class UserModel {
       username: this.username,
       email: this.email,
       password_hash: this.passwordHash,
+      nickname: this.nickname,
+      phone: this.phone,
+      avatar_url: this.avatarUrl,
+      status: this.status,
+      email_verified: this.emailVerified,
+      phone_verified: this.phoneVerified,
+      last_login_at: this.lastLoginAt,
+      last_login_ip: this.lastLoginIp,
+      password_changed_at: this.passwordChangedAt,
+      failed_login_attempts: this.failedLoginAttempts,
+      locked_until: this.lockedUntil,
       created_at: this.createdAt,
       updated_at: this.updatedAt,
-      is_active: this.isActive,
-      role: this.role,
-      permissions: JSON.stringify(this.permissions),
-      // 新增字段
-      email_verified: this.emailVerified,
-      verification_token: this.verificationToken,
-      verification_token_expires: this.verificationTokenExpires,
-      reset_token: this.resetToken,
-      reset_token_expires: this.resetTokenExpires,
-      qq_number: this.qqNumber,
-      qq_verified: this.qqVerified
+      // 兼容旧版本字段
+      permissions: JSON.stringify(this.permissions)
     };
   }
 
@@ -103,24 +125,30 @@ class UserModel {
   static fromDatabase(dbRecord) {
     if (!dbRecord) return null;
 
+    // 判断是否为管理员：基于用户名或邮箱
+    const isAdmin = dbRecord.username === 'admin' || dbRecord.email === 'admin@example.com';
+    
     return new UserModel({
       id: dbRecord.id,
       username: dbRecord.username,
       email: dbRecord.email,
       password_hash: dbRecord.password_hash,
+      nickname: dbRecord.nickname,
+      phone: dbRecord.phone,
+      avatar_url: dbRecord.avatar_url,
+      status: dbRecord.status || 'active',
+      email_verified: dbRecord.email_verified || false,
+      phone_verified: dbRecord.phone_verified || false,
+      last_login_at: dbRecord.last_login_at,
+      last_login_ip: dbRecord.last_login_ip,
+      password_changed_at: dbRecord.password_changed_at,
+      failed_login_attempts: dbRecord.failed_login_attempts || 0,
+      locked_until: dbRecord.locked_until,
       created_at: dbRecord.created_at,
       updated_at: dbRecord.updated_at,
-      is_active: dbRecord.is_active,
-      role: dbRecord.role,
-      permissions: dbRecord.permissions ? JSON.parse(dbRecord.permissions) : [],
-      // 新增字段
-      email_verified: dbRecord.email_verified || false,
-      verification_token: dbRecord.verification_token || null,
-      verification_token_expires: dbRecord.verification_token_expires || null,
-      reset_token: dbRecord.reset_token || null,
-      reset_token_expires: dbRecord.reset_token_expires || null,
-      qq_number: dbRecord.qq_number || null,
-      qq_verified: dbRecord.qq_verified || false
+      // 兼容旧版本字段
+      role: isAdmin ? 'admin' : 'user',
+      permissions: dbRecord.permissions ? JSON.parse(dbRecord.permissions) : []
     });
   }
 
@@ -133,15 +161,19 @@ class UserModel {
       id: this.id,
       username: this.username,
       email: this.email,
+      nickname: this.nickname,
+      phone: this.phone,
+      avatar_url: this.avatarUrl,
+      status: this.status,
+      email_verified: this.emailVerified,
+      phone_verified: this.phoneVerified,
+      last_login_at: this.lastLoginAt,
       created_at: this.createdAt,
       updated_at: this.updatedAt,
+      // 兼容旧版本字段
       is_active: this.isActive,
       role: this.role,
-      permissions: this.permissions,
-      // 新增验证相关字段
-      email_verified: this.emailVerified,
-      qq_number: this.qqNumber,
-      qq_verified: this.qqVerified
+      permissions: this.permissions
     };
   }
 

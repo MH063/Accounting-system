@@ -4,13 +4,13 @@
  */
 
 const Redis = require('ioredis');
-const LRU = require('lru-cache');
+const { LRUCache } = require('lru-cache');
 const logger = require('./logger');
 
 /**
  * L1缓存配置 - 内存缓存（LRU）
  */
-const l1Cache = new LRU({
+const l1Cache = new LRUCache({
   max: 1000, // 最大缓存项数
   ttl: 1000 * 60 * 5, // 5分钟过期时间
   updateAgeOnGet: true, // 访问时更新年龄

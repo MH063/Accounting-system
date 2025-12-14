@@ -14,7 +14,7 @@ const {
   refreshAccessToken, 
   revokeTokenPair 
 } = require('../config/jwtManager');
-const { User, Admin, Role, Permission } = require('../models');
+
 const AdminAuthService = require('./AdminAuthService');
 
 class UserService extends BaseService {
@@ -41,7 +41,16 @@ class UserService extends BaseService {
       }
 
       // 验证邮箱格式
+      logger.debug('[UserService] 验证邮箱格式', { 
+        email: userData.email,
+        emailType: typeof userData.email
+      });
+      
       if (!this.isValidEmail(userData.email)) {
+        logger.error('[UserService] 邮箱格式验证失败', { 
+          email: userData.email,
+          emailType: typeof userData.email
+        });
         throw new Error('邮箱格式不正确');
       }
 
@@ -118,7 +127,7 @@ class UserService extends BaseService {
         username: loginData.username || loginData.email 
       });
 
-      const { username, email, password } = loginData;
+      const { username, email, password, captchaCode, sessionId, ip, userAgent } = loginData;
 
       // 验证必填字段
       if (!password) {
@@ -129,13 +138,38 @@ class UserService extends BaseService {
         throw new Error('用户名或邮箱为必填项');
       }
 
+      // 验证验证码（如果提供）
+      if (captchaCode && sessionId) {
+        const captchaValid = await this.validateCaptcha(captchaCode, sessionId, ip);
+        if (!captchaValid) {
+          logger.warn('[UserService] 用户登录失败: 验证码错误', { 
+            sessionId,
+            ip
+          });
+          throw new Error('验证码错误，请重新输入');
+        }
+      }
+
       // 查找用户
       let user;
-      if (email) {
-        user = await this.userRepository.findByEmail(email);
+      // 如果提供了email，则使用email查找；否则使用username查找
+      const loginIdentifier = email || username;
+      
+      // 判断是否为邮箱格式
+      if (this.isValidEmail(loginIdentifier)) {
+        user = await this.userRepository.findByEmail(loginIdentifier);
       } else {
-        user = await this.userRepository.findByUsername(username);
+        user = await this.userRepository.findByUsername(loginIdentifier);
       }
+
+      // 添加调试日志
+      logger.info('[UserService] 查找用户结果', { 
+        loginIdentifier,
+        userFound: !!user,
+        userId: user ? user.id : null,
+        username: user ? user.username : null,
+        passwordHashExists: user ? !!user.passwordHash : null
+      });
 
       if (!user) {
         logger.warn('[UserService] 用户登录失败: 用户不存在', { 
@@ -144,29 +178,42 @@ class UserService extends BaseService {
         throw new Error('用户名或密码错误');
       }
 
-      // 检查用户是否激活
-      if (!user.is_active) {
-        logger.warn('[UserService] 用户登录失败: 用户未激活', { 
+      // 检查用户状态
+      if (user.status !== 'active') {
+        const statusMessages = {
+          'inactive': '账户未激活，请联系管理员',
+          'pending': '账户待审核，请稍后再试',
+          'banned': '账户已被禁用，请联系管理员'
+        };
+        
+        logger.warn('[UserService] 用户登录失败: 账户状态异常', { 
           userId: user.id,
-          username: user.username 
+          username: user.username,
+          status: user.status
         });
-        throw new Error('账户未激活，请联系管理员');
+        throw new Error(statusMessages[user.status] || '账户状态异常，请联系管理员');
       }
 
       // 检查用户是否被锁定
-      const lockStatus = await this.userRepository.checkUserLocked(user.id);
-      
-      if (lockStatus.locked) {
+      if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
         logger.warn('[UserService] 用户登录失败: 账户已被锁定', { 
           userId: user.id,
           username: user.username,
-          lockedUntil: lockStatus.lockedUntil 
+          lockedUntil: user.lockedUntil 
         });
-        throw new Error(`账户已被锁定，锁定原因: ${lockStatus.reason || '登录失败次数过多'}，请稍后再试`);
+        throw new Error(`账户已被锁定，请于 ${new Date(user.lockedUntil).toLocaleString()} 后再试`);
       }
 
+      // DEBUG: 打印密码哈希信息
+      logger.info('[UserService] DEBUG: 验证密码', {
+        username: user.username,
+        inputPasswordLength: password ? password.length : 0,
+        storedHash: user.passwordHash,
+        storedHashLength: user.passwordHash ? user.passwordHash.length : 0
+      });
+
       // 验证密码
-      const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+      const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
       
       if (!isPasswordValid) {
         // 记录登录失败
@@ -182,8 +229,11 @@ class UserService extends BaseService {
       // 密码正确，重置登录失败次数
       await this.userRepository.resetLoginAttempts(user.id);
       
-      // 更新最后登录时间
-      await this.userRepository.updateLastLogin(user.id);
+      // 更新最后登录时间和IP
+      await this.userRepository.updateLastLogin(user.id, ip);
+
+      // 创建用户会话
+      const session = await this.createUserSession(user.id, ip, userAgent);
 
       // 生成JWT双令牌
       const tokenPair = generateTokenPair(user.id, {
@@ -202,11 +252,13 @@ class UserService extends BaseService {
         success: true,
         data: {
           user: user.toApiResponse(),
-          accessToken: tokenPair.accessToken,
-          refreshToken: tokenPair.refreshToken,
-          expiresIn: tokenPair.expiresIn,
-          tokenType: 'Bearer',
-          tokenPairId: tokenPair.tokenPairId
+          tokens: {
+            accessToken: tokenPair.accessToken,
+            refreshToken: tokenPair.refreshToken,
+            expiresIn: tokenPair.expiresIn,
+            refreshExpiresIn: tokenPair.refreshExpiresIn
+          },
+          session: session
         },
         message: '登录成功'
       };
@@ -269,48 +321,73 @@ class UserService extends BaseService {
   /**
    * 用户登出
    * @param {number} userId - 用户ID
-   * @param {string} accessToken - 访问令牌
-   * @param {string} refreshToken - 刷新令牌
+   * @param {string} sessionToken - 会话令牌
+   * @param {string} ipAddress - IP地址
+   * @param {string} userAgent - 用户代理
    * @returns {Promise<Object>} 登出结果
    */
-  async logout(userId, accessToken, refreshToken) {
+  async logout(userId, sessionToken, ipAddress, userAgent) {
     try {
-      logger.info('[UserService] 用户登出', { userId });
+      logger.info('[UserService] 用户登出', { userId, sessionToken });
 
-      // 撤销令牌
-      const revokeResults = revokeTokenPair(accessToken, refreshToken, 'logout');
+      // 1. 更新当前会话状态为 revoked
+      const updateSessionQuery = `
+        UPDATE user_sessions 
+        SET status = 'revoked', last_accessed_at = NOW() 
+        WHERE session_token = $1 AND status = 'active' AND user_id = $2
+        RETURNING id, session_token, status, expires_at
+      `;
+
+      const sessionResult = await this.userRepository.executeQuery(updateSessionQuery, [sessionToken, userId]);
+
+      if (!sessionResult || sessionResult.rows.length === 0) {
+        logger.warn('[UserService] 登出失败: 会话不存在或已失效', { 
+          userId, 
+          sessionToken 
+        });
+        return {
+          success: false,
+          message: '会话不存在或已失效'
+        };
+      }
+
+      const updatedSession = sessionResult.rows[0];
+
+      logger.info('[UserService] 用户登出成功', { 
+        userId, 
+        sessionToken,
+        sessionId: updatedSession.id
+      });
 
       // 记录安全事件
-      if (revokeResults.accessToken || revokeResults.refreshToken) {
-        logger.info('[UserService] 用户登出成功，令牌已撤销', { 
-          userId,
-          accessTokenRevoked: revokeResults.accessToken,
-          refreshTokenRevoked: revokeResults.refreshToken 
-        });
-
-        // 记录安全事件
-        logger.info('[UserService] 安全事件: 用户正常登出', {
-          event: 'USER_LOGOUT',
-          userId,
-          revokedTokens: {
-            accessToken: revokeResults.accessToken,
-            refreshToken: revokeResults.refreshToken
-          },
-          timestamp: new Date().toISOString()
-        });
-      } else {
-        logger.warn('[UserService] 用户登出时撤销令牌失败', { userId });
-      }
+      logger.info('[UserService] 安全事件: 用户正常登出', {
+        event: 'USER_LOGOUT',
+        userId,
+        sessionToken,
+        sessionId: updatedSession.id,
+        ipAddress,
+        userAgent,
+        timestamp: new Date().toISOString()
+      });
 
       return {
         success: true,
+        data: {
+          session: {
+            id: updatedSession.id,
+            sessionToken: updatedSession.session_token,
+            status: updatedSession.status,
+            expiresAt: updatedSession.expires_at
+          }
+        },
         message: '登出成功'
       };
 
     } catch (error) {
       logger.error('[UserService] 用户登出失败', { 
         error: error.message,
-        userId 
+        userId,
+        sessionToken
       });
       throw error;
     }
@@ -642,7 +719,7 @@ class UserService extends BaseService {
       }
 
       // 验证当前密码
-      const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password_hash);
+      const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.passwordHash);
       
       if (!isCurrentPasswordValid) {
         logger.warn('[UserService] 修改密码失败: 当前密码错误', { userId });
@@ -682,8 +759,29 @@ class UserService extends BaseService {
    * @returns {boolean} 是否有效
    */
   isValidEmail(email) {
+    logger.debug('[UserService] 验证邮箱格式', { 
+      email,
+      emailType: typeof email,
+      emailLength: email ? email.length : 'null/undefined'
+    });
+    
+    if (!email || typeof email !== 'string') {
+      logger.error('[UserService] 邮箱格式验证失败: 邮箱为空或不是字符串', { 
+        email,
+        emailType: typeof email
+      });
+      return false;
+    }
+    
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
+    const result = emailRegex.test(email);
+    
+    logger.debug('[UserService] 邮箱格式验证结果', { 
+      email,
+      result
+    });
+    
+    return result;
   }
 
   /**
@@ -1176,7 +1274,7 @@ class UserService extends BaseService {
       }
 
       // 验证密码
-      const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+      const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
       
       if (!isPasswordValid) {
         throw new Error('密码错误');
@@ -1311,6 +1409,172 @@ class UserService extends BaseService {
       });
       throw error;
     }
+  }
+
+  /**
+   * 验证验证码
+   * @param {string} captchaCode - 验证码
+   * @param {string} sessionId - 会话ID
+   * @param {string} ip - IP地址
+   * @returns {Promise<boolean>} 验证结果
+   */
+  async validateCaptcha(captchaCode, sessionId, ip) {
+    try {
+      // 这里应该查询captcha_codes表验证验证码
+      // 由于没有相应的Repository，这里简化处理
+      // 实际项目中应该创建CaptchaRepository并实现验证逻辑
+      
+      // 模拟验证码验证（实际应该查询数据库）
+      // 1. 检查验证码是否存在且未使用
+      // 2. 检查验证码是否过期
+      // 3. 检查IP地址或会话ID是否匹配
+      // 4. 验证码正确后标记为已使用
+      
+      logger.info('[UserService] 验证码验证', { 
+        sessionId,
+        ip,
+        captchaCode: captchaCode.substring(0, 1) + '***' // 只记录第一个字符，避免记录完整验证码
+      });
+      
+      // 这里应该返回实际的验证结果
+      // 暂时返回true，实际项目中应该实现完整的验证逻辑
+      return true;
+    } catch (error) {
+      logger.error('[UserService] 验证码验证失败', { 
+        error: error.message,
+        sessionId,
+        ip
+      });
+      return false;
+    }
+  }
+
+  /**
+   * 创建用户会话
+   * @param {number} userId - 用户ID
+   * @param {string} ip - IP地址
+   * @param {string} userAgent - 用户代理
+   * @returns {Promise<Object>} 会话信息
+   */
+  async createUserSession(userId, ip, userAgent) {
+    try {
+      // 生成会话令牌
+      const sessionToken = this.generateSecureToken();
+      const refreshToken = this.generateSecureToken();
+      
+      // 解析用户代理信息
+      const deviceInfo = this.parseUserAgent(userAgent);
+      
+      // 设置会话过期时间（默认7天）
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+      
+      // 插入到数据库的 user_sessions 表
+      const insertQuery = `
+        INSERT INTO user_sessions (
+          user_id, session_token, refresh_token, device_info, 
+          ip_address, user_agent, status, expires_at, last_accessed_at
+        ) VALUES (
+          $1, $2, $3, $4::jsonb, 
+          $5, $6, 'active', $7, NOW()
+        )
+        RETURNING id, user_id, session_token, refresh_token, device_info, ip_address, user_agent, status, expires_at, created_at, last_accessed_at
+      `;
+      
+      const params = [
+        userId,
+        sessionToken,
+        refreshToken,
+        JSON.stringify(deviceInfo),
+        ip || '0.0.0.0',
+        userAgent || '',
+        expiresAt
+      ];
+      
+      const result = await this.userRepository.executeQuery(insertQuery, params);
+      const session = result.rows[0];
+      
+      logger.info('[UserService] 创建用户会话', { 
+        userId,
+        sessionId: session.id,
+        ip,
+        expiresAt: session.expires_at
+      });
+      
+      return session;
+    } catch (error) {
+      logger.error('[UserService] 创建用户会话失败', { 
+        error: error.message,
+        userId,
+        ip
+      });
+      return null;
+    }
+  }
+
+  /**
+   * 生成安全令牌
+   * @returns {string} 安全令牌
+   */
+  generateSecureToken() {
+    const crypto = require('crypto');
+    return crypto.randomBytes(32).toString('hex');
+  }
+
+  /**
+   * 生成唯一ID
+   * @returns {number} 唯一ID
+   */
+  generateId() {
+    return Date.now() + Math.floor(Math.random() * 1000);
+  }
+
+  /**
+   * 解析用户代理信息
+   * @param {string} userAgent - 用户代理字符串
+   * @returns {Object} 设备信息
+   */
+  parseUserAgent(userAgent) {
+    if (!userAgent) {
+      return {
+        browser: 'Unknown',
+        os: 'Unknown',
+        device: 'Unknown'
+      };
+    }
+
+    // 简单的用户代理解析
+    // 实际项目中可以使用专门的库如ua-parser-js
+    let browser = 'Unknown';
+    let os = 'Unknown';
+    let device = 'Desktop';
+
+    // 检测浏览器
+    if (userAgent.includes('Chrome')) browser = 'Chrome';
+    else if (userAgent.includes('Firefox')) browser = 'Firefox';
+    else if (userAgent.includes('Safari')) browser = 'Safari';
+    else if (userAgent.includes('Edge')) browser = 'Edge';
+
+    // 检测操作系统
+    if (userAgent.includes('Windows')) os = 'Windows';
+    else if (userAgent.includes('Mac')) os = 'macOS';
+    else if (userAgent.includes('Linux')) os = 'Linux';
+    else if (userAgent.includes('Android')) os = 'Android';
+    else if (userAgent.includes('iOS')) os = 'iOS';
+
+    // 检测设备类型
+    if (userAgent.includes('Mobile') || userAgent.includes('Android') || userAgent.includes('iOS')) {
+      device = 'Mobile';
+    } else if (userAgent.includes('Tablet') || userAgent.includes('iPad')) {
+      device = 'Tablet';
+    }
+
+    return {
+      browser,
+      os,
+      device,
+      raw: userAgent
+    };
   }
 }
 

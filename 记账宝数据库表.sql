@@ -1241,6 +1241,15 @@ INSERT INTO roles (role_name, role_display_name, description, permissions, is_sy
 ('member', '成员', '普通宿舍成员', '{"expenses": ["read", "write"], "profile": ["read", "write"]}', true),
 ('viewer', '查看者', '只能查看信息，无法修改', '{"expenses": ["read"], "profile": ["read"]}', true);
 
+-- 插入管理员账户（初始超级管理员）
+INSERT INTO users (username, email, password_hash, nickname, phone, status, email_verified) VALUES
+('admin', 'admin@example.com', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '系统管理员', '13800000000', 'active', true);
+
+-- 为初始管理员分配超级管理员角色
+INSERT INTO user_roles (user_id, role_id) 
+SELECT u.id, r.id 
+FROM users u, roles r 
+WHERE u.username = 'admin' AND r.role_name = 'super_admin';
 -- 插入基础费用类别
 INSERT INTO expense_categories (category_code, category_name, description, color_code, icon_name, sort_order) VALUES
 ('accommodation', '住宿费', '房租、押金等住宿相关费用', '#FF6B6B', 'home', 1),
@@ -1267,7 +1276,7 @@ DO $$
 BEGIN
     RAISE NOTICE '记账宝数据库表结构创建完成！';
     RAISE NOTICE '已创建表: users, roles, user_roles, user_sessions, dorms, user_dorms, expense_categories, expenses, expense_splits, verification_codes, two_factor_auth, performance_metrics, audit_logs';
-    RAISE NOTICE '已创建视图: user_details, expense_summary';
+    RAISE NOTICE '已创建账单管理模块表: bills, bill_expenses, bill_splits, bill_payments, bill_types, bill_cycles, scheduled_bills, bill_shares, bill_share_users';    RAISE NOTICE '已创建视图: user_details, expense_summary';
     RAISE NOTICE '已创建触发器: 更新时间戳触发器';
     RAISE NOTICE '已创建索引: 性能优化索引';
     RAISE NOTICE '已创建函数: 系统维护和统计函数';
@@ -1353,12 +1362,345 @@ COMMENT ON COLUMN two_factor_codes.verification_attempts IS '验证尝试次数'
 COMMENT ON COLUMN two_factor_codes.max_attempts IS '最大尝试次数';
 COMMENT ON COLUMN two_factor_codes.expires_at IS '过期时间';
 
+-- 管理员操作日志表
+CREATE TABLE admin_operation_logs (
+    id BIGSERIAL PRIMARY KEY,
+    admin_id BIGINT NOT NULL,
+    admin_username VARCHAR(50) NOT NULL,
+    operation_type VARCHAR(50) NOT NULL,
+    module VARCHAR(50) NOT NULL,
+    description TEXT,
+    request_method VARCHAR(10),
+    request_url TEXT,
+    request_params JSONB,
+    response_status INTEGER,
+    ip_address INET,
+    user_agent TEXT,
+    execution_time INTEGER, -- 执行时间(毫秒)
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    
+    -- 外键约束
+    CONSTRAINT fk_admin_operation_logs_admin_id 
+        FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+COMMENT ON TABLE admin_operation_logs IS '管理员操作日志表，记录管理员在管理后台的所有操作';
+COMMENT ON COLUMN admin_operation_logs.id IS '日志唯一标识';
+COMMENT ON COLUMN admin_operation_logs.admin_id IS '管理员ID';
+COMMENT ON COLUMN admin_operation_logs.admin_username IS '管理员用户名';
+COMMENT ON COLUMN admin_operation_logs.operation_type IS '操作类型';
+COMMENT ON COLUMN admin_operation_logs.module IS '操作模块';
+COMMENT ON COLUMN admin_operation_logs.description IS '操作描述';
+COMMENT ON COLUMN admin_operation_logs.request_method IS '请求方法';
+COMMENT ON COLUMN admin_operation_logs.request_url IS '请求URL';
+COMMENT ON COLUMN admin_operation_logs.request_params IS '请求参数';
+COMMENT ON COLUMN admin_operation_logs.response_status IS '响应状态码';
+COMMENT ON COLUMN admin_operation_logs.ip_address IS 'IP地址';
+COMMENT ON COLUMN admin_operation_logs.user_agent IS '用户代理';
+COMMENT ON COLUMN admin_operation_logs.execution_time IS '执行时间(毫秒)';
+COMMENT ON COLUMN admin_operation_logs.created_at IS '创建时间';
+
+-- 管理员登录日志表
+CREATE TABLE admin_login_logs (
+    id BIGSERIAL PRIMARY KEY,
+    admin_id BIGINT,
+    username VARCHAR(50) NOT NULL,
+    login_status VARCHAR(20) NOT NULL 
+        CHECK (login_status IN ('success', 'failed')),
+    ip_address INET,
+    user_agent TEXT,
+    login_time TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    logout_time TIMESTAMP WITH TIME ZONE,
+    session_duration INTEGER, -- 会话时长(秒)
+    
+    -- 外键约束
+    CONSTRAINT fk_admin_login_logs_admin_id 
+        FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+COMMENT ON TABLE admin_login_logs IS '管理员登录日志表，记录管理员登录和登出信息';
+COMMENT ON COLUMN admin_login_logs.id IS '日志唯一标识';
+COMMENT ON COLUMN admin_login_logs.admin_id IS '管理员ID';
+COMMENT ON COLUMN admin_login_logs.username IS '用户名';
+COMMENT ON COLUMN admin_login_logs.login_status IS '登录状态';
+COMMENT ON COLUMN admin_login_logs.ip_address IS 'IP地址';
+COMMENT ON COLUMN admin_login_logs.user_agent IS '用户代理';
+COMMENT ON COLUMN admin_login_logs.login_time IS '登录时间';
+COMMENT ON COLUMN admin_login_logs.logout_time IS '登出时间';
+COMMENT ON COLUMN admin_login_logs.session_duration IS '会话时长(秒)';
+
+-- 权限菜单表
+CREATE TABLE admin_permissions (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    code VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    module VARCHAR(50),
+    parent_id INTEGER,
+    level INTEGER DEFAULT 1,
+    sort_order INTEGER DEFAULT 0,
+    icon VARCHAR(50),
+    route_path VARCHAR(200),
+    component_path VARCHAR(200),
+    is_menu BOOLEAN DEFAULT true,
+    is_system BOOLEAN DEFAULT false,
+    status VARCHAR(20) NOT NULL DEFAULT 'active'
+        CHECK (status IN ('active', 'inactive')),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    
+    -- 外键约束
+    CONSTRAINT fk_admin_permissions_parent_id 
+        FOREIGN KEY (parent_id) REFERENCES admin_permissions(id) ON DELETE CASCADE
+);
+
+COMMENT ON TABLE admin_permissions IS '权限菜单表，定义管理系统的所有权限和菜单项';
+COMMENT ON COLUMN admin_permissions.id IS '权限唯一标识';
+COMMENT ON COLUMN admin_permissions.name IS '权限名称';
+COMMENT ON COLUMN admin_permissions.code IS '权限代码';
+COMMENT ON COLUMN admin_permissions.description IS '权限描述';
+COMMENT ON COLUMN admin_permissions.module IS '所属模块';
+COMMENT ON COLUMN admin_permissions.parent_id IS '父级权限ID';
+COMMENT ON COLUMN admin_permissions.level IS '层级';
+COMMENT ON COLUMN admin_permissions.sort_order IS '排序';
+COMMENT ON COLUMN admin_permissions.icon IS '图标';
+COMMENT ON COLUMN admin_permissions.route_path IS '路由路径';
+COMMENT ON COLUMN admin_permissions.component_path IS '组件路径';
+COMMENT ON COLUMN admin_permissions.is_menu IS '是否为菜单项';
+COMMENT ON COLUMN admin_permissions.is_system IS '是否为系统权限';
+COMMENT ON COLUMN admin_permissions.status IS '状态';
+COMMENT ON COLUMN admin_permissions.created_at IS '创建时间';
+COMMENT ON COLUMN admin_permissions.updated_at IS '更新时间';
+
+-- 角色权限关联表
+CREATE TABLE role_permissions (
+    id BIGSERIAL PRIMARY KEY,
+    role_id INTEGER NOT NULL,
+    permission_id INTEGER NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    
+    -- 外键约束
+    CONSTRAINT fk_role_permissions_role_id 
+        FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
+    CONSTRAINT fk_role_permissions_permission_id 
+        FOREIGN KEY (permission_id) REFERENCES admin_permissions(id) ON DELETE CASCADE,
+        
+    -- 唯一约束
+    CONSTRAINT uk_role_permissions_role_permission 
+        UNIQUE (role_id, permission_id)
+);
+
+COMMENT ON TABLE role_permissions IS '角色权限关联表，定义角色拥有的权限';
+COMMENT ON COLUMN role_permissions.id IS '关联记录唯一标识';
+COMMENT ON COLUMN role_permissions.role_id IS '角色ID';
+COMMENT ON COLUMN role_permissions.permission_id IS '权限ID';
+COMMENT ON COLUMN role_permissions.created_at IS '创建时间';
+
+-- 系统通知表
+CREATE TABLE system_notifications (
+    id BIGSERIAL PRIMARY KEY,
+    title VARCHAR(200) NOT NULL,
+    content TEXT NOT NULL,
+    type VARCHAR(20) NOT NULL 
+        CHECK (type IN ('system', 'announcement', 'reminder', 'urgent')),
+    status VARCHAR(20) NOT NULL DEFAULT 'draft'
+        CHECK (status IN ('draft', 'scheduled', 'sending', 'sent', 'failed')),
+    priority VARCHAR(10) NOT NULL DEFAULT 'medium'
+        CHECK (priority IN ('low', 'medium', 'high', 'urgent')),
+    sender_id BIGINT,
+    recipient_groups JSONB, -- 接收人群组
+    send_methods JSONB, -- 发送方式
+    scheduled_time TIMESTAMP WITH TIME ZONE, -- 计划发送时间
+    send_time TIMESTAMP WITH TIME ZONE, -- 实际发送时间
+    read_count INTEGER DEFAULT 0,
+    click_count INTEGER DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    
+    -- 外键约束
+    CONSTRAINT fk_system_notifications_sender_id 
+        FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+COMMENT ON TABLE system_notifications IS '系统通知表，存储系统发送的通知消息';
+COMMENT ON COLUMN system_notifications.id IS '通知唯一标识';
+COMMENT ON COLUMN system_notifications.title IS '通知标题';
+COMMENT ON COLUMN system_notifications.content IS '通知内容';
+COMMENT ON COLUMN system_notifications.type IS '通知类型';
+COMMENT ON COLUMN system_notifications.status IS '通知状态';
+COMMENT ON COLUMN system_notifications.priority IS '优先级';
+COMMENT ON COLUMN system_notifications.sender_id IS '发送者ID';
+COMMENT ON COLUMN system_notifications.recipient_groups IS '接收人群组';
+COMMENT ON COLUMN system_notifications.send_methods IS '发送方式';
+COMMENT ON COLUMN system_notifications.scheduled_time IS '计划发送时间';
+COMMENT ON COLUMN system_notifications.send_time IS '实际发送时间';
+COMMENT ON COLUMN system_notifications.read_count IS '已读数量';
+COMMENT ON COLUMN system_notifications.click_count IS '点击数量';
+COMMENT ON COLUMN system_notifications.created_at IS '创建时间';
+COMMENT ON COLUMN system_notifications.updated_at IS '更新时间';
+
+-- 通知模板表
+CREATE TABLE notification_templates (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    title_template VARCHAR(200) NOT NULL,
+    content_template TEXT NOT NULL,
+    type VARCHAR(20) NOT NULL 
+        CHECK (type IN ('system', 'announcement', 'reminder', 'urgent')),
+    variables JSONB, -- 模板变量
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    usage_count INTEGER DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE notification_templates IS '通知模板表，定义系统通知的模板';
+COMMENT ON COLUMN notification_templates.id IS '模板唯一标识';
+COMMENT ON COLUMN notification_templates.name IS '模板名称';
+COMMENT ON COLUMN notification_templates.title_template IS '标题模板';
+COMMENT ON COLUMN notification_templates.content_template IS '内容模板';
+COMMENT ON COLUMN notification_templates.type IS '模板类型';
+COMMENT ON COLUMN notification_templates.variables IS '模板变量';
+COMMENT ON COLUMN notification_templates.is_active IS '是否启用';
+COMMENT ON COLUMN notification_templates.usage_count IS '使用次数';
+COMMENT ON COLUMN notification_templates.created_at IS '创建时间';
+COMMENT ON COLUMN notification_templates.updated_at IS '更新时间';
+
+-- 数据备份记录表
+CREATE TABLE data_backup_records (
+    id BIGSERIAL PRIMARY KEY,
+    backup_name VARCHAR(200) NOT NULL,
+    backup_type VARCHAR(20) NOT NULL 
+        CHECK (backup_type IN ('full', 'incremental')),
+    file_path VARCHAR(500),
+    file_size BIGINT,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'running', 'success', 'failed', 'cancelled')),
+    started_at TIMESTAMP WITH TIME ZONE,
+    completed_at TIMESTAMP WITH TIME ZONE,
+    duration INTEGER, -- 备份时长(秒)
+    checksum VARCHAR(100),
+    error_message TEXT,
+    created_by BIGINT,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    
+    -- 外键约束
+    CONSTRAINT fk_data_backup_records_created_by 
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+COMMENT ON TABLE data_backup_records IS '数据备份记录表，记录系统数据备份的历史';
+COMMENT ON COLUMN data_backup_records.id IS '备份记录唯一标识';
+COMMENT ON COLUMN data_backup_records.backup_name IS '备份名称';
+COMMENT ON COLUMN data_backup_records.backup_type IS '备份类型';
+COMMENT ON COLUMN data_backup_records.file_path IS '备份文件路径';
+COMMENT ON COLUMN data_backup_records.file_size IS '备份文件大小';
+COMMENT ON COLUMN data_backup_records.status IS '备份状态';
+COMMENT ON COLUMN data_backup_records.started_at IS '开始时间';
+COMMENT ON COLUMN data_backup_records.completed_at IS '完成时间';
+COMMENT ON COLUMN data_backup_records.duration IS '备份时长(秒)';
+COMMENT ON COLUMN data_backup_records.checksum IS '文件校验和';
+COMMENT ON COLUMN data_backup_records.error_message IS '错误信息';
+COMMENT ON COLUMN data_backup_records.created_by IS '创建者ID';
+COMMENT ON COLUMN data_backup_records.created_at IS '创建时间';
+
+-- 系统配置表
+CREATE TABLE system_configs (
+    id SERIAL PRIMARY KEY,
+    config_key VARCHAR(100) NOT NULL UNIQUE,
+    config_value TEXT,
+    config_group VARCHAR(50),
+    description TEXT,
+    is_system BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE system_configs IS '系统配置表，存储系统的各项配置参数';
+COMMENT ON COLUMN system_configs.id IS '配置唯一标识';
+COMMENT ON COLUMN system_configs.config_key IS '配置键';
+COMMENT ON COLUMN system_configs.config_value IS '配置值';
+COMMENT ON COLUMN system_configs.config_group IS '配置分组';
+COMMENT ON COLUMN system_configs.description IS '配置描述';
+COMMENT ON COLUMN system_configs.is_system IS '是否为系统配置';
+COMMENT ON COLUMN system_configs.created_at IS '创建时间';
+COMMENT ON COLUMN system_configs.updated_at IS '更新时间';
+
+-- 客户端功能控制表
+CREATE TABLE client_features (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    code VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    feature_type VARCHAR(20) NOT NULL 
+        CHECK (feature_type IN ('boolean', 'string', 'number', 'json')),
+    default_value TEXT,
+    current_value TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'disabled'
+        CHECK (status IN ('enabled', 'disabled')),
+    rollout_percentage INTEGER DEFAULT 0, -- 灰度发布百分比
+    target_users JSONB, -- 目标用户
+    target_roles JSONB, -- 目标角色
+    version_constraints JSONB, -- 版本约束
+    created_by BIGINT,
+    updated_by BIGINT,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    
+    -- 外键约束
+    CONSTRAINT fk_client_features_created_by 
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT fk_client_features_updated_by 
+        FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+COMMENT ON TABLE client_features IS '客户端功能控制表，用于控制客户端功能的开关和灰度发布';
+COMMENT ON COLUMN client_features.id IS '功能唯一标识';
+COMMENT ON COLUMN client_features.name IS '功能名称';
+COMMENT ON COLUMN client_features.code IS '功能代码';
+COMMENT ON COLUMN client_features.description IS '功能描述';
+COMMENT ON COLUMN client_features.feature_type IS '功能类型';
+COMMENT ON COLUMN client_features.default_value IS '默认值';
+COMMENT ON COLUMN client_features.current_value IS '当前值';
+COMMENT ON COLUMN client_features.status IS '状态';
+COMMENT ON COLUMN client_features.rollout_percentage IS '灰度发布百分比';
+COMMENT ON COLUMN client_features.target_users IS '目标用户';
+COMMENT ON COLUMN client_features.target_roles IS '目标角色';
+COMMENT ON COLUMN client_features.version_constraints IS '版本约束';
+COMMENT ON COLUMN client_features.created_by IS '创建者ID';
+COMMENT ON COLUMN client_features.updated_by IS '更新者ID';
+COMMENT ON COLUMN client_features.created_at IS '创建时间';
+COMMENT ON COLUMN client_features.updated_at IS '更新时间';
+
+-- 功能使用统计表
+CREATE TABLE feature_usage_stats (
+    id BIGSERIAL PRIMARY KEY,
+    feature_id INTEGER NOT NULL,
+    user_id BIGINT,
+    usage_count INTEGER DEFAULT 1,
+    last_used_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    
+    -- 外键约束
+    CONSTRAINT fk_feature_usage_stats_feature_id 
+        FOREIGN KEY (feature_id) REFERENCES client_features(id) ON DELETE CASCADE,
+    CONSTRAINT fk_feature_usage_stats_user_id 
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+COMMENT ON TABLE feature_usage_stats IS '功能使用统计表，记录客户端功能的使用情况';
+COMMENT ON COLUMN feature_usage_stats.id IS '统计记录唯一标识';
+COMMENT ON COLUMN feature_usage_stats.feature_id IS '功能ID';
+COMMENT ON COLUMN feature_usage_stats.user_id IS '用户ID';
+COMMENT ON COLUMN feature_usage_stats.usage_count IS '使用次数';
+COMMENT ON COLUMN feature_usage_stats.last_used_at IS '最后使用时间';
+COMMENT ON COLUMN feature_usage_stats.created_at IS '创建时间';
+
 -- 6. 系统监控模块
 -- ============================================================
 
 -- 性能监控脚本
-CREATE OR REPLACE FUNCTION get_slow_queries(min_duration_ms INTEGER DEFAULT 1000)
-RETURNS TABLE (
+CREATE OR REPLACE FUNCTION get_slow_queries(min_duration_ms INTEGER DEFAULT 1000)RETURNS TABLE (
     query_text TEXT,
     total_calls BIGINT,
     total_time_ms DECIMAL,
@@ -1944,13 +2286,63 @@ CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
 CREATE INDEX idx_audit_logs_action ON audit_logs(action);
 CREATE INDEX idx_audit_logs_resource ON audit_logs(resource_type, resource_id);
 
--- 复合索引优化
+-- 管理后台索引
+CREATE INDEX idx_admin_operation_logs_admin_id ON admin_operation_logs(admin_id);
+CREATE INDEX idx_admin_operation_logs_module ON admin_operation_logs(module);
+CREATE INDEX idx_admin_operation_logs_created_at ON admin_operation_logs(created_at);
+
+CREATE INDEX idx_admin_login_logs_admin_id ON admin_login_logs(admin_id);
+CREATE INDEX idx_admin_login_logs_login_time ON admin_login_logs(login_time);
+CREATE INDEX idx_admin_login_logs_status ON admin_login_logs(login_status);
+
+CREATE INDEX idx_admin_permissions_parent_id ON admin_permissions(parent_id);
+CREATE INDEX idx_admin_permissions_module ON admin_permissions(module);
+CREATE INDEX idx_admin_permissions_status ON admin_permissions(status);
+
+CREATE INDEX idx_role_permissions_role_id ON role_permissions(role_id);
+CREATE INDEX idx_role_permissions_permission_id ON role_permissions(permission_id);
+
+CREATE INDEX idx_system_notifications_type ON system_notifications(type);
+CREATE INDEX idx_system_notifications_status ON system_notifications(status);
+CREATE INDEX idx_system_notifications_send_time ON system_notifications(send_time);
+
+CREATE INDEX idx_data_backup_records_status ON data_backup_records(status);
+CREATE INDEX idx_data_backup_records_created_at ON data_backup_records(created_at);
+
+CREATE INDEX idx_client_features_status ON client_features(status);
+CREATE INDEX idx_client_features_code ON client_features(code);
+
+CREATE INDEX idx_feature_usage_stats_feature_id ON feature_usage_stats(feature_id);
+CREATE INDEX idx_feature_usage_stats_user_id ON feature_usage_stats(user_id);
+CREATE INDEX idx_feature_usage_stats_last_used ON feature_usage_stats(last_used_at);-- 复合索引优化
 CREATE INDEX idx_expenses_dorm_status_date ON expenses(dorm_id, status, expense_date);
 CREATE INDEX idx_expense_splits_user_status ON expense_splits(user_id, payment_status);
 CREATE INDEX idx_user_dorms_dorm_status ON user_dorms(dorm_id, status);
 
--- 11. 触发器创建
--- ============================================================
+-- 账单管理索引
+CREATE INDEX idx_bills_dorm_id ON bills(dorm_id);
+CREATE INDEX idx_bills_status ON bills(status);
+CREATE INDEX idx_bills_type ON bills(type);
+CREATE INDEX idx_bills_due_date ON bills(due_date);
+CREATE INDEX idx_bills_created_at ON bills(created_at);
+
+CREATE INDEX idx_bill_expenses_bill_id ON bill_expenses(bill_id);
+CREATE INDEX idx_bill_expenses_expense_id ON bill_expenses(expense_id);
+
+CREATE INDEX idx_bill_splits_bill_id ON bill_splits(bill_id);
+CREATE INDEX idx_bill_splits_user_id ON bill_splits(user_id);
+CREATE INDEX idx_bill_splits_status ON bill_splits(status);
+
+CREATE INDEX idx_bill_payments_bill_id ON bill_payments(bill_id);
+CREATE INDEX idx_bill_payments_user_id ON bill_payments(user_id);
+CREATE INDEX idx_bill_payments_status ON bill_payments(status);
+CREATE INDEX idx_bill_payments_payment_date ON bill_payments(payment_date);
+
+CREATE INDEX idx_scheduled_bills_dorm_id ON scheduled_bills(dorm_id);
+CREATE INDEX idx_scheduled_bills_is_active ON scheduled_bills(is_active);
+CREATE INDEX idx_scheduled_bills_next_run_date ON scheduled_bills(next_run_date);
+
+-- 11. 触发器创建-- ============================================================
 
 -- 为主要表创建更新时间戳触发器
 CREATE TRIGGER trigger_users_updated_at
@@ -1988,7 +2380,20 @@ CREATE TRIGGER trigger_expense_splits_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
--- 审计日志触发器
+CREATE TRIGGER trigger_bills_updated_at
+    BEFORE UPDATE ON bills
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trigger_bill_splits_updated_at
+    BEFORE UPDATE ON bill_splits
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trigger_bill_payments_updated_at
+    BEFORE UPDATE ON bill_payments
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();-- 审计日志触发器
 CREATE TRIGGER trigger_users_audit
     AFTER INSERT OR UPDATE OR DELETE ON users
     FOR EACH ROW
@@ -2010,11 +2415,338 @@ CREATE TRIGGER trigger_update_expense_payment_status
     FOR EACH ROW
     EXECUTE FUNCTION update_expense_payment_status();
 
+-- 13. 账单管理模块
+-- ============================================================
+
+-- 账单表
+CREATE TABLE bills (
+    id BIGSERIAL PRIMARY KEY,
+    dorm_id BIGINT NOT NULL REFERENCES dorms(id) ON DELETE CASCADE,
+    creator_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title VARCHAR(200) NOT NULL,
+    description TEXT,
+    billing_period_start DATE NOT NULL,
+    billing_period_end DATE NOT NULL,
+    total_amount DECIMAL(12, 2) NOT NULL,
+    currency VARCHAR(3) NOT NULL DEFAULT 'CNY',
+    bill_status VARCHAR(20) NOT NULL DEFAULT 'draft' 
+        CHECK (bill_status IN ('draft', 'published', 'closed', 'cancelled')),
+    payment_deadline DATE,
+    attachments JSONB,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    published_at TIMESTAMP WITH TIME ZONE,
+    closed_at TIMESTAMP WITH TIME ZONE,
+    
+    -- 检查约束
+    CONSTRAINT bills_period_check CHECK (billing_period_end >= billing_period_start),
+    CONSTRAINT bills_amount_check CHECK (total_amount > 0)
+);
+
+-- 账单明细表（关联费用与账单）
+CREATE TABLE bill_items (
+    id BIGSERIAL PRIMARY KEY,
+    bill_id BIGINT NOT NULL REFERENCES bills(id) ON DELETE CASCADE,
+    expense_id BIGINT NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
+    amount DECIMAL(12, 2) NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(bill_id, expense_id)
+);
+
+-- 账单成员分摊表
+CREATE TABLE bill_splits (
+    id BIGSERIAL PRIMARY KEY,
+    bill_id BIGINT NOT NULL REFERENCES bills(id) ON DELETE CASCADE,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    dorm_member_id BIGINT NOT NULL REFERENCES user_dorms(id) ON DELETE CASCADE,
+    amount DECIMAL(12, 2) NOT NULL,
+    percentage DECIMAL(5, 2),
+    is_paid BOOLEAN NOT NULL DEFAULT false,
+    paid_at TIMESTAMP WITH TIME ZONE,
+    payment_method VARCHAR(50),
+    transaction_id VARCHAR(100),
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(bill_id, dorm_member_id)
+);
+
+COMMENT ON TABLE bills IS '账单表，存储宿舍的各种账单信息';
+COMMENT ON COLUMN bills.id IS '账单唯一标识';
+COMMENT ON COLUMN bills.dorm_id IS '宿舍ID，外键关联dorms表';
+COMMENT ON COLUMN bills.title IS '账单标题';
+COMMENT ON COLUMN bills.description IS '账单描述';
+COMMENT ON COLUMN bills.amount IS '账单金额';
+COMMENT ON COLUMN bills.type IS '账单类型：monthly-月度账单，one-time-一次性账单，emergency-紧急账单';
+COMMENT ON COLUMN bills.status IS '账单状态：pending-待支付，paid-已支付，overdue-已逾期，cancelled-已取消';
+COMMENT ON COLUMN bills.due_date IS '截止日期';
+COMMENT ON COLUMN bills.created_at IS '创建时间';
+COMMENT ON COLUMN bills.updated_at IS '更新时间';
+
+-- 账单费用关联表
+CREATE TABLE bill_expenses (
+    id BIGSERIAL PRIMARY KEY,
+    bill_id BIGINT NOT NULL,
+    expense_id BIGINT NOT NULL,
+    amount DECIMAL(10,2) NOT NULL CHECK (amount > 0),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    
+    -- 外键约束
+    CONSTRAINT fk_bill_expenses_bill_id 
+        FOREIGN KEY (bill_id) REFERENCES bills(id) ON DELETE CASCADE,
+    CONSTRAINT fk_bill_expenses_expense_id 
+        FOREIGN KEY (expense_id) REFERENCES expenses(id) ON DELETE CASCADE,
+        
+    -- 唯一约束
+    CONSTRAINT uk_bill_expenses_bill_expense 
+        UNIQUE (bill_id, expense_id)
+);
+
+COMMENT ON TABLE bill_expenses IS '账单费用关联表，记录账单包含的费用明细';
+COMMENT ON COLUMN bill_expenses.id IS '关联记录唯一标识';
+COMMENT ON COLUMN bill_expenses.bill_id IS '账单ID，外键关联bills表';
+COMMENT ON COLUMN bill_expenses.expense_id IS '费用ID，外键关联expenses表';
+COMMENT ON COLUMN bill_expenses.amount IS '该费用在账单中的金额';
+COMMENT ON COLUMN bill_expenses.created_at IS '创建时间';
+
+-- 账单成员分摊表
+CREATE TABLE bill_splits (
+    id BIGSERIAL PRIMARY KEY,
+    bill_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    dorm_id INTEGER NOT NULL,
+    amount DECIMAL(10,2) NOT NULL CHECK (amount >= 0),
+    status VARCHAR(20) NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'paid', 'overdue', 'waived')),
+    paid_amount DECIMAL(10,2) DEFAULT 0.00 CHECK (paid_amount >= 0),
+    paid_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    
+    -- 外键约束
+    CONSTRAINT fk_bill_splits_bill_id 
+        FOREIGN KEY (bill_id) REFERENCES bills(id) ON DELETE CASCADE,
+    CONSTRAINT fk_bill_splits_user_id 
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_bill_splits_dorm_id 
+        FOREIGN KEY (dorm_id) REFERENCES dorms(id) ON DELETE CASCADE,
+        
+    -- 唯一约束
+    CONSTRAINT uk_bill_splits_bill_user 
+        UNIQUE (bill_id, user_id)
+);
+
+COMMENT ON TABLE bill_splits IS '账单成员分摊表，记录每个成员在账单中的分摊金额和支付状态';
+COMMENT ON COLUMN bill_splits.id IS '分摊记录唯一标识';
+COMMENT ON COLUMN bill_splits.bill_id IS '账单ID，外键关联bills表';
+COMMENT ON COLUMN bill_splits.user_id IS '用户ID，外键关联users表';
+COMMENT ON COLUMN bill_splits.dorm_id IS '宿舍ID，外键关联dorms表';
+COMMENT ON COLUMN bill_splits.amount IS '分摊金额';
+COMMENT ON COLUMN bill_splits.status IS '支付状态：pending-待支付，paid-已支付，overdue-已逾期，waived-已免除';
+COMMENT ON COLUMN bill_splits.paid_amount IS '已支付金额';
+COMMENT ON COLUMN bill_splits.paid_at IS '支付时间';
+COMMENT ON COLUMN bill_splits.created_at IS '创建时间';
+COMMENT ON COLUMN bill_splits.updated_at IS '更新时间';
+
+-- 账单支付记录表
+CREATE TABLE bill_payments (
+    id BIGSERIAL PRIMARY KEY,
+    bill_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    amount DECIMAL(10,2) NOT NULL CHECK (amount > 0),
+    payment_method VARCHAR(50) NOT NULL 
+        CHECK (payment_method IN ('cash', 'bank_transfer', 'alipay', 'wechat', 'credit_card', 'debit_card', 'other')),
+    payment_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    transaction_id VARCHAR(255),
+    status VARCHAR(20) NOT NULL DEFAULT 'completed' 
+        CHECK (status IN ('pending', 'completed', 'failed', 'refunded')),
+    notes TEXT,
+    receipt_url TEXT,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    
+    -- 外键约束
+    CONSTRAINT fk_bill_payments_bill_id 
+        FOREIGN KEY (bill_id) REFERENCES bills(id) ON DELETE CASCADE,
+    CONSTRAINT fk_bill_payments_user_id 
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+COMMENT ON TABLE bill_payments IS '账单支付记录表，记录账单的支付详情';
+COMMENT ON COLUMN bill_payments.id IS '支付记录唯一标识';
+COMMENT ON COLUMN bill_payments.bill_id IS '账单ID，外键关联bills表';
+COMMENT ON COLUMN bill_payments.user_id IS '用户ID，外键关联users表';
+COMMENT ON COLUMN bill_payments.amount IS '支付金额';
+COMMENT ON COLUMN bill_payments.payment_method IS '支付方式';
+COMMENT ON COLUMN bill_payments.payment_date IS '支付日期';
+COMMENT ON COLUMN bill_payments.transaction_id IS '交易ID';
+COMMENT ON COLUMN bill_payments.status IS '支付状态：pending-待处理，completed-已完成，failed-失败，refunded-已退款';
+COMMENT ON COLUMN bill_payments.notes IS '备注';
+COMMENT ON COLUMN bill_payments.receipt_url IS '收据URL';
+COMMENT ON COLUMN bill_payments.created_at IS '创建时间';
+COMMENT ON COLUMN bill_payments.updated_at IS '更新时间';
+
+-- 账单类型配置表
+CREATE TABLE bill_types (
+    id SERIAL PRIMARY KEY,
+    type_code VARCHAR(50) NOT NULL UNIQUE,
+    type_name VARCHAR(100) NOT NULL,
+    description TEXT,
+    icon VARCHAR(100),
+    color VARCHAR(7),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_order INTEGER DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE bill_types IS '账单类型配置表，定义系统支持的账单类型';
+COMMENT ON COLUMN bill_types.id IS '类型唯一标识';
+COMMENT ON COLUMN bill_types.type_code IS '类型代码';
+COMMENT ON COLUMN bill_types.type_name IS '类型名称';
+COMMENT ON COLUMN bill_types.description IS '类型描述';
+COMMENT ON COLUMN bill_types.icon IS '图标';
+COMMENT ON COLUMN bill_types.color IS '颜色';
+COMMENT ON COLUMN bill_types.is_active IS '是否启用';
+COMMENT ON COLUMN bill_types.sort_order IS '排序';
+COMMENT ON COLUMN bill_types.created_at IS '创建时间';
+COMMENT ON COLUMN bill_types.updated_at IS '更新时间';
+
+-- 账单周期配置表
+CREATE TABLE bill_cycles (
+    id SERIAL PRIMARY KEY,
+    cycle_code VARCHAR(50) NOT NULL UNIQUE,
+    cycle_name VARCHAR(100) NOT NULL,
+    description TEXT,
+    cycle_value INTEGER NOT NULL,
+    cycle_unit VARCHAR(20) NOT NULL 
+        CHECK (cycle_unit IN ('day', 'week', 'month', 'year')),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_order INTEGER DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE bill_cycles IS '账单周期配置表，定义系统支持的账单周期';
+COMMENT ON COLUMN bill_cycles.id IS '周期唯一标识';
+COMMENT ON COLUMN bill_cycles.cycle_code IS '周期代码';
+COMMENT ON COLUMN bill_cycles.cycle_name IS '周期名称';
+COMMENT ON COLUMN bill_cycles.description IS '周期描述';
+COMMENT ON COLUMN bill_cycles.cycle_value IS '周期值';
+COMMENT ON COLUMN bill_cycles.cycle_unit IS '周期单位';
+COMMENT ON COLUMN bill_cycles.is_active IS '是否启用';
+COMMENT ON COLUMN bill_cycles.sort_order IS '排序';
+COMMENT ON COLUMN bill_cycles.created_at IS '创建时间';
+COMMENT ON COLUMN bill_cycles.updated_at IS '更新时间';
+
+-- 定时账单规则表
+CREATE TABLE scheduled_bills (
+    id BIGSERIAL PRIMARY KEY,
+    dorm_id INTEGER NOT NULL,
+    title_template VARCHAR(200) NOT NULL,
+    description_template TEXT,
+    amount_template DECIMAL(10,2),
+    type VARCHAR(20) NOT NULL DEFAULT 'monthly' 
+        CHECK (type IN ('monthly', 'one-time', 'emergency')),
+    category_id INTEGER,
+    cycle_id INTEGER NOT NULL,
+    interval_value INTEGER DEFAULT 1,
+    start_date DATE NOT NULL,
+    end_date DATE,
+    due_days INTEGER DEFAULT 7,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    last_run_date DATE,
+    next_run_date DATE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    
+    -- 外键约束
+    CONSTRAINT fk_scheduled_bills_dorm_id 
+        FOREIGN KEY (dorm_id) REFERENCES dorms(id) ON DELETE CASCADE,
+    CONSTRAINT fk_scheduled_bills_category_id 
+        FOREIGN KEY (category_id) REFERENCES expense_categories(id) ON DELETE SET NULL,
+    CONSTRAINT fk_scheduled_bills_cycle_id 
+        FOREIGN KEY (cycle_id) REFERENCES bill_cycles(id) ON DELETE RESTRICT
+);
+
+COMMENT ON TABLE scheduled_bills IS '定时账单规则表，定义自动生成账单的规则';
+COMMENT ON COLUMN scheduled_bills.id IS '定时规则唯一标识';
+COMMENT ON COLUMN scheduled_bills.dorm_id IS '宿舍ID，外键关联dorms表';
+COMMENT ON COLUMN scheduled_bills.title_template IS '账单标题模板';
+COMMENT ON COLUMN scheduled_bills.description_template IS '账单描述模板';
+COMMENT ON COLUMN scheduled_bills.amount_template IS '账单金额模板';
+COMMENT ON COLUMN scheduled_bills.type IS '账单类型';
+COMMENT ON COLUMN scheduled_bills.category_id IS '费用类别ID，外键关联expense_categories表';
+COMMENT ON COLUMN scheduled_bills.cycle_id IS '周期ID，外键关联bill_cycles表';
+COMMENT ON COLUMN scheduled_bills.interval_value IS '周期间隔';
+COMMENT ON COLUMN scheduled_bills.start_date IS '开始日期';
+COMMENT ON COLUMN scheduled_bills.end_date IS '结束日期';
+COMMENT ON COLUMN scheduled_bills.due_days IS '到期天数';
+COMMENT ON COLUMN scheduled_bills.is_active IS '是否启用';
+COMMENT ON COLUMN scheduled_bills.last_run_date IS '上次执行日期';
+COMMENT ON COLUMN scheduled_bills.next_run_date IS '下次执行日期';
+COMMENT ON COLUMN scheduled_bills.created_at IS '创建时间';
+COMMENT ON COLUMN scheduled_bills.updated_at IS '更新时间';
+
+-- 账单分享记录表
+CREATE TABLE bill_shares (
+    id BIGSERIAL PRIMARY KEY,
+    bill_id BIGINT NOT NULL,
+    share_code VARCHAR(50) UNIQUE,
+    share_url TEXT,
+    permission VARCHAR(20) NOT NULL DEFAULT 'view'
+        CHECK (permission IN ('view', 'edit')),
+    expires_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    
+    -- 外键约束
+    CONSTRAINT fk_bill_shares_bill_id 
+        FOREIGN KEY (bill_id) REFERENCES bills(id) ON DELETE CASCADE
+);
+
+COMMENT ON TABLE bill_shares IS '账单分享记录表，记录账单的分享信息';
+COMMENT ON COLUMN bill_shares.id IS '分享记录唯一标识';
+COMMENT ON COLUMN bill_shares.bill_id IS '账单ID，外键关联bills表';
+COMMENT ON COLUMN bill_shares.share_code IS '分享码';
+COMMENT ON COLUMN bill_shares.share_url IS '分享链接';
+COMMENT ON COLUMN bill_shares.permission IS '权限：view-查看，edit-编辑';
+COMMENT ON COLUMN bill_shares.expires_at IS '过期时间';
+COMMENT ON COLUMN bill_shares.created_at IS '创建时间';
+
+-- 账单分享用户关联表
+CREATE TABLE bill_share_users (
+    id BIGSERIAL PRIMARY KEY,
+    bill_share_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    permission VARCHAR(20) NOT NULL DEFAULT 'view'
+        CHECK (permission IN ('view', 'edit')),
+    shared_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    
+    -- 外键约束
+    CONSTRAINT fk_bill_share_users_bill_share_id 
+        FOREIGN KEY (bill_share_id) REFERENCES bill_shares(id) ON DELETE CASCADE,
+    CONSTRAINT fk_bill_share_users_user_id 
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        
+    -- 唯一约束
+    CONSTRAINT uk_bill_share_users_share_user 
+        UNIQUE (bill_share_id, user_id)
+);
+
+COMMENT ON TABLE bill_share_users IS '账单分享用户关联表，记录分享给具体用户的权限';
+COMMENT ON COLUMN bill_share_users.id IS '关联记录唯一标识';
+COMMENT ON COLUMN bill_share_users.bill_share_id IS '账单分享ID，外键关联bill_shares表';
+COMMENT ON COLUMN bill_share_users.user_id IS '用户ID，外键关联users表';
+COMMENT ON COLUMN bill_share_users.permission IS '权限：view-查看，edit-编辑';
+COMMENT ON COLUMN bill_share_users.shared_at IS '分享时间';
+
 -- 12. 系统维护函数
 -- ============================================================
 
--- 索引维护函数
-CREATE OR REPLACE FUNCTION maintain_indexes()
+-- 索引维护函数CREATE OR REPLACE FUNCTION maintain_indexes()
 RETURNS TEXT AS $$
 DECLARE
     index_name TEXT;

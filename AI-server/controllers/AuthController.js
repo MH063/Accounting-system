@@ -20,19 +20,33 @@ class AuthController extends BaseController {
    */
   async login(req, res, next) {
     try {
-      const { username, password } = req.body;
+      const { username, email, password, captchaCode, sessionId } = req.body;
       
       // 记录登录尝试
       logger.audit(req, '用户登录尝试', { 
         username,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        ip: req.ip
       });
 
       // 验证输入
-      this.validateRequiredFields(req.body, ['username', 'password']);
+      this.validateRequiredFields(req.body, ['password']);
+
+      if ((!username || username.toString().trim().length === 0) &&
+          (!email || email.toString().trim().length === 0)) {
+        return this.sendError(res, '用户名或邮箱为必填项', 400);
+      }
 
       // 调用服务层进行登录验证（包含登录失败限制和账户锁定功能）
-      const loginResult = await this.userService.login({ username, password });
+      const loginResult = await this.userService.login({ 
+        username, 
+        email,
+        password,
+        captchaCode,
+        sessionId,
+        ip: req.ip,
+        userAgent: req.get('User-Agent')
+      });
       
       if (!loginResult.success) {
         // 登录失败，记录安全日志
@@ -47,7 +61,7 @@ class AuthController extends BaseController {
         return this.sendError(res, loginResult.message, statusCode);
       }
 
-      const { user, tokens } = loginResult.data;
+      const { user, tokens, session } = loginResult.data;
 
       logger.auth('登录成功', { username, userId: user.id });
       logger.audit(req, '用户登录成功', { 
@@ -56,12 +70,19 @@ class AuthController extends BaseController {
         timestamp: new Date().toISOString()
       });
 
-      // 返回成功响应（包含双令牌）
+      // 返回成功响应（包含双令牌和会话信息）
       return this.sendSuccess(res, {
         user: {
           id: user.id,
           username: user.username,
           email: user.email,
+          nickname: user.nickname,
+          phone: user.phone,
+          avatar_url: user.avatar_url,
+          status: user.status,
+          email_verified: user.email_verified,
+          phone_verified: user.phone_verified,
+          last_login_at: user.last_login_at,
           created_at: user.created_at
         },
         tokens: {
@@ -69,7 +90,13 @@ class AuthController extends BaseController {
           refreshToken: tokens.refreshToken,
           expiresIn: tokens.expiresIn,
           refreshExpiresIn: tokens.refreshExpiresIn
-        }
+        },
+        session: session ? {
+          sessionId: session.id,
+          sessionToken: session.session_token,
+          deviceInfo: session.device_info,
+          expiresAt: session.expires_at
+        } : null
       }, '登录成功');
 
     } catch (error) {
@@ -327,20 +354,30 @@ class AuthController extends BaseController {
         timestamp: new Date().toISOString()
       });
 
-      // 获取令牌信息用于撤销
-      const token = req.headers.authorization?.replace('Bearer ', '');
-      const refreshToken = req.body.refreshToken;
+      // 获取请求参数
+      const { sessionToken } = req.body;
+      const userId = req.user.id;
+      const ipAddress = req.ip;
+      const userAgent = req.get('User-Agent');
 
-      // 调用服务层登出（包含令牌撤销）
-      const success = await this.userService.logout(req.user.id, token, refreshToken);
-      
-      if (!success) {
-        return this.sendError(res, '登出失败', 400);
+      // 验证必填字段
+      if (!sessionToken) {
+        return this.sendError(res, '会话令牌不能为空', 400);
       }
 
-      logger.auth('用户登出成功', { userId: req.user.id });
+      // 调用服务层登出（更新会话状态并记录审计日志）
+      const result = await this.userService.logout(userId, sessionToken, ipAddress, userAgent);
+      
+      if (!result.success) {
+        return this.sendError(res, result.message || '登出失败', 400);
+      }
 
-      return this.sendSuccess(res, null, '登出成功');
+      logger.auth('用户登出成功', { userId, sessionToken });
+
+      return this.sendSuccess(res, {
+        sessionToken: sessionToken,
+        status: 'revoked'
+      }, '登出成功');
 
     } catch (error) {
       logger.error('[AuthController] 登出失败', { error: error.message });

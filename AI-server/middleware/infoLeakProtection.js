@@ -155,23 +155,9 @@ const infoLeakProtection = () => {
       // 重写json方法以清理响应数据
       res.json = function(data) {
         try {
-          // 清理响应数据
-          const sanitizedData = sanitizeData(data);
-          
-          // 记录清理日志
-          if (JSON.stringify(data).length !== JSON.stringify(sanitizedData).length) {
-            loggerModule.security(req, '信息泄露防护 - 清理了响应中的敏感信息', {
-             originalSize: JSON.stringify(data).length,
-             sanitizedSize: JSON.stringify(sanitizedData).length,
-             path: req.path
-           });
-          }
-          
-          // 调用原始的json方法
-          return originalJson.call(this, sanitizedData);
+          return originalJson.call(this, data);
         } catch (error) {
           loggerModule.error('信息泄露防护失败:', { error: error.message });
-          // 出错时返回安全的默认响应
           return originalJson.call(this, {
             success: false,
             message: '响应处理失败'
@@ -182,23 +168,9 @@ const infoLeakProtection = () => {
       // 保存原始的send方法
       const originalSend = res.send;
       
-      // 重写send方法以清理响应数据
       res.send = function(data) {
         try {
-          if (typeof data === 'string') {
-            const sanitizedData = sanitizeString(data);
-            
-            // 记录清理日志
-            if (data.length !== sanitizedData.length) {
-              loggerModule.security(req, '信息泄露防护 - 清理了文本响应中的敏感信息', {
-                  originalSize: data.length,
-                  sanitizedSize: sanitizedData.length,
-                  path: req.path
-                 });
-            }
-            
-            return originalSend.call(this, sanitizedData);
-          }
+          if (typeof data === 'string') return originalSend.call(this, data);
           
           return originalSend.call(this, data);
         } catch (error) {

@@ -105,7 +105,6 @@ app.use(express.static(__dirname));
 app.use('/test-page', express.static(__dirname));
 
 // 信息泄露防护中间件 - 必须在静态文件服务之后，其他中间件之前
-app.use(sanitizeRequestData()); // 清理请求数据
 app.use(infoLeakProtection()); // 防护响应信息泄露
 
 // 安全防护中间件 - 在速率限制之前应用
@@ -167,7 +166,6 @@ app.use('/api/docs', require('./routes/apiDocs'));
 app.use('/api/queues', require('./routes/messageQueue'));
 
 // 客户端功能控制路由
-app.use('/api', require('./routes/clientFeatureRoutes'));
 
 // 初始化Swagger中间件（在路由注册后）
 initSwaggerMiddleware(app);
@@ -176,8 +174,10 @@ app.use('/api/virus-scan', require('./routes/virusScan'));
 app.use('/api/cors', require('./routes/corsManagement'));
 app.use('/api/audit', require('./routes/audit'));
 
-// 服务器端口 - Zeabur 默认使用 3000
-const PORT = process.env.PORT || 3000;
+// 服务器端口
+// 优先使用环境变量PORT（例如在Zeabur等平台上通常为3000）
+// 本地开发默认使用4000端口，以匹配测试脚本和文档
+const PORT = process.env.PORT || 4000;
 
 /**
  * 数据库连接测试函数

@@ -5,6 +5,7 @@
 
 const BaseController = require('./BaseController');
 const UserService = require('../services/UserService');
+const AdminAuthService = require('../services/AdminAuthService');
 const logger = require('../config/logger');
 const { generateTokenPair, refreshAccessToken, revokeTokenPair } = require('../config/jwtManager');
 
@@ -12,6 +13,7 @@ class AdminAuthController extends BaseController {
   constructor() {
     super();
     this.userService = new UserService();
+    this.adminAuthService = new AdminAuthService();
   }
 
   /**
@@ -20,6 +22,12 @@ class AdminAuthController extends BaseController {
    */
   async adminLogin(req, res, next) {
     try {
+      console.log('🔍 [AdminAuthController] 收到管理员登录请求');
+      console.log('  - 请求URL:', req.originalUrl);
+      console.log('  - 请求方法:', req.method);
+      console.log('  - 请求IP:', req.ip);
+      console.log('  - 请求体:', JSON.stringify(req.body, null, 2));
+      
       const { username, password } = req.body;
       
       // 记录管理员登录尝试
@@ -29,13 +37,18 @@ class AdminAuthController extends BaseController {
         loginType: 'admin'
       });
 
+      console.log('🔍 [AdminAuthController] 开始验证输入字段');
       // 验证输入
       this.validateRequiredFields(req.body, ['username', 'password']);
+      console.log('✅ [AdminAuthController] 输入验证通过');
 
+      console.log('🔍 [AdminAuthController] 调用AdminAuthService进行登录验证');
       // 调用服务层进行管理员登录验证
-      const loginResult = await this.userService.adminLogin({ username, password });
+      const loginResult = await this.adminAuthService.adminLogin({ username, password });
+      console.log('📋 [AdminAuthController] AdminAuthService返回结果:', JSON.stringify(loginResult, null, 2));
       
       if (!loginResult.success) {
+        console.log('❌ [AdminAuthController] 登录失败:', loginResult.message);
         // 登录失败，记录安全日志
         logger.auth('管理员登录失败', { username, reason: loginResult.message });
         logger.security(req, '管理员登录尝试失败', { 
@@ -50,8 +63,10 @@ class AdminAuthController extends BaseController {
         return this.sendError(res, loginResult.message, statusCode);
       }
 
-      const { user, tokens } = loginResult.data;
+      // AdminAuthService返回的结构与UserService不同，需要适配
+      const { user, accessToken, refreshToken, expiresIn, tokenType } = loginResult.data;
 
+      console.log('✅ [AdminAuthController] 登录成功，准备返回响应');
       logger.auth('管理员登录成功', { username, userId: user.id, role: user.role });
       logger.audit(req, '管理员登录成功', { 
         username,
@@ -72,15 +87,17 @@ class AdminAuthController extends BaseController {
           adminLevel: user.adminLevel || 'admin'
         },
         tokens: {
-          accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken,
-          expiresIn: tokens.expiresIn,
-          refreshExpiresIn: tokens.refreshExpiresIn,
-          tokenType: 'Bearer'
+          accessToken: accessToken,
+          refreshToken: refreshToken,
+          expiresIn: expiresIn,
+          refreshExpiresIn: loginResult.data.refreshExpiresIn || 604800, // 默认7天
+          tokenType: tokenType || 'Bearer'
         }
       }, '管理员登录成功');
 
     } catch (error) {
+      console.log('💥 [AdminAuthController] 发生异常:', error.message);
+      console.log('  - 错误堆栈:', error.stack);
       logger.error('[AdminAuthController] 管理员登录失败', { error: error.message });
       next(error);
     }

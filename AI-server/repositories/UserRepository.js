@@ -165,24 +165,25 @@ class UserRepository extends BaseRepository {
   }
 
   /**
-   * 更新用户最后登录时间
+   * 更新用户最后登录时间和IP地址
    * @param {number} userId - 用户ID
+   * @param {string} ip - IP地址
    * @returns {Promise<boolean>} 是否更新成功
    */
-  async updateLastLogin(userId) {
+  async updateLastLogin(userId, ip = null) {
     try {
-      const queryText = 'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1';
-      const result = await this.executeQuery(queryText, [userId]);
+      const queryText = 'UPDATE users SET last_login_at = CURRENT_TIMESTAMP, last_login_ip = $2 WHERE id = $1';
+      const result = await this.executeQuery(queryText, [userId, ip]);
       
       const success = result.rowCount > 0;
       
       if (success) {
-        logger.info('[UserRepository] 用户最后登录时间更新成功', { userId });
+        logger.info('[UserRepository] 用户最后登录时间和IP更新成功', { userId, ip });
       }
 
       return success;
     } catch (error) {
-      logger.error('[UserRepository] 更新用户最后登录时间失败', { error: error.message, userId });
+      logger.error('[UserRepository] 更新用户最后登录时间和IP失败', { error: error.message, userId, ip });
       throw error;
     }
   }
@@ -196,28 +197,28 @@ class UserRepository extends BaseRepository {
     try {
       const queryText = `
         UPDATE users 
-        SET login_attempts = login_attempts + 1,
+        SET failed_login_attempts = failed_login_attempts + 1,
             locked_until = CASE 
-              WHEN login_attempts + 1 >= 5 THEN CURRENT_TIMESTAMP + INTERVAL '30 minutes'
+              WHEN failed_login_attempts + 1 >= 5 THEN CURRENT_TIMESTAMP + INTERVAL '30 minutes'
               ELSE locked_until
             END,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = $1
-        RETURNING login_attempts, locked_until
+        RETURNING failed_login_attempts, locked_until
       `;
       
       const result = await this.executeQuery(queryText, [userId]);
       
       if (result.rows.length > 0) {
-        const { login_attempts, locked_until } = result.rows[0];
+        const { failed_login_attempts, locked_until } = result.rows[0];
         logger.info('[UserRepository] 用户登录失败次数更新', { 
           userId, 
-          loginAttempts: login_attempts,
+          loginAttempts: failed_login_attempts,
           lockedUntil: locked_until 
         });
         return {
           success: true,
-          loginAttempts: parseInt(login_attempts),
+          loginAttempts: parseInt(failed_login_attempts),
           lockedUntil: locked_until
         };
       }
@@ -238,9 +239,9 @@ class UserRepository extends BaseRepository {
     try {
       const queryText = `
         UPDATE users 
-        SET login_attempts = 0,
+        SET failed_login_attempts = 0,
             locked_until = NULL,
-            last_login = CURRENT_TIMESTAMP,
+            last_login_at = CURRENT_TIMESTAMP,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = $1
       `;
@@ -268,7 +269,7 @@ class UserRepository extends BaseRepository {
   async checkUserLocked(userId) {
     try {
       const queryText = `
-        SELECT login_attempts, locked_until, is_active
+        SELECT failed_login_attempts, locked_until, status
         FROM users 
         WHERE id = $1
       `;
@@ -285,9 +286,9 @@ class UserRepository extends BaseRepository {
       return {
         locked: isLocked,
         lockedUntil: user.locked_until,
-        loginAttempts: parseInt(user.login_attempts) || 0,
-        isActive: user.is_active,
-        reason: isLocked ? '登录失败次数过多' : (user.is_active ? null : '用户未激活')
+        loginAttempts: parseInt(user.failed_login_attempts) || 0,
+        isActive: user.status === 'active',
+        reason: isLocked ? '登录失败次数过多' : (user.status === 'active' ? null : '用户未激活')
       };
     } catch (error) {
       logger.error('[UserRepository] 检查用户锁定状态失败', { error: error.message, userId });
@@ -341,7 +342,7 @@ class UserRepository extends BaseRepository {
     try {
       const queryText = `
         UPDATE users 
-        SET login_attempts = 0,
+        SET failed_login_attempts = 0,
             locked_until = NULL,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = $1

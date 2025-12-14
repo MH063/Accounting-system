@@ -465,10 +465,11 @@ function revokeTokenPair(accessToken, refreshToken, reason = 'logout') {
 /**
  * 验证令牌并检查黑名单
  */
-function verifyTokenWithBlacklist(token) {
+async function verifyTokenWithBlacklist(token) {
   // 首先检查黑名单
   if (JWT_CONFIG.blacklistEnabled && JWT_CONFIG.blacklistCheck) {
-    if (tokenBlacklist.isTokenRevoked(token)) {
+    const isRevoked = await tokenBlacklist.isTokenRevoked(token);
+    if (isRevoked) {
       throw new Error('令牌已被撤销');
     }
   }
