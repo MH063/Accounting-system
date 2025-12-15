@@ -401,10 +401,9 @@ import {
 import { 
   confirmPayment as confirmPaymentApi,
   getQRCodes,
-  processQuickPayment,
-  calculateSharing
+  processQuickPayment as processQuickPaymentApi,
+  calculateSharing as calculateSharingApi
 } from '../services/paymentService'
-import type { PaymentMethod, PaymentRequest } from '../services/paymentService'
 
 // 路由
 const router = useRouter()
@@ -474,6 +473,18 @@ const paymentMethods = ref<Array<PaymentMethod & { fee: string; description: str
     isDefault: false
   }
 ])
+
+// PaymentMethod 类型定义
+interface PaymentMethod {
+  id: string
+  name: string
+  description?: string
+  icon?: string
+  fee?: string
+  status: string
+  type: string
+  isDefault?: boolean
+}
 
 // 可用支付方式（用于对话框）
 const availablePaymentMethods = ref([
@@ -666,7 +677,7 @@ const selectPaymentMethod = (method: PaymentMethod & { fee: string; description:
 const calculateSharing = async () => {
   try {
     // 调用真实API计算费用分摊
-    const response = await calculateSharing({
+    const response = await calculateSharingApi({
       expenses: expenses.value,
       members: members.value
     })
@@ -898,7 +909,7 @@ const processQuickPayment = async (quickPay: QuickPayment) => {
     
     try {
       // 调用真实支付API
-      const response = await processQuickPayment({
+      const response = await processQuickPaymentApi({
         quickPayId: quickPay.id,
         amount: amount,
         type: transactionType,

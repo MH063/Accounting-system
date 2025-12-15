@@ -69,7 +69,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // 路由实例
-const router = useRouter()
+// const router = useRouter()
 
 // 表单引用
 const verificationFormRef = ref<FormInstance>()

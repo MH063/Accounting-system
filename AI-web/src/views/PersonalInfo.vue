@@ -316,7 +316,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick, watch, onBeforeUnmount } from 'vue'
+import { ref, reactive, onMounted, nextTick, onBeforeUnmount } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { savePersonalInfo as savePersonalInfoAPI, syncPersonalInfo } from '../services/userService'
@@ -329,12 +329,10 @@ import {
   Download,
   Clock,
   MoreFilled,
-  Document,
-  Delete
+  Document
 } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules, UploadFile } from 'element-plus'
 import SecurityVerificationModal from '@/components/SecurityVerificationModal.vue'
-import { checkSecurityQuestionsSetup, requireSecurityVerification, isSecurityVerificationRequired } from '@/services/securityVerificationService'
 import { hasSecurityQuestions } from '@/services/securityQuestionService'
 import dataEncryptionManager from '@/services/dataEncryptionManager'
 
@@ -1155,7 +1153,7 @@ onBeforeUnmount(() => {
 })
 
 // 路由离开前确认
-onBeforeRouteLeave((to, from, next) => {
+onBeforeRouteLeave((_to, _from, next) => {
   if (hasUnsavedChanges.value) {
     ElMessageBox.confirm(
       '您有未保存的更改，确定要离开吗？',

@@ -49,8 +49,8 @@ class UserModel {
       errors.push('用户名长度不能少于3个字符');
     } else if (this.username.length > 50) {
       errors.push('用户名长度不能超过50个字符');
-    } else if (!/^[a-zA-Z0-9_-]+$/.test(this.username)) {
-      errors.push('用户名只能包含字母、数字、下划线和连字符');
+    } else if (!/^[\u4e00-\u9fa5a-zA-Z0-9_-]+$/.test(this.username)) {
+      errors.push('用户名只能包含中文、字母、数字、下划线和连字符');
     }
 
     // 验证邮箱
@@ -273,6 +273,10 @@ class UserModel {
     const user = new UserModel({
       username: userData.username,
       email: userData.email,
+      password_hash: userData.passwordHash,
+      nickname: userData.nickname || '',
+      phone: userData.phone || null,
+      avatar_url: userData.avatar_url || '',
       created_at: new Date(),
       updated_at: new Date(),
       is_active: true,
@@ -281,13 +285,8 @@ class UserModel {
       qq_number: userData.qq_number || null
     });
 
-    if (userData.passwordHash) {
-      user.setPasswordHash(userData.passwordHash);
-    }
-
     return user;
   }
-
   /**
    * 设置邮箱验证令牌
    * @param {string} token - 验证令牌

@@ -103,7 +103,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, shallowRef } from 'vue'
+import { ref, onMounted } from 'vue'
 import { House, User, Money, DataAnalysis, ArrowRight } from '@element-plus/icons-vue'
 
 // 功能数据
@@ -147,12 +147,12 @@ const steps = ref([
 ])
 
 // 图标映射
-const iconComponents = {
-  House,
-  User,
-  Money,
-  DataAnalysis
-}
+// const iconComponents = {
+//   House,
+//   User,
+//   Money,
+//   DataAnalysis
+// }
 
 // 页面加载动画
 onMounted(() => {

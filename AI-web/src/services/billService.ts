@@ -2,7 +2,7 @@
  * 账单服务 - 提供账单相关的API调用
  */
 
-import request from '@/utils/request'
+import { request } from '@/utils/request'
 
 // 账单相关类型定义
 export interface Bill {

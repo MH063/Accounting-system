@@ -58,6 +58,8 @@ import { User, SwitchButton, ArrowDown, Refresh, QuestionFilled, InfoFilled } fr
 import { getCurrentUser } from '@/services/userService'
 import { checkForUpdates } from '@/services/versionService'
 import { showInfoMessage, showErrorMessage, showSuccessMessage, showConfirmDialog } from '@/utils/messageUtils'
+import { logout } from '@/services/authService'
+import { ElMessage } from 'element-plus'
 
 
 // 路由
@@ -225,17 +227,37 @@ ${updateInfo.latestVersion.releaseNotes}
 }
 
 // 退出登录
-const handleLogout = () => {
+const handleLogout = async () => {
   closeDropdown()
   
-  // 清除登录状态
-  if (typeof localStorage !== 'undefined') {
-    localStorage.removeItem('isAuthenticated')
-    localStorage.removeItem('username')
+  try {
+    console.log('开始执行登出流程')
+    
+    // 调用登出API
+    const response = await logout()
+    
+    console.log('登出API响应:', response)
+    
+    if (response.success) {
+      console.log('登出成功，跳转到首页')
+      ElMessage.success('登出成功')
+      
+      // 清除本地登录状态
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem('isAuthenticated')
+        localStorage.removeItem('username')
+      }
+      
+      // 跳转到首页
+      router.push('/')
+    } else {
+      console.error('登出失败:', response.message)
+      ElMessage.error(response.message || '登出失败')
+    }
+  } catch (error) {
+    console.error('登出异常:', error)
+    ElMessage.error('登出失败，请稍后重试')
   }
-  
-  // 立即跳转到首页
-  router.push('/')
 }
 
 // 自定义指令绑定接口定义

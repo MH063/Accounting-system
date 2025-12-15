@@ -95,14 +95,81 @@ router.post('/refresh',
 );
 
 /**
+ * 安全刷新令牌路由（实现刷新令牌轮换）
+ * POST /api/auth/refresh-token
+ */
+router.post('/refresh-token', 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await authController.refreshSecureToken(req, res);
+  }))
+);
+
+/**
  * 用户登出路由
  * POST /api/auth/logout
- * 需要有效的JWT令牌才能访问
  */
 router.post('/logout', 
   authenticateToken, 
   responseWrapper(asyncHandler(async (req, res, next) => {
     return await authController.logout(req, res, next);
+  }))
+);
+
+/**
+ * 两步验证路由
+ * POST /api/auth/two-factor/verify
+ */
+router.post('/two-factor/verify', 
+  responseWrapper(asyncHandler(async (req, res, next) => {
+    return await authController.verifyTwoFactorCode(req, res, next);
+  }))
+);
+
+/**
+ * 启用两步验证路由
+ * POST /api/auth/two-factor/enable
+ * 需要有效的JWT令牌才能访问
+ */
+router.post('/two-factor/enable', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res, next) => {
+    return await authController.enableTwoFactor(req, res, next);
+  }))
+);
+
+/**
+ * 禁用两步验证路由
+ * POST /api/auth/two-factor/disable
+ * 需要有效的JWT令牌才能访问
+ */
+router.post('/two-factor/disable', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res, next) => {
+    return await authController.disableTwoFactor(req, res, next);
+  }))
+);
+
+/**
+ * 获取两步验证状态路由
+ * GET /api/auth/two-factor/status
+ * 需要有效的JWT令牌才能访问
+ */
+router.get('/two-factor/status', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res, next) => {
+    return await authController.getTwoFactorStatus(req, res, next);
+  }))
+);
+
+/**
+ * 生成两步验证码路由
+ * POST /api/auth/two-factor/generate
+ * 需要有效的JWT令牌才能访问
+ */
+router.post('/two-factor/generate', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res, next) => {
+    return await authController.generateTwoFactorCode(req, res, next);
   }))
 );
 
@@ -211,14 +278,22 @@ router.post('/import',
 );
 
 /**
- * 发送邮箱验证邮件
- * POST /api/auth/send-email-verification
- * 需要有效的JWT令牌才能访问
+ * 验证邮箱验证码路由
+ * POST /api/auth/verify-email-code
  */
-router.post('/send-email-verification', 
-  authenticateToken, 
-  responseWrapper(asyncHandler(async (req, res) => {
-    return await authController.sendEmailVerification(req, res);
+router.post('/verify-email-code', 
+  responseWrapper(asyncHandler(async (req, res, next) => {
+    return await authController.verifyEmailCode(req, res, next);
+  }))
+);
+
+/**
+ * 发送邮箱验证码路由
+ * POST /api/auth/send-email-code
+ */
+router.post('/send-email-code', 
+  responseWrapper(asyncHandler(async (req, res, next) => {
+    return await authController.sendEmailVerificationCode(req, res, next);
   }))
 );
 
@@ -267,12 +342,32 @@ router.post('/request-password-reset',
 );
 
 /**
+ * 请求密码重置验证码
+ * POST /api/auth/request-password-reset-code
+ */
+router.post('/request-password-reset-code', 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await authController.requestPasswordResetCode(req, res);
+  }))
+);
+
+/**
  * 重置密码
  * POST /api/auth/reset-password
  */
 router.post('/reset-password', 
   responseWrapper(asyncHandler(async (req, res) => {
     return await authController.resetPassword(req, res);
+  }))
+);
+
+/**
+ * 验证密码重置验证码并重置密码
+ * POST /api/auth/reset-password-with-code
+ */
+router.post('/reset-password-with-code', 
+  responseWrapper(asyncHandler(async (req, res, next) => {
+    return await authController.resetPasswordWithCode(req, res, next);
   }))
 );
 

@@ -83,6 +83,34 @@
               <div id="register-email-help" class="sr-only">请输入有效的邮箱地址</div>
             </el-form-item>
 
+            <!-- 新增昵称输入框 -->
+            <el-form-item label="昵称（可选）" prop="nickname">
+              <el-input
+                id="register-nickname"
+                v-model="registerForm.nickname"
+                placeholder="请输入昵称"
+                prefix-icon="User"
+                size="large"
+                clearable
+                aria-describedby="register-nickname-help"
+              />
+              <div id="register-nickname-help" class="sr-only">请输入您的昵称（可选）</div>
+            </el-form-item>
+
+            <!-- 新增手机号输入框 -->
+            <el-form-item label="手机号（可选）" prop="phone">
+              <el-input
+                id="register-phone"
+                v-model="registerForm.phone"
+                placeholder="请输入手机号"
+                prefix-icon="Phone"
+                size="large"
+                clearable
+                aria-describedby="register-phone-help"
+              />
+              <div id="register-phone-help" class="sr-only">请输入您的手机号（可选）</div>
+            </el-form-item>
+
             <el-form-item label="密码" prop="password">
               <el-input
                 id="register-password"
@@ -229,6 +257,8 @@ const loading = ref(false)
 const registerForm = reactive({
   username: '',
   email: '',
+  nickname: '',  // 新增昵称字段
+  phone: '',     // 新增手机号字段
   password: '',
   confirmPassword: ''
 })
@@ -298,6 +328,14 @@ const rules = reactive<FormRules>({
     { required: true, message: '请输入邮箱地址', trigger: 'blur' },
     { type: 'email', message: '请输入正确的邮箱地址', trigger: 'blur' }
   ],
+  // 昵称验证规则（可选，所以不设置required）
+  nickname: [
+    { min: 2, max: 20, message: '昵称长度在 2 到 20 个字符', trigger: 'blur' }
+  ],
+  // 手机号验证规则（可选，但如果填写了就需要符合手机号格式）
+  phone: [
+    { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号', trigger: 'blur' }
+  ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
     { min: 8, message: '密码长度至少8位', trigger: 'blur' },
@@ -332,11 +370,24 @@ const handleRegister = async (): Promise<void> => {
     if (valid) {
       try {
         await withLoading(async () => {
-          const response = await authService.register({
+          // 构造注册数据，只传递非空字段
+          const registerData: any = {
             username: registerForm.username,
             email: registerForm.email,
             password: registerForm.password
-          })
+          };
+          
+          // 如果昵称不为空，则添加到注册数据中
+          if (registerForm.nickname.trim() !== '') {
+            registerData.nickname = registerForm.nickname.trim();
+          }
+          
+          // 如果手机号不为空，则添加到注册数据中
+          if (registerForm.phone.trim() !== '') {
+            registerData.phone = registerForm.phone.trim();
+          }
+          
+          const response = await authService.register(registerData)
           
           console.log('注册成功:', response)
           ElMessage.success('注册成功！请登录')
@@ -785,7 +836,4 @@ const goToHome = (): void => {
   white-space: nowrap;
   border: 0;
 }
-
-
-
 </style>

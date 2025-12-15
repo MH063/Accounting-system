@@ -76,7 +76,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
 import { hasSecurityQuestions as checkHasSecurityQuestions } from '@/services/securityQuestionService'
 
 // 路由实例
@@ -86,9 +85,6 @@ const router = useRouter()
 const currentUserId = ref('')
 
 // 是否已设置安全问题
-const hasSecurityQuestionsValue = ref(false)
-
-// 计算属性：是否已设置安全问题
 const hasSecurityQuestions = ref(false)
 
 // 检查是否已设置安全问题

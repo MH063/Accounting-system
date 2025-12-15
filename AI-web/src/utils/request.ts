@@ -35,7 +35,7 @@ const requestInterceptors: RequestInterceptor[] = []
 const responseInterceptors: ResponseInterceptor[] = []
 
 // 基础URL
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://10.26.120.9:4000'
 
 /**
  * 添加请求拦截器
@@ -158,13 +158,13 @@ export async function request<T = any>(
     }
     
     // 处理请求体
-    if (mergedConfig.data && !mergedConfig.body) {
-      if (mergedConfig.data instanceof FormData) {
-        mergedConfig.body = mergedConfig.data
+    if ((mergedConfig as any).data && !mergedConfig.body) {
+      if ((mergedConfig as any).data instanceof FormData) {
+        mergedConfig.body = (mergedConfig as any).data
         // 移除Content-Type头，让浏览器自动设置
         delete (mergedConfig.headers as any)['Content-Type']
       } else {
-        mergedConfig.body = JSON.stringify(mergedConfig.data)
+        mergedConfig.body = JSON.stringify((mergedConfig as any).data)
       }
     }
     
@@ -232,14 +232,14 @@ export const get = <T = any>(url: string, config?: RequestConfig): Promise<T> =>
  * POST请求快捷方法
  */
 export const post = <T = any>(url: string, data?: any, config?: RequestConfig): Promise<T> => {
-  return request<T>(url, { ...config, method: 'POST', data })
+  return request<T>(url, { ...config, method: 'POST', data: data } as any)
 }
 
 /**
  * PUT请求快捷方法
  */
 export const put = <T = any>(url: string, data?: any, config?: RequestConfig): Promise<T> => {
-  return request<T>(url, { ...config, method: 'PUT', data })
+  return request<T>(url, { ...config, method: 'PUT', data: data } as any)
 }
 
 /**
@@ -271,7 +271,7 @@ export const upload = <T = any>(
     ...config,
     method: 'POST',
     data: formData
-  })
+  } as any)
 }
 
 // 添加默认的请求拦截器

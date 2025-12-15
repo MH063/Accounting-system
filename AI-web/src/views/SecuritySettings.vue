@@ -1138,11 +1138,11 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import QRCode from 'qrcode'
 import dataEncryptionManager from '@/services/dataEncryptionManager'
+import { changePassword as changeUserPassword } from '@/services/authService'
 import { 
   checkBiometricSupport,
   enableBiometric,
   disableBiometric,
-  isBiometricEnabled,
   type BiometricType
 } from '@/services/biometricService'
 import { 
@@ -1152,8 +1152,7 @@ import {
   unlockAccount,
   getLoginAttempts,
   resetFailedAttempts,
-  manuallyLockAccount as serviceManuallyLockAccount,
-  type SecurityConfig
+  manuallyLockAccount as serviceManuallyLockAccount
 } from '@/services/accountSecurityService'
 import {
   getLoginDeviceLimitConfig,
@@ -1163,9 +1162,6 @@ import {
   recordNewDeviceSession,
   logoutDevice,
   logoutAllDevices,
-  getCurrentDeviceSession,
-  isDeviceAllowedToLogin,
-  getActiveDeviceCount,
   cleanupExpiredSessions,
   getUserAgent,
   getClientIpAddress,
@@ -1177,15 +1173,12 @@ import {
   activateTwoFactor,
   getTwoFactorStatus,
   getTwoFactorConfig,
-  saveTwoFactorConfig,
   verifyTwoFactorToken,
-  hexToBase32,
   regenerateBackupCodes as generateNewBackupCodes
 } from '@/services/twoFactorService'
 import {
   getSecurityQuestionConfig,
-  saveSecurityQuestionConfig,
-  hasSecurityQuestions
+  saveSecurityQuestionConfig
 } from '@/services/securityQuestionService'
 import { 
   getSecurityOperationLogs, 
@@ -1196,9 +1189,22 @@ import {
   performSecurityAssessment 
 } from '@/services/securityAssessmentService'
 import { 
-  getSecurityAssessmentHistory,
-  clearSecurityAssessmentHistory
+  getSecurityAssessmentHistory
 } from '@/services/securityAssessmentHistoryService'
+
+// 占位函数：发送短信验证码
+const sendSmsCode = async (data: { phone: string; type: string }): Promise<void> => {
+  console.log('发送短信验证码:', data)
+  // TODO: 对接真实API
+  return Promise.resolve()
+}
+
+// 占位函数：发送邮箱验证码
+const sendEmailVerificationCode = async (data: { email: string; type: string }): Promise<void> => {
+  console.log('发送邮箱验证码:', data)
+  // TODO: 对接真实API
+  return Promise.resolve()
+}
 
 // 当前激活的标签页
 const activeTab = ref('account')
@@ -1836,9 +1842,9 @@ const changePassword = async (): Promise<void> => {
   try {
     // 调用真实API接口修改密码
     await changeUserPassword({
-      userId: currentUserId.value,
       currentPassword: passwordForm.currentPassword,
-      newPassword: passwordForm.newPassword
+      newPassword: passwordForm.newPassword,
+      confirmPassword: passwordForm.confirmPassword
     })
     
     ElMessage.success('密码修改成功')

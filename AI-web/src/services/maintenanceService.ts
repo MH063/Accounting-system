@@ -19,15 +19,18 @@ export interface MaintenanceStatus {
 
 /**
  * 获取维护模式状态
+ * 暂时禁用，等待后端接口完成
  */
 export const getMaintenanceStatus = async (): Promise<MaintenanceStatus | null> => {
   try {
-    console.log('获取维护模式状态')
+    console.log('获取维护模式状态 - 暂时禁用，等待后端接口')
     
-    // 调用真实API获取维护状态
-    const response = await request<MaintenanceStatus>('/maintenance/status')
+    // 暂时返回null，不发起API请求
+    // 等后端接口完成后启用以下代码：
+    // const response = await request<MaintenanceStatus>('/maintenance/status')
+    // return response
     
-    return response
+    return null
   } catch (error) {
     console.error('获取维护状态失败:', error)
     return null

@@ -2,6 +2,7 @@ import type { ApiResponse } from '@/types'
 // 导入请求函数
 import { request } from '@/utils/request'
 
+
 // 用户认证信息接口
 export interface AuthUser {
   id: string
@@ -14,33 +15,14 @@ export interface AuthUser {
   updatedAt: string
 }
 
-// 登录请求参数
-export interface LoginRequest {
-  email: string
-  password: string
-  rememberMe?: boolean
-  deviceInfo?: {
-    deviceId: string
-    deviceName: string
-    platform: string
-    browser: string
-  }
-}
-
-// 登录响应
-export interface LoginResponse {
-  token: string
-  refreshToken: string
-  expiresIn: number
-  user: AuthUser
-}
-
 // 注册请求参数
 export interface RegisterRequest {
   name: string
   email: string
   password: string
   confirmPassword: string
+  nickname?: string  // 昵称（可选）
+  phone?: string     // 手机号（可选）
   verificationCode?: string
   inviteCode?: string
 }
@@ -73,45 +55,12 @@ export interface RefreshTokenRequest {
 
 // 刷新令牌响应
 export interface RefreshTokenResponse {
-  token: string
+  accessToken: string
   refreshToken: string
   expiresIn: number
+  refreshExpiresIn: number
 }
 
-/**
- * 用户登录
- * @param loginData 登录数据
- * @returns 登录结果的API响应
- */
-export const login = async (loginData: LoginRequest): Promise<ApiResponse<LoginResponse>> => {
-  try {
-    console.log('用户登录:', loginData.email)
-    
-    // 调用真实API进行登录
-    const response = await request<LoginResponse>('/auth/login', {
-      method: 'POST',
-      data: loginData
-    })
-    
-    // 登录成功后保存令牌到本地存储
-    if (response.success && response.data) {
-      localStorage.setItem('access_token', response.data.token)
-      localStorage.setItem('refresh_token', response.data.refreshToken)
-      localStorage.setItem('token_expires', (Date.now() + response.data.expiresIn * 1000).toString())
-      localStorage.setItem('user_info', JSON.stringify(response.data.user))
-    }
-    
-    return response
-  } catch (error) {
-    console.error('登录失败:', error)
-    return {
-      success: false,
-      data: {} as LoginResponse,
-      message: '登录失败，请检查用户名和密码',
-      code: 401
-    }
-  }
-}
 
 /**
  * 用户注册
@@ -123,9 +72,9 @@ export const register = async (registerData: RegisterRequest): Promise<ApiRespon
     console.log('用户注册:', registerData.email)
     
     // 调用真实API进行注册
-    const response = await request<RegisterResponse>('/auth/register', {
+    const response = await request<ApiResponse<RegisterResponse>>('/auth/register', {
       method: 'POST',
-      data: registerData
+      body: JSON.stringify(registerData)
     })
     
     // 注册成功后保存令牌到本地存储
@@ -148,24 +97,54 @@ export const register = async (registerData: RegisterRequest): Promise<ApiRespon
   }
 }
 
+// 登出响应接口
+export interface LogoutResponse {
+  sessionToken: string
+  status: string
+}
+
 /**
  * 用户登出
  * @returns 登出结果的API响应
  */
-export const logout = async (): Promise<ApiResponse<null>> => {
+export const logout = async (): Promise<ApiResponse<LogoutResponse>> => {
   try {
     console.log('用户登出')
     
-    // 调用真实API进行登出
-    const response = await request<null>('/auth/logout', {
-      method: 'POST'
+    // 获取sessionToken
+    const sessionInfo = localStorage.getItem('session_info')
+    let sessionToken = ''
+    
+    if (sessionInfo) {
+      try {
+        const sessionData = JSON.parse(sessionInfo)
+        sessionToken = sessionData.sessionToken || ''
+      } catch (error) {
+        console.error('解析会话信息失败:', error)
+      }
+    }
+    
+    // 如果没有sessionToken，使用默认的空字符串
+    const logoutData = {
+      sessionToken: sessionToken
+    }
+    
+    console.log('调用登出API，请求参数:', logoutData)
+    
+    // 调用真实API进行登出，路径为 /api/auth/logout
+    const response = await request<ApiResponse<LogoutResponse>>('/api/auth/logout', {
+      method: 'POST',
+      body: JSON.stringify(logoutData)
     })
+    
+    console.log('登出API返回响应:', response)
     
     // 清除本地存储的认证信息
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
     localStorage.removeItem('token_expires')
     localStorage.removeItem('user_info')
+    localStorage.removeItem('session_info')
     
     return response
   } catch (error) {
@@ -175,10 +154,11 @@ export const logout = async (): Promise<ApiResponse<null>> => {
     localStorage.removeItem('refresh_token')
     localStorage.removeItem('token_expires')
     localStorage.removeItem('user_info')
+    localStorage.removeItem('session_info')
     
     return {
       success: true,
-      data: null,
+      data: { sessionToken: '', status: 'revoked' },
       message: '登出成功'
     }
   }
@@ -193,7 +173,7 @@ export const getCurrentAuthUser = async (): Promise<ApiResponse<AuthUser>> => {
     console.log('获取当前用户信息')
     
     // 调用真实API获取当前用户信息
-    const response = await request<AuthUser>('/auth/me')
+    const response = await request<ApiResponse<AuthUser>>('/auth/me')
     
     // 更新本地存储的用户信息
     if (response.success && response.data) {
@@ -234,16 +214,17 @@ export const refreshToken = async (refreshTokenData?: RefreshTokenRequest): Prom
     }
     
     // 调用真实API刷新令牌
-    const response = await request<RefreshTokenResponse>('/auth/refresh', {
+    const response = await request<ApiResponse<RefreshTokenResponse>>('/api/auth/refresh-token', {
       method: 'POST',
-      data: { refreshToken: token }
+      body: JSON.stringify({ refreshToken: token })
     })
     
     // 更新本地存储的令牌信息
     if (response.success && response.data) {
-      localStorage.setItem('access_token', response.data.token)
-      localStorage.setItem('refresh_token', response.data.refreshToken)
-      localStorage.setItem('token_expires', (Date.now() + response.data.expiresIn * 1000).toString())
+      const responseData = response.data;
+      localStorage.setItem('access_token', responseData.accessToken)
+      localStorage.setItem('refresh_token', responseData.refreshToken)
+      localStorage.setItem('token_expires', (Date.now() + responseData.expiresIn * 1000).toString())
     }
     
     return response
@@ -268,9 +249,9 @@ export const resetPassword = async (resetData: ResetPasswordRequest): Promise<Ap
     console.log('重置密码:', resetData.email)
     
     // 调用真实API重置密码
-    const response = await request<null>('/auth/reset-password', {
+    const response = await request<ApiResponse<null>>('/auth/reset-password', {
       method: 'POST',
-      data: resetData
+      body: JSON.stringify(resetData)
     })
     
     return response
@@ -295,9 +276,9 @@ export const changePassword = async (changeData: ChangePasswordRequest): Promise
     console.log('修改密码')
     
     // 调用真实API修改密码
-    const response = await request<null>('/auth/change-password', {
+    const response = await request<ApiResponse<null>>('/auth/change-password', {
       method: 'POST',
-      data: changeData
+      body: JSON.stringify(changeData)
     })
     
     return response
@@ -314,6 +295,7 @@ export const changePassword = async (changeData: ChangePasswordRequest): Promise
 
 /**
  * 检查令牌是否有效
+ * 优先使用本地验证，避免不必要的 API 调用
  * @returns 检查结果
  */
 export const validateToken = async (): Promise<boolean> => {
@@ -321,24 +303,32 @@ export const validateToken = async (): Promise<boolean> => {
     const token = localStorage.getItem('access_token')
     const expires = localStorage.getItem('token_expires')
     
-    // 检查令牌是否存在且未过期
-    if (!token || !expires) {
+    // 检查令牌是否存在
+    if (!token) {
+      console.log('validateToken: 令牌不存在')
       return false
+    }
+    
+    // 如果没有过期时间，认为令牌有效（兼容旧数据）
+    if (!expires) {
+      console.log('validateToken: 无过期时间信息，认为有效')
+      return true
     }
     
     const now = Date.now()
     const expiresTime = parseInt(expires)
     
-    // 如果令牌已过期，尝试刷新
+    // 检查令牌是否过期
     if (now >= expiresTime) {
+      console.log('validateToken: 令牌已过期，尝试刷新')
+      // 如果令牌已过期，尝试刷新
       const refreshResult = await refreshToken()
       return refreshResult.success
     }
     
-    // 调用真实API验证令牌
-    const response = await request<{ valid: boolean }>('/auth/validate')
-    
-    return response.valid
+    console.log('validateToken: 令牌有效')
+    // 令牌存在且未过期，直接返回 true
+    return true
   } catch (error) {
     console.error('验证令牌失败:', error)
     return false
@@ -372,9 +362,216 @@ export const clearLocalAuth = (): void => {
   localStorage.removeItem('user_info')
 }
 
+// 两步验证相关接口
+
+// 两步验证请求参数
+export interface TwoFactorVerifyRequest {
+  userId: number
+  code: string
+  codeType: string  // 'totp', 'sms', 'email', 'backup'
+}
+
+// 两步验证响应
+export interface TwoFactorVerifyResponse {
+  verified: boolean
+  token?: string
+  sessionId?: string
+  expiresAt?: string
+}
+
+// 两步验证状态响应
+export interface TwoFactorStatusResponse {
+  enabled: boolean
+  totpEnabled: boolean
+  smsEnabled: boolean
+  emailEnabled: boolean
+  backupCodesCount: number
+  lastEnabledAt?: string
+}
+
+// 两步验证配置请求
+export interface TwoFactorEnableRequest {
+  method: string  // 'totp', 'sms', 'email'
+  phone?: string
+  email?: string
+}
+
+// 两步验证配置响应
+export interface TwoFactorEnableResponse {
+  qrCode?: string
+  secret?: string
+  backupCodes?: string[]
+  method: string
+  enabled: boolean
+}
+
+// 两步验证代码生成请求
+export interface TwoFactorCodeGenerateRequest {
+  userId: number
+  method: string  // 'sms', 'email'
+  phone?: string
+  email?: string
+}
+
+// 两步验证代码生成响应
+export interface TwoFactorCodeGenerateResponse {
+  sent: boolean
+  method: string
+  expiresAt: string
+  cooldown: number
+}
+
+/**
+ * 验证两步验证码
+ * @param verifyData 验证数据
+ * @returns 验证结果的API响应
+ */
+export const verifyTwoFactor = async (verifyData: TwoFactorVerifyRequest): Promise<ApiResponse<TwoFactorVerifyResponse>> => {
+  try {
+    console.log('验证两步验证码:', { userId: verifyData.userId, codeType: verifyData.codeType })
+    
+    const response = await request<ApiResponse<TwoFactorVerifyResponse>>('/api/auth/two-factor/verify', {
+      method: 'POST',
+      body: JSON.stringify(verifyData)
+    })
+    
+    console.log('两步验证API返回响应:', response)
+    
+    return response
+  } catch (error) {
+    console.error('两步验证失败:', error)
+    return {
+      success: false,
+      data: { verified: false },
+      message: '验证失败，请检查验证码后重试',
+      code: 400
+    }
+  }
+}
+
+/**
+ * 获取两步验证状态
+ * @param userId 用户ID
+ * @returns 状态查询结果的API响应
+ */
+export const getTwoFactorStatus = async (userId: number): Promise<ApiResponse<TwoFactorStatusResponse>> => {
+  try {
+    console.log('获取两步验证状态:', userId)
+    
+    // 确保能获取到刚保存的令牌
+    const token = localStorage.getItem('access_token')
+    console.log('当前访问令牌:', token ? token.slice(0, 20) + '...' : '未找到')
+    
+    const response = await request<ApiResponse<TwoFactorStatusResponse>>(`/api/auth/two-factor/status?userId=${userId}`, {
+      method: 'GET'
+    })
+    
+    console.log('两步验证状态API返回响应:', response)
+    
+    return response
+  } catch (error) {
+    console.error('获取两步验证状态失败:', error)
+    return {
+      success: false,
+      data: { 
+        enabled: false, 
+        totpEnabled: false, 
+        smsEnabled: false, 
+        emailEnabled: false, 
+        backupCodesCount: 0 
+      },
+      message: '获取状态失败',
+      code: 400
+    }
+  }
+}
+
+/**
+ * 启用两步验证
+ * @param enableData 启用数据
+ * @returns 启用结果的API响应
+ */
+export const enableTwoFactor = async (enableData: TwoFactorEnableRequest): Promise<ApiResponse<TwoFactorEnableResponse>> => {
+  try {
+    console.log('启用两步验证:', enableData)
+    
+    const response = await request<ApiResponse<TwoFactorEnableResponse>>('/api/auth/two-factor/enable', {
+      method: 'POST',
+      body: JSON.stringify(enableData)
+    })
+    
+    console.log('启用两步验证API返回响应:', response)
+    
+    return response
+  } catch (error) {
+    console.error('启用两步验证失败:', error)
+    return {
+      success: false,
+      data: { enabled: false, method: enableData.method },
+      message: '启用两步验证失败',
+      code: 400
+    }
+  }
+}
+
+/**
+ * 禁用两步验证
+ * @param method 验证方式
+ * @returns 禁用结果的API响应
+ */
+export const disableTwoFactor = async (method: string): Promise<ApiResponse<{ disabled: boolean; method: string }>> => {
+  try {
+    console.log('禁用两步验证:', method)
+    
+    const response = await request<ApiResponse<{ disabled: boolean; method: string }>>('/api/auth/two-factor/disable', {
+      method: 'POST',
+      body: JSON.stringify({ method })
+    })
+    
+    console.log('禁用两步验证API返回响应:', response)
+    
+    return response
+  } catch (error) {
+    console.error('禁用两步验证失败:', error)
+    return {
+      success: false,
+      data: { disabled: false, method },
+      message: '禁用两步验证失败',
+      code: 400
+    }
+  }
+}
+
+/**
+ * 生成两步验证验证码
+ * @param generateData 生成数据
+ * @returns 生成结果的API响应
+ */
+export const generateTwoFactorCode = async (generateData: TwoFactorCodeGenerateRequest): Promise<ApiResponse<TwoFactorCodeGenerateResponse>> => {
+  try {
+    console.log('生成两步验证验证码:', generateData)
+    
+    const response = await request<ApiResponse<TwoFactorCodeGenerateResponse>>('/api/auth/two-factor/generate', {
+      method: 'POST',
+      body: JSON.stringify(generateData)
+    })
+    
+    console.log('生成验证码API返回响应:', response)
+    
+    return response
+  } catch (error) {
+    console.error('生成验证码失败:', error)
+    return {
+      success: false,
+      data: { sent: false, method: generateData.method, expiresAt: '', cooldown: 0 },
+      message: '生成验证码失败',
+      code: 400
+    }
+  }
+}
+
 // 默认导出认证服务对象
 export default {
-  login,
   register,
   logout,
   getCurrentAuthUser,
@@ -383,5 +580,10 @@ export default {
   changePassword,
   validateToken,
   getLocalUserInfo,
-  clearLocalAuth
+  clearLocalAuth,
+  verifyTwoFactor,
+  getTwoFactorStatus,
+  enableTwoFactor,
+  disableTwoFactor,
+  generateTwoFactorCode
 }

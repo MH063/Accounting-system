@@ -9,6 +9,8 @@
     "build": "echo '构建完成'",
     "lint": "echo '代码检查完成'",
     "format": "echo '代码格式化完成'",
+    "migrate:two-factor": "node scripts/run-migration.js",
+    "verify:two-factor": "node scripts/verify-migration.js",
     "zeabur:start": "node server.js",
     "zeabur:install": "npm install --only=production"
   },

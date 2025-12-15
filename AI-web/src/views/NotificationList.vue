@@ -514,10 +514,8 @@ import {
   User,
   Setting,
   Folder,
-  Search,
   ArrowLeft,
-  Check,
-  Close
+  Check
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useNotifications } from '../services/notificationService'
@@ -622,8 +620,6 @@ const todoCount = computed(() => {
   return notifications.value.filter(n => !n.isRead && n.isImportant).length
 })
 
-const hasTodoNotifications = computed(() => todoCount.value > 0)
-
 const filteredList = computed(() => {
   let filtered = notifications.value
   
@@ -726,12 +722,6 @@ const handleBatchMarkAsRead = () => {
 const handleBatchMarkAsUnread = () => {
   batchMarkAsUnread(selectedNotifications.value)
   ElMessage.success(`已批量标为未读 ${selectedNotifications.value.length} 项`)
-  clearSelection()
-}
-
-const handleBatchMarkAsImportant = () => {
-  batchToggleImportance(selectedNotifications.value)
-  ElMessage.success(`已批量标记重要性 ${selectedNotifications.value.length} 项`)
   clearSelection()
 }
 
@@ -915,11 +905,6 @@ const handleMarkAllAsRead = async () => {
 const handleSingleMarkAsRead = (id: number) => {
   markAsRead(id)
   ElMessage.success('已标为已读')
-}
-
-const handleSingleMarkAsUnread = (id: number) => {
-  markAsUnread(id)
-  ElMessage.success('已标为未读')
 }
 
 const handleSingleDelete = async (id: number) => {

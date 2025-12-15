@@ -1,13 +1,15 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
 import Layout from '@/layouts/Layout.vue'
 import Home from '@/views/Home.vue'
-import Login from '@/views/Login.vue'
 import Register from '@/views/Register.vue'
+import ResetPassword from '@/views/ResetPassword.vue'
 import NotFound from '@/views/NotFound.vue'
 import SecuritySettings from '@/views/SecuritySettings.vue'
 import SecurityQuestionVerification from '@/views/SecurityQuestionVerification.vue'
 import SecurityQuestionDemo from '@/views/SecurityQuestionDemo.vue'
 import NotificationList from '@/views/NotificationList.vue'
+// 导入认证服务
+import { validateToken } from '@/services/authService'
 
 // 路由配置
 const routes: Array<RouteRecordRaw> = [
@@ -21,21 +23,29 @@ const routes: Array<RouteRecordRaw> = [
     }
   },
   {
-    path: '/login',
-    name: 'Login',
-    component: Login,
-    meta: { 
-      requiresAuth: false,
-      title: '登录'
-    }
-  },
-  {
     path: '/register',
     name: 'Register',
     component: Register,
     meta: { 
       requiresAuth: false,
       title: '注册'
+    }
+  },
+  {
+    path: '/reset-password',
+    name: 'ResetPassword',
+    component: ResetPassword,
+    meta: { 
+      requiresAuth: false,
+      title: '重置密码'
+    }
+  },  {
+    path: '/two-factor-verify',
+    name: 'TwoFactorVerify',
+    component: () => import('@/views/TwoFactorVerify.vue'),
+    meta: { 
+      requiresAuth: false,
+      title: '两步验证'
     }
   },
   {
@@ -403,6 +413,13 @@ router.beforeEach(async (to, from, next) => {
   if (to.meta.requiresAuth) {
     // 检查用户是否已登录（使用本地存储）
     const isAuthenticated = typeof localStorage !== 'undefined' && localStorage.getItem('isAuthenticated') === 'true';
+    console.log('检查认证状态:', {
+      isAuthenticated,
+      localStorage_value: localStorage.getItem('isAuthenticated'),
+      userId: localStorage.getItem('userId'),
+      username: localStorage.getItem('username')
+    });
+    
     if (!isAuthenticated) {
       console.log('User not authenticated, redirecting to login');
       next('/login');
@@ -415,11 +432,14 @@ router.beforeEach(async (to, from, next) => {
     const config = getSecurityConfig();
     const lockStatus = getAccountLockStatus(accountId, config);
     
+    console.log('检查账户锁定状态:', { accountId, isLocked: lockStatus.isLocked });
+    
     if (lockStatus.isLocked) {
       // 如果账户被锁定，重定向到登录页面并显示锁定信息
       // 在localStorage中设置锁定提示信息
       const remainingMinutes = lockStatus.lockedUntil ? Math.ceil((lockStatus.lockedUntil - Date.now()) / 1000 / 60) : 0;
       localStorage.setItem('accountLockMessage', `账户已被锁定，剩余时间：${remainingMinutes}分钟，无法访问个人资料、费用管理、账单等所有需要认证的操作`);
+      console.log('账户已锁定，重定向到登录页');
       next('/login');
       return;
     }
@@ -428,8 +448,12 @@ router.beforeEach(async (to, from, next) => {
     const sessionId = localStorage.getItem('sessionId');
     if (sessionId) {
       const { isSessionValid } = await import('@/services/loginDeviceLimitService');
-      if (!isSessionValid(accountId, sessionId)) {
+      const isValid = isSessionValid(accountId, sessionId);
+      console.log('检查会话有效性:', { sessionId, isValid });
+      
+      if (!isValid) {
         // 会话无效，清除登录状态并重定向到登录页面
+        console.log('会话无效，清除登录状态并重定向');
         localStorage.removeItem('isAuthenticated');
         localStorage.removeItem('username');
         localStorage.removeItem('userId');
@@ -438,6 +462,21 @@ router.beforeEach(async (to, from, next) => {
         return;
       }
     }
+    
+    // 验证令牌有效性，在需要认证的路由中检查令牌是否过期
+    const isTokenValid = await validateToken();
+    if (!isTokenValid) {
+      console.log('令牌无效，重定向到登录页');
+      // 清除认证状态
+      localStorage.removeItem('isAuthenticated');
+      localStorage.removeItem('username');
+      localStorage.removeItem('userId');
+      localStorage.removeItem('sessionId');
+      next('/login');
+      return;
+    }
+    
+    console.log('所有检查通过，允许导航');
   }
 
   next();

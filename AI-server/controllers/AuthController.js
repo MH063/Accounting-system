@@ -111,7 +111,7 @@ class AuthController extends BaseController {
    */
   async register(req, res, next) {
     try {
-      const { username, email, password } = req.body;
+      const { username, email, password, nickname, phone, avatar_url } = req.body;
       
       // 记录注册尝试审计日志
       logger.audit(req, '用户注册尝试', {
@@ -135,7 +135,10 @@ class AuthController extends BaseController {
       const result = await this.userService.register({
         username,
         email,
-        password
+        password,
+        nickname,
+        phone,
+        avatar_url
       });
       
       const user = result.data;
@@ -175,7 +178,7 @@ class AuthController extends BaseController {
    * 获取用户个人资料
    * GET /api/auth/profile
    */
-  async getProfile(req, res, next) {
+  async getProfile(req, res) {
     try {
       const userId = req.user.id;
       
@@ -206,7 +209,7 @@ class AuthController extends BaseController {
 
     } catch (error) {
       logger.error('[AuthController] 获取用户资料失败', { error: error.message });
-      next(error);
+      return this.sendError(res, '服务器内部错误', 500);
     }
   }
 
@@ -335,10 +338,83 @@ class AuthController extends BaseController {
         accessToken,
         refreshToken: newRefreshToken
       }, '令牌刷新成功');
-
     } catch (error) {
       logger.error('[AuthController] 刷新令牌失败', { error: error.message });
       next(error);
+    }
+  }
+
+  /**
+   * 安全刷新令牌接口（实现刷新令牌轮换）
+   * POST /api/auth/refresh-token
+   */
+  async refreshSecureToken(req, res) {
+    try {
+      const { refreshToken } = req.body;
+      
+      // 验证输入
+      if (!refreshToken) {
+        return this.sendError(res, '刷新令牌不能为空', 400);
+      }
+
+      // 记录安全令牌刷新尝试
+      logger.audit(req, '安全令牌刷新尝试', {
+        timestamp: new Date().toISOString()
+      });
+
+      // 首先验证刷新令牌是否有效且未被撤销
+      const { verifyTokenWithBlacklist } = require('../config/jwtManager');
+      try {
+        const decoded = await verifyTokenWithBlacklist(refreshToken);
+        
+        // 验证令牌类型
+        if (decoded.type !== 'refresh') {
+          return this.sendError(res, '无效的刷新令牌类型', 401);
+        }
+        
+        logger.info('[AuthController] 刷新令牌验证通过', { userId: decoded.userId });
+      } catch (tokenError) {
+        logger.warn('[AuthController] 刷新令牌验证失败', { error: tokenError.message });
+        
+        if (tokenError.message === '令牌已被撤销') {
+          return this.sendError(res, '刷新令牌已被撤销', 401);
+        } else if (tokenError.name === 'TokenExpiredError') {
+          return this.sendError(res, '刷新令牌已过期', 401);
+        } else {
+          return this.sendError(res, '无效的刷新令牌', 401);
+        }
+      }
+
+      // 调用服务层安全刷新令牌
+      const result = await this.userService.refreshSecureToken(refreshToken, {
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+      
+      // 记录安全令牌刷新成功
+      logger.auth('安全令牌刷新成功', { userId: result.data.userId });
+
+      return this.sendSuccess(res, {
+        accessToken: result.data.accessToken,
+        refreshToken: result.data.refreshToken,
+        expiresIn: result.data.expiresIn,
+        refreshExpiresIn: result.data.refreshExpiresIn
+      }, '令牌刷新成功');
+    } catch (error) {
+      logger.error('[AuthController] 安全刷新令牌失败', { error: error.message });
+      
+      // 根据错误类型返回合适的状态码
+      const errorMessage = error.message;
+      if (errorMessage.includes('无效的刷新令牌') || 
+          errorMessage.includes('会话已过期') ||
+          errorMessage.includes('用户不存在') ||
+          // 处理可能的编码问题
+          errorMessage.includes('鏃犳晥鐨勫埛鏂颁护鐗?') ||
+          errorMessage.includes('浼氳瘽宸茶繃鏈?')) {
+        return this.sendError(res, errorMessage, 401);
+      }
+      
+      return this.sendError(res, '服务器内部错误', 500);
     }
   }
 
@@ -463,33 +539,37 @@ class AuthController extends BaseController {
   }
 
   /**
-   * 发送邮箱验证邮件
-   * POST /api/auth/send-email-verification
+   * 发送邮箱验证码
+   * POST /api/auth/send-email-code
    */
-  async sendEmailVerification(req, res, next) {
+  async sendEmailVerificationCode(req, res, next) {
     try {
-      const userId = req.user.id;
+      const { email } = req.body;
       
-      // 记录邮箱验证请求
-      logger.audit(req, '发送邮箱验证邮件', { 
-        userId,
+      // 验证输入
+      this.validateRequiredFields(req.body, ['email']);
+
+      // 记录发送验证码请求
+      logger.audit(req, '发送邮箱验证码', { 
+        email,
         timestamp: new Date().toISOString()
       });
 
-      const result = await this.userService.sendEmailVerification(userId);
+      const result = await this.userService.sendEmailVerificationCode(email);
       
+      // 为安全考虑，即使失败也返回成功
       if (!result.success) {
-        return this.sendError(res, result.message, 400);
+        return this.sendSuccess(res, null, result.message);
       }
 
-      logger.auth('邮箱验证邮件发送成功', { userId });
+      logger.auth('邮箱验证码发送成功', { email });
 
       return this.sendSuccess(res, result.data, result.message);
 
     } catch (error) {
-      logger.error('[AuthController] 发送邮箱验证邮件失败', { 
+      logger.error('[AuthController] 发送邮箱验证码失败', { 
         error: error.message,
-        userId: req.user?.id 
+        email: req.body?.email 
       });
       next(error);
     }
@@ -526,6 +606,47 @@ class AuthController extends BaseController {
       logger.error('[AuthController] 邮箱验证失败', { 
         error: error.message,
         token: req.body?.token?.substring(0, 8) + '...' 
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * 验证邮箱验证码
+   * POST /api/auth/verify-email-code
+   */
+  async verifyEmailCode(req, res, next) {
+    try {
+      const { email, code } = req.body;
+      
+      // 验证输入
+      this.validateRequiredFields(req.body, ['email', 'code']);
+
+      // 记录邮箱验证码验证尝试
+      logger.audit(req, '邮箱验证码验证尝试', {
+        email: email.substring(0, 3) + '***' + email.substring(email.length - 3),
+        timestamp: new Date().toISOString()
+      });
+
+      const result = await this.userService.verifyEmailCode(email, code);
+      
+      if (!result.success) {
+        return this.sendError(res, result.message, 400);
+      }
+
+      logger.auth('邮箱验证码验证成功', { 
+        email: email.substring(0, 3) + '***' + email.substring(email.length - 3)
+      });
+
+      return this.sendSuccess(res, {
+        email: email,
+        verified: true
+      }, result.message);
+
+    } catch (error) {
+      logger.error('[AuthController] 邮箱验证码验证失败', { 
+        error: error.message,
+        email: req.body?.email ? req.body.email.substring(0, 3) + '***' + req.body.email.substring(req.body.email.length - 3) : undefined
       });
       next(error);
     }
@@ -645,6 +766,44 @@ class AuthController extends BaseController {
   }
 
   /**
+   * 请求密码重置验证码
+   * POST /api/auth/request-password-reset-code
+   */
+  async requestPasswordResetCode(req, res, next) {
+    try {
+      const { email } = req.body;
+      
+      // 验证输入
+      this.validateRequiredFields(req.body, ['email']);
+
+      // 记录密码重置验证码请求
+      logger.audit(req, '请求密码重置验证码', { 
+        email,
+        timestamp: new Date().toISOString()
+      });
+
+      const result = await this.userService.sendPasswordResetCode(email);
+      
+      // 为安全考虑，即使失败也返回成功
+      if (!result.success) {
+        return this.sendSuccess(res, null, result.message);
+      }
+
+      logger.auth('密码重置验证码发送', { email });
+
+      return this.sendSuccess(res, result.data, result.message);
+
+    } catch (error) {
+      logger.error('[AuthController] 请求密码重置验证码失败', { 
+        error: error.message,
+        email: req.body?.email 
+      });
+      // 为安全考虑，返回成功
+      return this.sendSuccess(res, null, '如果该邮箱地址已注册，您将收到密码重置验证码');
+    }
+  }
+
+  /**
    * 重置密码
    * POST /api/auth/reset-password
    */
@@ -675,6 +834,42 @@ class AuthController extends BaseController {
       logger.error('[AuthController] 密码重置失败', { 
         error: error.message,
         token: req.body?.token?.substring(0, 8) + '...' 
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * 验证密码重置验证码并重置密码
+   * POST /api/auth/reset-password-with-code
+   */
+  async resetPasswordWithCode(req, res, next) {
+    try {
+      const { email, code, newPassword } = req.body;
+      
+      // 验证输入
+      this.validateRequiredFields(req.body, ['email', 'code', 'newPassword']);
+
+      // 记录密码重置尝试
+      logger.audit(req, '使用验证码重置密码尝试', {
+        email,
+        timestamp: new Date().toISOString()
+      });
+
+      const result = await this.userService.resetPasswordWithCode(email, code, newPassword);
+      
+      if (!result.success) {
+        return this.sendError(res, result.message, 400);
+      }
+
+      logger.auth('使用验证码密码重置成功', { email });
+
+      return this.sendSuccess(res, null, result.message);
+
+    } catch (error) {
+      logger.error('[AuthController] 使用验证码重置密码失败', { 
+        error: error.message,
+        email: req.body?.email 
       });
       next(error);
     }
@@ -748,6 +943,276 @@ class AuthController extends BaseController {
         error: error.message,
         userId: req.user?.id 
       });
+      next(error);
+    }
+  }
+
+  /**
+   * 两步验证
+   * POST /api/auth/two-factor/verify
+   */
+  async verifyTwoFactorCode(req, res, next) {
+    try {
+      const { userId, code, codeType } = req.body;
+      
+      // 记录两步验证尝试
+      logger.audit(req, '两步验证尝试', { 
+        userId,
+        codeType,
+        timestamp: new Date().toISOString()
+      });
+
+      // 验证输入
+      this.validateRequiredFields(req.body, ['userId', 'code', 'codeType']);
+
+      // 调用服务层进行两步验证
+      const verificationResult = await this.userService.verifyTwoFactorCode({ 
+        userId,
+        code,
+        codeType,
+        ip: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+      
+      if (!verificationResult.success) {
+        // 验证失败，记录安全日志
+        logger.auth('两步验证失败', { userId, reason: verificationResult.message });
+        logger.security(req, '两步验证尝试失败', { 
+          userId,
+          reason: verificationResult.message
+        });
+        
+        return this.sendError(res, verificationResult.message, 401);
+      }
+
+      const { user, tokens, session } = verificationResult.data;
+
+      logger.auth('两步验证成功', { userId });
+      logger.audit(req, '用户两步验证成功', { 
+        userId,
+        timestamp: new Date().toISOString()
+      });
+
+      // 返回成功响应（包含双令牌和会话信息）
+      return this.sendSuccess(res, {
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          nickname: user.nickname,
+          phone: user.phone,
+          avatar_url: user.avatar_url,
+          status: user.status,
+          email_verified: user.email_verified,
+          phone_verified: user.phone_verified,
+          last_login_at: user.last_login_at,
+          created_at: user.created_at
+        },
+        tokens: {
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          expiresIn: tokens.expiresIn,
+          refreshExpiresIn: tokens.refreshExpiresIn
+        },
+        session: session ? {
+          sessionId: session.id,
+          sessionToken: session.session_token,
+          deviceInfo: session.device_info,
+          expiresAt: session.expires_at
+        } : null
+      }, '两步验证成功');
+
+    } catch (error) {
+      logger.error('[AuthController] 两步验证失败', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * 启用两步验证
+   * POST /api/auth/two-factor/enable
+   */
+  async enableTwoFactor(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const { code, codeType } = req.body;
+      
+      // 记录启用两步验证尝试
+      logger.audit(req, '启用两步验证尝试', {
+        userId,
+        codeType,
+        timestamp: new Date().toISOString()
+      });
+
+      // 验证输入
+      this.validateRequiredFields(req.body, ['code', 'codeType']);
+
+      // 调用服务层启用两步验证
+      const result = await this.userService.enableTwoFactor(userId, {
+        code,
+        codeType
+      });
+      
+      if (!result.success) {
+        logger.audit(req, '启用两步验证失败', {
+          userId,
+          error: result.message,
+          timestamp: new Date().toISOString()
+        });
+        return this.sendError(res, result.message, 400);
+      }
+
+      // 记录启用成功审计日志
+      logger.audit(req, '启用两步验证成功', {
+        userId,
+        timestamp: new Date().toISOString()
+      });
+
+      return this.sendSuccess(res, result.data, '两步验证已启用');
+
+    } catch (error) {
+      // 记录启用失败审计日志
+      logger.audit(req, '启用两步验证失败', {
+        userId,
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
+
+      logger.error('启用两步验证失败', { error: error.message, stack: error.stack });
+      return next(error);
+    }
+  }
+
+  /**
+   * 禁用两步验证
+   * POST /api/auth/two-factor/disable
+   */
+  async disableTwoFactor(req, res, next) {
+    try {
+      const userId = req.user.id;
+      
+      // 记录禁用两步验证尝试
+      logger.audit(req, '禁用两步验证尝试', {
+        userId,
+        timestamp: new Date().toISOString()
+      });
+
+      // 调用服务层禁用两步验证
+      const result = await this.userService.disableTwoFactor(userId);
+      
+      if (!result.success) {
+        logger.audit(req, '禁用两步验证失败', {
+          userId,
+          error: result.message,
+          timestamp: new Date().toISOString()
+        });
+        return this.sendError(res, result.message, 400);
+      }
+
+      // 记录禁用成功审计日志
+      logger.audit(req, '禁用两步验证成功', {
+        userId,
+        timestamp: new Date().toISOString()
+      });
+
+      return this.sendSuccess(res, result.data, '两步验证已禁用');
+
+    } catch (error) {
+      // 记录禁用失败审计日志
+      logger.audit(req, '禁用两步验证失败', {
+        userId,
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
+
+      logger.error('禁用两步验证失败', { error: error.message, stack: error.stack });
+      return next(error);
+    }
+  }
+
+  /**
+   * 获取两步验证状态
+   * GET /api/auth/two-factor/status
+   */
+  async getTwoFactorStatus(req, res, next) {
+    try {
+      const userId = req.user.id;
+      
+      // 记录获取两步验证状态尝试
+      logger.audit(req, '获取两步验证状态', { 
+        userId,
+        timestamp: new Date().toISOString()
+      });
+
+      // 调用服务层获取两步验证状态
+      const result = await this.userService.getTwoFactorStatus(userId);
+      
+      if (!result.success) {
+        return this.sendError(res, result.message, 400);
+      }
+
+      logger.audit(req, '获取两步验证状态成功', { 
+        userId,
+        timestamp: new Date().toISOString()
+      });
+
+      return this.sendSuccess(res, result.data, '获取两步验证状态成功');
+
+    } catch (error) {
+      logger.error('[AuthController] 获取两步验证状态失败', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * 生成两步验证码
+   * POST /api/auth/two-factor/generate
+   */
+  async generateTwoFactorCode(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const { codeType, target, channel } = req.body;
+      
+      // 记录生成两步验证码尝试
+      logger.audit(req, '生成两步验证码', { 
+        userId,
+        codeType,
+        target,
+        channel,
+        timestamp: new Date().toISOString()
+      });
+
+      // 验证输入
+      this.validateRequiredFields(req.body, ['codeType']);
+
+      // 调用服务层生成两步验证码
+      const result = await this.userService.generateTwoFactorCode(userId, codeType, {
+        target,
+        channel,
+        ip: req.ip
+      });
+      
+      if (!result.success) {
+        return this.sendError(res, result.message, 400);
+      }
+
+      logger.audit(req, '生成两步验证码成功', { 
+        userId,
+        codeType,
+        timestamp: new Date().toISOString()
+      });
+
+      // 不返回实际的验证码，只返回相关信息
+      return this.sendSuccess(res, {
+        codeId: result.data.codeId,
+        codeType: result.data.codeType,
+        channel: result.data.channel,
+        target: result.data.target,
+        expiresAt: result.data.expiresAt
+      }, '验证码已生成并发送');
+
+    } catch (error) {
+      logger.error('[AuthController] 生成两步验证码失败', { error: error.message });
       next(error);
     }
   }

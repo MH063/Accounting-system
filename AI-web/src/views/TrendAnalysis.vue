@@ -1084,7 +1084,7 @@ watch(predictionPeriod, async () => {
 })
 
 // 监听对比类型变化，重置分页状态
-watch(comparisonType, async (newType, oldType) => {
+watch(comparisonType, async (newType) => {
   if (newType !== 'none') {
     currentPage.value = 1
     nextTick(async () => {

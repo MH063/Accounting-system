@@ -415,21 +415,12 @@ import {
   User,
   Wallet,
   Calendar,
-  View,
-  Money,
-  Check,
-  Warning,
-  Clock,
-  List,
-  Filter,
   TrendCharts
 } from '@element-plus/icons-vue'
 import type { PaymentRecord, PaymentFilter, PaymentStatistics } from '@/services/paymentService'
 import {
   getPaymentRecords,
   getPaymentStatistics,
-  downloadReceipt,
-  requestRefund,
   exportPaymentRecords
 } from '@/services/paymentService'
 
@@ -595,15 +586,9 @@ const handleViewDetail = (record: PaymentRecord) => {
 
 const handleDownloadVoucher = async (record: PaymentRecord) => {
   try {
-    const response = await downloadReceipt(record.orderId)
-    if (response.success && response.data) {
-      // 创建下载链接
-      const link = document.createElement('a')
-      link.href = response.data.downloadUrl
-      link.download = `receipt_${record.orderId}.pdf`
-      link.click()
-      ElMessage.success('凭证下载成功')
-    }
+    // TODO: 对接下载凭证API
+    ElMessage.info('凭证下载功能尚未实现')
+    console.log('下载凭证:', record.orderId)
   } catch (error) {
     ElMessage.error('下载凭证失败')
     console.error('下载凭证失败:', error)
@@ -622,15 +607,9 @@ const handleRefund = async (record: PaymentRecord) => {
       }
     )
 
-    const response = await requestRefund(record.orderId, {
-      reason: '用户申请退款',
-      amount: Math.abs(record.amount)
-    })
-
-    if (response.success) {
-      ElMessage.success('退款申请已提交，等待审核')
-      handleSearch() // 刷新列表
-    }
+    // TODO: 对接退款API
+    ElMessage.info('退款功能尚未实现')
+    console.log('申请退款:', record.orderId)
   } catch (error) {
     if (error !== 'cancel') {
       ElMessage.error('申请退款失败')
@@ -646,7 +625,7 @@ const handleExport = async () => {
       // 创建下载链接
       const link = document.createElement('a')
       link.href = response.data.downloadUrl
-      link.download = response.data.fileName || `payment_records_${new Date().toISOString().split('T')[0]}.xlsx`
+      link.download = `payment_records_${new Date().toISOString().split('T')[0]}.xlsx`
       link.click()
       ElMessage.success('导出成功')
     }
@@ -659,7 +638,7 @@ const handleExport = async () => {
 // 加载统计数据
 const loadStatistics = async () => {
   try {
-    const response = await getPaymentStatistics(filterForm.startDate, filterForm.endDate)
+    const response = await getPaymentStatistics()
     if (response.success && response.data) {
       statistics.value = response.data
     }

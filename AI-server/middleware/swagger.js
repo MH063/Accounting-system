@@ -320,6 +320,155 @@ function generateAPIPaths() {
         }
       }
     },
+    
+    '/api/auth/refresh-token': {
+      post: {
+        tags: ['Authentication'],
+        summary: '安全刷新令牌',
+        description: '使用刷新令牌获取新的访问令牌和刷新令牌（实现刷新令牌轮换）',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['refreshToken'],
+                properties: {
+                  refreshToken: { 
+                    type: 'string', 
+                    description: '刷新令牌' 
+                  }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          '200': {
+            description: '令牌刷新成功',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { 
+                      type: 'boolean', 
+                      example: true,
+                      description: '请求是否成功'
+                    },
+                    message: { 
+                      type: 'string', 
+                      example: '令牌刷新成功',
+                      description: '响应消息'
+                    },
+                    data: {
+                      type: 'object',
+                      properties: {
+                        accessToken: { 
+                          type: 'string',
+                          description: '新的访问令牌'
+                        },
+                        refreshToken: { 
+                          type: 'string',
+                          description: '新的刷新令牌'
+                        },
+                        expiresIn: { 
+                          type: 'object',
+                          properties: {
+                            access: { 
+                              type: 'string',
+                              example: '15m',
+                              description: '访问令牌过期时间'
+                            },
+                            refresh: { 
+                              type: 'string',
+                              example: '7d',
+                              description: '刷新令牌过期时间'
+                            }
+                          },
+                          description: '令牌过期时间配置'
+                        },
+                        refreshExpiresIn: { 
+                          type: 'object',
+                          properties: {
+                            access: { 
+                              type: 'string',
+                              example: '15m',
+                              description: '访问令牌过期时间'
+                            },
+                            refresh: { 
+                              type: 'string',
+                              example: '7d',
+                              description: '刷新令牌过期时间'
+                            }
+                          },
+                          description: '刷新令牌过期时间配置'
+                        }
+                      },
+                      description: "/* 业务字段说明 */\n" +
+                        "accessToken: \"新的访问令牌，用于API认证\",\n" +
+                        "refreshToken: \"新的刷新令牌，用于获取新的访问令牌\",\n" +
+                        "expiresIn: {\n" +
+                        "  access: \"访问令牌过期时间，例如15分钟\",\n" +
+                        "  refresh: \"刷新令牌过期时间，例如7天\"\n" +
+                        "},\n" +
+                        "refreshExpiresIn: {\n" +
+                        "  access: \"访问令牌过期时间，例如15分钟\",\n" +
+                        "  refresh: \"刷新令牌过期时间，例如7天\"\n" +
+                        "}"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          '400': {
+            description: '请求参数错误',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { 
+                      type: 'boolean', 
+                      example: false,
+                      description: '请求是否成功'
+                    },
+                    message: { 
+                      type: 'string', 
+                      example: '刷新令牌不能为空',
+                      description: '错误消息'
+                    }
+                  }
+                }
+              }
+            }
+          },
+          '401': {
+            description: '认证失败',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { 
+                      type: 'boolean', 
+                      example: false,
+                      description: '请求是否成功'
+                    },
+                    message: { 
+                      type: 'string', 
+                      example: '无效的刷新令牌或会话已过期',
+                      description: '错误消息'
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
 
     // 数据库相关API
     '/api/db/tables': {

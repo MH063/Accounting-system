@@ -28,6 +28,11 @@ CREATE TABLE users (
     email_verified BOOLEAN NOT NULL DEFAULT FALSE,
     phone_verified BOOLEAN NOT NULL DEFAULT FALSE,
     
+    -- 两步验证
+    two_factor_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    two_factor_secret VARCHAR(255),
+    two_factor_backup_codes JSONB,
+    
     -- 安全相关
     last_login_at TIMESTAMP WITH TIME ZONE,
     last_login_ip INET,
@@ -60,6 +65,9 @@ COMMENT ON COLUMN users.avatar_url IS '头像URL地址';
 COMMENT ON COLUMN users.status IS '账户状态：active-活跃，inactive-未激活，pending-待审核，banned-已禁用';
 COMMENT ON COLUMN users.email_verified IS '邮箱是否已验证';
 COMMENT ON COLUMN users.phone_verified IS '手机是否已验证';
+COMMENT ON COLUMN users.two_factor_enabled IS '是否启用两步验证';
+COMMENT ON COLUMN users.two_factor_secret IS '两步验证密钥';
+COMMENT ON COLUMN users.two_factor_backup_codes IS '两步验证备用码';
 COMMENT ON COLUMN users.last_login_at IS '最后登录时间';
 COMMENT ON COLUMN users.last_login_ip IS '最后登录IP地址';
 COMMENT ON COLUMN users.failed_login_attempts IS '连续登录失败次数';
@@ -1852,13 +1860,13 @@ COMMENT ON COLUMN captcha_codes.usage_count IS '已使用次数';
 COMMENT ON COLUMN captcha_codes.max_usage IS '最大使用次数';
 COMMENT ON COLUMN captcha_codes.expires_at IS '过期时间';
 
--- 两步验证表
+-- 两步验证代码表
 CREATE TABLE two_factor_codes (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
     code VARCHAR(10) NOT NULL,
     code_type VARCHAR(20) NOT NULL DEFAULT 'login'
-        CHECK (code_type IN ('login', 'register', 'reset', 'verify')),
+        CHECK (code_type IN ('login', 'register', 'reset', 'verify', 'enable')),
     channel VARCHAR(20) NOT NULL DEFAULT 'email'
         CHECK (channel IN ('email', 'sms', 'authenticator')),
     target VARCHAR(255) NOT NULL, -- 邮箱或手机号
@@ -1879,11 +1887,31 @@ CREATE TABLE two_factor_codes (
     CONSTRAINT two_factor_attempts_check CHECK (attempts >= 0 AND attempts <= max_attempts)
 );
 
+-- 两步验证密钥表
+CREATE TABLE two_factor_auth (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    secret_key VARCHAR(255) NOT NULL,
+    backup_codes JSONB DEFAULT '[]',
+    is_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    last_used_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    
+    -- 外键约束
+    CONSTRAINT fk_two_factor_auth_user_id 
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    
+    -- 唯一约束
+    CONSTRAINT uk_two_factor_auth_user 
+        UNIQUE (user_id)
+);
+
 COMMENT ON TABLE two_factor_codes IS '两步验证表，存储邮箱和手机验证码信息';
 COMMENT ON COLUMN two_factor_codes.id IS '验证记录唯一标识';
 COMMENT ON COLUMN two_factor_codes.user_id IS '用户ID';
 COMMENT ON COLUMN two_factor_codes.code IS '验证码';
-COMMENT ON COLUMN two_factor_codes.code_type IS '验证码类型：login-登录，register-注册，reset-重置，verify-验证';
+COMMENT ON COLUMN two_factor_codes.code_type IS '验证码类型：login-登录，register-注册，reset-重置，verify-验证，enable-启用';
 COMMENT ON COLUMN two_factor_codes.channel IS '发送渠道：email-邮箱，sms-短信，authenticator-验证器';
 COMMENT ON COLUMN two_factor_codes.target IS '目标地址（邮箱或手机号）';
 COMMENT ON COLUMN two_factor_codes.ip_address IS '请求IP地址';
@@ -1892,6 +1920,17 @@ COMMENT ON COLUMN two_factor_codes.max_attempts IS '最大尝试次数';
 COMMENT ON COLUMN two_factor_codes.is_used IS '是否已使用';
 COMMENT ON COLUMN two_factor_codes.used_at IS '使用时间';
 COMMENT ON COLUMN two_factor_codes.expires_at IS '过期时间';
+
+-- 两步验证密钥表注释
+COMMENT ON TABLE two_factor_auth IS '两步验证表，存储用户的两步验证配置';
+COMMENT ON COLUMN two_factor_auth.id IS '两步验证配置唯一标识';
+COMMENT ON COLUMN two_factor_auth.user_id IS '用户ID';
+COMMENT ON COLUMN two_factor_auth.secret_key IS 'TOTP密钥';
+COMMENT ON COLUMN two_factor_auth.backup_codes IS '备用码';
+COMMENT ON COLUMN two_factor_auth.is_enabled IS '是否启用两步验证';
+COMMENT ON COLUMN two_factor_auth.last_used_at IS '最后使用时间';
+COMMENT ON COLUMN two_factor_auth.created_at IS '创建时间';
+COMMENT ON COLUMN two_factor_auth.updated_at IS '更新时间';
 
 -- ============================================================
 -- 3. 数据初始化脚本

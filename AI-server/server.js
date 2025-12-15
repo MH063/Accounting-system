@@ -165,6 +165,9 @@ app.use('/api/permissions', require('./routes/permissions'));
 app.use('/api/docs', require('./routes/apiDocs'));
 app.use('/api/queues', require('./routes/messageQueue'));
 
+// 仪表盘路由
+app.use('/api/dashboard', require('./routes/dashboard'));
+
 // 客户端功能控制路由
 
 // 初始化Swagger中间件（在路由注册后）

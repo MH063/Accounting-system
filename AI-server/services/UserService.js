@@ -5,6 +5,7 @@
 
 const BaseService = require('./BaseService');
 const UserRepository = require('../repositories/UserRepository');
+const TwoFactorRepository = require('../repositories/TwoFactorRepository');
 const UserModel = require('../models/UserModel');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -21,6 +22,7 @@ class UserService extends BaseService {
   constructor() {
     super(new UserRepository());
     this.userRepository = new UserRepository();
+    this.twoFactorRepository = new TwoFactorRepository();
   }
 
   /**
@@ -29,7 +31,10 @@ class UserService extends BaseService {
    * @returns {Promise<Object>} 注册结果
    */
   async register(userData) {
+    const { pool } = require('../config/database');
+    const client = await pool.connect();
     try {
+      await client.query('BEGIN');      
       logger.info('[UserService] 用户注册开始', { 
         username: userData.username,
         email: userData.email 
@@ -66,11 +71,20 @@ class UserService extends BaseService {
         throw new Error(`${conflictField === 'username' ? '用户名' : '邮箱'} '${conflictValue}' 已被使用`);
       }
 
+      // 加密密码
+      const saltRounds = 12;
+      const passwordHash = await bcrypt.hash(userData.password, saltRounds);
+      
+      logger.debug('[UserService] 加密后的密码哈希:', { 
+        passwordHash: passwordHash,
+        passwordHashLength: passwordHash.length
+      });
+      
       // 创建用户模型
       const user = UserModel.create({
         username: userData.username,
         email: userData.email,
-        password: userData.password,
+        passwordHash: passwordHash,
         full_name: userData.full_name || userData.username,
         phone: userData.phone || null,
         role: 'user', // 默认角色
@@ -79,40 +93,152 @@ class UserService extends BaseService {
         updated_at: new Date()
       });
 
-      // 验证数据
-      const validation = user.validate();
-      if (!validation.isValid) {
-        throw new Error(`数据验证失败: ${validation.errors.join(', ')}`);
+      logger.debug('[UserService] 创建的用户模型:', { 
+        username: user.username,
+        email: user.email,
+        passwordHash: user.passwordHash,
+        passwordHashLength: user.passwordHash ? user.passwordHash.length : 0
+      });
+
+      // 设置额外的用户属性
+      if (userData.nickname) {
+        user.nickname = userData.nickname;
+      }
+      
+      if (userData.phone) {
+        user.phone = userData.phone;
+      }
+      
+      if (userData.avatar_url) {
+        user.avatarUrl = userData.avatar_url;
       }
 
-      // 加密密码
-      const saltRounds = 12;
-      const passwordHash = await bcrypt.hash(userData.password, saltRounds);
+      // 验证数据
+      const validation = user.validate();
+      logger.debug('[UserService] 验证结果:', { 
+        isValid: validation.isValid,
+        errors: validation.errors
+      });
       
-      // 设置密码哈希
-      user.setPasswordHash(passwordHash);
+      if (!validation.isValid) {
+        throw new Error(`数据验证失败: ${validation.errors.join(', ')}`);
+      }      // 1. 创建新用户记录（状态设为pending，邮箱未验证）
+      // 使用简化的字段集，让数据库使用默认值处理其他字段
+      const insertUserQuery = `
+        INSERT INTO users (
+          username, email, password_hash, nickname,
+          phone, status, email_verified
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id
+      `;
 
-      // 创建用户
-      const createdUser = await this.userRepository.create(user.toDatabaseFormat());
+      const userValues = [
+        user.username,
+        user.email,
+        user.passwordHash,
+        user.nickname || '',
+        user.phone || null,
+        'pending',
+        false
+      ];
+      
+      // 恢复用户创建和角色分配代码
+      const userResult = await client.query(insertUserQuery, userValues);
+      const userId = userResult.rows[0].id;
+
+      // 2. 为用户分配默认角色（'user'角色）
+      const assignRoleQuery = `
+        INSERT INTO user_roles (user_id, role_id, assigned_at, is_active)
+        SELECT $1, id, NOW(), TRUE 
+        FROM roles 
+        WHERE role_name = 'user'
+      `;
+
+      await client.query(assignRoleQuery, [userId]);
+      
+      // 3. 生成邮箱验证码
+      const verificationCode = Math.floor(100000 + Math.random() * 900000).toString(); // 6位数字验证码
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1小时后过期
+
+      const insertCodeQuery = `
+        INSERT INTO verification_codes (
+          email, code, code_type, expires_at
+        ) VALUES ($1, $2, $3, $4)
+      `;
+
+      const codeValues = [
+        user.email,
+        verificationCode,
+        'email_verification', // 验证码类型为邮箱验证
+        expiresAt
+      ];
+
+      await client.query(insertCodeQuery, codeValues);
+
+      // 4. 记录审计日志
+      const insertAuditQuery = `
+        INSERT INTO audit_logs (
+          table_name, operation, record_id, new_values,
+          user_id, ip_address, user_agent
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `;
+
+      const auditValues = [
+        'users',
+        'INSERT',
+        userId,
+        JSON.stringify({
+          id: userId,
+          username: user.username,
+          email: user.email,
+          status: 'pending',
+          email_verified: false
+        }),
+        userId,
+        '127.0.0.1', // TODO: 实际部署时应获取真实IP
+        'API Client' // TODO: 实际部署时应获取真实User-Agent
+      ];
+
+      await client.query(insertAuditQuery, auditValues);
+      // 提交事务
+      await client.query('COMMIT');
 
       logger.info('[UserService] 用户注册成功', { 
-        userId: createdUser.id,
-        username: createdUser.username 
+        userId: userId,
+        username: user.username 
       });
+
+      // 返回用户信息（不包含敏感数据）
+      const createdUser = {
+        id: userId,
+        username: user.username,
+        email: user.email,
+        nickname: user.nickname,
+        phone: user.phone,
+        avatar_url: user.avatarUrl,
+        status: 'pending',
+        email_verified: false,
+        created_at: new Date(),
+        updated_at: new Date()
+      };
 
       return {
         success: true,
-        data: createdUser.toApiResponse(),
-        message: '用户注册成功'
+        data: createdUser,
+        message: '用户注册成功，请检查邮箱以完成验证',
+        verification_code: verificationCode // 开发环境返回验证码，生产环境应通过邮件发送
       };
 
     } catch (error) {
+      await client.query('ROLLBACK');
       logger.error('[UserService] 用户注册失败', { 
         error: error.message,
         username: userData.username,
         email: userData.email 
       });
       throw error;
+    } finally {
+      client.release();
     }
   }
 
@@ -232,15 +358,18 @@ class UserService extends BaseService {
       // 更新最后登录时间和IP
       await this.userRepository.updateLastLogin(user.id, ip);
 
-      // 创建用户会话
-      const session = await this.createUserSession(user.id, ip, userAgent);
-
       // 生成JWT双令牌
       const tokenPair = generateTokenPair(user.id, {
         username: user.username,
         email: user.email,
         role: user.role,
         permissions: user.permissions || []
+      });
+
+      // 创建用户会话(传入JWT refreshToken)
+      const session = await this.createUserSession(user.id, ip, userAgent, {
+        accessToken: tokenPair.accessToken,
+        refreshToken: tokenPair.refreshToken
       });
 
       logger.info('[UserService] 用户登录成功', { 
@@ -417,12 +546,191 @@ class UserService extends BaseService {
         },
         message: '令牌刷新成功'
       };
-
     } catch (error) {
       logger.error('[UserService] 刷新访问令牌失败', { 
         error: error.message 
       });
       throw error;
+    }
+  }
+
+  /**
+   * 安全刷新令牌（实现刷新令牌轮换机制）
+   * @param {string} refreshToken - 刷新令牌
+   * @param {Object} options - 选项参数
+   * @returns {Promise<Object>} 刷新结果
+   */
+  async refreshSecureToken(refreshToken, options = {}) {
+    const { pool } = require('../config/database');
+    const client = await pool.connect();
+    
+    try {
+      logger.info('[UserService] 安全刷新令牌开始');
+      
+      // 开始事务
+      await client.query('BEGIN');
+      
+      // 1. 验证刷新令牌是否有效
+      // 首先尝试直接匹配数据库中的刷新令牌
+      let sessionQuery = `
+        SELECT 
+          s.id, s.user_id, s.refresh_token, s.status, s.expires_at,
+          u.id as user_id, u.status as user_status, u.locked_until
+        FROM user_sessions s
+        JOIN users u ON s.user_id = u.id
+        WHERE s.refresh_token = $1
+          AND s.status = 'active'
+          AND s.expires_at > NOW()
+          AND u.status = 'active'
+          AND (u.locked_until IS NULL OR u.locked_until < NOW())
+        FOR UPDATE  -- 行级锁，防止并发刷新
+      `;
+      
+      let sessionResult = await client.query(sessionQuery, [refreshToken]);
+      
+      // 如果没有找到匹配的记录，尝试验证JWT令牌
+      if (sessionResult.rows.length === 0) {
+        try {
+          const { verifyToken } = require('../config/jwtManager');
+          const decoded = verifyToken(refreshToken);
+          
+          // 如果是有效的JWT刷新令牌，查找对应的会话记录
+          if (decoded.type === 'refresh') {
+            sessionQuery = `
+              SELECT 
+                s.id, s.user_id, s.refresh_token, s.status, s.expires_at,
+                u.id as user_id, u.status as user_status, u.locked_until
+              FROM user_sessions s
+              JOIN users u ON s.user_id = u.id
+              WHERE s.user_id = $1
+                AND s.status = 'active'
+                AND s.expires_at > NOW()
+                AND u.status = 'active'
+                AND (u.locked_until IS NULL OR u.locked_until < NOW())
+              FOR UPDATE  -- 行级锁，防止并发刷新
+            `;
+            sessionResult = await client.query(sessionQuery, [decoded.userId]);
+          }
+        } catch (jwtError) {
+          // JWT验证失败，保持原来的错误处理
+          logger.debug('[UserService] JWT验证失败:', jwtError.message);
+        }
+      }
+      
+      if (sessionResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        throw new Error('无效的刷新令牌或会话已过期');
+      }
+      
+      const session = sessionResult.rows[0];
+      const userId = session.user_id;
+      
+      // 2. 生成新的访问令牌和刷新令牌
+      const { generateTokenPair } = require('../config/jwtManager');
+      const user = await this.userRepository.findById(userId);
+      
+      if (!user) {
+        await client.query('ROLLBACK');
+        throw new Error('用户不存在');
+      }
+      
+      const tokenPair = generateTokenPair(userId, {
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        permissions: user.permissions || []
+      });
+      
+      // 3. 更新会话记录（实现刷新令牌轮换）
+      // 在更新之前，先将旧的刷新令牌加入黑名单
+      const { revokeTokenPair } = require('../config/jwtManager');
+      
+      // 撤销旧的令牌对（将旧的刷新令牌加入黑名单）
+      try {
+        await revokeTokenPair(null, refreshToken, 'token_refresh');
+        logger.info('[UserService] 旧刷新令牌已加入黑名单');
+      } catch (revokeError) {
+        logger.warn('[UserService] 撤销旧刷新令牌失败', { error: revokeError.message });
+      }
+      
+      const updateSessionQuery = `
+        UPDATE user_sessions 
+        SET 
+          session_token = $1,
+          refresh_token = $2,
+          expires_at = NOW() + INTERVAL '7 days',
+          last_accessed_at = NOW()
+        WHERE id = $3
+        RETURNING id, user_id, session_token, refresh_token, expires_at
+      `;
+      
+      const updateParams = [
+        tokenPair.accessToken,
+        tokenPair.refreshToken,
+        session.id
+      ];
+      
+      const updateResult = await client.query(updateSessionQuery, updateParams);
+      
+      if (updateResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        throw new Error('会话更新失败');
+      }
+      
+      const updatedSession = updateResult.rows[0];
+      
+      // 4. 记录审计日志
+      const auditLogQuery = `
+        INSERT INTO audit_logs (
+          table_name, operation, record_id, old_values, new_values,
+          user_id, ip_address, user_agent
+        ) VALUES (
+          'user_sessions', 'UPDATE', $1, $2, $3,
+          $4, $5, $6
+        )
+      `;
+      
+      const auditParams = [
+        updatedSession.id,
+        JSON.stringify({
+          last_activity: oldSession.last_activity
+        }),
+        JSON.stringify({
+          last_activity: updatedSession.last_activity,
+          updated_at: updatedSession.updated_at
+        }),
+        userId,
+        options.ipAddress || '0.0.0.0',
+        options.userAgent || ''
+      ];
+      
+      await client.query(auditLogQuery, auditParams);
+      
+      // 提交事务
+      await client.query('COMMIT');
+      
+      logger.info('[UserService] 安全令牌刷新成功', { userId });
+      
+      return {
+        success: true,
+        data: {
+          userId,
+          accessToken: tokenPair.accessToken,
+          refreshToken: tokenPair.refreshToken,
+          expiresIn: tokenPair.expiresIn,
+          refreshExpiresIn: tokenPair.refreshExpiresIn
+        },
+        message: '令牌刷新成功'
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      logger.error('[UserService] 安全刷新令牌失败', { 
+        error: error.message,
+        stack: error.stack
+      });
+      throw error;
+    } finally {
+      client.release();
     }
   }
 
@@ -571,7 +879,7 @@ class UserService extends BaseService {
         throw new Error('用户不存在');
       }
 
-      if (!user.is_active) {
+      if (user.status !== 'active') {
         logger.warn('[UserService] 获取用户资料失败: 用户未激活', { userId });
         throw new Error('用户未激活');
       }
@@ -617,7 +925,7 @@ class UserService extends BaseService {
         throw new Error('用户不存在');
       }
 
-      if (!user.is_active) {
+      if (user.status !== 'active') {
         logger.warn('[UserService] 更新用户资料失败: 用户未激活', { userId });
         throw new Error('用户未激活');
       }
@@ -713,7 +1021,7 @@ class UserService extends BaseService {
         throw new Error('用户不存在');
       }
 
-      if (!user.is_active) {
+      if (user.status !== 'active') {
         logger.warn('[UserService] 修改密码失败: 用户未激活', { userId });
         throw new Error('用户未激活');
       }
@@ -862,8 +1170,8 @@ class UserService extends BaseService {
     }
 
     // 验证用户名格式
-    if (data.username && !/^[a-zA-Z0-9_]{3,20}$/.test(data.username)) {
-      errors.push('用户名必须是3-20位的字母、数字或下划线');
+    if (data.username && !/^[\u4e00-\u9fa5a-zA-Z0-9_]{3,20}$/.test(data.username)) {
+      errors.push('用户名必须是3-20位的中文、字母、数字或下划线');
     }
 
     // 验证邮箱格式
@@ -897,8 +1205,8 @@ class UserService extends BaseService {
     }
 
     // 验证用户名格式（如果提供）
-    if (data.username && !/^[a-zA-Z0-9_]{3,20}$/.test(data.username)) {
-      errors.push('用户名必须是3-20位的字母、数字或下划线');
+    if (data.username && !/^[一-龥a-zA-Z0-9_]{3,20}$/.test(data.username)) {
+      errors.push('用户名必须是3-20位的中文、字母、数字或下划线');
     }
 
     return {
@@ -1456,11 +1764,11 @@ class UserService extends BaseService {
    * @param {string} userAgent - 用户代理
    * @returns {Promise<Object>} 会话信息
    */
-  async createUserSession(userId, ip, userAgent) {
+  async createUserSession(userId, ip, userAgent, tokens = null) {
     try {
       // 生成会话令牌
-      const sessionToken = this.generateSecureToken();
-      const refreshToken = this.generateSecureToken();
+      const sessionToken = tokens?.accessToken || this.generateSecureToken();
+      const refreshToken = tokens?.refreshToken || this.generateSecureToken();
       
       // 解析用户代理信息
       const deviceInfo = this.parseUserAgent(userAgent);
@@ -1475,7 +1783,7 @@ class UserService extends BaseService {
           user_id, session_token, refresh_token, device_info, 
           ip_address, user_agent, status, expires_at, last_accessed_at
         ) VALUES (
-          $1, $2, $3, $4::jsonb, 
+          $1, $2, $3, $4, 
           $5, $6, 'active', $7, NOW()
         )
         RETURNING id, user_id, session_token, refresh_token, device_info, ip_address, user_agent, status, expires_at, created_at, last_accessed_at
@@ -1575,6 +1883,868 @@ class UserService extends BaseService {
       device,
       raw: userAgent
     };
+  }
+
+  /**
+   * 验证两步验证码
+   * @param {Object} verificationData - 验证数据
+   * @returns {Promise<Object>} 验证结果
+   */
+  async verifyTwoFactorCode(verificationData) {
+    try {
+      const { userId, code, codeType, ip, userAgent } = verificationData;
+      logger.info('[UserService] 两步验证开始', { userId, codeType });
+
+      // 查找用户
+      const user = await this.userRepository.findById(userId);
+      if (!user) {
+        throw new Error('用户不存在');
+      }
+      
+      // 查找验证码记录
+      const verificationRecord = await this.twoFactorRepository.verifyTwoFactorCode({
+        email: user.email,
+        code,
+        codeType
+      });
+
+      if (!verificationRecord) {
+        throw new Error('验证码无效或已过期');
+      }
+
+      // 标记验证码为已使用
+      await this.twoFactorRepository.markCodeAsUsed(verificationRecord.id);
+
+      // 更新用户的两步验证状态
+      if (codeType === 'login') {
+        await this.userRepository.update(userId, {
+          last_login_at: new Date(),
+          last_login_ip: ip
+        });
+      }
+
+      // 生成JWT双令牌
+      const tokenPair = generateTokenPair(userId, {
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        permissions: user.permissions || []
+      });
+
+      // 创建用户会话(传入JWT refreshToken)
+      const session = await this.createUserSession(userId, ip, userAgent, {
+        accessToken: tokenPair.accessToken,
+        refreshToken: tokenPair.refreshToken
+      });
+
+      logger.info('[UserService] 两步验证成功', { userId });
+
+      return {
+        success: true,
+        data: {
+          user: user.toApiResponse(),
+          tokens: {
+            accessToken: tokenPair.accessToken,
+            refreshToken: tokenPair.refreshToken,
+            expiresIn: tokenPair.expiresIn,
+            refreshExpiresIn: tokenPair.refreshExpiresIn
+          },
+          session: session
+        },
+        message: '两步验证成功'
+      };
+
+    } catch (error) {
+      logger.error('[UserService] 两步验证失败', { 
+        error: error.message,
+        userId: verificationData.userId 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 启用两步验证
+   * @param {number} userId - 用户ID
+   * @param {Object} enableData - 启用数据
+   * @returns {Promise<Object>} 启用结果
+   */
+  async enableTwoFactor(userId, enableData) {
+    try {
+      const { code, codeType } = enableData;
+      logger.info('[UserService] 启用两步验证', { userId, codeType });
+
+      // 查找用户
+      const user = await this.userRepository.findById(userId);
+      if (!user) {
+        throw new Error('用户不存在');
+      }
+
+      // 验证验证码
+      const verificationRecord = await this.twoFactorRepository.verifyTwoFactorCode({
+        email: user.email,
+        code,
+        codeType
+      });
+
+      if (!verificationRecord) {
+        throw new Error('验证码无效或已过期');
+      }
+
+      // 标记验证码为已使用
+      await this.twoFactorRepository.markCodeAsUsed(verificationRecord.id);
+
+      // 启用两步验证
+      await this.userRepository.update(userId, {
+        two_factor_enabled: true,
+        updated_at: new Date()
+      });
+
+      logger.info('[UserService] 两步验证启用成功', { userId });
+
+      return {
+        success: true,
+        data: {
+          userId,
+          twoFactorEnabled: true
+        },
+        message: '两步验证已启用'
+      };
+
+    } catch (error) {
+      logger.error('[UserService] 启用两步验证失败', { 
+        error: error.message,
+        userId 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 禁用两步验证
+   * @param {number} userId - 用户ID
+   * @returns {Promise<Object>} 禁用结果
+   */
+  async disableTwoFactor(userId) {
+    try {
+      logger.info('[UserService] 禁用两步验证', { userId });
+
+      // 查找用户
+      const user = await this.userRepository.findById(userId);
+      if (!user) {
+        throw new Error('用户不存在');
+      }
+
+      // 禁用两步验证
+      await this.userRepository.update(userId, {
+        two_factor_enabled: false,
+        updated_at: new Date()
+      });
+
+      logger.info('[UserService] 两步验证禁用成功', { userId });
+
+      return {
+        success: true,
+        data: {
+          userId,
+          twoFactorEnabled: false
+        },
+        message: '两步验证已禁用'
+      };
+
+    } catch (error) {
+      logger.error('[UserService] 禁用两步验证失败', { 
+        error: error.message,
+        userId 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 获取两步验证状态
+   * @param {number} userId - 用户ID
+   * @returns {Promise<Object>} 状态信息
+   */
+  async getTwoFactorStatus(userId) {
+    try {
+      logger.info('[UserService] 获取两步验证状态', { userId });
+
+      // 查找用户
+      const user = await this.userRepository.findById(userId);
+      if (!user) {
+        throw new Error('用户不存在');
+      }
+
+      logger.info('[UserService] 获取两步验证状态成功', { userId });
+
+      return {
+        success: true,
+        data: {
+          userId,
+          twoFactorEnabled: user.twoFactorEnabled || false,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt
+        },
+        message: '获取两步验证状态成功'
+      };
+
+    } catch (error) {
+      logger.error('[UserService] 获取两步验证状态失败', { 
+        error: error.message,
+        userId 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 生成两步验证码
+   * @param {number} userId - 用户ID
+   * @param {string} codeType - 验证码类型
+   * @param {Object} options - 选项
+   * @returns {Promise<Object>} 生成结果
+   */
+  async generateTwoFactorCode(userId, codeType, options = {}) {
+    const { pool } = require('../config/database');
+    const client = await pool.connect();
+    
+    try {
+      logger.info('[UserService] 生成两步验证码', { userId, codeType });
+
+      // 查找用户
+      const user = await this.userRepository.findById(userId);
+      if (!user) {
+        throw new Error('用户不存在');
+      }
+
+      // 生成6位随机数字验证码
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+
+      // 获取用户邮箱或手机号作为目标
+      const target = options.target || user.email;
+      const channel = options.channel || 'email';
+      
+      // 确定验证码类型
+      let verificationCodeType;
+      switch (codeType) {
+        case 'login':
+          verificationCodeType = 'login';
+          break;
+        case 'register':
+          verificationCodeType = 'email_verification';
+          break;
+        case 'reset':
+          verificationCodeType = 'password_reset';
+          break;
+        case 'verify':
+          verificationCodeType = 'email_verification';
+          break;
+        case 'enable':
+          verificationCodeType = 'email_verification';
+          break;
+        default:
+          verificationCodeType = 'email_verification';
+      }
+
+      // 创建验证码记录
+      const expiresAt = new Date();
+      expiresAt.setMinutes(expiresAt.getMinutes() + (options.expireMinutes || 10)); // 默认10分钟过期
+
+      // 开始事务
+      await client.query('BEGIN');
+
+      // 插入验证码记录到 verification_codes 表
+      const insertCodeQuery = `
+        INSERT INTO verification_codes (
+          email, code, code_type, expires_at
+        ) VALUES ($1, $2, $3, $4)
+        RETURNING id
+      `;
+
+      const codeValues = [
+        target, // 使用目标邮箱
+        code,
+        verificationCodeType, // 使用映射后的验证码类型
+        expiresAt
+      ];
+
+      const codeResult = await client.query(insertCodeQuery, codeValues);
+      const codeId = codeResult.rows[0].id;
+
+      // 提交事务
+      await client.query('COMMIT');
+
+      logger.info('[UserService] 两步验证码生成成功', { 
+        userId, 
+        codeId: codeId,
+        codeType,
+        channel
+      });
+
+      return {
+        success: true,
+        data: {
+          codeId: codeId,
+          codeType,
+          channel,
+          target,
+          expiresAt: expiresAt
+        },
+        message: '验证码已生成'
+      };
+
+    } catch (error) {
+      await client.query('ROLLBACK');
+      logger.error('[UserService] 生成两步验证码失败', { 
+        error: error.message,
+        userId,
+        codeType
+      });
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 发送邮箱验证码
+   * @param {string} email - 邮箱地址
+   * @returns {Promise<Object>} 发送结果
+   */
+  async sendEmailVerificationCode(email) {
+    const { pool } = require('../config/database');
+    const client = await pool.connect();
+    
+    try {
+      logger.info('[UserService] 发送邮箱验证码', { email });
+
+      // 验证邮箱格式
+      if (!this.isValidEmail(email)) {
+        throw new Error('邮箱格式不正确');
+      }
+
+      // 生成6位数字验证码
+      const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30分钟后过期
+
+      // 开始事务
+      await client.query('BEGIN');
+
+      // 插入验证码记录到 verification_codes 表
+      const insertCodeQuery = `
+        INSERT INTO verification_codes (
+          email, code, code_type, expires_at
+        ) VALUES ($1, $2, $3, $4)
+        RETURNING id
+      `;
+
+      const codeValues = [
+        email,
+        verificationCode,
+        'email_verification', // 验证码类型为邮箱验证
+        expiresAt
+      ];
+
+      const codeResult = await client.query(insertCodeQuery, codeValues);
+      const codeId = codeResult.rows[0].id;
+
+      // 提交事务
+      await client.query('COMMIT');
+
+      // TODO: 实际项目中应该通过邮件服务发送验证码
+      // 这里只是模拟发送过程
+      logger.info('[UserService] 邮箱验证码已生成', { 
+        email: email,
+        codeId: codeId
+      });
+
+      return {
+        success: true,
+        message: '验证码已发送至您的邮箱',
+        data: {
+          codeId: codeId,
+          // 在开发环境中返回验证码以便测试，生产环境应移除
+          verificationCode: process.env.NODE_ENV === 'development' ? verificationCode : undefined
+        }
+      };
+
+    } catch (error) {
+      await client.query('ROLLBACK');
+      logger.error('[UserService] 发送邮箱验证码失败', { 
+        error: error.message,
+        email 
+      });
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 验证邮箱验证码
+   * @param {string} email - 邮箱地址
+   * @param {string} code - 验证码
+   * @returns {Promise<Object>} 验证结果
+   */
+  async verifyEmailCode(email, code) {
+    const { pool } = require('../config/database');
+    const client = await pool.connect();
+    
+    try {
+      logger.info('[UserService] 验证邮箱验证码', { email });
+      
+      // 验证输入
+      if (!email || !code) {
+        throw new Error('邮箱和验证码为必填项');
+      }
+      
+      // 验证邮箱格式
+      if (!this.isValidEmail(email)) {
+        throw new Error('邮箱格式不正确');
+      }
+      
+      // 验证验证码格式（6位数字）
+      if (!/^\d{6}$/.test(code)) {
+        throw new Error('验证码格式不正确');
+      }
+      
+      // 开始事务
+      await client.query('BEGIN');
+      
+      // 1. 验证验证码是否有效
+      const findCodeQuery = `
+        SELECT id, email, code, code_type, expires_at, used_at
+        FROM verification_codes
+        WHERE email = $1
+            AND code = $2
+            AND code_type = 'email_verification'
+            AND used_at IS NULL
+            AND expires_at > NOW()
+      `;
+      
+      const codeResult = await client.query(findCodeQuery, [email, code]);
+      
+      if (codeResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        throw new Error('验证码无效或已过期');
+      }
+      
+      const verificationRecord = codeResult.rows[0];
+      
+      // 2. 标记验证码为已使用
+      const updateCodeQuery = `
+        UPDATE verification_codes 
+        SET used_at = NOW()
+        WHERE id = $1 AND used_at IS NULL
+      `;
+      
+      await client.query(updateCodeQuery, [verificationRecord.id]);
+      
+      // 3. 获取用户ID用于更新和审计日志
+      const userQuery = `SELECT id, status FROM users WHERE email = $1`;
+      const userResult = await client.query(userQuery, [email]);
+      
+      if (userResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        throw new Error('用户不存在');
+      }
+      
+      const user = userResult.rows[0];
+      
+      // 4. 更新用户邮箱验证状态（支持多种场景）
+      let updateUserQuery;
+      let updateUserParams;
+      
+      if (user.status === 'pending') {
+        // 场景1：新用户注册验证（用户状态为 pending）
+        updateUserQuery = `
+          UPDATE users 
+          SET 
+              email_verified = TRUE,
+              status = 'active',
+              updated_at = NOW()
+          WHERE email = $1 AND status = 'pending'
+        `;
+        updateUserParams = [email];
+      } else {
+        // 场景2：已有用户重新验证邮箱（用户状态已经是 active）
+        updateUserQuery = `
+          UPDATE users 
+          SET 
+              email_verified = TRUE,
+              updated_at = NOW()
+          WHERE email = $1 AND status = 'active'
+        `;
+        updateUserParams = [email];
+      }
+      
+      await client.query(updateUserQuery, updateUserParams);
+      
+      // 5. 记录审计日志
+      const insertLogQuery = `
+        INSERT INTO audit_logs (
+            table_name, operation, record_id, new_values,
+            user_id, ip_address, user_agent
+        ) VALUES (
+            'users', 'UPDATE', $1, $2,
+            $3, $4::inet, $5
+        )
+      `;
+      
+      const logValues = [
+        user.id,
+        JSON.stringify({
+          email_verified: true,
+          status: user.status === 'pending' ? 'active' : user.status
+        }),
+        user.id, 
+        '127.0.0.1', 
+        'API Request'
+      ];
+      
+      await client.query(insertLogQuery, logValues);
+      
+      // 批量清理已使用的验证码
+      const deleteOldCodesQuery = `
+        DELETE FROM verification_codes 
+        WHERE email = $1 
+            AND code_type = 'email_verification'
+            AND (used_at IS NOT NULL OR expires_at <= NOW())
+      `;
+      
+      await client.query(deleteOldCodesQuery, [email]);
+      
+      // 提交事务
+      await client.query('COMMIT');
+      
+      logger.info('[UserService] 邮箱验证码验证成功', { 
+        userId: user.id,
+        email: email,
+        codeId: verificationRecord.id
+      });
+      
+      return {
+        success: true,
+        message: '邮箱验证成功',
+        data: {
+          userId: user.id,
+          email: email
+        }
+      };
+      
+    } catch (error) {
+      await client.query('ROLLBACK');
+      logger.error('[UserService] 验证邮箱验证码失败', { 
+        error: error.message,
+        email 
+      });
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 记录审计日志
+   * @param {Object} logData - 日志数据
+   * @returns {Promise<void>}
+   */
+  async logAuditAction(logData) {
+    try {
+      const { pool } = require('../config/database');
+      
+      const insertLogQuery = `
+        INSERT INTO audit_logs (
+          table_name, operation, record_id, new_values,
+          user_id, ip_address
+        ) VALUES ($1, $2, $3, $4, $5, $6)
+      `;
+      
+      const logValues = [
+        logData.tableName || 'unknown',
+        logData.operation || 'UNKNOWN',
+        logData.recordId || 0,
+        JSON.stringify({
+          action: logData.action,
+          severity: logData.severity || 'info',
+          success: logData.success !== undefined ? logData.success : true,
+          errorMessage: logData.errorMessage || null
+        }),
+        logData.userId || null,
+        logData.ipAddress || '127.0.0.1'
+      ];
+      
+      await pool.query(insertLogQuery, logValues);
+    } catch (error) {
+      logger.error('[UserService] 记录审计日志失败', { 
+        error: error.message,
+        action: logData?.action 
+      });
+      // 不抛出错误，因为审计日志不应该影响主流程
+    }
+  }
+
+  /**
+   * 发送密码重置验证码
+   * @param {string} email - 邮箱地址
+   * @returns {Promise<Object>} 发送结果
+   */
+  async sendPasswordResetCode(email) {
+    const { pool } = require('../config/database');
+    const client = await pool.connect();
+    
+    try {
+      logger.info('[UserService] 发送密码重置验证码', { email });
+
+      // 验证邮箱格式
+      if (!this.isValidEmail(email)) {
+        throw new Error('邮箱格式不正确');
+      }
+
+      // 检查用户是否存在
+      const userQuery = `SELECT id, status FROM users WHERE email = $1`;
+      const userResult = await client.query(userQuery, [email]);
+      
+      if (userResult.rows.length === 0) {
+        // 为安全考虑，即使用户不存在也返回成功
+        return {
+          success: true,
+          message: '如果该邮箱地址已注册，您将收到密码重置验证码'
+        };
+      }
+
+      const user = userResult.rows[0];
+      
+      // 检查用户状态
+      if (user.status !== 'active') {
+        logger.warn('[UserService] 密码重置失败: 用户状态不正确', { 
+          userId: user.id, 
+          status: user.status 
+        });
+        // 为安全考虑，即使用户状态不正确也返回成功
+        return {
+          success: true,
+          message: '如果该邮箱地址已注册，您将收到密码重置验证码'
+        };
+      }
+
+      // 生成6位数字验证码
+      const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30分钟后过期
+
+      // 开始事务
+      await client.query('BEGIN');
+
+      // 插入验证码记录到 verification_codes 表
+      const insertCodeQuery = `
+        INSERT INTO verification_codes (
+          email, code, code_type, expires_at
+        ) VALUES ($1, $2, $3, $4)
+        RETURNING id
+      `;
+
+      const codeValues = [
+        email,
+        verificationCode,
+        'password_reset', // 验证码类型为密码重置
+        expiresAt
+      ];
+
+      const codeResult = await client.query(insertCodeQuery, codeValues);
+      const codeId = codeResult.rows[0].id;
+
+      // 提交事务
+      await client.query('COMMIT');
+
+      // TODO: 实际项目中应该通过邮件服务发送验证码
+      // 这里只是模拟发送过程
+      logger.info('[UserService] 密码重置验证码已生成', { 
+        email: email,
+        userId: user.id,
+        codeId: codeId
+      });
+
+      return {
+        success: true,
+        message: '验证码已发送至您的邮箱',
+        data: {
+          codeId: codeId,
+          // 在开发环境中返回验证码以便测试，生产环境应移除
+          verificationCode: process.env.NODE_ENV === 'development' ? verificationCode : undefined
+        }
+      };
+
+    } catch (error) {
+      await client.query('ROLLBACK');
+      logger.error('[UserService] 发送密码重置验证码失败', { 
+        error: error.message,
+        email 
+      });
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 使用验证码重置密码
+   * @param {string} email - 邮箱地址
+   * @param {string} code - 验证码
+   * @param {string} newPassword - 新密码
+   * @returns {Promise<Object>} 重置结果
+   */
+  async resetPasswordWithCode(email, code, newPassword) {
+    const { pool } = require('../config/database');
+    const client = await pool.connect();
+    const bcrypt = require('bcrypt');
+    
+    try {
+      logger.info('[UserService] 使用验证码重置密码', { email });
+      
+      // 验证输入
+      if (!email || !code || !newPassword) {
+        throw new Error('邮箱、验证码和新密码为必填项');
+      }
+      
+      // 验证邮箱格式
+      if (!this.isValidEmail(email)) {
+        throw new Error('邮箱格式不正确');
+      }
+      
+      // 验证验证码格式（6位数字）
+      if (!/^\d{6}$/.test(code)) {
+        throw new Error('验证码格式不正确');
+      }
+      
+      // 验证新密码强度
+      if (!this.isValidPassword(newPassword)) {
+        throw new Error('新密码不符合安全要求（至少8位，包含大小写字母、数字和特殊字符）');
+      }
+      
+      // 开始事务
+      await client.query('BEGIN');
+      
+      // 1. 验证验证码是否有效
+      const findCodeQuery = `
+        SELECT id, email, code, code_type, expires_at, used_at
+        FROM verification_codes
+        WHERE email = $1
+            AND code = $2
+            AND code_type = 'password_reset'
+            AND used_at IS NULL
+            AND expires_at > NOW()
+      `;
+      
+      const codeResult = await client.query(findCodeQuery, [email, code]);
+      
+      if (codeResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        throw new Error('验证码无效或已过期');
+      }
+      
+      const verificationRecord = codeResult.rows[0];
+      
+      // 2. 标记验证码为已使用
+      const updateCodeQuery = `
+        UPDATE verification_codes 
+        SET used_at = NOW()
+        WHERE id = $1 AND used_at IS NULL
+      `;
+      
+      await client.query(updateCodeQuery, [verificationRecord.id]);
+      
+      // 3. 获取用户信息
+      const userQuery = `SELECT id, status FROM users WHERE email = $1`;
+      const userResult = await client.query(userQuery, [email]);
+      
+      if (userResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        throw new Error('用户不存在');
+      }
+      
+      const user = userResult.rows[0];
+      
+      // 4. 检查用户状态
+      if (user.status !== 'active') {
+        await client.query('ROLLBACK');
+        throw new Error('用户状态不正确，无法重置密码');
+      }
+      
+      // 5. 加密新密码
+      const saltRounds = 12;
+      const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+      
+      // 6. 更新用户密码
+      const updateUserQuery = `
+        UPDATE users 
+        SET 
+            password_hash = $1,
+            password_changed_at = NOW(),
+            updated_at = NOW()
+        WHERE email = $2
+      `;
+      
+      await client.query(updateUserQuery, [newPasswordHash, email]);
+      
+      // 7. 记录审计日志
+      const insertLogQuery = `
+        INSERT INTO audit_logs (
+            table_name, operation, record_id, new_values,
+            user_id, ip_address, user_agent
+        ) VALUES (
+            'users', 'UPDATE', $1, $2,
+            $3, $4::inet, $5
+        )
+      `;
+      
+      const logValues = [
+        user.id,
+        JSON.stringify({
+          password_changed: true,
+          password_changed_at: new Date().toISOString()
+        }),
+        user.id, 
+        '127.0.0.1', 
+        'API Request'
+      ];
+      
+      await client.query(insertLogQuery, logValues);
+      
+      // 8. 批量清理已使用的验证码
+      const deleteOldCodesQuery = `
+        DELETE FROM verification_codes 
+        WHERE email = $1 
+            AND code_type = 'password_reset'
+            AND (used_at IS NOT NULL OR expires_at <= NOW())
+      `;
+      
+      await client.query(deleteOldCodesQuery, [email]);
+      
+      // 提交事务
+      await client.query('COMMIT');
+      
+      logger.info('[UserService] 使用验证码密码重置成功', { 
+        userId: user.id,
+        email: email,
+        codeId: verificationRecord.id
+      });
+      
+      return {
+        success: true,
+        message: '密码重置成功，请使用新密码登录'
+      };
+      
+    } catch (error) {
+      await client.query('ROLLBACK');
+      logger.error('[UserService] 使用验证码重置密码失败', { 
+        error: error.message,
+        email 
+      });
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 }
 
