@@ -296,7 +296,8 @@ const loading = ref(false)
 const autoRefreshEnabled = ref(true)
 const refreshInterval = ref<NodeJS.Timeout | null>(null)
 const lastUpdateTime = ref(new Date())
-const enabledWidgets = ref<string[]>([])
+// 设置默认显示的Widget
+const enabledWidgets = ref<string[]>(['stats', 'smart-notifications', 'activities'])
 const widgetSettings = reactive({
   autoRefresh: true,
   refreshInterval: 30, // 秒

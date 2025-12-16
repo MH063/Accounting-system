@@ -1125,7 +1125,7 @@ const updateValidationStatus = async (): Promise<void> => {
   
   // 验证每个字段
   let validCount = 0
-  for (const field of fields) {
+  for (let i = 0; i < fields.length; i++) {
     try {
       // 这里简化处理，实际应该调用表单验证方法
       // 由于Element Plus的验证方法是异步的，这里只是示例

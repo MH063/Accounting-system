@@ -51,18 +51,14 @@ class UserRepository extends BaseRepository {
    * @param {number} excludeId - 要排除的用户ID（更新时用到）
    * @returns {Promise<boolean>} 是否已存在
    */
-  async isUsernameExists(username, excludeId = null) {
+  async usernameExists(username, excludeId = null) {
     try {
-      let queryText = 'SELECT COUNT(*) as count FROM users WHERE username = $1';
-      let params = [username];
-
+      const conditions = { username };
       if (excludeId) {
-        queryText += ' AND id != $2';
-        params.push(excludeId);
+        conditions.id = { $ne: excludeId };
       }
-
-      const result = await this.executeQuery(queryText, params);
-      return parseInt(result.rows[0].count) > 0;
+      const user = await this.findOne(conditions);
+      return !!user;
     } catch (error) {
       logger.error('[UserRepository] 检查用户名存在性失败', { error: error.message, username });
       throw error;
@@ -75,18 +71,14 @@ class UserRepository extends BaseRepository {
    * @param {number} excludeId - 要排除的用户ID（更新时用到）
    * @returns {Promise<boolean>} 是否已存在
    */
-  async isEmailExists(email, excludeId = null) {
+  async emailExists(email, excludeId = null) {
     try {
-      let queryText = 'SELECT COUNT(*) as count FROM users WHERE email = $1';
-      let params = [email];
-
+      const conditions = { email };
       if (excludeId) {
-        queryText += ' AND id != $2';
-        params.push(excludeId);
+        conditions.id = { $ne: excludeId };
       }
-
-      const result = await this.executeQuery(queryText, params);
-      return parseInt(result.rows[0].count) > 0;
+      const user = await this.findOne(conditions);
+      return !!user;
     } catch (error) {
       logger.error('[UserRepository] 检查邮箱存在性失败', { error: error.message, email });
       throw error;
@@ -94,40 +86,44 @@ class UserRepository extends BaseRepository {
   }
 
   /**
-   * 检查用户名或邮箱是否已存在
+   * 检查用户是否存在（通过用户名或邮箱）
    * @param {string} username - 用户名
    * @param {string} email - 邮箱地址
-   * @param {number} excludeId - 要排除的用户ID
    * @returns {Promise<Object>} 检查结果
    */
-  async checkUserExists(username, email, excludeId = null) {
+  async checkUserExists(username, email) {
     try {
-      let queryText = 'SELECT id, username, email FROM users WHERE username = $1 OR email = $2';
-      let params = [username, email];
+      const { query } = require('../config/database');
+      const result = await query(`
+        SELECT 
+          id,
+          username,
+          email,
+          status,
+          CASE 
+            WHEN username = $1 THEN 'username'
+            WHEN email = $2 THEN 'email'
+            ELSE 'none'
+          END as match_type
+        FROM users 
+        WHERE username = $1 OR email = $2
+        LIMIT 1
+      `, [username, email]);
 
-      if (excludeId) {
-        queryText += ' AND id != $3';
-        params.push(excludeId);
+      if (result.rows.length === 0) {
+        return { exists: false };
       }
 
-      const result = await this.executeQuery(queryText, params);
-      
-      const exists = result.rows.length > 0;
-      const existingUser = result.rows[0];
-      
-      let conflictField = null;
-      if (exists) {
-        if (existingUser.username === username) {
-          conflictField = 'username';
-        } else if (existingUser.email === email) {
-          conflictField = 'email';
-        }
-      }
-
+      const user = result.rows[0];
       return {
-        exists,
-        conflictField,
-        existingUser: existingUser ? UserModel.fromDatabase(existingUser) : null
+        exists: true,
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          status: user.status
+        },
+        matchType: user.match_type
       };
     } catch (error) {
       logger.error('[UserRepository] 检查用户存在性失败', { 
@@ -147,116 +143,22 @@ class UserRepository extends BaseRepository {
    */
   async updatePassword(userId, newPasswordHash) {
     try {
-      const result = await this.update(userId, {
-        password_hash: newPasswordHash
-      });
+      const { query } = require('../config/database');
+      const result = await query(`
+        UPDATE users 
+        SET password_hash = $1, password_changed_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+      `, [newPasswordHash, userId]);
 
-      if (result) {
-        logger.info('[UserRepository] 用户密码更新成功', { userId });
-      } else {
+      if (result.rowCount === 0) {
         logger.warn('[UserRepository] 用户密码更新失败: 用户不存在', { userId });
+        return false;
       }
 
-      return !!result;
+      logger.info('[UserRepository] 用户密码更新成功', { userId });
+      return true;
     } catch (error) {
       logger.error('[UserRepository] 更新用户密码失败', { error: error.message, userId });
-      throw error;
-    }
-  }
-
-  /**
-   * 更新用户最后登录时间和IP地址
-   * @param {number} userId - 用户ID
-   * @param {string} ip - IP地址
-   * @returns {Promise<boolean>} 是否更新成功
-   */
-  async updateLastLogin(userId, ip = null) {
-    try {
-      const queryText = 'UPDATE users SET last_login_at = CURRENT_TIMESTAMP, last_login_ip = $2 WHERE id = $1';
-      const result = await this.executeQuery(queryText, [userId, ip]);
-      
-      const success = result.rowCount > 0;
-      
-      if (success) {
-        logger.info('[UserRepository] 用户最后登录时间和IP更新成功', { userId, ip });
-      }
-
-      return success;
-    } catch (error) {
-      logger.error('[UserRepository] 更新用户最后登录时间和IP失败', { error: error.message, userId, ip });
-      throw error;
-    }
-  }
-
-  /**
-   * 增加登录失败次数
-   * @param {number} userId - 用户ID
-   * @returns {Promise<boolean>} 是否更新成功
-   */
-  async incrementLoginAttempts(userId) {
-    try {
-      const queryText = `
-        UPDATE users 
-        SET failed_login_attempts = failed_login_attempts + 1,
-            locked_until = CASE 
-              WHEN failed_login_attempts + 1 >= 5 THEN CURRENT_TIMESTAMP + INTERVAL '30 minutes'
-              ELSE locked_until
-            END,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = $1
-        RETURNING failed_login_attempts, locked_until
-      `;
-      
-      const result = await this.executeQuery(queryText, [userId]);
-      
-      if (result.rows.length > 0) {
-        const { failed_login_attempts, locked_until } = result.rows[0];
-        logger.info('[UserRepository] 用户登录失败次数更新', { 
-          userId, 
-          loginAttempts: failed_login_attempts,
-          lockedUntil: locked_until 
-        });
-        return {
-          success: true,
-          loginAttempts: parseInt(failed_login_attempts),
-          lockedUntil: locked_until
-        };
-      }
-
-      return { success: false };
-    } catch (error) {
-      logger.error('[UserRepository] 增加登录失败次数失败', { error: error.message, userId });
-      throw error;
-    }
-  }
-
-  /**
-   * 重置登录失败次数
-   * @param {number} userId - 用户ID
-   * @returns {Promise<boolean>} 是否更新成功
-   */
-  async resetLoginAttempts(userId) {
-    try {
-      const queryText = `
-        UPDATE users 
-        SET failed_login_attempts = 0,
-            locked_until = NULL,
-            last_login_at = CURRENT_TIMESTAMP,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = $1
-      `;
-      
-      const result = await this.executeQuery(queryText, [userId]);
-      
-      const success = result.rowCount > 0;
-      
-      if (success) {
-        logger.info('[UserRepository] 用户登录失败次数重置成功', { userId });
-      }
-
-      return success;
-    } catch (error) {
-      logger.error('[UserRepository] 重置登录失败次数失败', { error: error.message, userId });
       throw error;
     }
   }
@@ -266,29 +168,30 @@ class UserRepository extends BaseRepository {
    * @param {number} userId - 用户ID
    * @returns {Promise<Object>} 锁定状态
    */
-  async checkUserLocked(userId) {
+  async checkUserLockStatus(userId) {
     try {
-      const queryText = `
-        SELECT failed_login_attempts, locked_until, status
+      const { query } = require('../config/database');
+      const result = await query(`
+        SELECT 
+          failed_login_attempts,
+          locked_until,
+          status
         FROM users 
         WHERE id = $1
-      `;
-      
-      const result = await this.executeQuery(queryText, [userId]);
-      
+      `, [userId]);
+
       if (result.rows.length === 0) {
         return { locked: false, reason: '用户不存在' };
       }
 
       const user = result.rows[0];
       const isLocked = user.locked_until && new Date(user.locked_until) > new Date();
-      
+
       return {
         locked: isLocked,
+        reason: isLocked ? '登录失败次数过多' : (user.status === 'active' ? null : '用户未激活'),
         lockedUntil: user.locked_until,
-        loginAttempts: parseInt(user.failed_login_attempts) || 0,
-        isActive: user.status === 'active',
-        reason: isLocked ? '登录失败次数过多' : (user.status === 'active' ? null : '用户未激活')
+        failedAttempts: user.failed_login_attempts
       };
     } catch (error) {
       logger.error('[UserRepository] 检查用户锁定状态失败', { error: error.message, userId });
@@ -297,214 +200,425 @@ class UserRepository extends BaseRepository {
   }
 
   /**
-   * 手动锁定用户
+   * 锁定用户账户
    * @param {number} userId - 用户ID
+   * @param {number} duration - 锁定时长（分钟）
    * @param {string} reason - 锁定原因
-   * @param {number} durationMinutes - 锁定时长（分钟）
-   * @returns {Promise<boolean>} 是否更新成功
+   * @returns {Promise<boolean>} 是否锁定成功
    */
-  async lockUser(userId, reason = 'Manual lock', durationMinutes = 1440) {
+  async lockUser(userId, duration = 30, reason = '登录失败次数过多') {
     try {
-      const queryText = `
+      const { query } = require('../config/database');
+      const lockedUntil = new Date();
+      lockedUntil.setMinutes(lockedUntil.getMinutes() + duration);
+
+      const result = await query(`
         UPDATE users 
-        SET locked_until = CURRENT_TIMESTAMP + INTERVAL '${durationMinutes} minutes',
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = $1
-        RETURNING locked_until
-      `;
-      
-      const result = await this.executeQuery(queryText, [userId]);
-      
-      if (result.rows.length > 0) {
+        SET locked_until = $1
+        WHERE id = $2
+      `, [lockedUntil, userId]);
+
+      if (result.rowCount > 0) {
         logger.warn('[UserRepository] 用户被锁定', { 
           userId, 
-          reason, 
-          durationMinutes,
-          lockedUntil: result.rows[0].locked_until 
+          lockedUntil, 
+          reason 
         });
         return true;
       }
 
       return false;
     } catch (error) {
-      logger.error('[UserRepository] 锁定用户失败', { error: error.message, userId, reason });
+      logger.error('[UserRepository] 锁定用户失败', { error: error.message, userId });
       throw error;
     }
   }
 
   /**
-   * 手动解锁用户
+   * 解锁用户账户
    * @param {number} userId - 用户ID
    * @param {string} reason - 解锁原因
-   * @returns {Promise<boolean>} 是否更新成功
+   * @returns {Promise<boolean>} 是否解锁成功
    */
-  async unlockUser(userId, reason = 'Manual unlock') {
-    try {
-      const queryText = `
-        UPDATE users 
-        SET failed_login_attempts = 0,
-            locked_until = NULL,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = $1
-      `;
-      
-      const result = await this.executeQuery(queryText, [userId]);
-      
-      const success = result.rowCount > 0;
-      
-      if (success) {
-        logger.info('[UserRepository] 用户被解锁', { userId, reason });
-      }
-
-      return success;
-    } catch (error) {
-      logger.error('[UserRepository] 解锁用户失败', { error: error.message, userId, reason });
-      throw error;
-    }
-  }
-
-  /**
-   * 获取活跃用户列表
-   * @param {Object} options - 查询选项
-   * @returns {Promise<Object>} 用户列表和分页信息
-   */
-  async getActiveUsers(options = {}) {
-    try {
-      const { page = 1, limit = 10, sort = 'last_login', order = 'DESC' } = options;
-      
-      const offset = (page - 1) * limit;
-      
-      // 获取总数
-      const countQuery = 'SELECT COUNT(*) as total FROM users WHERE is_active = true';
-      const countResult = await this.executeQuery(countQuery);
-      const total = parseInt(countResult.rows[0].total);
-
-      // 获取活跃用户列表
-      const queryText = `
-        SELECT * FROM users 
-        WHERE is_active = true 
-        ORDER BY ${sort} ${order}
-        LIMIT $1 OFFSET $2
-      `;
-      
-      const result = await this.executeQuery(queryText, [limit, offset]);
-      
-      const users = result.rows.map(row => UserModel.fromDatabase(row));
-
-      return {
-        data: users,
-        pagination: {
-          total,
-          page,
-          limit,
-          totalPages: Math.ceil(total / limit)
-        }
-      };
-    } catch (error) {
-      logger.error('[UserRepository] 获取活跃用户列表失败', { error: error.message });
-      throw error;
-    }
-  }
-
-  /**
-   * 执行原始查询（内部方法）
-   * @param {string} queryText - SQL查询语句
-   * @param {Array} params - 查询参数
-   * @returns {Promise<Object>} 查询结果
-   */
-  async executeQuery(queryText, params = []) {
+  async unlockUser(userId, reason = '管理员解锁') {
     try {
       const { query } = require('../config/database');
-      return await query(queryText, params);
+      const result = await query(`
+        UPDATE users 
+        SET failed_login_attempts = 0, locked_until = NULL
+        WHERE id = $1
+      `, [userId]);
+
+      if (result.rowCount > 0) {
+        logger.info('[UserRepository] 用户被解锁', { userId, reason });
+        return true;
+      }
+
+      return false;
     } catch (error) {
-      logger.error('[UserRepository] 数据库查询失败', { 
+      logger.error('[UserRepository] 解锁用户失败', { error: error.message, userId });
+      throw error;
+    }
+  }
+
+  /**
+   * 重置登录失败次数
+   * @param {number} userId - 用户ID
+   * @returns {Promise<boolean>} 是否重置成功
+   */
+  async resetLoginAttempts(userId) {
+    try {
+      const { query } = require('../config/database');
+      const result = await query(`
+        UPDATE users 
+        SET failed_login_attempts = 0, locked_until = NULL
+        WHERE id = $1
+      `, [userId]);
+
+      if (result.rowCount > 0) {
+        logger.info('[UserRepository] 用户登录失败次数重置成功', { userId });
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      logger.error('[UserRepository] 重置登录失败次数失败', { error: error.message, userId });
+      throw error;
+    }
+  }
+
+  /**
+   * 增加登录失败次数
+   * @param {number} userId - 用户ID
+   * @param {number} maxAttempts - 最大失败次数
+   * @returns {Promise<Object>} 操作结果
+   */
+  async increaseFailedAttempts(userId, maxAttempts = 5) {
+    try {
+      const { query } = require('../config/database');
+      const result = await query(`
+        UPDATE users 
+        SET failed_login_attempts = failed_login_attempts + 1
+        WHERE id = $1
+        RETURNING failed_login_attempts
+      `, [userId]);
+
+      if (result.rows.length === 0) {
+        return { success: false, attempts: 0 };
+      }
+
+      const attempts = result.rows[0].failed_login_attempts;
+      
+      // 如果达到最大失败次数，锁定账户
+      if (attempts >= maxAttempts) {
+        await this.lockUser(userId, 30, '登录失败次数过多');
+        return { 
+          success: true, 
+          attempts, 
+          locked: true,
+          message: `登录失败次数过多，账户已被锁定30分钟`
+        };
+      }
+
+      return { 
+        success: true, 
+        attempts, 
+        locked: false,
+        message: `登录失败，还剩 ${maxAttempts - attempts} 次机会`
+      };
+    } catch (error) {
+      logger.error('[UserRepository] 增加登录失败次数失败', { error: error.message, userId });
+      throw error;
+    }
+  }
+
+  /**
+   * 更新最后登录时间和IP
+   * @param {number} userId - 用户ID
+   * @param {string} ip - IP地址
+   * @returns {Promise<boolean>} 是否更新成功
+   */
+  async updateLastLogin(userId, ip = null) {
+    try {
+      const { query } = require('../config/database');
+      const result = await query(`
+        UPDATE users 
+        SET last_login_at = CURRENT_TIMESTAMP, last_login_ip = $1
+        WHERE id = $2
+      `, [ip, userId]);
+
+      if (result.rowCount > 0) {
+        logger.info('[UserRepository] 用户最后登录时间和IP更新成功', { userId, ip });
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      logger.error('[UserRepository] 更新最后登录信息失败', { error: error.message, userId });
+      throw error;
+    }
+  }
+
+  /**
+   * 获取用户的角色信息
+   * @param {number} userId - 用户ID
+   * @returns {Promise<Object|null>} 角色信息
+   */
+  async getUserRoles(userId) {
+    try {
+      const { query } = require('../config/database');
+      const result = await query(`
+        SELECT 
+          r.role_name,
+          r.role_display_name,
+          r.permissions,
+          r.is_system_role,
+          ur.assigned_at,
+          ur.expires_at,
+          ur.is_active
+        FROM user_roles ur
+        JOIN roles r ON ur.role_id = r.id
+        WHERE ur.user_id = $1 AND ur.is_active = true
+        ORDER BY ur.assigned_at DESC
+        LIMIT 1
+      `, [userId]);
+
+      if (result.rows.length === 0) {
+        return null;
+      }
+
+      const roleData = result.rows[0];
+      return {
+        role: roleData.role_name,
+        displayName: roleData.role_display_name,
+        permissions: roleData.permissions || [],
+        isSystemRole: roleData.is_system_role,
+        assignedAt: roleData.assigned_at,
+        expiresAt: roleData.expires_at
+      };
+    } catch (error) {
+      logger.error('[UserRepository] 获取用户角色失败', { 
         error: error.message, 
-        query: queryText,
-        params 
+        userId 
       });
       throw error;
     }
   }
 
   /**
-   * 批量创建用户（用于数据导入）
-   * @param {Array} usersData - 用户数据数组
-   * @returns {Promise<Object>} 创建结果
+   * 根据用户名或邮箱查找用户（包含角色信息）
+   * @param {string} identifier - 用户名或邮箱
+   * @returns {Promise<UserModel|null>} 用户模型实例
    */
-  async batchCreate(usersData) {
+  async findUserWithRoles(identifier) {
     try {
-      const client = await this.getClient();
-      
-      try {
-        await client.query('BEGIN');
-        
-        const createdUsers = [];
-        const errors = [];
-        
-        for (let i = 0; i < usersData.length; i++) {
-          const userData = usersData[i];
-          
-          try {
-            // 验证数据
-            const user = UserModel.create(userData);
-            const validation = user.validate();
-            
-            if (!validation.isValid) {
-              errors.push({
-                index: i,
-                username: userData.username,
-                errors: validation.errors
-              });
-              continue;
-            }
-            
-            // 检查是否已存在
-            const exists = await this.checkUserExists(user.username, user.email);
-            if (exists.exists) {
-              errors.push({
-                index: i,
-                username: userData.username,
-                errors: ['用户名或邮箱已存在']
-              });
-              continue;
-            }
-            
-            // 创建用户
-            const createdUser = await this.create(user.toDatabaseFormat());
-            createdUsers.push(createdUser);
-            
-          } catch (error) {
-            errors.push({
-              index: i,
-              username: userData.username,
-              errors: [error.message]
-            });
-          }
-        }
-        
-        await client.query('COMMIT');
-        
-        logger.info('[UserRepository] 批量创建用户完成', {
-          total: usersData.length,
-          success: createdUsers.length,
-          errors: errors.length
-        });
-        
-        return {
-          success: createdUsers.length,
-          errors: errors.length,
-          createdUsers,
-          errors
-        };
-        
-      } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-      } finally {
-        client.release();
+      const { query } = require('../config/database');
+      const result = await query(`
+        SELECT 
+          u.*,
+          r.role_name,
+          r.role_display_name,
+          r.permissions,
+          r.is_system_role
+        FROM users u
+        LEFT JOIN user_roles ur ON u.id = ur.user_id AND ur.is_active = true
+        LEFT JOIN roles r ON ur.role_id = r.id
+        WHERE (u.username = $1 OR u.email = $1)
+        ORDER BY ur.assigned_at DESC
+        LIMIT 1
+      `, [identifier]);
+
+      if (result.rows.length === 0) {
+        return null;
       }
+
+      const userData = result.rows[0];
+      return UserModel.fromDatabase(userData);
     } catch (error) {
-      logger.error('[UserRepository] 批量创建用户失败', { error: error.message });
+      logger.error('[UserRepository] 查找用户（包含角色）失败', { 
+        error: error.message, 
+        identifier 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 获取用户列表（分页）
+   * @param {Object} options - 查询选项
+   * @returns {Promise<Object>} 用户列表和分页信息
+   */
+  async getUserList(options = {}) {
+    try {
+      const {
+        page = 1,
+        limit = 10,
+        search,
+        status,
+        sortBy = 'created_at',
+        sortOrder = 'DESC'
+      } = options;
+
+      const filters = {};
+      if (status) {
+        filters.status = status;
+      }
+
+      const result = await this.findAll({
+        page,
+        limit,
+        search,
+        filters,
+        sort: sortBy,
+        order: sortOrder
+      });
+
+      return {
+        users: result.data,
+        pagination: result.pagination
+      };
+    } catch (error) {
+      logger.error('[UserRepository] 数据库查询失败', { 
+        error: error.message, 
+        options 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 创建用户
+   * @param {UserModel} user - 用户模型
+   * @returns {Promise<UserModel>} 创建的用户
+   */
+  async createUser(user) {
+    try {
+      const result = await this.create(user.toDatabaseFormat());
+      return result;
+    } catch (error) {
+      // 检查是否是唯一约束冲突
+      if (error.code === '23505') {
+        const field = error.detail.includes('username') ? 'username' : 'email';
+        throw new Error(`用户${field === 'username' ? '名' : '邮箱'}已存在`);
+      }
+      
+      logger.error('[UserRepository] 创建用户失败', { 
+        error: error.message, 
+        user: user.id 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 更新用户信息
+   * @param {number} userId - 用户ID
+   * @param {Object} updates - 更新数据
+   * @returns {Promise<boolean>} 是否更新成功
+   */
+  async updateUser(userId, updates) {
+    try {
+      const result = await this.update(userId, updates);
+      return result.rowCount > 0;
+    } catch (error) {
+      // 检查是否是唯一约束冲突
+      if (error.code === '23505') {
+        const field = error.detail.includes('username') ? 'username' : 'email';
+        throw new Error(`用户${field === 'username' ? '名' : '邮箱'}已存在`);
+      }
+      
+      logger.error('[UserRepository] 更新用户失败', { 
+        error: error.message, 
+        userId 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 验证用户数据
+   * @param {Object} userData - 用户数据
+   * @param {boolean} isUpdate - 是否为更新操作
+   * @returns {Object} 验证结果
+   */
+  validateUserData(userData, isUpdate = false) {
+    const errors = [];
+
+    // 用户名验证
+    if (!isUpdate || userData.username !== undefined) {
+      if (!userData.username || userData.username.trim().length < 3) {
+        errors.push('用户名长度至少为3个字符');
+      } else if (!/^[a-zA-Z0-9_]+$/.test(userData.username)) {
+        errors.push('用户名只能包含字母、数字和下划线');
+      }
+    }
+
+    // 邮箱验证
+    if (!isUpdate || userData.email !== undefined) {
+      if (!userData.email) {
+        errors.push('邮箱不能为空');
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userData.email)) {
+        errors.push('邮箱格式不正确');
+      }
+    }
+
+    // 密码验证（仅在创建时）
+    if (!isUpdate && !userData.password) {
+      errors.push('密码不能为空');
+    } else if (userData.password && userData.password.length < 6) {
+      errors.push('密码长度至少为6个字符');
+    }
+
+    // 状态验证
+    if (userData.status && !['active', 'inactive', 'pending', 'banned'].includes(userData.status)) {
+      errors.push('无效的用户状态');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  }
+
+  /**
+   * 检查用户名和邮箱的唯一性
+   * @param {string} username - 用户名
+   * @param {string} email - 邮箱
+   * @param {number} excludeId - 排除的用户ID（更新时使用）
+   * @returns {Promise<Object>} 检查结果
+   */
+  async checkUniqueness(username, email, excludeId = null) {
+    try {
+      const { query } = require('../config/database');
+      const result = await query(`
+        SELECT 
+          id,
+          username,
+          email
+        FROM users 
+        WHERE (username = $1 OR email = $2) 
+        ${excludeId ? `AND id != $3` : ''}
+      `, excludeId ? [username, email, excludeId] : [username, email]);
+
+      const conflicts = result.rows.reduce((acc, row) => {
+        if (row.username === username) acc.push('username');
+        if (row.email === email) acc.push('email');
+        return acc;
+      }, []);
+
+      return {
+        isUnique: conflicts.length === 0,
+        conflicts,
+        errors: conflicts.map(field => 
+          field === 'username' ? '用户名已存在' : '邮箱已存在'
+        )
+      };
+    } catch (error) {
+      logger.error('[UserRepository] 检查唯一性失败', { 
+        error: error.message, 
+        username, 
+        email 
+      });
       throw error;
     }
   }

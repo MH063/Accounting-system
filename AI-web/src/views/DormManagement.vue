@@ -8,6 +8,24 @@
       </el-button>
     </div>
 
+    <!-- 搜索栏 -->
+    <div class="search-bar">
+      <el-input
+        v-model="searchKeyword"
+        placeholder="请输入宿舍名称"
+        clearable
+        @clear="handleSearch"
+        @keyup.enter="handleSearch"
+        style="width: 300px; margin-right: 20px;"
+      >
+        <template #append>
+          <el-button :icon="Search" @click="handleSearch" />
+        </template>
+      </el-input>
+      <el-button type="primary" @click="handleSearch">搜索</el-button>
+    </div>
+
+    <!-- 宿舍列表 -->
     <el-table :data="dormList" stripe style="width: 100%">
       <el-table-column prop="dormNumber" label="寝室编号" width="100">
         <template #default="scope">
@@ -48,6 +66,19 @@
         </template>
       </el-table-column>
     </el-table>
+
+    <!-- 分页 -->
+    <div class="pagination-container">
+      <el-pagination
+        v-model:current-page="currentPage"
+        v-model:page-size="pageSize"
+        :page-sizes="[10, 20, 50, 100]"
+        :total="total"
+        layout="total, sizes, prev, pager, next, jumper"
+        @size-change="handleSizeChange"
+        @current-change="handleCurrentChange"
+      />
+    </div>
 
     <!-- 编辑宿舍对话框 -->
     <el-dialog
@@ -121,36 +152,25 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Plus, Document } from '@element-plus/icons-vue'
+import { Plus, Document, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import type { DormManagementItem, EditingDorm } from '@/types'
-import { dormitoryService } from '@/services/dormitoryService'
+import { dormService } from '@/services/dormService'
 import { withLoading } from '@/utils/loadingUtils'
 import { handleApiError } from '@/utils/errorUtils'
 
 const router = useRouter()
 
 // 宿舍列表数据
-const dormList = ref<DormManagementItem[]>([
-  {
-    id: 1,
-    name: '宿舍A101',
-    dormNumber: 'A-101-2024012401',
-    address: '学生公寓A栋101室',
-    memberCount: 4,
-    status: 'active',
-    remark: '靠近食堂，生活便利'
-  },
-  {
-    id: 2,
-    name: '宿舍B205',
-    dormNumber: 'B-205-2024012402',
-    address: '学生公寓B栋205室',
-    memberCount: 3,
-    status: 'active',
-    remark: '朝南向阳，环境安静'
-  }
-])
+const dormList = ref<DormManagementItem[]>([])
+
+// 分页相关数据
+const currentPage = ref(1)
+const pageSize = ref(10)
+const total = ref(0)
+
+// 搜索关键字
+const searchKeyword = ref('')
 
 // 编辑对话框相关数据
 const editDialogVisible = ref(false)
@@ -215,7 +235,7 @@ const handleSaveEdit = async () => {
     await editFormRef.value.validate()
     
     await withLoading(async () => {
-      const response = await dormitoryService.updateDormitory(editingDorm.id, {
+      const response = await dormService.updateDormitory(editingDorm.id, {
         name: editingDorm.name,
         address: editingDorm.address,
         memberCount: editingDorm.memberCount,
@@ -299,18 +319,48 @@ const getDormNumberShort = (dormNumber: string) => {
 
 // 生命周期钩子
 onMounted(async () => {
+  await loadDormList()
+})
+
+// 加载宿舍列表
+const loadDormList = async () => {
   try {
     await withLoading(async () => {
-      const response = await dormitoryService.getDormitoryList()
+      const response = await dormService.getDormitoryList({
+        page: currentPage.value,
+        limit: pageSize.value,
+        search: searchKeyword.value
+      })
       console.log('获取宿舍列表成功:', response)
       if (response.success && response.data) {
-        dormList.value = response.data
+        // 从返回的数据中提取宿舍列表和分页信息
+        dormList.value = response.data.dorms || []
+        total.value = response.data.pagination?.total || 0
       }
     })
   } catch (error) {
     handleApiError(error, '获取宿舍列表失败')
   }
-})
+}
+
+// 搜索处理
+const handleSearch = async () => {
+  currentPage.value = 1
+  await loadDormList()
+}
+
+// 分页大小改变处理
+const handleSizeChange = async (val: number) => {
+  pageSize.value = val
+  currentPage.value = 1
+  await loadDormList()
+}
+
+// 当前页改变处理
+const handleCurrentChange = async (val: number) => {
+  currentPage.value = val
+  await loadDormList()
+}
 </script>
 
 <style scoped>
@@ -330,6 +380,12 @@ onMounted(async () => {
   margin: 0;
 }
 
+.search-bar {
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+}
+
 .remark-text {
   color: #606266;
   font-size: 14px;
@@ -339,5 +395,11 @@ onMounted(async () => {
 .no-remark {
   color: #909399;
   font-style: italic;
+}
+
+.pagination-container {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
 }
 </style>

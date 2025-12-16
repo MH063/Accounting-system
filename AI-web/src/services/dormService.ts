@@ -178,6 +178,38 @@ class DormService {
   }
 
   /**
+   * 获取寝室列表（支持分页和搜索）
+   * @param params 查询参数
+   */
+  async getDormitoryList(params?: { page?: number; limit?: number; search?: string }): Promise<ApiResponse<any>> {
+    try {
+      console.log('获取寝室列表（分页/搜索）:', params)
+      
+      // 构建查询参数
+      const queryParams = new URLSearchParams();
+      if (params?.page) queryParams.append('page', params.page.toString());
+      if (params?.limit) queryParams.append('limit', params.limit.toString());
+      if (params?.search) queryParams.append('search', params.search);
+      
+      // 构建完整URL
+      const url = `/api/dorms${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      
+      // 调用真实API获取寝室列表
+      const response = await request<any>(url);
+      
+      return response;
+    } catch (error) {
+      console.error('获取寝室列表失败:', error);
+      return {
+        success: false,
+        data: null,
+        message: '获取寝室列表失败',
+        code: 500
+      };
+    }
+  }
+
+  /**
    * 根据ID获取寝室详情
    */
   async getDormById(id: string): Promise<ApiResponse<DormInfo>> {

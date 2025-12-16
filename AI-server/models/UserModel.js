@@ -125,14 +125,22 @@ class UserModel {
   static fromDatabase(dbRecord) {
     if (!dbRecord) return null;
 
-    // 判断是否为管理员：基于用户名或邮箱
-    const isAdmin = dbRecord.username === 'admin' || dbRecord.email === 'admin@example.com';
+    // 使用从数据库查询到的真实角色信息，如果没有则使用默认值
+    let role = dbRecord.role_name || 'user'; // 使用数据库中的真实角色
+    let permissions = dbRecord.permissions || [];
     
+    // 如果数据库查询没有返回角色信息，使用默认角色
+    if (!dbRecord.role_name) {
+      role = 'user';
+      permissions = [];
+    }
+    
+    // 创建UserModel实例，字段名应该与构造函数参数名一致
     return new UserModel({
       id: dbRecord.id,
       username: dbRecord.username,
       email: dbRecord.email,
-      password_hash: dbRecord.password_hash,
+      password_hash: dbRecord.password_hash, // 这里传入password_hash，构造函数会将其映射为passwordHash
       nickname: dbRecord.nickname,
       phone: dbRecord.phone,
       avatar_url: dbRecord.avatar_url,
@@ -146,9 +154,9 @@ class UserModel {
       locked_until: dbRecord.locked_until,
       created_at: dbRecord.created_at,
       updated_at: dbRecord.updated_at,
-      // 兼容旧版本字段
-      role: isAdmin ? 'admin' : 'user',
-      permissions: dbRecord.permissions ? JSON.parse(dbRecord.permissions) : []
+      // 使用从数据库查询到的真实角色信息
+      role: role,
+      permissions: permissions
     });
   }
 

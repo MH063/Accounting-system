@@ -35,7 +35,7 @@ const requestInterceptors: RequestInterceptor[] = []
 const responseInterceptors: ResponseInterceptor[] = []
 
 // 基础URL
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://10.26.120.9:4000'
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:4000'
 
 /**
  * 添加请求拦截器

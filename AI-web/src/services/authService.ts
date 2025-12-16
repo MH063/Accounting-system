@@ -1,6 +1,8 @@
 import type { ApiResponse } from '@/types'
 // 导入请求函数
 import { request } from '@/utils/request'
+// 导入身份验证存储服务
+import authStorageService from './authStorageService'
 
 
 // 用户认证信息接口
@@ -97,16 +99,220 @@ export const register = async (registerData: RegisterRequest): Promise<ApiRespon
   }
 }
 
+// 登录用户信息接口
+export interface UserInfo {
+  id: number
+  username: string
+  email: string
+  nickname: string
+  phone: string
+  avatar_url: string
+  status: string
+  email_verified: boolean
+  phone_verified: boolean
+  last_login_at: string
+  created_at: string
+}
+
+// 登录令牌信息接口
+export interface TokenInfo {
+  accessToken: string
+  refreshToken: string
+  expiresIn: number
+  refreshExpiresIn: number
+}
+
+// 登录会话信息接口
+export interface SessionInfo {
+  sessionId: number
+  sessionToken: string
+  deviceInfo: object
+  expiresAt: string
+}
+
+// 登录响应数据接口
+export interface LoginData {
+  user: UserInfo
+  tokens: TokenInfo
+  session: SessionInfo
+}
+
+// 登录请求接口
+export interface LoginRequest {
+  username?: string     // 用户名（与email二选一，必填）
+  email?: string        // 邮箱（与username二选一，必填）
+  password: string      // 密码（必填）
+  captchaCode?: string  // 验证码（可选）
+  sessionId?: string    // 会话ID（可选）
+}
+
+// 登录响应接口
+export interface LoginResponse {
+  success: boolean
+  message: string
+  data: LoginData
+}
+
 // 登出响应接口
 export interface LogoutResponse {
   sessionToken: string
   status: string
 }
 
+// 令牌验证请求接口
+export interface ValidateTokenRequest {
+  sessionToken: string
+}
+
+// 令牌验证用户信息接口
+export interface ValidateTokenUser {
+  id: string
+  username: string
+  email: string
+  nickname: string
+  status: string
+  twoFactorEnabled: boolean
+  lockedUntil: string | null
+}
+
+// 令牌验证会话信息接口
+export interface ValidateTokenSession {
+  sessionId: string
+  status: string
+  expiresAt: string
+  lastAccessedAt: string
+}
+
+// 令牌验证响应数据接口
+export interface ValidateTokenData {
+  user: ValidateTokenUser
+  session: ValidateTokenSession
+}
+
+// 令牌验证响应接口
+export interface ValidateTokenResponse {
+  success: boolean
+  message: string
+  data: ValidateTokenData
+}
+
+/**
+ * 用户登录
+ * @param loginData 登录数据
+ * @returns 登录结果的API响应
+ */
+export const login = async (loginData: LoginRequest): Promise<ApiResponse<LoginResponse>> => {
+  try {
+    console.log('用户登录:', loginData.username || loginData.email)
+    
+    // 调用真实API进行登录
+    const response = await request<ApiResponse<LoginResponse>>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(loginData)
+    })
+    
+    console.log('登录API返回响应:', response)
+    
+    // 登录成功后保存令牌到本地存储
+    if (response.success && response.data) {
+      // 正确处理双层嵌套结构 response.data.data.xxx
+      const actualData = response.data
+      
+      // 使用身份验证存储服务保存完整的认证信息
+      authStorageService.saveAuthData({
+        user: actualData.user,
+        tokens: actualData.tokens,
+        session: actualData.session
+      })
+      
+      console.log('登录成功，已保存认证信息')
+    }
+    
+    return response
+  } catch (error) {
+    console.error('登录失败:', error)
+    
+    return {
+      success: false,
+      data: {} as LoginResponse,
+      message: '登录失败，请检查用户名和密码',
+      code: 401
+    }
+  }
+}
+
 /**
  * 用户登出
  * @returns 登出结果的API响应
  */
+/**
+ * 验证访问令牌
+ * @param sessionToken 会话令牌
+ * @returns 验证结果的API响应
+ */
+export const validateAccessToken = async (sessionToken: string): Promise<ApiResponse<ValidateTokenResponse>> => {
+  try {
+    console.log('验证访问令牌')
+    
+    // 调用真实API验证令牌
+    const response = await request<ApiResponse<ValidateTokenResponse>>('/api/auth/validate-token', {
+      method: 'POST',
+      body: JSON.stringify({ sessionToken })
+    })
+    
+    console.log('令牌验证API返回响应:', response)
+    
+    // 验证成功后更新本地存储的认证信息
+    if (response.success && response.data) {
+      // 正确处理双层嵌套结构 response.data.data.xxx
+      let actualData = response.data;
+      if (response.data.data) {
+        actualData = response.data.data;
+      }
+      
+      // 确保actualData存在并且包含必要的属性
+      if (actualData && typeof actualData === 'object') {
+        const { user, session } = actualData;
+        
+        // 更新用户信息
+        if (user) {
+          authStorageService.saveUserInfo({
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            nickname: user.nickname,
+            status: user.status,
+            // 其他必要字段可以按需补充
+          })
+        }
+        
+        // 更新会话信息
+        if (session) {
+          authStorageService.saveSessionInfo({
+            sessionId: session.sessionId,
+            sessionToken: sessionToken,
+            expiresAt: session.expiresAt
+          })
+        }
+        
+        console.log('令牌验证成功，已更新认证信息')
+      } else {
+        console.warn('令牌验证响应数据结构异常:', actualData);
+      }
+    }
+    
+    return response
+  } catch (error) {
+    console.error('令牌验证失败:', error)
+    return {
+      success: false,
+      data: {} as ValidateTokenResponse,
+      message: '令牌验证失败',
+      code: 401
+    }
+  }
+}
+
 export const logout = async (): Promise<ApiResponse<LogoutResponse>> => {
   try {
     console.log('用户登出')
@@ -572,6 +778,7 @@ export const generateTwoFactorCode = async (generateData: TwoFactorCodeGenerateR
 
 // 默认导出认证服务对象
 export default {
+  login,
   register,
   logout,
   getCurrentAuthUser,
@@ -579,6 +786,7 @@ export default {
   resetPassword,
   changePassword,
   validateToken,
+  validateAccessToken,
   getLocalUserInfo,
   clearLocalAuth,
   verifyTwoFactor,

@@ -169,6 +169,7 @@ app.use('/api/queues', require('./routes/messageQueue'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 
 // 客户端功能控制路由
+app.use('/api/dorms', require('./routes/dorms'));
 
 // 初始化Swagger中间件（在路由注册后）
 initSwaggerMiddleware(app);

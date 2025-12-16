@@ -20,6 +20,7 @@ const permissionRoutes = require('./permissions');
 const apiDocsRoutes = require('./apiDocs');
 const messageQueueRoutes = require('./messageQueue');
 const clientFeatureRoutes = require('./clientFeatureRoutes');
+const dormRoutes = require('./dorms');
 
 module.exports = {
   authRoutes,
@@ -38,5 +39,6 @@ module.exports = {
   permissionRoutes,
   apiDocsRoutes,
   messageQueueRoutes,
-  clientFeatureRoutes
+  clientFeatureRoutes,
+  dormRoutes
 };

@@ -1017,6 +1017,7 @@ import {
   Search, Refresh, List, WarningFilled, ChatDotRound, Close
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import * as expenseService from '@/services/expenseService'
 
 // 文件处理辅助函数 - 必须在模板使用前定义
 const getFileNameFromPath = (filePathOrAttachment: string | { url?: string; name?: string }): string => {
@@ -1245,6 +1246,52 @@ watch(() => route.query.id, (newId, oldId) => {
 // 方法
 const handleBackToExpenses = (): void => {
   router.push('/dashboard/expense')
+}
+
+// 模拟获取待审核费用数据的函数
+const getPendingExpenses = async (): Promise<{ data: ExpenseItem[] }> => {
+  // 模拟API延迟
+  await new Promise(resolve => setTimeout(resolve, 800))
+  
+  // 模拟数据 - 实际应用中应从真实API获取
+  const mockData: ExpenseItem[] = [
+    {
+      id: '1',
+      title: '会议室租赁费用',
+      category: 'accommodation',
+      amount: 1200,
+      date: '2023-06-15',
+      description: '租用公司大会议室一天用于季度会议',
+      applicant: '张三',
+      phone: '13800138000',
+      department: '技术部',
+      position: '高级工程师',
+      attachments: [],
+      status: 'pending',
+      isUrgent: true,
+      createdAt: '2023-06-10T09:30:00Z',
+      updatedAt: '2023-06-10T09:30:00Z'
+    },
+    {
+      id: '2',
+      title: '办公用品采购',
+      category: 'other',
+      amount: 350,
+      date: '2023-06-18',
+      description: '购买打印机墨盒和A4纸',
+      applicant: '李四',
+      phone: '13900139000',
+      department: '行政部',
+      position: '行政助理',
+      attachments: [],
+      status: 'pending',
+      isUrgent: false,
+      createdAt: '2023-06-12T14:20:00Z',
+      updatedAt: '2023-06-12T14:20:00Z'
+    }
+  ]
+  
+  return { data: mockData }
 }
 
 const loadExpenseData = (): void => {

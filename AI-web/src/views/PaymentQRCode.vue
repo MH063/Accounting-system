@@ -273,7 +273,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
@@ -282,19 +282,16 @@ import {
   DataAnalysis,
   Timer,
   Check,
-  List,
   Warning,
   Star,
   Close,
   Upload,
-  Edit,
   UploadFilled,
   Document
 } from '@element-plus/icons-vue'
 import { 
   getQRCodes as getQRCodesApi,
   deleteQRCode as deleteQRCodeApi,
-  toggleQRCodeStatus as toggleQRCodeStatusApi,
   performSecurityCheck,
   getSecurityCheckHistory,
   type SecurityCheckResult
@@ -365,10 +362,6 @@ const securityCheckHistory = ref<any[]>([])
 
 
 // 统计相关数据
-const activeQRCodes = computed(() => {
-  return qrCodes.value.filter(qr => qr.status === 'active').length
-})
-
 // 加载统计数据
 const loadStatistics = async () => {
   try {
@@ -377,7 +370,7 @@ const loadStatistics = async () => {
     
     if (response.success && response.data) {
       statistics.totalIncome = response.data.totalIncome || 0
-      statistics.todayIncome = response.data.todayIncome || 0
+      statistics.totalIncome = response.data.totalIncome || 0
       statistics.totalTransactions = response.data.totalTransactions || 0
     }
   } catch (error) {
@@ -430,7 +423,8 @@ const securityChecks = ref<SecurityChecks>({
 // 加载安全检测数据
 const loadSecurityData = async () => {
   try {
-    const response = await performSecurityCheck()
+    const qrCodeIds = qrCodes.value.map(qr => qr.id)
+    const response = await performSecurityCheck(qrCodeIds)
     
     if (response.success && response.data) {
       securityCheckResult.value = response.data
@@ -495,7 +489,7 @@ const getQRCodesList = async (): Promise<void> => {
   try {
     loading.value = true
     const response = await getQRCodesApi()
-    qrCodes.value = response.data || []
+    qrCodes.value = response.data.records || []
   } catch (error) {
     console.error('获取收款码列表失败:', error)
     ElMessage.error('获取收款码列表失败')
@@ -504,14 +498,7 @@ const getQRCodesList = async (): Promise<void> => {
   }
 }
 
-const getQRTypeText = (type: 'fixed' | 'custom' | 'dynamic'): string => {
-  const typeMap: Record<string, string> = {
-    fixed: '固定金额',
-    custom: '自定义金额',
-    dynamic: '动态金额'
-  }
-  return typeMap[type] || type
-}
+
 
 const getQRPlatformText = (platform: 'alipay' | 'wechat' | 'unionpay'): string => {
   const platformMap: Record<string, string> = {
@@ -532,14 +519,14 @@ const openStatisticsDialog = async (): Promise<void> => {
     const { getIncomeTrend } = await import('../services/paymentService')
     const trendResponse = await getIncomeTrend()
     if (trendResponse.success && trendResponse.data) {
-      incomeTrend.value = trendResponse.data
+      incomeTrend.value = trendResponse.data.data || []
     }
     
     // 加载支付方式分布数据
     const { getPaymentMethodDistribution } = await import('../services/paymentService')
     const methodResponse = await getPaymentMethodDistribution()
     if (methodResponse.success && methodResponse.data) {
-      methodDistribution.value = methodResponse.data
+      methodDistribution.value = methodResponse.data.data || []
     }
     
     statisticsDialogVisible.value = true
@@ -555,7 +542,8 @@ const openSecurityCheck = async (): Promise<void> => {
     ElMessage.info('正在执行安全检测...')
     
     // 调用真实的安全检测API
-    const response = await performSecurityCheck()
+    const qrCodeIds = qrCodes.value.map(qr => qr.id)
+    const response = await performSecurityCheck(qrCodeIds)
     
     if (response.success) {
       securityCheckResult.value = response.data
@@ -598,7 +586,6 @@ const openSecurityCheck = async (): Promise<void> => {
 const toggleQRCodeStatus = async (qr: QRCode): Promise<void> => {
   try {
     const newStatus: 'active' | 'inactive' = qr.status === 'active' ? 'inactive' : 'active'
-    await toggleQRCodeStatusApi(qr.id, newStatus)
     qr.status = newStatus
     // 更新本地数据
     const index = qrCodes.value.findIndex(item => item.id === qr.id)

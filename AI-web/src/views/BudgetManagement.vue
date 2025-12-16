@@ -610,7 +610,7 @@ const budgetForm = reactive({
 })
 
 // 趋势分析周期
-const trendPeriod = ref('')
+const trendPeriod = ref<'1m' | '3m' | '6m' | '1y'>('3m')
 
 // 预算提醒设置
 const reminderSettings = reactive({
@@ -653,7 +653,7 @@ const budgetRules = {
 }
 
 // 历史对比周期
-const historyPeriod = ref('')
+const historyPeriod = ref<'3m' | '6m' | '12m'>('3m')
 
 // 预算数据
 const budgetList = ref<BudgetItem[]>([])
@@ -1266,11 +1266,7 @@ const initHistoryChart = () => {
 // 获取历史预算数据
 const fetchHistoryData = async () => {
   try {
-    const response = await getBudgetHistory({
-      period: historyPeriod.value,
-      startDate: dateRange.value[0],
-      endDate: dateRange.value[1]
-    })
+    const response = await getBudgetHistory(historyPeriod.value)
     
     if (response.success && response.data) {
       return response.data
@@ -1491,7 +1487,7 @@ const updateTrendChart = async () => {
     console.log('开始加载趋势图表数据...')
     
     // 调用真实API获取趋势数据
-    const response = await getBudgetHistory('trend')
+    const response = await getBudgetHistory(trendPeriod.value === '1m' ? '3m' : trendPeriod.value === '1y' ? '12m' : (trendPeriod.value as '3m' | '6m'))
     
     if (response.success && response.data) {
       console.log('趋势数据加载成功:', response.data)
@@ -1566,7 +1562,7 @@ const updateCategoryChart = async () => {
     console.log('开始加载分类统计图表数据...')
     
     // 调用真实API获取分类统计数据
-    const response = await getBudgetHistory('category')
+    const response = await getBudgetHistory(historyPeriod.value)
     
     if (response.success && response.data) {
       console.log('分类统计数据加载成功:', response.data)
@@ -1861,7 +1857,6 @@ onUnmounted(() => {
   // 停止定时检查预算使用情况
   stopBudgetChecking();
 })
-
 </script>
 
 <style scoped>

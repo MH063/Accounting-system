@@ -324,8 +324,7 @@ const selectedPreset = ref('')
 const presets = ref<Array<{id: string, name: string, settings: any}>>([])
 
 // 自动保存功能
-const enableAutoSave = ref(false)
-let autoSaveTimer: number | null = null
+// 自动保存功能已移除
 
 // 保存设置
 const saveSettings = () => {
@@ -634,36 +633,9 @@ const loadPresetsFromStorage = () => {
   }
 }
 
-// 切换自动保存功能
-const toggleAutoSave = (value: boolean) => {
-  enableAutoSave.value = value
-  if (value) {
-    startAutoSave()
-    ElMessage.info('已开启自动保存，设置将每隔30秒自动保存')
-  } else {
-    stopAutoSave()
-    ElMessage.info('已关闭自动保存')
-  }
-}
+// 自动保存功能已集成到上面的代码中
 
-// 启动自动保存
-const startAutoSave = () => {
-  if (autoSaveTimer) {
-    clearInterval(autoSaveTimer)
-  }
-  
-  autoSaveTimer = window.setInterval(() => {
-    saveSettings()
-  }, 30000) // 每30秒自动保存一次
-}
-
-// 停止自动保存
-const stopAutoSave = () => {
-  if (autoSaveTimer) {
-    clearInterval(autoSaveTimer)
-    autoSaveTimer = null
-  }
-}
+// 自动保存功能已移除
 
 // 加载设置
 const loadSettings = () => {
@@ -715,9 +687,6 @@ onMounted(() => {
 })
 
 // 组件卸载时清理
-onUnmounted(() => {
-  stopAutoSave()
-})
 </script>
 
 <style scoped>

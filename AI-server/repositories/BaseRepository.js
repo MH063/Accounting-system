@@ -352,6 +352,26 @@ class BaseRepository {
   }
 
   /**
+   * 执行自定义查询
+   * @param {string} queryText - SQL查询语句
+   * @param {Array} params - 查询参数
+   * @returns {Promise<Object>} 查询结果
+   */
+  async executeQuery(queryText, params = []) {
+    try {
+      const result = await query(queryText, params);
+      return result;
+    } catch (error) {
+      logger.error(`[${this.tableName}] 执行自定义查询失败`, { 
+        error: error.message, 
+        query: queryText,
+        params 
+      });
+      throw error;
+    }
+  }
+
+  /**
    * 过滤敏感数据
    * @param {Object} data - 要过滤的数据
    * @returns {Object} 过滤后的数据

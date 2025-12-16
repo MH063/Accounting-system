@@ -804,11 +804,8 @@ const loadPendingPayments = async () => {
 
 const handleSearch = () => {
   loading.value = true
-  // 模拟搜索
-  setTimeout(() => {
-    ElMessage.success('搜索完成')
-    loading.value = false
-  }, 500)
+  // 调用真实API搜索
+  loadPendingPayments()
 }
 
 const resetSearch = () => {
@@ -861,13 +858,20 @@ const batchConfirmPayment = async () => {
     
     batchProcessing.value = true
     
-    // 模拟批量支付API调用
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    
-    // 更新支付状态
-    selectedPayments.value.forEach(payment => {
-      payment.status = 'paid'
+    // 调用真实API进行批量支付确认
+    const paymentIds = selectedPayments.value.map(payment => payment.id)
+    const response = await request({
+      url: '/payments/batch-confirm',
+      method: 'POST',
+      body: JSON.stringify({ paymentIds })
     })
+    
+    if (response.success) {
+      // 更新支付状态
+      selectedPayments.value.forEach(payment => {
+        payment.status = 'paid'
+      })
+    }
     
     // 清空选择
     clearSelection()

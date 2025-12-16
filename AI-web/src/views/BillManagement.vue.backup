@@ -570,58 +570,41 @@ const getProgressColor = (bill: any) => {
 const loadBillList = async () => {
   loading.value = true
   try {
-    // 模拟API调用
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    // 模拟数据
-    const mockBills: Bill[] = [
-      {
-        id: '1',
-        title: '2024年1月住宿费',
-        status: 'paid',
-        totalAmount: 1200.00,
-        paidAmount: 1200.00,
-        billDate: '2024-01-31',
-        payerName: '张三',
-        type: 'monthly',
-        description: '1月份宿舍住宿费用，包含水电网费'
-      },
-      {
-        id: '2',
-        title: '水电费账单',
-        status: 'pending',
-        totalAmount: 280.50,
-        paidAmount: 0,
-        billDate: '2024-02-15',
-        payerName: '李四',
-        type: 'expense',
-        description: '2月份水电费用分摊'
-      },
-      {
-        id: '3',
-        title: '设备维修费',
-        status: 'partial',
-        totalAmount: 500.00,
-        paidAmount: 300.00,
-        billDate: '2024-02-20',
-        payerName: '王五',
-        type: 'temporary',
-        description: '洗衣机维修费用'
+    // 调用真实API获取账单列表
+    const response = await request({
+      url: '/bills',
+      method: 'GET',
+      params: {
+        page: pagination.page,
+        pageSize: pagination.pageSize,
+        keyword: searchForm.keyword,
+        status: searchForm.status,
+        month: searchForm.month,
+        type: searchForm.type
       }
-    ]
+    })
     
-    billList.value = mockBills
-    pagination.total = mockBills.length
-    
-    // 更新统计信息
-    billStats.pending = mockBills.filter(bill => bill.status === 'pending').length
-    billStats.paid = mockBills.filter(bill => bill.status === 'paid').length
-    billStats.overdue = mockBills.filter(bill => bill.status === 'overdue').length
-    billStats.totalAmount = mockBills.reduce((sum, bill) => sum + bill.totalAmount, 0)
+    if (response.success && response.data) {
+      billList.value = response.data.records || []
+      pagination.total = response.data.total || 0
+      
+      // 更新统计信息
+      billStats.pending = billList.value.filter((bill: any) => bill.status === 'pending').length
+      billStats.paid = billList.value.filter((bill: any) => bill.status === 'paid').length
+      billStats.overdue = billList.value.filter((bill: any) => bill.status === 'overdue').length
+      billStats.totalAmount = billList.value.reduce((sum: number, bill: any) => sum + bill.totalAmount, 0)
+    } else {
+      console.error('获取账单列表失败:', response.message)
+      ElMessage.error(response.message || '获取账单列表失败')
+      billList.value = []
+      pagination.total = 0
+    }
     
   } catch (error) {
     console.error('加载账单列表失败:', error)
     ElMessage.error('加载账单列表失败')
+    billList.value = []
+    pagination.total = 0
   } finally {
     loading.value = false
   }

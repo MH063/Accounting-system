@@ -906,7 +906,7 @@ const exportBills = async (format: 'csv' | 'xlsx' = 'csv') => {
     }))
 
     // 处理导出数据
-    const exportData = selectedBills.length > 0 
+    const processedData = selectedBills.length > 0 
       ? billList.value.filter(bill => selectedBills.includes(bill.id)).map(bill => ({
           '账单ID': bill.id,
           '账单标题': bill.title,
@@ -934,16 +934,16 @@ const exportBills = async (format: 'csv' | 'xlsx' = 'csv') => {
           '更新时间': formatLocalDate(bill.updatedAt || new Date().toISOString())
         }))
 
-    console.log('[BillManagement] 开始导出账单记录，格式:', format, '数据条数:', exportData.length)
+    console.log('[BillManagement] 开始导出账单记录，格式:', format, '数据条数:', processedData.length)
 
     const timestamp = new Date().toISOString().split('T')[0]
     
     if (format === 'xlsx') {
       // 导出为Excel格式 (实际使用CSV格式，但文件扩展名为xlsx)
-      const headers = exportData.length > 0 ? Object.keys(exportData[0]!) : []
+      const headers = processedData.length > 0 ? Object.keys(processedData[0]!) : []
       const csvContent = [
         headers.join(','),
-        ...exportData.map(row => 
+        ...processedData.map(row => 
           headers.map(header => {
             const value = row[header as keyof typeof row]
             // 处理包含逗号或引号的值
@@ -971,16 +971,16 @@ const exportBills = async (format: 'csv' | 'xlsx' = 'csv') => {
         document.body.removeChild(link)
         URL.revokeObjectURL(url)
         
-        ElMessage.success(`成功导出 ${exportData.length} 条账单记录 (Excel格式)`)
+        ElMessage.success(`成功导出 ${processedData.length} 条账单记录 (Excel格式)`)
       } else {
         ElMessage.error('您的浏览器版本较低，不支持文件下载功能，请升级浏览器或使用其他浏览器重试')
       }
     } else {
       // 导出为CSV格式
-      const headers = exportData.length > 0 ? Object.keys(exportData[0]!) : []
+      const headers = processedData.length > 0 ? Object.keys(processedData[0]!) : []
       const csvContent = [
         headers.join(','),
-        ...exportData.map(row => 
+        ...processedData.map(row => 
           headers.map(header => {
             const value = row[header as keyof typeof row]
             // 处理包含逗号或引号的值
@@ -1008,14 +1008,14 @@ const exportBills = async (format: 'csv' | 'xlsx' = 'csv') => {
         document.body.removeChild(link)
         URL.revokeObjectURL(url)
         
-        ElMessage.success(`成功导出 ${exportData.length} 条账单记录 (CSV格式)`)
+        ElMessage.success(`成功导出 ${processedData.length} 条账单记录 (CSV格式)`)
       } else {
         ElMessage.error('您的浏览器版本较低，不支持文件下载功能，请升级浏览器或使用其他浏览器重试')
       }
     }
 
     // 记录导出操作日志
-    console.log(`导出${format === 'xlsx' ? 'Excel' : 'CSV'}格式账单记录 ${exportData.length} 条`)
+    console.log(`导出${format === 'xlsx' ? 'Excel' : 'CSV'}格式账单记录 ${processedData.length} 条`)
     
   } catch (error) {
     console.error('导出失败:', error)

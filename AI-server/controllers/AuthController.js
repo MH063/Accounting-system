@@ -72,19 +72,7 @@ class AuthController extends BaseController {
 
       // 返回成功响应（包含双令牌和会话信息）
       return this.sendSuccess(res, {
-        user: {
-          id: user.id,
-          username: user.username,
-          email: user.email,
-          nickname: user.nickname,
-          phone: user.phone,
-          avatar_url: user.avatar_url,
-          status: user.status,
-          email_verified: user.email_verified,
-          phone_verified: user.phone_verified,
-          last_login_at: user.last_login_at,
-          created_at: user.created_at
-        },
+        user: user,
         tokens: {
           accessToken: tokens.accessToken,
           refreshToken: tokens.refreshToken,
@@ -340,6 +328,17 @@ class AuthController extends BaseController {
       }, '令牌刷新成功');
     } catch (error) {
       logger.error('[AuthController] 刷新令牌失败', { error: error.message });
+      
+      // 处理刷新令牌相关的错误
+      if (error.message.includes('刷新令牌已被撤销') ||
+          error.message.includes('无效的刷新令牌') ||
+          error.message.includes('会话已过期') ||
+          error.message.includes('令牌已过期') ||
+          error.message.includes('无效的刷新令牌类型')) {
+        return this.sendError(res, error.message, 401);
+      }
+      
+      // 其他错误传递给全局错误处理中间件
       next(error);
     }
   }
@@ -1213,6 +1212,146 @@ class AuthController extends BaseController {
 
     } catch (error) {
       logger.error('[AuthController] 生成两步验证码失败', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * 短信登录
+   * POST /api/auth/sms-login
+   */
+  async smsLogin(req, res, next) {
+    try {
+      const { phone, code } = req.body;
+      
+      // 记录短信登录尝试
+      logger.audit(req, '短信登录尝试', { 
+        phone,
+        timestamp: new Date().toISOString(),
+        ip: req.ip
+      });
+
+      // 验证输入
+      this.validateRequiredFields(req.body, ['phone', 'code']);
+
+      // 调用服务层进行短信登录验证
+      const loginResult = await this.userService.smsLogin({ 
+        phone,
+        code,
+        ip: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+      
+      if (!loginResult.success) {
+        // 登录失败，记录安全日志
+        logger.auth('短信登录失败', { phone, reason: loginResult.message });
+        logger.security(req, '短信登录尝试失败', { 
+          phone,
+          reason: loginResult.message
+        });
+        
+        // 根据失败原因返回不同的状态码
+        const statusCode = loginResult.message.includes('锁定') ? 423 : 401;
+        return this.sendError(res, loginResult.message, statusCode);
+      }
+
+      const { user, tokens, session } = loginResult.data;
+
+      logger.auth('短信登录成功', { phone, userId: user.id });
+      logger.audit(req, '用户短信登录成功', { 
+        phone,
+        userId: user.id,
+        timestamp: new Date().toISOString()
+      });
+
+      // 返回成功响应（包含双令牌和会话信息）
+      return this.sendSuccess(res, {
+        user: user,
+        tokens: {
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          expiresIn: tokens.expiresIn,
+          refreshExpiresIn: tokens.refreshExpiresIn
+        },
+        session: session ? {
+          sessionId: session.id,
+          sessionToken: session.session_token,
+          deviceInfo: session.device_info,
+          expiresAt: session.expires_at
+        } : null
+      }, '登录成功');
+
+    } catch (error) {
+      logger.error('[AuthController] 短信登录失败', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * 验证访问令牌有效性
+   * POST /api/auth/validate-token
+   */
+  async validateToken(req, res, next) {
+    try {
+      const { sessionToken } = req.body;
+      
+      // 记录令牌验证尝试
+      logger.audit(req, '令牌验证尝试', { 
+        timestamp: new Date().toISOString(),
+        ip: req.ip
+      });
+
+      // 验证输入
+      if (!sessionToken) {
+        return this.sendError(res, '访问令牌为必填项', 400);
+      }
+
+      // 调用服务层进行令牌验证
+      const validationResult = await this.userService.validateToken({ 
+        sessionToken
+      });
+      
+      if (!validationResult.success) {
+        // 验证失败，记录安全日志
+        logger.auth('令牌验证失败', { reason: validationResult.message });
+        logger.security(req, '令牌验证尝试失败', { 
+          reason: validationResult.message
+        });
+        
+        // 根据失败原因返回不同的状态码
+        const statusCode = validationResult.message.includes('过期') ? 401 : 401;
+        return this.sendError(res, validationResult.message, statusCode);
+      }
+
+      const { user, session } = validationResult.data;
+
+      logger.auth('令牌验证成功', { userId: user.id });
+      logger.audit(req, '令牌验证成功', { 
+        userId: user.id,
+        timestamp: new Date().toISOString()
+      });
+
+      // 返回成功响应（包含用户信息和会话状态）
+      return this.sendSuccess(res, {
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          nickname: user.nickname,
+          status: user.status,
+          twoFactorEnabled: user.two_factor_enabled,
+          lockedUntil: user.locked_until
+        },
+        session: session ? {
+          sessionId: session.id,
+          status: session.status,
+          expiresAt: session.expires_at,
+          lastAccessedAt: session.last_accessed_at
+        } : null
+      }, '令牌验证成功');
+
+    } catch (error) {
+      logger.error('[AuthController] 令牌验证失败', { error: error.message });
       next(error);
     }
   }

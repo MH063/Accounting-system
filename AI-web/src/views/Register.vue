@@ -234,15 +234,7 @@ import authService from '@/services/authService'
 import { withLoading } from '@/utils/loadingUtils'
 import { handleApiError } from '@/utils/errorUtils'
 
-// 表单验证规则接口
-interface ValidationRule {
-  field: string
-  value: any
-  callback: (error?: Error) => void
-}
-
-// 自定义验证器类型
-type ValidatorFn = (rule: ValidationRule, value: string, callback: (error?: Error) => void) => void
+// 表单验证已移除
 
 // 路由实例
 const router = useRouter()

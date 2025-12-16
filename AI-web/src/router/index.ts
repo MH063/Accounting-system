@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
 import Layout from '@/layouts/Layout.vue'
 import Home from '@/views/Home.vue'
+import Login from '@/views/Login.vue'
 import Register from '@/views/Register.vue'
 import ResetPassword from '@/views/ResetPassword.vue'
 import NotFound from '@/views/NotFound.vue'
@@ -8,8 +9,8 @@ import SecuritySettings from '@/views/SecuritySettings.vue'
 import SecurityQuestionVerification from '@/views/SecurityQuestionVerification.vue'
 import SecurityQuestionDemo from '@/views/SecurityQuestionDemo.vue'
 import NotificationList from '@/views/NotificationList.vue'
-// 导入认证服务
-import { validateToken } from '@/services/authService'
+// 导入身份验证守卫
+import { createAuthGuard } from '@/utils/authGuard'
 
 // 路由配置
 const routes: Array<RouteRecordRaw> = [
@@ -18,8 +19,17 @@ const routes: Array<RouteRecordRaw> = [
     name: 'Home',
     component: Home,
     meta: { 
-      requiresAuth: false,
+      requireAuth: false,
       title: '首页'
+    }
+  },
+  {
+    path: '/login',
+    name: 'Login',
+    component: Login,
+    meta: { 
+      requireAuth: false,
+      title: '登录'
     }
   },
   {
@@ -27,7 +37,7 @@ const routes: Array<RouteRecordRaw> = [
     name: 'Register',
     component: Register,
     meta: { 
-      requiresAuth: false,
+      requireAuth: false,
       title: '注册'
     }
   },
@@ -36,7 +46,7 @@ const routes: Array<RouteRecordRaw> = [
     name: 'ResetPassword',
     component: ResetPassword,
     meta: { 
-      requiresAuth: false,
+      requireAuth: false,
       title: '重置密码'
     }
   },  {
@@ -44,7 +54,7 @@ const routes: Array<RouteRecordRaw> = [
     name: 'TwoFactorVerify',
     component: () => import('@/views/TwoFactorVerify.vue'),
     meta: { 
-      requiresAuth: false,
+      requireAuth: false,
       title: '两步验证'
     }
   },
@@ -52,7 +62,7 @@ const routes: Array<RouteRecordRaw> = [
     path: '/dashboard',
     component: Layout,
     meta: { 
-      requiresAuth: true,
+      requireAuth: true,
       title: '仪表盘'
     },
     children: [
@@ -295,7 +305,7 @@ const routes: Array<RouteRecordRaw> = [
         component: () => import('@/views/HelpCenter.vue'),
         meta: { 
           title: '帮助中心',
-          requiresAuth: true
+          requireAuth: true
         }
       },
       {
@@ -304,7 +314,7 @@ const routes: Array<RouteRecordRaw> = [
         component: () => import('@/views/AboutSystem.vue'),
         meta: { 
           title: '关于系统',
-          requiresAuth: true
+          requireAuth: true
         }
       },
       {
@@ -313,7 +323,7 @@ const routes: Array<RouteRecordRaw> = [
         component: () => import('@/views/UserAgreement.vue'),
         meta: { 
           title: '用户协议',
-          requiresAuth: true
+          requireAuth: true
         }
       },
       {
@@ -322,7 +332,7 @@ const routes: Array<RouteRecordRaw> = [
         component: () => import('@/views/PrivacyPolicy.vue'),
         meta: { 
           title: '隐私政策',
-          requiresAuth: true
+          requireAuth: true
         }
       },
       {
@@ -331,7 +341,7 @@ const routes: Array<RouteRecordRaw> = [
         component: () => import('@/views/TermsOfService.vue'),
         meta: { 
           title: '服务条款',
-          requiresAuth: true
+          requireAuth: true
         }
       },
       {
@@ -340,7 +350,7 @@ const routes: Array<RouteRecordRaw> = [
         component: () => import('@/views/NotificationList.vue'),
         meta: { 
           title: '通知中心',
-          requiresAuth: true
+          requireAuth: true
         }
       }
     ]
@@ -350,7 +360,7 @@ const routes: Array<RouteRecordRaw> = [
     name: 'SecuritySettings',
     component: SecuritySettings,
     meta: { 
-      requiresAuth: true,
+      requireAuth: true,
       title: '安全设置'
     }
   },
@@ -359,7 +369,7 @@ const routes: Array<RouteRecordRaw> = [
     name: 'SecurityQuestionVerification',
     component: SecurityQuestionVerification,
     meta: { 
-      requiresAuth: true,
+      requireAuth: true,
       title: '安全问题验证'
     }
   },
@@ -368,7 +378,7 @@ const routes: Array<RouteRecordRaw> = [
     name: 'SecurityQuestionDemo',
     component: SecurityQuestionDemo,
     meta: { 
-      requiresAuth: true,
+      requireAuth: true,
       title: '安全问题演示'
     }
   },
@@ -377,7 +387,7 @@ const routes: Array<RouteRecordRaw> = [
     name: 'NotificationList',
     component: NotificationList,
     meta: { 
-      requiresAuth: true,
+      requireAuth: true,
       title: '通知列表'
     }
   },
@@ -387,7 +397,7 @@ const routes: Array<RouteRecordRaw> = [
     component: NotFound,
     meta: { 
       title: '页面未找到',
-      requiresAuth: false
+      requireAuth: false
     }
   },
   {
@@ -401,86 +411,8 @@ const router = createRouter({
   routes
 })
 
-// 路由守卫 - 权限验证
-router.beforeEach(async (to, from, next) => {
-  console.log('Route navigation:', {
-    to: to.path,
-    from: from.path,
-    requiresAuth: to.meta.requiresAuth
-  });
-
-  // 如果路由需要认证
-  if (to.meta.requiresAuth) {
-    // 检查用户是否已登录（使用本地存储）
-    const isAuthenticated = typeof localStorage !== 'undefined' && localStorage.getItem('isAuthenticated') === 'true';
-    console.log('检查认证状态:', {
-      isAuthenticated,
-      localStorage_value: localStorage.getItem('isAuthenticated'),
-      userId: localStorage.getItem('userId'),
-      username: localStorage.getItem('username')
-    });
-    
-    if (!isAuthenticated) {
-      console.log('User not authenticated, redirecting to login');
-      next('/login');
-      return;
-    }
-    
-    // 检查账户是否被锁定
-    const accountId = localStorage.getItem('userId') || 'default_user';
-    const { getSecurityConfig, getAccountLockStatus } = await import('@/services/accountSecurityService');
-    const config = getSecurityConfig();
-    const lockStatus = getAccountLockStatus(accountId, config);
-    
-    console.log('检查账户锁定状态:', { accountId, isLocked: lockStatus.isLocked });
-    
-    if (lockStatus.isLocked) {
-      // 如果账户被锁定，重定向到登录页面并显示锁定信息
-      // 在localStorage中设置锁定提示信息
-      const remainingMinutes = lockStatus.lockedUntil ? Math.ceil((lockStatus.lockedUntil - Date.now()) / 1000 / 60) : 0;
-      localStorage.setItem('accountLockMessage', `账户已被锁定，剩余时间：${remainingMinutes}分钟，无法访问个人资料、费用管理、账单等所有需要认证的操作`);
-      console.log('账户已锁定，重定向到登录页');
-      next('/login');
-      return;
-    }
-    
-    // 检查会话是否仍然有效（设备限制可能导致会话被登出）
-    const sessionId = localStorage.getItem('sessionId');
-    if (sessionId) {
-      const { isSessionValid } = await import('@/services/loginDeviceLimitService');
-      const isValid = isSessionValid(accountId, sessionId);
-      console.log('检查会话有效性:', { sessionId, isValid });
-      
-      if (!isValid) {
-        // 会话无效，清除登录状态并重定向到登录页面
-        console.log('会话无效，清除登录状态并重定向');
-        localStorage.removeItem('isAuthenticated');
-        localStorage.removeItem('username');
-        localStorage.removeItem('userId');
-        localStorage.removeItem('sessionId');
-        next('/login');
-        return;
-      }
-    }
-    
-    // 验证令牌有效性，在需要认证的路由中检查令牌是否过期
-    const isTokenValid = await validateToken();
-    if (!isTokenValid) {
-      console.log('令牌无效，重定向到登录页');
-      // 清除认证状态
-      localStorage.removeItem('isAuthenticated');
-      localStorage.removeItem('username');
-      localStorage.removeItem('userId');
-      localStorage.removeItem('sessionId');
-      next('/login');
-      return;
-    }
-    
-    console.log('所有检查通过，允许导航');
-  }
-
-  next();
-})
+// 应用身份验证守卫
+createAuthGuard(router)
 
 // 路由后置守卫，确保每次导航后都回到顶部
 router.afterEach((_to, _from) => {

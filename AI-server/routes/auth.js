@@ -85,12 +85,11 @@ router.post('/change-password',
 /**
  * 刷新令牌路由
  * POST /api/auth/refresh
- * 需要有效的JWT令牌才能访问
+ * 只验证刷新令牌，不需要访问令牌
  */
 router.post('/refresh', 
-  authenticateToken, 
-  responseWrapper(asyncHandler(async (req, res) => {
-    return await authController.refreshToken(req, res);
+  responseWrapper(asyncHandler(async (req, res, next) => {
+    return await authController.refreshToken(req, res, next);
   }))
 );
 
@@ -112,6 +111,21 @@ router.post('/logout',
   authenticateToken, 
   responseWrapper(asyncHandler(async (req, res, next) => {
     return await authController.logout(req, res, next);
+  }))
+);
+
+/**
+ * 短信登录路由
+ * POST /api/auth/sms-login
+ */
+router.post('/sms-login', 
+  strictRateLimit({ 
+    windowMs: 60000, // 1分钟
+    maxRequests: 5,  // 每分钟最多5次登录尝试
+    skipSuccessfulRequests: true // 成功后不计入限制
+  }), 
+  responseWrapper(asyncHandler(async (req, res, next) => {
+    return await authController.smsLogin(req, res, next);
   }))
 );
 
@@ -392,6 +406,16 @@ router.delete('/account',
   authenticateToken, 
   responseWrapper(asyncHandler(async (req, res) => {
     return await authController.deleteAccount(req, res);
+  }))
+);
+
+/**
+ * 验证令牌路由
+ * POST /api/auth/validate-token
+ */
+router.post('/validate-token', 
+  responseWrapper(asyncHandler(async (req, res, next) => {
+    return await authController.validateToken(req, res, next);
   }))
 );
 

@@ -357,7 +357,6 @@ const memberList = ref<{id: number, name: string}[]>([])
 
 // 分类详情数据
 const categoryDetailData = ref<{category: string, amount: number, percentage: number}[]>([])
-const categoryDetailVisible = ref(false)
 const currentCategory = ref('')
 const categoryDetailLoading = ref(false)
 

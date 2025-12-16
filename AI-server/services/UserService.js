@@ -20,8 +20,9 @@ const AdminAuthService = require('./AdminAuthService');
 
 class UserService extends BaseService {
   constructor() {
-    super(new UserRepository());
-    this.userRepository = new UserRepository();
+    const userRepository = new UserRepository();
+    super(userRepository);
+    this.userRepository = userRepository;
     this.twoFactorRepository = new TwoFactorRepository();
   }
 
@@ -276,17 +277,9 @@ class UserService extends BaseService {
         }
       }
 
-      // 查找用户
-      let user;
-      // 如果提供了email，则使用email查找；否则使用username查找
+      // 查找用户（包含角色信息）
       const loginIdentifier = email || username;
-      
-      // 判断是否为邮箱格式
-      if (this.isValidEmail(loginIdentifier)) {
-        user = await this.userRepository.findByEmail(loginIdentifier);
-      } else {
-        user = await this.userRepository.findByUsername(loginIdentifier);
-      }
+      const user = await this.userRepository.findUserWithRoles(loginIdentifier);
 
       // 添加调试日志
       logger.info('[UserService] 查找用户结果', { 
@@ -642,17 +635,7 @@ class UserService extends BaseService {
       });
       
       // 3. 更新会话记录（实现刷新令牌轮换）
-      // 在更新之前，先将旧的刷新令牌加入黑名单
-      const { revokeTokenPair } = require('../config/jwtManager');
-      
-      // 撤销旧的令牌对（将旧的刷新令牌加入黑名单）
-      try {
-        await revokeTokenPair(null, refreshToken, 'token_refresh');
-        logger.info('[UserService] 旧刷新令牌已加入黑名单');
-      } catch (revokeError) {
-        logger.warn('[UserService] 撤销旧刷新令牌失败', { error: revokeError.message });
-      }
-      
+      // 先更新数据库中的刷新令牌，确保新令牌生效
       const updateSessionQuery = `
         UPDATE user_sessions 
         SET 
@@ -679,7 +662,18 @@ class UserService extends BaseService {
       
       const updatedSession = updateResult.rows[0];
       
-      // 4. 记录审计日志
+      // 4. 只有在成功更新数据库后，再撤销旧的刷新令牌
+      const { revokeTokenPair } = require('../config/jwtManager');
+      
+      try {
+        await revokeTokenPair(null, refreshToken, 'token_refresh');
+        logger.info('[UserService] 旧刷新令牌已加入黑名单');
+      } catch (revokeError) {
+        logger.warn('[UserService] 撤销旧刷新令牌失败', { error: revokeError.message });
+        // 这里不抛出错误，因为数据库已经更新成功
+      }
+      
+      // 5. 记录审计日志
       const auditLogQuery = `
         INSERT INTO audit_logs (
           table_name, operation, record_id, old_values, new_values,
@@ -693,10 +687,10 @@ class UserService extends BaseService {
       const auditParams = [
         updatedSession.id,
         JSON.stringify({
-          last_activity: oldSession.last_activity
+          last_activity: session.last_activity || session.last_accessed_at
         }),
         JSON.stringify({
-          last_activity: updatedSession.last_activity,
+          last_activity: updatedSession.last_activity || updatedSession.last_accessed_at,
           updated_at: updatedSession.updated_at
         }),
         userId,
@@ -884,9 +878,19 @@ class UserService extends BaseService {
         throw new Error('用户未激活');
       }
 
+      // 获取用户的角色信息
+      const roles = await this.userRepository.getUserRoles(userId);
+      
+      // 如果有角色信息，更新用户对象
+      if (roles) {
+        user.role = roles.role;
+        user.permissions = roles.permissions || [];
+      }
+
       logger.info('[UserService] 获取用户资料成功', { 
         userId,
-        username: user.username 
+        username: user.username,
+        role: user.role
       });
 
       return {
@@ -2594,6 +2598,230 @@ class UserService extends BaseService {
    * @param {string} newPassword - 新密码
    * @returns {Promise<Object>} 重置结果
    */
+  /**
+   * 短信登录
+   * @param {Object} loginData - 登录数据
+   * @returns {Promise<Object>} 登录结果
+   */
+  async smsLogin(loginData) {
+    const { pool } = require('../config/database');
+    const client = await pool.connect();
+    
+    try {
+      logger.info('[UserService] 短信登录开始', { phone: loginData.phone });
+
+      const { phone, code, ip, userAgent } = loginData;
+
+      // 验证必填字段
+      if (!phone || !code) {
+        throw new Error('手机号和验证码为必填项');
+      }
+
+      // 开始事务
+      await client.query('BEGIN');
+
+      // 1. 验证手机号码是否存在且状态正常
+      logger.info('[UserService] 开始验证手机号码', { phone });
+      // 注意：可能存在多个使用相同手机号的用户，我们需要确保获取到最新的用户
+      const findUserQuery = `
+        SELECT id, phone, phone_verified, status, failed_login_attempts, locked_until
+        FROM users 
+        WHERE phone = $1 AND status = 'active'
+        ORDER BY created_at DESC
+        LIMIT 1
+      `;
+      
+      const userResult = await client.query(findUserQuery, [phone]);
+      logger.info('[UserService] 用户查询结果', { rowCount: userResult.rows.length });
+      
+      if (userResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        throw new Error('手机号未注册或账户状态异常');
+      }
+      
+      const user = userResult.rows[0];
+      logger.info('[UserService] 找到用户', { userId: user.id, phone: user.phone, status: user.status });
+      
+      // 检查用户是否被锁定
+      if (user.locked_until && new Date(user.locked_until) > new Date()) {
+        await client.query('ROLLBACK');
+        logger.warn('[UserService] 短信登录失败: 账户已被锁定', { 
+          userId: user.id,
+          phone,
+          lockedUntil: user.locked_until 
+        });
+        throw new Error(`账户已被锁定，请于 ${new Date(user.locked_until).toLocaleString()} 后再试`);
+      }
+
+      // 2. 验证短信验证码
+      logger.info('[UserService] 开始验证短信验证码', { userId: user.id, code });
+      
+      const findCodeQuery = `
+        SELECT id, user_id, code, attempts, max_attempts, is_used, expires_at
+        FROM two_factor_codes
+        WHERE user_id = $1 
+          AND code = $2 
+          AND channel = 'sms' 
+          AND code_type = 'login'
+          AND is_used = FALSE
+          AND expires_at > NOW()
+          AND attempts < max_attempts
+        ORDER BY created_at DESC 
+        LIMIT 1
+      `;
+      
+      const codeResult = await client.query(findCodeQuery, [user.id, code]);
+      
+      logger.info('[UserService] 验证码查询结果', { rowCount: codeResult.rows.length, userId: user.id, code: code });
+      
+      if (codeResult.rows.length === 0) {
+        // 增加验证码尝试次数
+        // 注意：根据表结构约束，attempts 字段需要在合理的范围内
+        await client.query('ROLLBACK');
+        logger.warn('[UserService] 短信登录失败: 验证码无效或已过期', { 
+          userId: user.id,
+          phone,
+          code
+        });
+        throw new Error('验证码无效或已过期');
+      }
+      
+      const verificationRecord = codeResult.rows[0];
+
+      // 3. 更新验证码状态为已使用
+      const updateCodeQuery = `
+        UPDATE two_factor_codes 
+        SET is_used = TRUE, used_at = NOW() 
+        WHERE id = $1
+      `;
+      
+      await client.query(updateCodeQuery, [verificationRecord.id]);
+
+      // 4. 生成JWT双令牌
+      const tokenPair = generateTokenPair(user.id, {
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        permissions: user.permissions || []
+      });
+
+      // 5. 创建用户会话
+      const sessionToken = tokenPair.accessToken;
+      const refreshToken = tokenPair.refreshToken;
+      
+      // 解析用户代理信息
+      const deviceInfo = this.parseUserAgent(userAgent);
+      
+      // 设置会话过期时间（默认7天）
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+      
+      const insertSessionQuery = `
+        INSERT INTO user_sessions (
+          user_id, session_token, refresh_token, device_info, 
+          ip_address, user_agent, status, expires_at, last_accessed_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, 'active', $7, NOW())
+        RETURNING id, user_id, session_token, refresh_token, device_info, ip_address, user_agent, status, expires_at, created_at, last_accessed_at
+      `;
+      
+      const sessionParams = [
+        user.id,
+        sessionToken,
+        refreshToken,
+        JSON.stringify(deviceInfo),
+        ip || '0.0.0.0',
+        userAgent || '',
+        expiresAt
+      ];
+      
+      const sessionResult = await client.query(insertSessionQuery, sessionParams);
+      const session = sessionResult.rows[0];
+
+      // 6. 更新用户登录信息
+      const updateUserQuery = `
+        UPDATE users 
+        SET last_login_at = NOW(), last_login_ip = $1, failed_login_attempts = 0 
+        WHERE id = $2
+      `;
+      
+      await client.query(updateUserQuery, [ip, user.id]);
+
+      // 7. 记录审计日志
+      const auditLogQuery = `
+        INSERT INTO audit_logs (
+          table_name, operation, record_id, new_values,
+          user_id, ip_address, user_agent
+        ) VALUES (
+          'users', 'INSERT', $1, $2,
+          $3, $4, $5
+        )
+      `;
+      
+      const auditParams = [
+        user.id,
+        JSON.stringify({
+          action: 'sms_login',
+          phone: user.phone,
+          success: true
+        }),
+        user.id,
+        ip || '0.0.0.0',
+        userAgent || ''
+      ];
+      
+      await client.query(auditLogQuery, auditParams);
+
+      // 提交事务
+      await client.query('COMMIT');
+
+      logger.info('[UserService] 短信登录成功', { 
+        userId: user.id,
+        phone
+      });
+
+      return {
+        success: true,
+        data: {
+          user: {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            phone: user.phone,
+            status: user.status,
+            phone_verified: user.phone_verified,
+            last_login_at: new Date(),
+            created_at: user.created_at
+          },
+          tokens: {
+            accessToken: tokenPair.accessToken,
+            refreshToken: tokenPair.refreshToken,
+            expiresIn: tokenPair.expiresIn,
+            refreshExpiresIn: tokenPair.refreshExpiresIn
+          },
+          session: session
+        },
+        message: '登录成功'
+      };
+
+    } catch (error) {
+      await client.query('ROLLBACK');
+      logger.error('[UserService] 短信登录失败', { 
+        error: error.message,
+        phone: loginData.phone 
+      });
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 使用验证码重置密码
+   * @param {string} email - 邮箱地址
+   * @param {string} code - 验证码
+   * @param {string} newPassword - 新密码
+   * @returns {Promise<Object>} 重置结果
+   */
   async resetPasswordWithCode(email, code, newPassword) {
     const { pool } = require('../config/database');
     const client = await pool.connect();
@@ -2740,6 +2968,103 @@ class UserService extends BaseService {
       logger.error('[UserService] 使用验证码重置密码失败', { 
         error: error.message,
         email 
+      });
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 验证访问令牌有效性
+   * @param {Object} validationData - 验证数据
+   * @returns {Promise<Object>} 验证结果
+   */
+  async validateToken(validationData) {
+    const { pool } = require('../config/database');
+    const client = await pool.connect();
+    
+    try {
+      logger.info('[UserService] 令牌验证开始', { sessionToken: validationData.sessionToken });
+
+      const { sessionToken } = validationData;
+
+      // 验证必填字段
+      if (!sessionToken) {
+        throw new Error('访问令牌为必填项');
+      }
+
+      // 开始事务
+      await client.query('BEGIN');
+
+      // 1. 验证访问令牌有效性 - 查询 user_sessions 表
+      const findSessionQuery = `
+        SELECT us.id, us.user_id, us.status, us.expires_at, us.last_accessed_at,
+               u.id as user_id, u.username, u.email, u.nickname, u.status as user_status, 
+               u.two_factor_enabled, u.locked_until
+        FROM user_sessions us
+        JOIN users u ON us.user_id = u.id
+        WHERE us.session_token = $1
+          AND us.status = 'active'
+          AND us.expires_at > NOW()
+          AND u.status = 'active'
+          AND (u.locked_until IS NULL OR u.locked_until < NOW())
+      `;
+      
+      const sessionResult = await client.query(findSessionQuery, [sessionToken]);
+      
+      if (sessionResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        throw new Error('令牌无效或已过期');
+      }
+      
+      const session = sessionResult.rows[0];
+      const user = {
+        id: session.user_id,
+        username: session.username,
+        email: session.email,
+        nickname: session.nickname,
+        status: session.user_status,
+        two_factor_enabled: session.two_factor_enabled,
+        locked_until: session.locked_until
+      };
+
+      // 2. 更新会话最后访问时间 - 更新 user_sessions 表
+      const updateSessionQuery = `
+        UPDATE user_sessions 
+        SET last_accessed_at = NOW() 
+        WHERE session_token = $1 AND status = 'active'
+      `;
+      
+      await client.query(updateSessionQuery, [sessionToken]);
+
+      // 提交事务
+      await client.query('COMMIT');
+
+      logger.info('[UserService] 令牌验证成功', { 
+        userId: user.id,
+        sessionId: session.id
+      });
+
+      return {
+        success: true,
+        data: {
+          user: user,
+          session: {
+            id: session.id,
+            status: session.status,
+            expires_at: session.expires_at,
+            last_accessed_at: session.last_accessed_at
+          }
+        },
+        message: '验证成功'
+      };
+
+    } catch (error) {
+      await client.query('ROLLBACK');
+      logger.error('[UserService] 令牌验证失败', { 
+        error: error.message,
+        sessionToken: validationData.sessionToken 
       });
       throw error;
     } finally {

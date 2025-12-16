@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 简化版数据库配置模块 - 调试版本
  */
 
@@ -10,39 +10,32 @@ dotenv.config({ path: '.env' });
 
 // 获取数据库配置
 function getDatabaseConfig() {
-  if (process.env.DATABASE_URL) {
-    console.log('使用 Zeabur 数据库配置');
-    return {
-      connectionString: process.env.DATABASE_URL,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-    };
-  } else {
-    console.log('⚠️ 使用单独的数据库配置（本地环境）');
-    const config = {
-      host: process.env.DB_HOST || '[DB_HOST]',
-      port: process.env.DB_PORT || 5432,
-      user: process.env.DB_USER || 'postgres',
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME || 'postgres',
-      ssl: false
-    };
-    
-    // 打印配置以便调试（在开发环境）
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('🔍 数据库连接配置检查:');
-      console.log('host:', getSafeEnvDisplay('DB_HOST'));
-      console.log('port:', getSafeEnvDisplay('DB_PORT'));
-      console.log('user:', getSafeEnvDisplay('DB_USER'));
-      console.log('password:', getSafeEnvDisplay('DB_PASSWORD') ? '***已设置***' : '未设置');
-      console.log('database:', getSafeEnvDisplay('DB_NAME'));
-      console.log('SSL:', config.ssl ? '已启用' : '未启用');
-    }
-    
-    return config;
+  // 直接使用.env文件中的本地数据库配置
+  console.log('使用本地数据库配置');
+  const config = {
+    host: process.env.DB_HOST || 'localhost',
+    port: process.env.DB_PORT || 5432,
+    user: process.env.DB_USER || 'postgres',
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME || 'postgres',
+    ssl: false
+  };
+  
+  // 打印配置以便调试（在开发环境）
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('🔍 数据库连接配置检查');
+    console.log('host:', getSafeEnvDisplay('DB_HOST'));
+    console.log('port:', getSafeEnvDisplay('DB_PORT'));
+    console.log('user:', getSafeEnvDisplay('DB_USER'));
+    console.log('password:', getSafeEnvDisplay('DB_PASSWORD') ? '***已设置**' : '未设置');
+    console.log('database:', getSafeEnvDisplay('DB_NAME'));
+    console.log('SSL:', config.ssl ? '已启用' : '未启用');
   }
+  
+  return config;
 }
 
-// 创建简化版连接池配置
+// 创建连接池时设置UTF-8编码
 const poolConfig = {
   ...getDatabaseConfig(),
   // 连接池大小配置
@@ -59,29 +52,24 @@ const poolConfig = {
 // 创建连接池
 const pool = new Pool(poolConfig);
 
+// 设置UTF-8字符编码
+pool.on('connect', (client) => {
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[DB_POOL] 新连接已建立');
+  }
+  // 设置UTF-8字符编码
+  client.query('SET client_encoding TO UTF8;');
+});
+
 // 简化的错误处理 - 避免信息泄露
 pool.on('error', (err, client) => {
   console.error('[DB_POOL] 连接池错误: [错误信息已过滤]');
 });
 
-pool.on('connect', (client) => {
-  if (process.env.NODE_ENV !== 'production') {
-    console.log('[DB_POOL] 新连接已建立');
-  }
-});
-
-pool.on('acquire', (client) => {
-  // 在生产环境下不输出详细日志
-});
-
-pool.on('remove', (client) => {
-  // 在生产环境下不输出详细日志
-});
-
 // 简化版查询函数 - 过滤敏感信息
 const query = async (text, params = []) => {
   if (process.env.NODE_ENV !== 'production') {
-    console.log(`[DB_QUERY] 执行查询: ${text.substring(0, 50)}...`);
+    console.log('[DB_QUERY] 执行查询: ...');
   }
   const start = Date.now();
   
@@ -157,7 +145,7 @@ const getDatabases = async () => {
     const result = await query('SELECT datname FROM pg_database WHERE datistemplate = false');
     return result.rows.map(row => row.datname);
   } catch (error) {
-    console.error('获取数据库列表失败:', error);
+    console.error('获取数据库列表失败', error);
     throw error;
   }
 };

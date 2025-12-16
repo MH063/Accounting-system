@@ -1139,6 +1139,7 @@ import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import QRCode from 'qrcode'
 import dataEncryptionManager from '@/services/dataEncryptionManager'
 import { changePassword as changeUserPassword } from '@/services/authService'
+import { validateUserToken } from '@/utils/tokenValidator'
 import { 
   checkBiometricSupport,
   enableBiometric,
@@ -1840,6 +1841,12 @@ const openSecurityLog = (): void => {
 
 const changePassword = async (): Promise<void> => {
   try {
+    // 验证用户令牌
+    const isTokenValid = await validateUserToken()
+    if (!isTokenValid) {
+      console.log('令牌验证失败')
+      return
+    }
     // 调用真实API接口修改密码
     await changeUserPassword({
       currentPassword: passwordForm.currentPassword,
@@ -2501,7 +2508,14 @@ const sendEmailCode = async (): Promise<void> => {
   initializeSecurityLogs();
 }
 
-const bindPhone = (): void => {
+const bindPhone = async (): Promise<void> => {
+  // 验证用户令牌
+  const isTokenValid = await validateUserToken()
+  if (!isTokenValid) {
+    console.log('令牌验证失败')
+    return
+  }
+  
   if (!phoneForm.phone || !phoneForm.code) {
     ElMessage.error('请填写完整信息')
     return
@@ -2525,7 +2539,14 @@ const bindPhone = (): void => {
   initializeSecurityLogs();
 }
 
-const bindEmail = (): void => {
+const bindEmail = async (): Promise<void> => {
+  // 验证用户令牌
+  const isTokenValid = await validateUserToken()
+  if (!isTokenValid) {
+    console.log('令牌验证失败')
+    return
+  }
+  
   if (!emailForm.email || !emailForm.code) {
     ElMessage.error('请填写完整信息')
     return
@@ -3113,8 +3134,14 @@ const regenerateBackupCodes = (): void => {
   })
 }
 
-const saveLoginLimit = (): void => {
+const saveLoginLimit = async (): Promise<void> => {
   try {
+    // 验证用户令牌
+    const isTokenValid = await validateUserToken()
+    if (!isTokenValid) {
+      console.log('令牌验证失败')
+      return
+    }
     // 获取当前用户ID（实际应用中应从用户信息获取）
     const userId = 'current_user_id';
     
@@ -3182,7 +3209,14 @@ const saveLoginLimit = (): void => {
   }
 }
 
-const saveSecurityQuestions = (): void => {
+const saveSecurityQuestions = async (): Promise<void> => {
+  // 验证用户令牌
+  const isTokenValid = await validateUserToken()
+  if (!isTokenValid) {
+    console.log('令牌验证失败')
+    return
+  }
+  
   if (!securityQuestionForm.question1 || !securityQuestionForm.answer1 ||
       !securityQuestionForm.question2 || !securityQuestionForm.answer2 ||
       !securityQuestionForm.question3 || !securityQuestionForm.answer3) {
@@ -3214,8 +3248,14 @@ const saveSecurityQuestions = (): void => {
   }
 }
 
-const saveLockoutSettings = (): void => {
+const saveLockoutSettings = async (): Promise<void> => {
   try {
+    // 验证用户令牌
+    const isTokenValid = await validateUserToken()
+    if (!isTokenValid) {
+      console.log('令牌验证失败')
+      return
+    }
     // 获取当前配置
     const config = getSecurityConfig()
     config.lockout = { ...lockoutSettings }
@@ -3291,7 +3331,13 @@ const cancelSessionTimeout = (): void => {
   initializeSecurityLogs();
 }
 
-const saveSessionTimeout = (): void => {
+const saveSessionTimeout = async (): Promise<void> => {
+  // 验证用户令牌
+  const isTokenValid = await validateUserToken()
+  if (!isTokenValid) {
+    console.log('令牌验证失败')
+    return
+  }
   // 保存会话超时设置
   ElMessage.success(`会话超时设置已保存：超时时长 ${sessionTimeoutForm.timeout} 分钟，提醒时间 ${sessionTimeoutForm.warningTime} 分钟`)
   showSessionTimeoutDialog.value = false
@@ -3707,9 +3753,21 @@ const stopLockStatusCheck = (): void => {
 }
 
 // 生命周期
-onMounted(() => {
+onMounted(async () => {
   // 模拟加载数据
   console.log('安全设置页面加载完成')
+  
+  // 验证用户令牌
+  try {
+    const isTokenValid = await validateUserToken()
+    if (!isTokenValid) {
+      console.log('令牌验证失败')
+      // 令牌验证失败的处理已经在validateUserToken中处理
+      return
+    }
+  } catch (error) {
+    console.error('令牌验证异常:', error)
+  }
   
   // 记录页面访问日志
   const userId = localStorage.getItem('userId') || 'default_user';

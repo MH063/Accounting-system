@@ -12,7 +12,7 @@
         <el-button 
           type="primary" 
           :icon="Plus" 
-          @click="router.push('/dashboard/expense')"
+          @click="router.push('/dashboard/expense/create')"
           class="create-btn"
         >
           新建费用
@@ -224,7 +224,7 @@
             class="more-actions-btn"
           >
             更多
-            <el-icon class="el-icon--right"><arrow-down /></el-icon>
+            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
           </el-button>
           <template #dropdown>
             <el-dropdown-menu>
@@ -273,7 +273,7 @@
                   :icon="Download"
                 >
                   导出
-                  <el-icon class="el-icon--right"><arrow-down /></el-icon>
+                  <el-icon class="el-icon--right"><ArrowDown /></el-icon>
                 </el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
@@ -405,9 +405,7 @@
             v-if="filteredExpenses.length > 0 && viewMode === 'card'"
             class="card-view-container"
           >
-            <el-pullrefresh 
-              v-model="refreshing" 
-              @refresh="handleRefresh"
+            <div 
               class="pullrefresh-wrapper"
             >
               <!-- 按月份分组展示 -->
@@ -550,7 +548,7 @@
                   加载中...
                 </el-button>
               </div>
-            </el-pullrefresh>
+            </div>
           </div>
 
           <!-- 空状态 -->
@@ -564,7 +562,7 @@
             <el-button 
               v-if="!searchQuery && !statusFilter && !categoryFilter && !monthFilter"
               type="primary" 
-              @click="router.push('/dashboard/expense')"
+              @click="router.push('/dashboard/expense/create')"
             >
               创建费用
             </el-button>
@@ -632,7 +630,7 @@
             </el-radio-group>
           </div>
         </div>
-        
+
         <!-- 收款码展示 -->
         <div v-if="showQRCode" class="qr-code-section">
           <h4>请扫描下方二维码完成支付</h4>
@@ -679,8 +677,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { 
   Plus, Search, Refresh, Wallet, Clock, CircleCheck,
-  Calendar, Money, DocumentChecked, Download, View, Edit, Delete, Grid, List, User, More,
-  CreditCard, ChatLineRound, Money as BankIcon, SuccessFilled, Picture
+  Calendar, Money, Document, DocumentChecked, Download, View, Edit, Delete, Grid, List, User, More,
+  CreditCard, ChatLineRound, Money as BankIcon, SuccessFilled, Picture, Close, ArrowDown, DataAnalysis
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { expenseService } from '@/services/expenseService'
@@ -1283,7 +1281,7 @@ const exportExpenses = async (format: 'csv' | 'xlsx' = 'csv') => {
 
 // 使用expenseService获取费用数据
 const loadExpenses = async () => {
-  await withLoading(loading, async () => {
+  await withLoading(async () => {
     try {
       const response = await expenseService.getExpenseList()
       if (response.success && response.data) {
@@ -1294,7 +1292,7 @@ const loadExpenses = async () => {
     } catch (error) {
       handleApiError(error, '获取费用数据失败')
     }
-  })
+  }, '加载费用数据...')
 }
 
 // 生命周期
@@ -1308,7 +1306,6 @@ const batchProcessing = ref(false)
 const quickFilter = ref('')
 
 // 批量操作方法
-const handleBatchApprove = async () => {
 // 批量审核通过
 const handleBatchApprove = async () => {
   // 获取所有待审核的记录
@@ -2252,6 +2249,5 @@ const handleClearAll = async () => {
   justify-content: flex-end;
   gap: 12px;
 }
-
 
 </style>

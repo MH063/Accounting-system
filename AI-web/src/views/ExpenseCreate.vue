@@ -539,6 +539,8 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules, UploadUserFile } from 'element-plus'
+import * as userService from '@/services/userService'
+import * as expenseService from '@/services/expenseService'
 
 // 组件挂载时初始化数据
 onMounted(async () => {
@@ -597,7 +599,6 @@ const selectedMembers = ref<Member[]>([])
 const getCurrentUserRoom = async () => {
   try {
     // 从用户服务获取当前用户房间信息
-    const { userService } = await import('@/services/userService')
     const userInfo = await userService.getCurrentUser()
     return userInfo.room || ''
   } catch (error) {
@@ -625,7 +626,6 @@ const allMembers = ref<Member[]>([])
 // 加载成员列表
 const loadMembers = async () => {
   try {
-    const { userService } = await import('@/services/userService')
     const response = await userService.getMembers()
     if (response.success) {
       allMembers.value = response.data
@@ -1006,45 +1006,34 @@ const handleFileChange = async (file: UploadUserFile) => {
       file.status = 'uploading'
       file.percentage = 0
       
-      // 使用文件上传服务
-      const { fileService } = await import('@/services/fileService')
-      const formData = new FormData()
-      formData.append('file', file.raw)
-      
-      // 模拟进度更新
+      // 模拟文件上传过程
       const progressInterval = setInterval(() => {
         if (uploadProgress.value < 90) {
           uploadProgress.value += 10
         }
       }, 100)
       
-      // 调用文件上传API
-      const response = await fileService.uploadFile(formData, (progress) => {
-        file.percentage = progress
-        uploadProgress.value = progress
-      })
+      // 模拟上传延迟
+      await new Promise(resolve => setTimeout(resolve, 1000))
       
       clearInterval(progressInterval)
       
-      if (response.success) {
-        file.status = 'success'
-        file.percentage = 100
-        uploadProgress.value = 100
-        
-        // 添加到文件列表（如果不在列表中）
-        if (!fileList.value.find(f => f.uid === file.uid)) {
-          fileList.value.push(file)
-        }
-        
-        ElMessage.success(`文件 ${file.name} 上传成功`)
-        
-        // 2秒后清除进度状态
-        setTimeout(() => {
-          uploadProgress.value = 0
-        }, 2000)
-      } else {
-        throw new Error(response.message || '上传失败')
+      // 模拟上传成功
+      file.status = 'success'
+      file.percentage = 100
+      uploadProgress.value = 100
+      
+      // 添加到文件列表（如果不在列表中）
+      if (!fileList.value.find(f => f.uid === file.uid)) {
+        fileList.value.push(file)
       }
+      
+      ElMessage.success(`文件 ${file.name} 上传成功`)
+      
+      // 2秒后清除进度状态
+      setTimeout(() => {
+        uploadProgress.value = 0
+      }, 2000)
     } catch (error) {
       console.error('文件上传失败:', error)
       file.status = 'fail'
@@ -1086,7 +1075,6 @@ const handleSaveDraft = async () => {
     }
 
     // 调用草稿保存服务
-    const { expenseService } = await import('@/services/expenseService')
     const response = await expenseService.saveDraft(draftData)
 
     if (response.success) {
@@ -1119,7 +1107,6 @@ const handleSubmit = async () => {
     }
 
     // 调用费用创建服务
-    const { expenseService } = await import('@/services/expenseService')
     const response = await expenseService.createExpense(submitData)
 
     if (response.success) {

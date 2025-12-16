@@ -174,14 +174,13 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onUnmounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { request } from '@/utils/request'
 import { handleApiError } from '@/utils/errorUtils'
 
 // 路由实例
 const router = useRouter()
-const route = useRoute()
 
 // 表单引用
 const resetFormRef = ref<FormInstance>()
@@ -526,15 +525,79 @@ onUnmounted(() => {
 
 .send-code-button {
   white-space: nowrap;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border: none !important;
+  border-radius: 8px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: white !important;
+  padding: 8px 16px !important;
+  height: 40px !important;
+  min-width: 120px !important;
+}
+
+.send-code-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.send-code-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.send-code-button:disabled {
+  background: #cccccc !important;
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .reset-button {
-  width: 100%;
-  margin-bottom: 1rem;
+  width: 100% !important;
+  height: 48px !important;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border: none !important;
+  border-radius: 12px !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: white !important;
+  margin-bottom: 1rem !important;
+}
+
+.reset-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+}
+
+.reset-button:active {
+  transform: translateY(0);
 }
 
 .login-link-button {
-  width: 100%;
+  width: 100% !important;
+  height: 48px !important;
+  background: transparent !important;
+  border: 2px solid #667eea !important;
+  border-radius: 12px !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: #667eea !important;
+}
+
+.login-link-button:hover {
+  background: #667eea !important;
+  color: white !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.login-link-button:active {
+  transform: translateY(0);
 }
 
 /* 密码强度指示器 */
@@ -650,7 +713,8 @@ onUnmounted(() => {
   }
   
   .send-code-button {
-    width: 100%;
+    width: 100% !important;
+    min-width: auto !important;
   }
 }
 </style>
