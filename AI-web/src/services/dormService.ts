@@ -150,9 +150,95 @@ export interface DormInfo {
   members: DormMember[]
 }
 
+// 宿舍详情接口
+export interface DormDetail {
+  id: number
+  dormName: string
+  dormCode: string
+  address: string
+  capacity: number
+  currentOccupancy: number
+  description: string | null
+  status: 'active' | 'inactive' | 'maintenance'
+  type: 'single' | 'double' | 'quad' | 'apartment' | 'standard'
+  area: number | null
+  genderLimit: 'male' | 'female' | 'mixed' | null
+  monthlyRent: string
+  deposit: string
+  utilityIncluded: boolean
+  building: string | null
+  floor: number | null
+  roomNumber: string | null
+  facilities: string[]
+  amenities: string[]
+  createdAt: string
+  updatedAt: string
+  adminInfo: {
+    id: number
+    username: string
+    nickname: string
+    avatar: string | null
+  } | null
+  currentUsers: Array<{
+    id: number
+    name: string
+    status: 'active' | 'inactive'
+  }> | null
+  occupancyRate: number
+}
+
 import type { ApiResponse } from '@/types'
 // 导入请求函数
 import { request } from '@/utils/request'
+
+// 定义宿舍创建请求参数接口
+export interface CreateDormRequest {
+  dormName: string           // ⭐️ 必需：宿舍名称
+  address: string            // ⭐️ 必需：地址
+  capacity: number           // ⭐️ 必需：容量
+  dormCode?: string          // ⭐️ 可选：宿舍编码（唯一）
+  description?: string       // ⭐️ 可选：描述
+  type?: string              // ⭐️ 可选：宿舍类型（single,double,quad,apartment,standard）
+  area?: number              // ⭐️ 可选：面积（平方米）
+  genderLimit?: string       // ⭐️ 可选：性别限制（male,female,mixed）
+  monthlyRent?: number       // ⭐️ 可选：月租金
+  deposit?: number           // ⭐️ 可选：押金
+  utilityIncluded?: boolean  // ⭐️ 可选：是否包含水电
+  contactPerson?: string     // ⭐️ 可选：联系人
+  contactPhone?: string      // ⭐️ 可选：联系电话
+  contactEmail?: string      // ⭐️ 可选：联系邮箱
+  building?: string          // ⭐️ 可选：建筑物
+  floor?: number             // ⭐️ 可选：楼层
+  roomNumber?: string        // ⭐️ 可选：房间号
+  facilities?: string[]      // ⭐️ 可选：设施列表（JSON数组）
+  amenities?: string[]       // ⭐️ 可选：便利设施（JSON数组）
+  adminId?: number           // ⭐️ 可选：管理员ID，关联users表
+}
+
+// 定义宿舍更新请求参数接口
+export interface UpdateDormRequest {
+  dormName?: string          // 宿舍名称 (可选)
+  dormCode?: string          // 宿舍编码 (可选)
+  address?: string           // 地址 (可选)
+  capacity?: number          // 容量 (可选)
+  description?: string       // 描述 (可选)
+  status?: string            // 状态 (可选)
+  type?: string              // 类型 (可选)
+  area?: number              // 面积（平方米）(可选)
+  genderLimit?: string       // 性别限制 (可选)
+  monthlyRent?: number       // 月租金 (可选)
+  deposit?: number           // 押金 (可选)
+  utilityIncluded?: boolean  // 是否包含水电 (可选)
+  contactPerson?: string     // 联系人 (可选)
+  contactPhone?: string      // 联系电话 (可选)
+  contactEmail?: string      // 联系邮箱 (可选)
+  building?: string          // 建筑物 (可选)
+  floor?: number             // 楼层 (可选)
+  roomNumber?: string        // 房间号 (可选)
+  facilities?: string[]      // 设施列表 (可选)
+  amenities?: string[]       // 便利设施 (可选)
+  adminId?: number           // 管理员ID (可选)
+}
 
 class DormService {
   /**
@@ -232,6 +318,28 @@ class DormService {
   }
 
   /**
+   * 根据ID获取宿舍详情（新API）
+   */
+  async getDormDetail(id: number): Promise<ApiResponse<DormDetail>> {
+    try {
+      console.log('获取宿舍详情:', id)
+      
+      // 调用真实API获取宿舍详情
+      const response = await request<DormDetail>(`/api/dorms/${id}`)
+      
+      return response
+    } catch (error) {
+      console.error('获取宿舍详情失败:', error)
+      return {
+        success: false,
+        data: {} as DormDetail,
+        message: '获取宿舍详情失败',
+        code: 500
+      }
+    }
+  }
+
+  /**
    * 创建新寝室
    */
   async createDorm(dormInfo: DormBasicInfo & { facilities: DormFacilities; fees: DormFees }): Promise<ApiResponse<DormInfo>> {
@@ -257,25 +365,52 @@ class DormService {
   }
 
   /**
-   * 更新寝室信息
+   * 创建新宿舍（符合新API格式）
    */
-  async updateDorm(id: string, dormInfo: Partial<DormInfo>): Promise<ApiResponse<DormInfo>> {
+  async createNewDorm(dormData: CreateDormRequest): Promise<ApiResponse<any>> {
     try {
-      console.log('更新寝室信息:', id, dormInfo)
+      console.log('创建新宿舍:', dormData)
       
-      // 调用真实API更新寝室信息
-      const response = await request<DormInfo>(`/dorms/${id}`, {
-        method: 'PUT',
-        data: dormInfo
+      // 调用真实API创建宿舍
+      const response = await request<any>('/api/dorms', {
+        method: 'POST',
+        data: dormData
       })
       
       return response
     } catch (error) {
-      console.error('更新寝室信息失败:', error)
+      console.error('创建宿舍失败:', error)
       return {
         success: false,
-        data: {} as DormInfo,
-        message: '更新寝室信息失败',
+        data: null,
+        message: '创建宿舍失败',
+        code: 500
+      }
+    }
+  }
+
+  /**
+   * 更新宿舍信息（新API）
+   * @param id 宿舍ID
+   * @param dormData 更新的宿舍数据
+   */
+  async updateDormInfo(id: number, dormData: UpdateDormRequest): Promise<ApiResponse<any>> {
+    try {
+      console.log('更新宿舍信息:', id, dormData)
+      
+      // 调用真实API更新宿舍信息
+      const response = await request<any>(`/api/dorms/${id}`, {
+        method: 'PUT',
+        data: dormData
+      })
+      
+      return response
+    } catch (error) {
+      console.error('更新宿舍信息失败:', error)
+      return {
+        success: false,
+        data: null,
+        message: '更新宿舍信息失败',
         code: 500
       }
     }
@@ -304,6 +439,33 @@ class DormService {
         success: false,
         data: false,
         message: '删除寝室失败',
+        code: 500
+      }
+    }
+  }
+
+  /**
+   * 更新宿舍信息
+   * @param id 宿舍ID
+   * @param dormData 更新的宿舍数据
+   */
+  async updateDormitory(id: number | string, dormData: Partial<Omit<EditingDorm, 'id' | 'dormNumber'>>): Promise<ApiResponse<any>> {
+    try {
+      console.log('更新宿舍信息:', id, dormData)
+      
+      // 调用真实API更新宿舍信息
+      const response = await request<any>(`/api/dorms/${id}`, {
+        method: 'PUT',
+        data: dormData
+      })
+      
+      return response
+    } catch (error) {
+      console.error('更新宿舍信息失败:', error)
+      return {
+        success: false,
+        data: null,
+        message: '更新宿舍信息失败',
         code: 500
       }
     }

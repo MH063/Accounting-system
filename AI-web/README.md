@@ -99,7 +99,7 @@ src/
 │   ├── BudgetManagement.vue   # 预算管理页面
 │   ├── Dashboard.vue          # 仪表盘页面
 │   ├── DormCreate.vue         # 创建寝室页面
-│   ├── DormInfo.vue           # 寝室信息页面
+
 │   ├── DormManagement.vue     # 寝室管理页面
 │   ├── DormSettings.vue       # 寝室设置页面
 │   ├── ExpenseCreate.vue      # 创建费用页面

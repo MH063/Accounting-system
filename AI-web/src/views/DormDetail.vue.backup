@@ -1,0 +1,574 @@
+<template>
+  <div class="dorm-detail">
+    <!-- 页面头部 -->
+    <div class="page-header">
+      <div class="header-left">
+        <h1 class="page-title">宿舍详情</h1>
+      </div>
+      <div class="header-actions">
+        <el-button 
+          type="primary" 
+          :icon="ArrowLeft" 
+          @click="handleBack"
+          class="back-btn"
+        >
+          返回
+        </el-button>
+        <el-button @click="refreshData" :loading="loading">
+          <el-icon><Refresh /></el-icon>
+          刷新
+        </el-button>
+      </div>
+    </div>
+
+    <!-- 加载状态 -->
+    <div v-if="loading" class="loading-container">
+      <el-skeleton animated>
+        <template #template>
+          <el-skeleton-item variant="h1" style="width: 30%" />
+          <div style="margin-top: 20px">
+            <el-skeleton-item variant="p" style="width: 50%" />
+          </div>
+          <div style="margin-top: 20px">
+            <el-skeleton-item variant="rect" style="width: 100%; height: 200px" />
+          </div>
+        </template>
+      </el-skeleton>
+    </div>
+
+    <!-- 错误状态 -->
+    <div v-else-if="error" class="error-container">
+      <el-result icon="error" title="加载失败" :sub-title="error">
+        <template #extra>
+          <el-button type="primary" @click="loadDormData">重新加载</el-button>
+        </template>
+      </el-result>
+    </div>
+
+    <!-- 内容区域 -->
+    <div v-else class="content-wrapper">
+      <el-row :gutter="20">
+        <!-- 左侧：宿舍基本信息 -->
+        <el-col :xs="24" :sm="24" :md="16" :lg="16" :xl="16">
+          <el-card class="info-card" shadow="hover">
+            <template #header>
+              <div class="card-header">
+                <span class="card-title">基本信息</span>
+              </div>
+            </template>
+
+            <div class="info-display">
+              <el-descriptions :column="2" border>
+                <el-descriptions-item label="宿舍ID">{{ dormData.id }}</el-descriptions-item>
+                <el-descriptions-item label="宿舍名称">{{ dormData.dormName }}</el-descriptions-item>
+                <el-descriptions-item label="宿舍编码">{{ dormData.dormCode }}</el-descriptions-item>
+                <el-descriptions-item label="地址">{{ dormData.address }}</el-descriptions-item>
+                <el-descriptions-item label="容量">{{ dormData.capacity }}人</el-descriptions-item>
+                <el-descriptions-item label="当前入住人数">{{ dormData.currentOccupancy }}人</el-descriptions-item>
+                <el-descriptions-item label="状态">
+                  <el-tag :type="getStatusType(dormData.status)">
+                    {{ getStatusText(dormData.status) }}
+                  </el-tag>
+                </el-descriptions-item>
+                <el-descriptions-item label="类型">{{ getTypeText(dormData.type) }}</el-descriptions-item>
+                <el-descriptions-item label="面积" v-if="dormData.area">{{ dormData.area }}平方米</el-descriptions-item>
+                <el-descriptions-item label="性别限制" v-if="dormData.genderLimit">{{ getGenderLimitText(dormData.genderLimit) }}</el-descriptions-item>
+                <el-descriptions-item label="月租金" v-if="dormData.monthlyRent !== '0.00'">￥{{ dormData.monthlyRent }}</el-descriptions-item>
+                <el-descriptions-item label="押金" v-if="dormData.deposit !== '0.00'">￥{{ dormData.deposit }}</el-descriptions-item>
+                <el-descriptions-item label="包含水电">
+                  <el-tag :type="dormData.utilityIncluded ? 'success' : 'info'">
+                    {{ dormData.utilityIncluded ? '是' : '否' }}
+                  </el-tag>
+                </el-descriptions-item>
+                <el-descriptions-item label="建筑物" v-if="dormData.building">{{ dormData.building }}</el-descriptions-item>
+                <el-descriptions-item label="楼层" v-if="dormData.floor">{{ dormData.floor }}</el-descriptions-item>
+                <el-descriptions-item label="房间号" v-if="dormData.roomNumber">{{ dormData.roomNumber }}</el-descriptions-item>
+                <el-descriptions-item label="入住率">{{ dormData.occupancyRate }}%</el-descriptions-item>
+                <el-descriptions-item label="创建时间">{{ formatDate(dormData.createdAt) }}</el-descriptions-item>
+                <el-descriptions-item label="更新时间">{{ formatDate(dormData.updatedAt) }}</el-descriptions-item>
+                <el-descriptions-item label="描述" :span="2" v-if="dormData.description">
+                  {{ dormData.description }}
+                </el-descriptions-item>
+                <el-descriptions-item label="描述" :span="2" v-else>
+                  <span class="no-description">暂无描述</span>
+                </el-descriptions-item>
+              </el-descriptions>
+            </div>
+          </el-card>
+
+          <!-- 设施信息 -->
+          <el-card class="facilities-card" shadow="hover" v-if="dormData.facilities && dormData.facilities.length > 0">
+            <template #header>
+              <div class="card-header">
+                <span class="card-title">设施列表</span>
+              </div>
+            </template>
+            
+            <div class="facilities-list">
+              <el-tag 
+                v-for="facility in dormData.facilities" 
+                :key="facility" 
+                class="facility-tag"
+              >
+                {{ facility }}
+              </el-tag>
+            </div>
+          </el-card>
+
+          <!-- 便利设施 -->
+          <el-card class="amenities-card" shadow="hover" v-if="dormData.amenities && dormData.amenities.length > 0">
+            <template #header>
+              <div class="card-header">
+                <span class="card-title">便利设施</span>
+              </div>
+            </template>
+            
+            <div class="amenities-list">
+              <el-tag 
+                v-for="amenity in dormData.amenities" 
+                :key="amenity" 
+                class="amenity-tag"
+              >
+                {{ amenity }}
+              </el-tag>
+            </div>
+          </el-card>
+        </el-col>
+
+        <!-- 右侧：统计概览 -->
+        <el-col :xs="24" :sm="24" :md="8" :lg="8" :xl="8">
+          <!-- 入住率统计 -->
+          <el-card class="stats-card" shadow="hover">
+            <template #header>
+              <span class="card-title">入住统计</span>
+            </template>
+
+            <div class="occupancy-stats">
+              <div class="stat-item">
+                <div class="stat-number">{{ dormData.currentOccupancy }}</div>
+                <div class="stat-label">当前入住</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-number">{{ dormData.capacity }}</div>
+                <div class="stat-label">总容量</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-number">{{ dormData.occupancyRate }}%</div>
+                <div class="stat-label">入住率</div>
+              </div>
+              
+              <div class="occupancy-bar">
+                <el-progress 
+                  :percentage="dormData.occupancyRate" 
+                  :status="getOccupancyStatus(dormData.occupancyRate)"
+                  :stroke-width="10"
+                  :text-inside="true">
+                </el-progress>
+              </div>
+            </div>
+          </el-card>
+
+          <!-- 管理员信息 -->
+          <el-card class="admin-card" shadow="hover" v-if="dormData.adminInfo">
+            <template #header>
+              <span class="card-title">管理员信息</span>
+            </template>
+
+            <div class="admin-info">
+              <div class="admin-avatar">
+                <el-avatar :size="60">{{ dormData.adminInfo.nickname?.charAt(0) || dormData.adminInfo.username?.charAt(0) || '管' }}</el-avatar>
+              </div>
+              <div class="admin-details">
+                <div class="admin-name">{{ dormData.adminInfo.nickname || dormData.adminInfo.username }}</div>
+                <div class="admin-username">@{{ dormData.adminInfo.username }}</div>
+              </div>
+            </div>
+          </el-card>
+
+          <!-- 成员列表 -->
+          <el-card class="members-card" shadow="hover" v-if="dormData.currentUsers && dormData.currentUsers.length > 0">
+            <template #header>
+              <span class="card-title">当前成员 ({{ dormData.currentUsers.length }})</span>
+            </template>
+
+            <div class="members-list">
+              <div 
+                class="member-item" 
+                v-for="member in dormData.currentUsers" 
+                :key="member.id"
+              >
+                <div class="member-avatar">
+                  <el-avatar :size="32">{{ member.name?.charAt(0) || '成' }}</el-avatar>
+                </div>
+                <div class="member-info">
+                  <div class="member-name">{{ member.name }}</div>
+                  <div class="member-status">
+                    <el-tag :type="member.status === 'active' ? 'success' : 'info'" size="small">
+                      {{ member.status === 'active' ? '活跃' : '非活跃' }}
+                    </el-tag>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </el-card>
+        </el-col>
+      </el-row>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { 
+  ArrowLeft, Refresh
+} from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { dormService } from '@/services/dormService'
+
+// 路由相关
+const route = useRoute()
+const router = useRouter()
+
+// 响应式数据
+const loading = ref(true)
+const error = ref('')
+const dormData = ref({
+  id: 0,
+  dormName: '',
+  dormCode: '',
+  address: '',
+  capacity: 0,
+  currentOccupancy: 0,
+  description: null,
+  status: 'active',
+  type: 'standard',
+  area: null,
+  genderLimit: null,
+  monthlyRent: '0.00',
+  deposit: '0.00',
+  utilityIncluded: false,
+  building: null,
+  floor: null,
+  roomNumber: null,
+  facilities: [] as string[],
+  amenities: [] as string[],
+  createdAt: '',
+  updatedAt: '',
+  adminInfo: null,
+  currentUsers: [] as any[],
+  occupancyRate: 0
+})
+
+// 获取状态标签类型
+const getStatusType = (status: string) => {
+  const statusMap: Record<string, string> = {
+    active: 'success',
+    inactive: 'info',
+    maintenance: 'warning'
+  }
+  return statusMap[status] || 'info'
+}
+
+// 获取状态文本
+const getStatusText = (status: string) => {
+  const statusMap: Record<string, string> = {
+    active: '活跃',
+    inactive: '非活跃',
+    maintenance: '维护中'
+  }
+  return statusMap[status] || '未知'
+}
+
+// 获取类型文本
+const getTypeText = (type: string) => {
+  const typeMap: Record<string, string> = {
+    single: '单人间',
+    double: '双人间',
+    quad: '四人间',
+    apartment: '公寓',
+    standard: '标准间'
+  }
+  return typeMap[type] || '标准间'
+}
+
+// 获取性别限制文本
+const getGenderLimitText = (gender: string) => {
+  const genderMap: Record<string, string> = {
+    male: '男生',
+    female: '女生',
+    mixed: '混合'
+  }
+  return genderMap[gender] || '混合'
+}
+
+// 获取入住率状态
+const getOccupancyStatus = (rate: number) => {
+  if (rate >= 90) return 'exception'
+  if (rate >= 70) return 'warning'
+  return 'success'
+}
+
+// 格式化日期
+const formatDate = (dateString: string) => {
+  if (!dateString) return '无'
+  const date = new Date(dateString)
+  return date.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+// 加载宿舍数据
+const loadDormData = async () => {
+  try {
+    loading.value = true
+    error.value = ''
+    
+    // 从路由参数获取宿舍ID
+    const dormId = route.params.id as string
+    
+    if (!dormId) {
+      throw new Error('宿舍ID不能为空')
+    }
+    
+    // 调用服务获取宿舍详情
+    const response = await dormService.getDormDetail(Number(dormId))
+    
+    if (response.success) {
+      dormData.value = response.data
+    } else {
+      throw new Error(response.message || '获取宿舍详情失败')
+    }
+  } catch (err: any) {
+    console.error('获取宿舍详情失败:', err)
+    error.value = err.message || '获取宿舍详情失败，请稍后重试'
+    ElMessage.error(error.value)
+  } finally {
+    loading.value = false
+  }
+}
+
+// 刷新数据
+const refreshData = async () => {
+  await loadDormData()
+  ElMessage.success('数据已刷新')
+}
+
+// 返回上一页
+const handleBack = () => {
+  router.back()
+}
+
+// 组件挂载时加载数据
+onMounted(() => {
+  loadDormData()
+})
+</script>
+
+<style scoped>
+.dorm-detail {
+  padding: 20px;
+  min-height: 100vh;
+  background-color: #f5f7fa;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  background: white;
+  padding: 16px 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.page-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #303133;
+  margin: 0;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.back-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.back-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(24, 144, 255, 0.2);
+}
+
+.loading-container,
+.error-container {
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.content-wrapper {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.info-card,
+.facilities-card,
+.amenities-card,
+.stats-card,
+.admin-card,
+.members-card {
+  margin-bottom: 20px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.card-title {
+  font-size: 18px;
+  font-weight: bold;
+  color: #303133;
+}
+
+.no-description {
+  color: #909399;
+  font-style: italic;
+}
+
+.facilities-list,
+.amenities-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 0;
+}
+
+.facility-tag,
+.amenity-tag {
+  margin: 0;
+}
+
+.occupancy-stats {
+  padding: 10px 0;
+}
+
+.stat-item {
+  text-align: center;
+  padding: 15px 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 8px;
+  color: white;
+  margin-bottom: 15px;
+}
+
+.stat-number {
+  font-size: 24px;
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.stat-label {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.occupancy-bar {
+  margin: 20px 0;
+}
+
+.admin-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 15px 0;
+}
+
+.admin-avatar {
+  flex-shrink: 0;
+}
+
+.admin-details {
+  flex: 1;
+}
+
+.admin-name {
+  font-size: 16px;
+  font-weight: 500;
+  color: #303133;
+  margin-bottom: 4px;
+}
+
+.admin-username {
+  color: #909399;
+  font-size: 14px;
+}
+
+.members-list {
+  padding: 10px 0;
+}
+
+.member-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.member-item:last-child {
+  border-bottom: none;
+}
+
+.member-info {
+  flex: 1;
+}
+
+.member-name {
+  font-size: 14px;
+  color: #303133;
+  margin-bottom: 4px;
+}
+
+@media (max-width: 768px) {
+  .dorm-detail {
+    padding: 10px;
+  }
+  
+  .page-header {
+    flex-direction: column;
+    gap: 15px;
+    align-items: flex-start;
+  }
+  
+  .header-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  
+  .card-header {
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+  }
+}
+</style>

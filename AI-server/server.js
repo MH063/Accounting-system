@@ -34,6 +34,9 @@ const uploadRoutes = require('./routes/upload');
 // 在 Zeabur 环境中，环境变量会自动设置
 dotenv.config({ path: '.env' });
 
+// 设置Node.js字符编码
+process.env.NODE_OPTIONS = '--icu-data-dir=node_modules/full-icu';
+
 // 验证环境变量配置
 const envValidation = validateEnvConfig();
 if (envValidation.status !== 'OK') {
@@ -97,6 +100,12 @@ app.use(createCorsMiddleware());
 // 中间件配置
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// 设置字符编码为UTF-8
+app.use((req, res, next) => {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  next();
+});
 
 // 静态文件服务 - 用于提供HTML测试页面等静态资源
 // 重要：静态文件中间件必须放在所有路由之前，确保静态文件优先级最高

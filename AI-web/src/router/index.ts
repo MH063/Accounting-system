@@ -83,13 +83,14 @@ const routes: Array<RouteRecordRaw> = [
           title: '创建寝室'
         }
       },
+
       {
-        path: 'dorm/info/:id',
-        name: 'DormInfo',
-        component: () => import('@/views/DormInfo.vue'),
+        path: 'dorm/detail/:id',
+        name: 'DormDetail',
+        component: () => import('@/views/DormDetail.vue'),
         props: true,
         meta: { 
-          title: '寝室详情'
+          title: '宿舍详情'
         }
       },
       {

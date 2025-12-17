@@ -27,14 +27,14 @@
 
     <!-- 宿舍列表 -->
     <el-table :data="dormList" stripe style="width: 100%">
-      <el-table-column prop="dormNumber" label="寝室编号" width="100">
+      <el-table-column prop="dormNumber" label="宿舍编码" width="100">
         <template #default="scope">
           <el-tag type="info" effect="plain">{{ getDormNumberShort(scope.row.dormNumber) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="name" label="宿舍名称" />
+      <el-table-column prop="name" label="寝室名称" />
       <el-table-column prop="address" label="地址" />
-      <el-table-column prop="memberCount" label="成员数" width="100">
+      <el-table-column prop="memberCount" label="当前人数" width="100">
         <template #default="scope">
           <el-tag type="success">{{ scope.row.memberCount }}人</el-tag>
         </template>
@@ -46,7 +46,7 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="remark" label="备注" min-width="200">
+      <el-table-column prop="remark" label="描述" min-width="200">
         <template #default="scope">
           <span v-if="scope.row.remark" class="remark-text">
             {{ scope.row.remark }}
@@ -93,11 +93,11 @@
         :rules="editFormRules"
         label-width="100px"
       >
-        <el-form-item label="宿舍名称" prop="name">
+        <el-form-item label="寝室名称" prop="name">
           <el-input v-model="editingDorm.name" placeholder="请输入宿舍名称" />
         </el-form-item>
         
-        <el-form-item label="寝室编号" prop="dormNumber">
+        <el-form-item label="宿舍编码" prop="dormNumber">
           <el-input v-model="editingDorm.dormNumber" readonly style="background-color: #f5f7fa; color: #606266">
             <template #prefix>
               <el-icon><Document /></el-icon>
@@ -105,11 +105,11 @@
           </el-input>
         </el-form-item>
         
-        <el-form-item label="宿舍地址" prop="address">
+        <el-form-item label="详细地址" prop="address">
           <el-input v-model="editingDorm.address" placeholder="请输入宿舍地址" />
         </el-form-item>
         
-        <el-form-item label="成员数量" prop="memberCount">
+        <el-form-item label="最大人数" prop="memberCount">
           <el-input-number 
             v-model="editingDorm.memberCount" 
             :min="1" 
@@ -118,7 +118,7 @@
           />
         </el-form-item>
         
-        <el-form-item label="宿舍状态" prop="status">
+        <el-form-item label="状态" prop="status">
           <el-select v-model="editingDorm.status" placeholder="选择宿舍状态">
             <el-option label="活跃" value="active" />
             <el-option label="非活跃" value="inactive" />
@@ -127,7 +127,7 @@
           </el-select>
         </el-form-item>
         
-        <el-form-item label="备注信息">
+        <el-form-item label="描述">
           <el-input 
             v-model="editingDorm.remark" 
             type="textarea" 
@@ -143,6 +143,7 @@
           <el-button type="primary" @click="handleSaveEdit" :loading="saving">
             保存
           </el-button>
+          <el-button @click="editDialogVisible = false" v-if="!saving">关闭</el-button>
         </span>
       </template>
     </el-dialog>
@@ -208,7 +209,7 @@ const editFormRules: FormRules = {
 // 查看宿舍详情
 const viewDorm = (dorm: DormManagementItem) => {
   console.log('查看宿舍:', dorm)
-  router.push(`/dashboard/dorm/info/${dorm.id}`)
+  router.push(`/dashboard/dorm/detail/${dorm.id}`)
 }
 
 // 编辑宿舍信息
@@ -259,7 +260,7 @@ const handleSaveEdit = async () => {
       }
       
       ElMessage.success('宿舍信息更新成功！')
-      editDialogVisible.value = false
+      // 保持在当前编辑页面，不关闭对话框
     })
   } catch (error) {
     handleApiError(error, '宿舍信息更新失败')
