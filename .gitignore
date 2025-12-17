@@ -39,3 +39,8 @@ package-lock.json
 
 # Backup files
 backup/
+
+# Database files
+*.rdb
+*.db
+dump.rdb
