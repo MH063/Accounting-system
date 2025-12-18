@@ -44,6 +44,7 @@
                 v-model="basicForm.openTime" 
                 format="HH:mm"
                 placeholder="选择开门时间"
+                value-format="HH:mm"
               />
             </el-form-item>
             
@@ -52,6 +53,7 @@
                 v-model="basicForm.closeTime" 
                 format="HH:mm"
                 placeholder="选择关门时间"
+                value-format="HH:mm"
               />
             </el-form-item>
             
@@ -216,12 +218,14 @@
                 <el-time-picker 
                   v-model="notificationForm.quietStart" 
                   format="HH:mm"
+                  value-format="HH:mm"
                   placeholder="开始时间"
                 />
                 <span class="time-separator">至</span>
                 <el-time-picker 
                   v-model="notificationForm.quietEnd" 
                   format="HH:mm"
+                  value-format="HH:mm"
                   placeholder="结束时间"
                 />
               </div>

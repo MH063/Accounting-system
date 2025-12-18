@@ -46,48 +46,40 @@
             label-width="120px"
             class="invite-form"
           >
-            <el-form-item label="姓名" prop="name">
+            <el-form-item label="邮箱" prop="email">
               <el-input 
-                v-model="directForm.name" 
-                placeholder="请输入成员姓名"
+                v-model="directForm.email" 
+                placeholder="请输入成员邮箱"
                 clearable
               />
             </el-form-item>
             
-            <el-form-item label="学号" prop="studentId">
-              <el-input 
-                v-model="directForm.studentId" 
-                placeholder="请输入学号"
-                clearable
-              />
-            </el-form-item>
-            
-            <el-form-item label="联系电话" prop="phone">
+            <el-form-item label="手机号" prop="phone">
               <el-input 
                 v-model="directForm.phone" 
-                placeholder="请输入联系电话"
+                placeholder="请输入成员手机号"
                 clearable
               />
             </el-form-item>
             
-            <el-form-item label="分配房间" prop="room">
-              <el-select 
-                v-model="directForm.room" 
-                placeholder="请选择房间"
+            <el-form-item label="分配床位" prop="bedNumber">
+              <el-input 
+                v-model="directForm.bedNumber" 
+                placeholder="请输入床位号"
                 clearable
-              >
-                <el-option label="A-101" value="A-101" />
-                <el-option label="A-102" value="A-102" />
-                <el-option label="A-103" value="A-103" />
-                <el-option label="A-104" value="A-104" />
-              </el-select>
+              />
             </el-form-item>
             
-            <el-form-item label="成员角色" prop="role">
-              <el-radio-group v-model="directForm.role">
-                <el-radio value="member">普通成员</el-radio>
-                <el-radio value="admin">管理员</el-radio>
-              </el-radio-group>
+            <el-form-item label="成员角色" prop="memberRole">
+              <el-select 
+                v-model="directForm.memberRole" 
+                placeholder="请选择成员角色"
+                clearable
+              >
+                <el-option label="普通成员" value="member" />
+                <el-option label="管理员" value="admin" />
+                <el-option label="查看者" value="viewer" />
+              </el-select>
             </el-form-item>
             
             <el-form-item label="备注">
@@ -433,7 +425,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   ArrowLeft, 
@@ -447,8 +439,11 @@ import {
   Search,
   User
 } from '@element-plus/icons-vue'
+import memberService, { type InviteMemberRequest } from '@/services/memberService'
 
+const route = useRoute()
 const router = useRouter()
+const dormId = ref(route.params.dormId ? Number(route.params.dormId) : null)
 
 // 响应式数据
 const inviteMethod = ref('direct')
@@ -458,30 +453,22 @@ const showInviteHistory = ref(false)
 // 直接邀请表单
 const directFormRef = ref()
 const directForm = ref({
-  name: '',
-  studentId: '',
+  email: '',
   phone: '',
-  room: '',
-  role: 'member',
+  memberRole: 'member',
+  bedNumber: '',
   remark: ''
 })
 
 // 表单验证规则
 const directRules = {
-  name: [
-    { required: true, message: '请输入姓名', trigger: 'blur' },
-    { min: 2, max: 10, message: '姓名长度在 2 到 10 个字符', trigger: 'blur' }
-  ],
-  studentId: [
-    { required: true, message: '请输入学号', trigger: 'blur' },
-    { pattern: /^\d{10}$/, message: '学号应为10位数字', trigger: 'blur' }
+  email: [
+    { required: true, message: '请输入邮箱或手机号', trigger: 'blur' },
+    { type: 'email', message: '请输入正确的邮箱地址', trigger: 'blur' }
   ],
   phone: [
-    { required: true, message: '请输入联系电话', trigger: 'blur' },
+    { required: true, message: '请输入邮箱或手机号', trigger: 'blur' },
     { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号码', trigger: 'blur' }
-  ],
-  room: [
-    { required: true, message: '请选择房间', trigger: 'change' }
   ]
 }
 
@@ -587,25 +574,47 @@ const handleDirectInvite = async () => {
     await directFormRef.value.validate()
     inviting.value = true
     
-    // 模拟API调用
-    setTimeout(() => {
+    // 构造邀请参数
+    const inviteData: InviteMemberRequest = {
+      email: directForm.value.email || undefined,
+      phone: directForm.value.phone || undefined,
+      memberRole: directForm.value.memberRole as 'admin' | 'member' | 'viewer' || 'member',
+      bedNumber: directForm.value.bedNumber || undefined
+    }
+    
+    // 调用真实API邀请成员
+    // 从路由参数获取宿舍ID
+    if (!dormId.value) {
+      ElMessage.error('缺少宿舍ID参数')
       inviting.value = false
+      return
+    }
+    
+    const response = await memberService.inviteMember(dormId.value, inviteData)
+    
+    inviting.value = false
+    
+    if (response.success) {
       ElMessage.success('邀请发送成功！')
       resetDirectForm()
-    }, 2000)
+      // 跳转到成员列表页面
+      router.push('/dashboard/member/list')
+    } else {
+      ElMessage.error(response.message || '邀请发送失败')
+    }
     
   } catch (error) {
-    ElMessage.error('请检查表单填写是否正确')
+    inviting.value = false
+    ElMessage.error('邀请发送失败，请重试')
   }
 }
 
 const resetDirectForm = () => {
   directForm.value = {
-    name: '',
-    studentId: '',
+    email: '',
     phone: '',
-    room: '',
-    role: 'member',
+    memberRole: 'member',
+    bedNumber: '',
     remark: ''
   }
   directFormRef.value?.clearValidate()

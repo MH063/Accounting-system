@@ -408,9 +408,9 @@ const getCategoryType = (category: string): string => {
     '奖金': 'success',
     '投资': 'warning',
     '兼职': 'info',
-    '其他': 'default'
+    '其他': 'info'
   }
-  return typeMap[category] || 'default'
+  return typeMap[category] || 'info'
 }
 
 const getGrowthClass = (value: number): string => {

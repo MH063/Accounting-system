@@ -740,7 +740,7 @@ const getCategoryType = (category: string): string => {
     accommodation: 'info',
     entertainment: 'warning',
     shopping: 'danger',
-    medical: '',
+    medical: 'info',
     education: 'info',
     other: 'info'
   }

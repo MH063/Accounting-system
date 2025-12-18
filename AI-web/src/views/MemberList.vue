@@ -110,6 +110,7 @@
                 <el-option label="寝室长" value="dorm_leader" />
                 <el-option label="管理员" value="admin" />
                 <el-option label="普通成员" value="member" />
+                <el-option label="查看者" value="viewer" />
               </el-select>
             </el-col>
             <el-col :span="4">
@@ -140,13 +141,13 @@
           </div>
           <div v-else class="member-cards-grid">
             <div 
-              v-for="member in paginatedMembers" 
+              v-for="member in filteredMembers" 
               :key="member.id"
               class="member-card"
               :class="getMemberCardClass(member)"
-              @contextmenu.prevent="showContextMenu($event, member)"
-              @touchstart="handleTouchStart($event, member)"
-              @touchend="handleTouchEnd($event, member)"
+              @contextmenu.prevent="(event) => { selectedMember.value = member; showContextMenu(); }"
+              @touchstart="(event) => handleTouchStart(event, member)"
+              @touchend="(event) => handleTouchEnd(event, member)"
             >
               <!-- 在线状态指示器 -->
               <div class="status-indicator" :class="member.onlineStatus"></div>
@@ -183,6 +184,14 @@
                       class="role-tag"
                     >
                       管理员
+                    </el-tag>
+                    <el-tag 
+                      v-else-if="member.role === 'viewer'" 
+                      size="small" 
+                      type="info" 
+                      class="role-tag"
+                    >
+                      查看者
                     </el-tag>
                   </div>
                   <div class="member-id">{{ member.studentId }}</div>
@@ -245,6 +254,17 @@
                   </el-button>
 
                   <el-button 
+                    v-if="canUpdateRole(member)"
+                    type="warning" 
+                    size="small" 
+                    circle 
+                    @click.stop="handleUpdateRole(member)"
+                    title="更新角色"
+                  >
+                    <el-icon><User /></el-icon>
+                  </el-button>
+                  
+                  <el-button 
                     v-if="canDeleteMember(member)"
                     type="danger" 
                     size="small" 
@@ -266,7 +286,7 @@
             v-model:current-page="currentPage"
             v-model:page-size="pageSize"
             :page-sizes="[5, 8, 12, 20, 50]"
-            :total="filteredMembers.length"
+            :total="totalMembers"
             layout="total, sizes, prev, pager, next, jumper"
             @size-change="handleSizeChange"
             @current-change="handleCurrentChange"
@@ -274,18 +294,59 @@
         </div>
       </el-card>
     </div>
-
-    <!-- 长按菜单 -->
-    <el-contextmenu ref="contextmenuRef" :before="beforeContextMenu">
-      <el-contextmenu-item @click="handleContextView">查看详情</el-contextmenu-item>
-      <el-contextmenu-item @click="handleContextEdit" v-if="canEditMember">编辑成员</el-contextmenu-item>
-      <el-contextmenu-item @click="handleContextMessage">发送消息</el-contextmenu-item>
-      <el-contextmenu-item @click="handleContextStatus">更改状态</el-contextmenu-item>
-      <el-contextmenu-divider />
-      <el-contextmenu-item @click="handleContextDelete" v-if="canDeleteMember" class="danger-item">
-        删除成员
-      </el-contextmenu-item>
-    </el-contextmenu>
+    
+    <!-- 角色更新对话框 -->
+    <el-dialog
+      v-model="roleUpdateDialogVisible"
+      title="更新成员角色"
+      width="400px"
+      :close-on-click-modal="false"
+    >
+      <div v-if="selectedMemberForRoleUpdate" class="role-update-content">
+        <div class="member-info">
+          <el-avatar 
+            :size="50" 
+            :src="selectedMemberForRoleUpdate.avatar || 'https://picsum.photos/50/50?random=' + selectedMemberForRoleUpdate.id"
+          >
+            {{ selectedMemberForRoleUpdate.name.charAt(0) }}
+          </el-avatar>
+          <div class="member-details">
+            <div class="member-name">{{ selectedMemberForRoleUpdate.name }}</div>
+            <div class="member-id">{{ selectedMemberForRoleUpdate.studentId }}</div>
+            <div class="current-role">
+              当前角色: <el-tag :type="getRoleTagType(selectedMemberForRoleUpdate.role)">
+                {{ getRoleText(selectedMemberForRoleUpdate.role) }}
+              </el-tag>
+            </div>
+          </div>
+        </div>
+        
+        <div class="role-selection">
+          <el-form label-width="80px">
+            <el-form-item label="新角色">
+              <el-select v-model="newRole" placeholder="请选择角色" style="width: 100%">
+                <el-option label="管理员" value="admin" />
+                <el-option label="普通成员" value="member" />
+                <el-option label="查看者" value="viewer" />
+              </el-select>
+            </el-form-item>
+          </el-form>
+        </div>
+      </div>
+      
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="roleUpdateDialogVisible = false">取消</el-button>
+          <el-button 
+            type="primary" 
+            @click="confirmUpdateRole"
+            :loading="roleUpdateLoading"
+          >
+            确认更新
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -294,7 +355,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { 
   Search, ArrowLeft, Refresh, CircleCheck, Clock, CircleClose, 
-  House, View, ChatDotRound, Delete, Check, Close
+  House, View, ChatDotRound, Delete, Check, Close, User
 } from '@element-plus/icons-vue'
 import { getCurrentUser } from '@/services/userService'
 import { dormService } from '@/services/dormService'
@@ -309,7 +370,7 @@ interface Member {
   studentId: string
   name: string
   room: string
-  role: 'dorm_leader' | 'admin' | 'member'
+  role: 'dorm_leader' | 'admin' | 'member' | 'viewer'
   status: 'online' | 'active' | 'away' | 'inactive'
   joinDate: string
   phone: string
@@ -333,43 +394,53 @@ const roleFilter = ref('')
 const roomFilter = ref('')
 const currentPage = ref(1)
 const pageSize = ref(5)
+const totalMembers = ref(0) // 总成员数
 const currentUserRole = ref<'dorm_leader' | 'admin' | 'member'>('admin')
 const currentUserRoom = ref<string>('') // 当前用户的寝室
 const selectedMember = ref<Member | null>(null)
 const touchStartTime = ref(0)
-const contextmenuRef = ref()
 
 // 获取当前用户和寝室信息
 const loadCurrentUserAndDorm = async () => {
   try {
     // 获取当前用户信息
     const userResponse = await getCurrentUser()
+    console.log('用户信息:', userResponse)
     if (userResponse.success && userResponse.data) {
-      // 在实际应用中，这里应该根据用户的角色和权限设置 currentUserRole
-      // 目前我们使用默认值
+      // 设置当前用户角色
+      currentUserRole.value = userResponse.data.role || 'member'
       
       // 获取用户所在的寝室
-      // 注意：在实际应用中，我们需要用户ID来查询寝室信息
-      // 这里我们假设用户ID为'1'（来自userService.ts中的模拟数据）
-      const dormResponse = await dormService.getCurrentUserDorm('1')
+      // 使用当前用户的实际ID来查询寝室信息
+      const dormResponse = await dormService.getCurrentUserDorm(userResponse.data.id)
+      console.log('寝室信息:', dormResponse)
       if (dormResponse.success && dormResponse.data) {
         const dormInfo = dormResponse.data as DormInfo
         // 设置当前用户的寝室号（格式：楼栋-房间号）
         currentUserRoom.value = `${dormInfo.building}-${dormInfo.dormNumber}`
+        console.log('设置寝室号:', currentUserRoom.value)
       } else {
         // 如果找不到寝室信息，使用默认值
         currentUserRoom.value = 'A-101'
+        console.log('使用默认寝室号:', currentUserRoom.value)
       }
     }
   } catch (error) {
     console.error('加载用户和寝室信息失败:', error)
     // 出错时使用默认值
     currentUserRoom.value = 'A-101'
+    console.log('出错时使用默认寝室号:', currentUserRoom.value)
   }
 }
 
 // 成员数据 - 从API加载
 const members = ref<Member[]>([])
+
+// 角色更新相关状态
+const roleUpdateDialogVisible = ref(false)
+const selectedMemberForRoleUpdate = ref<Member | null>(null)
+const newRole = ref<'admin' | 'member' | 'viewer'>('member')
+const roleUpdateLoading = ref(false)
 
 // 加载成员列表
 const loadMembers = async () => {
@@ -377,17 +448,65 @@ const loadMembers = async () => {
     loading.value = true
     console.log('开始加载成员列表...')
     
+    // 调试：查看currentUserRoom的值
+    console.log('currentUserRoom:', currentUserRoom.value)
+    
+    // 调试：查看从currentUserRoom提取宿舍ID的过程
+    const roomParts = currentUserRoom.value.split('-');
+    console.log('roomParts:', roomParts);
+    const dormIdStr = roomParts[1];
+    console.log('dormIdStr:', dormIdStr);
+    const dormId = parseInt(dormIdStr) || undefined;
+    console.log('dormId:', dormId);
+    
     const response = await memberService.getMembers({
-      room: currentUserRoom.value,
       page: currentPage.value,
-      pageSize: pageSize.value,
-      search: searchQuery.value,
-      status: statusFilter.value,
-      role: roleFilter.value
+      limit: pageSize.value,
+      dormId: dormId, // 从房间号提取宿舍ID
+      search: searchQuery.value || undefined,
+      role: roleFilter.value || undefined
     })
     
     if (response.success) {
-      members.value = response.data.records
+      // 调试：查看实际返回的数据结构
+      console.log('API返回的原始数据:', response.data)
+      
+      // 检查数据结构
+      if (!response.data) {
+        console.error('API返回的数据结构不正确，缺少data字段')
+        ElMessage.error('数据加载失败：返回的数据结构不正确')
+        members.value = []
+        return
+      }
+      
+      // 检查是否有members字段，如果没有则使用空数组
+      const membersData = response.data.members || []
+      
+      // 转换新接口返回的数据格式为当前组件使用的格式
+      const convertedMembers = membersData.map(member => ({
+        id: member.userId,
+        studentId: member.username,
+        name: member.realName || member.nickname || member.username,
+        room: member.dorm ? `${member.dorm.building || ''}-${member.dorm.roomNumber || ''}` : '未分配',
+        role: member.membership ? (member.membership.role === 'admin' ? 'admin' : 
+              member.membership.role === 'dorm_leader' ? 'dorm_leader' : 
+              member.membership.role === 'viewer' ? 'viewer' : 'member') : 'member',
+        status: member.userStatus as 'online' | 'active' | 'away' | 'inactive',
+        joinDate: member.membership ? member.membership.joinedAt : '',
+        phone: member.phone,
+        avatar: member.avatarUrl,
+        onlineStatus: member.userStatus === 'active' ? 'online' : 'offline'
+      }))
+      
+      members.value = convertedMembers
+      
+      // 更新分页信息
+      if (response.data.pagination) {
+        totalMembers.value = response.data.pagination.total
+      } else {
+        // 如果没有分页信息，使用成员数量作为总数
+        totalMembers.value = convertedMembers.length
+      }
     } else {
       ElMessage.error(response.message || '加载成员列表失败')
       members.value = []
@@ -411,6 +530,13 @@ const loadPendingMembers = async () => {
     const response = await memberService.getPendingMembers(currentUserRoom.value)
     
     if (response.success) {
+      // 检查数据结构
+      if (!response.data) {
+        console.error('API返回的数据结构不正确，缺少data字段')
+        ElMessage.error('待审核成员数据加载失败：返回的数据结构不正确')
+        return
+      }
+      
       // 将待审核成员添加到成员列表中
       members.value = [...members.value, ...response.data.map(member => ({
         ...member,
@@ -450,10 +576,13 @@ const pendingMembers = computed(() => {
   return members.value.filter(member => member.isPending && member.appliedRoom === currentUserRoom.value)
 })
 
+// 由于使用后端分页，直接返回所有成员
 const paginatedMembers = computed(() => {
-  const start = (currentPage.value - 1) * pageSize.value
-  const end = start + pageSize.value
-  return filteredMembers.value.slice(start, end)
+  return members.value
+  // 如果需要前端分页，可以取消下面的注释
+  // const start = (currentPage.value - 1) * pageSize.value
+  // const end = start + pageSize.value
+  // return filteredMembers.value.slice(start, end)
 })
 
 const onlineMembers = computed(() => {
@@ -497,7 +626,8 @@ const getMemberCardClass = (member: Member) => {
 // 基础方法
 const handleSearch = () => {
   currentPage.value = 1
-  // 这里可以添加实际的搜索逻辑
+  // 实际的搜索逻辑 - 重新加载数据
+  loadMembers()
 }
 
 const handleReset = () => {
@@ -512,10 +642,14 @@ const handleReset = () => {
 const handleSizeChange = (newSize: number) => {
   pageSize.value = newSize
   currentPage.value = 1
+  // 重新加载数据
+  loadMembers()
 }
 
 const handleCurrentChange = (newPage: number) => {
   currentPage.value = newPage
+  // 重新加载数据
+  loadMembers()
 }
 
 // 卡片操作方法
@@ -610,6 +744,74 @@ const handleQuickDelete = async (member: Member) => {
   }
 }
 
+/**
+ * 判断是否可以更新成员角色
+ */
+const canUpdateRole = (member: Member) => {
+  // 管理员可以更新所有成员的角色
+  if (currentUserRole.value === 'admin') return true
+  // 寝室长可以更新普通成员和查看者的角色，但不能更新管理员的角色
+  if (currentUserRole.value === 'dorm_leader' && member.role !== 'admin') return true
+  return false
+}
+
+/**
+ * 处理更新成员角色
+ */
+const handleUpdateRole = (member: Member) => {
+  selectedMemberForRoleUpdate.value = member
+  // 设置当前角色为默认值
+  newRole.value = member.role === 'admin' ? 'admin' : 
+                  member.role === 'dorm_leader' ? 'admin' : 
+                  member.role === 'member' ? 'member' : 
+                  member.role === 'viewer' ? 'viewer' : 'member'
+  roleUpdateDialogVisible.value = true
+}
+
+/**
+ * 确认更新成员角色
+ */
+const confirmUpdateRole = async () => {
+  if (!selectedMemberForRoleUpdate.value) return
+  
+  try {
+    roleUpdateLoading.value = true
+    
+    // 调用API更新成员角色
+    const response = await memberService.updateMemberRole(
+      selectedMemberForRoleUpdate.value.id,
+      {
+        memberRole: newRole.value,
+        updatePermissions: true,
+        notifyUser: true
+      }
+    )
+    
+    if (response.success) {
+      ElMessage.success('成员角色更新成功')
+      roleUpdateDialogVisible.value = false
+      
+      // 更新本地数据以反映角色变化
+      if (selectedMemberForRoleUpdate.value) {
+        const index = members.value.findIndex(m => m.id === selectedMemberForRoleUpdate.value!.id)
+        if (index > -1) {
+          members.value[index].role = newRole.value
+        }
+      }
+      
+      // 刷新成员列表
+      await loadMembers()
+    } else {
+      ElMessage.error(response.message || '更新成员角色失败')
+    }
+  } catch (error) {
+    console.error('更新成员角色失败:', error)
+    ElMessage.error('更新成员角色失败')
+  } finally {
+    roleUpdateLoading.value = false
+  }
+}
+
 const handleDeleteMember = async (member: Member) => {
   const response = await memberService.deleteMember(member.id)
   
@@ -625,11 +827,12 @@ const handleDeleteMember = async (member: Member) => {
 }
 
 // 长按菜单支持
-const handleTouchStart = () => {
+const handleTouchStart = (event: TouchEvent, member: Member) => {
   touchStartTime.value = Date.now()
+  selectedMember.value = member
 }
 
-const handleTouchEnd = () => {
+const handleTouchEnd = (event: TouchEvent, member: Member) => {
   const touchDuration = Date.now() - touchStartTime.value
   if (touchDuration > 500) {
     showContextMenu()
@@ -641,45 +844,11 @@ const showContextMenu = () => {
   ElMessage.info(`显示操作菜单`)
 }
 
-const beforeContextMenu = () => {
-  return selectedMember.value !== null
-}
-
 const truncateMessage = (message: string, maxLength: number = 25): string => {
   if (!message) return ''
   return message.length > maxLength ? message.substring(0, maxLength) + '...' : message
 }
 
-// 长按菜单操作
-const handleContextView = () => {
-  if (selectedMember.value) {
-    handleViewInfo(selectedMember.value)
-  }
-}
-
-const handleContextEdit = () => {
-  if (selectedMember.value) {
-    ElMessage.info(`编辑 ${selectedMember.value.name} 的信息`)
-  }
-}
-
-const handleContextMessage = () => {
-  if (selectedMember.value) {
-    handleQuickMessage(selectedMember.value)
-  }
-}
-
-const handleContextStatus = () => {
-  if (selectedMember.value) {
-    ElMessage.info(`更改 ${selectedMember.value.name} 的状态`)
-  }
-}
-
-const handleContextDelete = async () => {
-  if (selectedMember.value) {
-    await handleQuickDelete(selectedMember.value)
-  }
-}
 
 // 待审核成员操作方法
 const approveMember = async (member: Member) => {
@@ -772,11 +941,39 @@ const getStatusText = (status: string) => {
   }
 }
 
+/**
+ * 获取角色标签类型
+ */
+const getRoleTagType = (role: string) => {
+  switch (role) {
+    case 'admin': return 'danger'
+    case 'dorm_leader': return 'warning'
+    case 'member': return 'primary'
+    case 'viewer': return 'info'
+    default: return 'info'
+  }
+}
+
+/**
+ * 获取角色文本
+ */
+const getRoleText = (role: string) => {
+  switch (role) {
+    case 'admin': return '管理员'
+    case 'dorm_leader': return '寝室长'
+    case 'member': return '普通成员'
+    case 'viewer': return '查看者'
+    default: return '未知'
+  }
+}
+
 // 生命周期
 onMounted(async () => {
   try {
+    console.log('开始初始化MemberList组件')
     // 加载当前用户和寝室信息
     await loadCurrentUserAndDorm()
+    console.log('currentUserRoom值:', currentUserRoom.value)
     
     // 加载成员列表
     await loadMembers()
@@ -1429,5 +1626,46 @@ onMounted(async () => {
     align-items: flex-start;
     gap: 6px;
   }
+}
+
+/* 角色更新对话框样式 */
+.role-update-content {
+  padding: 10px 0;
+}
+
+.role-update-content .member-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #f5f7fa;
+  border-radius: 8px;
+}
+
+.role-update-content .member-details {
+  flex: 1;
+}
+
+.role-update-content .member-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 4px;
+}
+
+.role-update-content .member-id {
+  font-size: 14px;
+  color: #606266;
+  margin-bottom: 8px;
+}
+
+.role-update-content .current-role {
+  font-size: 14px;
+  color: #606266;
+}
+
+.role-update-content .role-selection {
+  margin-top: 16px;
 }
 </style>

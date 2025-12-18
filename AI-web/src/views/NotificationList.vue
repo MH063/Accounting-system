@@ -363,6 +363,7 @@
             <el-time-picker 
               v-model="notificationSettings.reminderTime" 
               format="HH:mm" 
+              value-format="HH:mm"
               @change="saveNotificationPreferences"
             />
           </div>

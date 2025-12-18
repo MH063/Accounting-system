@@ -217,6 +217,114 @@ class DormController extends BaseController {
       throw error;
     }
   }
+
+  /**
+   * 删除宿舍
+   * DELETE /api/dorms/:id
+   */
+  async deleteDorm(req, res) {
+    try {
+      // 记录宿舍删除尝试
+      logger.audit(req, '宿舍删除', { 
+        timestamp: new Date().toISOString(),
+        ip: req.ip,
+        dormId: req.params.id
+      });
+
+      // 获取宿舍ID
+      const { id } = req.params;
+
+      // 获取当前用户信息
+      const currentUser = req.user;
+      
+      // 调用服务层删除宿舍
+      const result = await this.dormService.deleteDorm(id, currentUser);
+      
+      if (!result.success) {
+        logger.error('[DormController] 删除宿舍失败', { 
+          reason: result.message,
+          dormId: id
+        });
+        // 根据错误类型返回适当的HTTP状态码
+        const statusCode = result.message.includes('权限') ? 403 : 400;
+        return this.sendError(res, result.message, statusCode);
+      }
+
+      const { dorm } = result.data;
+
+      logger.audit(req, '宿舍删除成功', { 
+        timestamp: new Date().toISOString(),
+        dormId: dorm.id,
+        dormName: dorm.dormName
+      });
+
+      // 返回成功响应
+      return this.sendSuccess(res, {
+        dorm: dorm
+      }, '宿舍删除成功');
+
+    } catch (error) {
+      logger.error('[DormController] 删除宿舍异常', { error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * 更新宿舍成员角色
+   * PUT /api/dorms/members/:id/role
+   */
+  async updateMemberRole(req, res) {
+    try {
+      // 记录宿舍成员角色更新尝试
+      logger.audit(req, '宿舍成员角色更新', { 
+        timestamp: new Date().toISOString(),
+        ip: req.ip,
+        userDormId: req.params.id,
+        requestData: req.body
+      });
+
+      // 获取用户宿舍关系ID
+      const { id } = req.params;
+      
+      // 获取请求体数据
+      const roleData = req.body;
+
+      // 获取当前用户信息
+      const currentUser = req.user;
+      
+      // 调用服务层更新宿舍成员角色
+      const result = await this.dormService.updateMemberRole(id, roleData, currentUser);
+      
+      if (!result.success) {
+        logger.error('[DormController] 更新宿舍成员角色失败', { 
+          reason: result.message,
+          userDormId: id
+        });
+        // 根据错误类型返回适当的HTTP状态码
+        const statusCode = result.message.includes('权限') ? 403 : 400;
+        return this.sendError(res, result.message, statusCode);
+      }
+
+      const { userDorm } = result.data;
+
+      logger.audit(req, '宿舍成员角色更新成功', { 
+        timestamp: new Date().toISOString(),
+        userDormId: userDorm.id,
+        userId: userDorm.userId,
+        dormId: userDorm.dormId,
+        newRole: userDorm.memberRole
+      });
+
+      // 返回成功响应
+      return this.sendSuccess(res, {
+        userDorm: userDorm
+      }, '成员角色更新成功');
+
+    } catch (error) {
+      logger.error('[DormController] 更新宿舍成员角色异常', { error: error.message });
+      throw error;
+    }
+  }
 }
 
 module.exports = DormController;

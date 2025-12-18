@@ -179,6 +179,166 @@ class DormService extends BaseService {
   }
 
   /**
+   * 更新宿舍成员角色
+   * @param {number} userDormId - user_dorms表的ID
+   * @param {Object} roleData - 角色数据
+   * @param {Object} currentUser - 当前用户信息
+   * @returns {Promise<Object>} 更新结果
+   */
+  async updateMemberRole(userDormId, roleData, currentUser) {
+    try {
+      logger.info('[DormService] 更新宿舍成员角色', { userDormId, roleData, currentUser });
+      
+      // 1. 参数验证
+      if (!userDormId || isNaN(userDormId)) {
+        return {
+          success: false,
+          message: '用户宿舍关系ID无效'
+        };
+      }
+      
+      const { memberRole, updatePermissions = true, notifyUser = true } = roleData;
+      
+      if (!memberRole || !['admin', 'member', 'viewer'].includes(memberRole)) {
+        return {
+          success: false,
+          message: '角色必须是admin、member或viewer之一'
+        };
+      }
+      
+      // 2. 验证当前用户权限
+      const hasPermission = await this.dormRepository.validateOperatorPermission(userDormId, currentUser.id);
+      if (!hasPermission) {
+        return {
+          success: false,
+          message: '权限不足，无法更新成员角色'
+        };
+      }
+      
+      // 3. 获取当前的成员信息和宿舍信息
+      const currentRecord = await this.dormRepository.getUserDormById(userDormId);
+      if (!currentRecord) {
+        return {
+          success: false,
+          message: '用户宿舍关系记录不存在'
+        };
+      }
+      
+      // 4. 验证角色变更的合法性
+      // 不能将宿舍管理员（admin_id）的角色降级（如果业务逻辑不允许）
+      if (currentRecord.member_role === 'admin' && 
+          currentRecord.dorm_admin_id === currentRecord.user_id && 
+          memberRole !== 'admin') {
+        // 检查是否是最后一个管理员
+        const adminCountQuery = `
+          SELECT COUNT(*) as admin_count
+          FROM user_dorms
+          WHERE dorm_id = $1 AND member_role = 'admin' AND status = 'active'
+        `;
+        
+        const { query } = require('../config/database');
+        const adminCountResult = await query(adminCountQuery, [currentRecord.dorm_id]);
+        const adminCount = parseInt(adminCountResult.rows[0].admin_count);
+        
+        if (adminCount <= 1) {
+          return {
+            success: false,
+            message: '不能移除最后一个宿舍管理员，请先指定新的管理员'
+          };
+        }
+      }
+      
+      // 5. 记录更新前的信息用于审计
+      const oldValues = {
+        member_role: currentRecord.member_role,
+        can_approve_expenses: currentRecord.can_approve_expenses,
+        can_invite_members: currentRecord.can_invite_members,
+        can_manage_facilities: currentRecord.can_manage_facilities
+      };
+      
+      // 6. 执行角色更新操作
+      const updatedRecord = await this.dormRepository.updateUserDormRole(userDormId, memberRole, updatePermissions);
+      
+      // 7. 记录审计日志
+      await this.dormRepository.logAuditAction({
+        tableName: 'user_dorms',
+        operation: 'UPDATE',
+        recordId: userDormId,
+        oldValues: oldValues,
+        newValues: {
+          member_role: updatedRecord.member_role,
+          can_approve_expenses: updatedRecord.can_approve_expenses,
+          can_invite_members: updatedRecord.can_invite_members,
+          can_manage_facilities: updatedRecord.can_manage_facilities
+        },
+        userId: currentUser.id,
+        sessionId: currentUser.sessionId,
+        ipAddress: currentUser.ip,
+        userAgent: currentUser.userAgent
+      });
+      
+      // 8. 发送通知
+      if (notifyUser) {
+        await this.dormRepository.sendNotification({
+          title: '角色更新通知',
+          content: `您在宿舍"${updatedRecord.dorm_name}"的角色已变更为"${memberRole}"`,
+          type: 'info',
+          userId: updatedRecord.user_id,
+          dormId: updatedRecord.dorm_id,
+          senderId: currentUser.id,
+          relatedId: userDormId,
+          relatedTable: 'user_dorms'
+        });
+      }
+      
+      logger.info('[DormService] 宿舍成员角色更新成功', { 
+        userDormId: updatedRecord.id, 
+        userId: updatedRecord.user_id,
+        dormId: updatedRecord.dorm_id,
+        newRole: updatedRecord.member_role 
+      });
+      
+      return {
+        success: true,
+        data: {
+          userDorm: {
+            id: updatedRecord.id,
+            userId: updatedRecord.user_id,
+            dormId: updatedRecord.dorm_id,
+            memberRole: updatedRecord.member_role,
+            status: updatedRecord.status,
+            moveInDate: updatedRecord.move_in_date,
+            moveOutDate: updatedRecord.move_out_date,
+            bedNumber: updatedRecord.bed_number,
+            roomNumber: updatedRecord.room_number,
+            monthlyShare: updatedRecord.monthly_share,
+            depositPaid: updatedRecord.deposit_paid,
+            lastPaymentDate: updatedRecord.last_payment_date,
+            canApproveExpenses: updatedRecord.can_approve_expenses,
+            canInviteMembers: updatedRecord.can_invite_members,
+            canManageFacilities: updatedRecord.can_manage_facilities,
+            invitedBy: updatedRecord.invited_by,
+            inviteCode: updatedRecord.invite_code,
+            inviteExpiresAt: updatedRecord.invite_expires_at,
+            joinedAt: updatedRecord.joined_at,
+            updatedAt: updatedRecord.updated_at,
+            username: updatedRecord.username,
+            nickname: updatedRecord.nickname,
+            email: updatedRecord.email,
+            dormName: updatedRecord.dorm_name,
+            dormAdminId: updatedRecord.dorm_admin_id
+          }
+        },
+        message: '成员角色更新成功'
+      };
+      
+    } catch (error) {
+      logger.error('[DormService] 更新宿舍成员角色失败', { error: error.message, userDormId, userId: currentUser?.id });
+      throw error;
+    }
+  }
+
+  /**
    * 更新宿舍信息
    * @param {number} dormId - 宿舍ID
    * @param {Object} dormData - 宿舍数据
@@ -561,6 +721,82 @@ class DormService extends BaseService {
       logger.info('[DormService] 宿舍成员角色调整成功', { dormId, oldAdminId, newAdminId });
     } catch (error) {
       logger.error('[DormService] 调整宿舍成员角色失败', { error: error.message, dormId, oldAdminId, newAdminId });
+      throw error;
+    }
+  }
+
+  /**
+   * 删除宿舍
+   * @param {number} dormId - 宿舍ID
+   * @param {Object} currentUser - 当前用户信息
+   * @returns {Promise<Object>} 删除结果
+   */
+  async deleteDorm(dormId, currentUser) {
+    try {
+      logger.info('[DormService] 删除宿舍', { dormId, userId: currentUser.id });
+      
+      // 1. 参数验证
+      if (!dormId || isNaN(dormId)) {
+        return {
+          success: false,
+          message: '宿舍ID无效'
+        };
+      }
+      
+      // 2. 验证当前用户权限
+      // 根据数据库的行级安全策略（RLS），只有以下用户可以删除宿舍：
+      // 系统管理员（system_admin角色）、普通管理员（admin角色）、该宿舍的管理员（admin_id等于当前用户ID）
+      const dormInfo = await this.dormRepository.validateDormExists(dormId);
+      if (!dormInfo) {
+        return {
+          success: false,
+          message: '宿舍不存在或已被删除'
+        };
+      }
+      
+      // 检查用户权限（系统管理员、普通管理员或宿舍管理员）
+      const userRole = currentUser.role;
+      const isAuthorized = userRole === 'system_admin' || 
+                          userRole === 'admin' || 
+                          dormInfo.admin_id === currentUser.id;
+                          
+      if (!isAuthorized) {
+        return {
+          success: false,
+          message: '权限不足，无法删除此宿舍'
+        };
+      }
+      
+      // 3. 调用仓库层删除宿舍
+      const result = await this.dormRepository.deleteDorm(dormId, currentUser.id);
+      
+      if (!result.success) {
+        return {
+          success: false,
+          message: result.message
+        };
+      }
+      
+      logger.info('[DormService] 宿舍删除成功', { 
+        dormId: result.data.id, 
+        dormName: result.data.dorm_name 
+      });
+      
+      return {
+        success: true,
+        data: {
+          dorm: {
+            id: result.data.id,
+            dormName: result.data.dorm_name,
+            status: result.data.status,
+            updatedAt: result.data.updated_at
+          }
+        },
+        message: '宿舍删除成功'
+      };
+      
+    } catch (error) {
+      logger.error('[DormService] 删除宿舍失败', { error: error.message, dormId });
       throw error;
     }
   }

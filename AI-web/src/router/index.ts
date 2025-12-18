@@ -135,9 +135,10 @@ const routes: Array<RouteRecordRaw> = [
         }
       },
       {
-        path: 'member/invite',
+        path: 'member/invite/:dormId?',
         name: 'MemberInvite',
         component: () => import('@/views/MemberInvite.vue'),
+        props: true,
         meta: { 
           title: '邀请成员'
         }
@@ -353,7 +354,8 @@ const routes: Array<RouteRecordRaw> = [
           title: '通知中心',
           requireAuth: true
         }
-      }
+      },
+
     ]
   },
   {

@@ -1948,7 +1948,7 @@ const getActionText = (action?: string): string => {
 
 const getCategoryType = (category?: string): string => {
   switch (category) {
-    case 'accommodation': return ''
+    case 'accommodation': return 'info'
     case 'utilities': return 'success'
     case 'maintenance': return 'warning'
     case 'cleaning': return 'info'

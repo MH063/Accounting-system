@@ -24,10 +24,10 @@ export const getCurrentUser = async (): Promise<ApiResponse<UserInfo>> => {
     console.log('调用获取当前用户信息API')
     
     // 调用真实API获取当前用户信息
-    const response = await request<UserInfo>('/users/current')
+    const response = await request<{user: UserInfo}>('/auth/profile')
     
     // 如果启用了数据加密，尝试解密敏感信息
-    if (dataEncryptionManager.isEncryptionEnabled() && response.data.name) {
+    if (dataEncryptionManager.isEncryptionEnabled() && response.data.user.name) {
       // 检查是否已有主密钥，如果没有则从存储中加载
       if (!dataEncryptionManager.hasMasterKey()) {
         // 设置主密钥（实际应用中应从安全存储获取）
@@ -37,9 +37,9 @@ export const getCurrentUser = async (): Promise<ApiResponse<UserInfo>> => {
       
       try {
         // 解密用户姓名和邮箱（如果它们是加密的）
-        response.data.name = dataEncryptionManager.decryptField(response.data.name)
-        if (response.data.email) {
-          response.data.email = dataEncryptionManager.decryptField(response.data.email)
+        response.data.user.name = dataEncryptionManager.decryptField(response.data.user.name)
+        if (response.data.user.email) {
+          response.data.user.email = dataEncryptionManager.decryptField(response.data.user.email)
         }
       } catch (error) {
         console.warn('解密用户信息失败:', error)
@@ -47,7 +47,11 @@ export const getCurrentUser = async (): Promise<ApiResponse<UserInfo>> => {
       }
     }
     
-    return response
+    // 转换响应格式以匹配期望的UserInfo格式
+    return {
+      ...response,
+      data: response.data.user
+    }
   } catch (error) {
     console.error('获取用户信息失败:', error)
     return {

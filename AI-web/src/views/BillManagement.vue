@@ -465,12 +465,14 @@
                 <el-time-picker 
                   v-model="reminderSettings.quietStart" 
                   format="HH:mm"
+                  value-format="HH:mm"
                   placeholder="开始时间"
                 />
                 <span class="time-separator">至</span>
                 <el-time-picker 
                   v-model="reminderSettings.quietEnd" 
                   format="HH:mm"
+                  value-format="HH:mm"
                   placeholder="结束时间"
                 />
               </div>

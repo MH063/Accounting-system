@@ -1093,7 +1093,7 @@ const handleLoadMore = async () => {
 
 const getCategoryType = (category: 'accommodation' | 'utilities' | 'maintenance' | 'cleaning' | 'other' | string) => {
   switch (category) {
-    case 'accommodation': return ''
+    case 'accommodation': return 'info'
     case 'utilities': return 'success'
     case 'maintenance': return 'warning'
     case 'cleaning': return 'info'

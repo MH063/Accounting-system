@@ -63,6 +63,9 @@
           <el-button size="small" type="warning" @click="dormSettings(scope.row)">
             设置
           </el-button>
+          <el-button size="small" type="danger" @click="deleteDorm(scope.row)">
+            删除
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -310,6 +313,38 @@ const getStatusText = (status: string) => {
 const dormSettings = (dorm: DormManagementItem) => {
   console.log('宿舍设置:', dorm)
   router.push(`/dashboard/dorm/settings/${dorm.id}`)
+}
+
+// 删除宿舍
+const deleteDorm = async (dorm: DormManagementItem) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除宿舍 "${dorm.name}" 吗？此操作不可恢复。`,
+      '确认删除',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    
+    // 调用删除接口
+    const response = await dormService.deleteDorm(dorm.id.toString())
+    
+    if (response.success) {
+      ElMessage.success(response.message || '宿舍删除成功')
+      // 重新加载宿舍列表
+      await loadDormList()
+    } else {
+      ElMessage.error(response.message || '删除失败')
+    }
+  } catch (error) {
+    // 用户取消删除或发生错误
+    if (error !== 'cancel' && error !== 'close') {
+      console.error('删除宿舍失败:', error)
+      ElMessage.error('删除宿舍失败')
+    }
+  }
 }
 
 // 获取寝室编号后四位

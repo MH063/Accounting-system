@@ -1487,7 +1487,7 @@ const getStatusText = (status: string) => {
 
 const getCategoryType = (category: string) => {
   switch (category) {
-    case 'accommodation': return ''
+    case 'accommodation': return 'info'
     case 'utilities': return 'success'
     case 'maintenance': return 'warning'
     case 'cleaning': return 'info'
