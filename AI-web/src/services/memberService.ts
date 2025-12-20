@@ -123,6 +123,15 @@ export interface ActivityStats {
   }>
 }
 
+// 更新成员状态请求参数接口
+export interface UpdateMemberStatusRequest {
+  status: 'active' | 'inactive' | 'pending'  // 必需，新的状态
+  moveOutDate?: string  // 可选，搬离日期（状态变更为inactive时使用）
+  moveInDate?: string   // 可选，入住日期（状态变更为active时使用）
+  handleUnpaidExpenses?: 'waive' | 'keep'  // 可选，如何处理未结费用：'waive'（免除）、'keep'（保持）
+  notifyUser?: boolean  // 可选，是否发送通知给用户，默认true
+}
+
 // 邀请成员请求参数接口
 export interface InviteMemberRequest {
   email?: string           // 被邀请用户的邮箱（邮箱或手机二选一）
@@ -133,7 +142,6 @@ export interface InviteMemberRequest {
   bedNumber?: string       // 分配床位号，可选
   inviteExpiresDays?: number // 邀请有效期天数，默认7天，可选
 }
-
 // 邀请成员响应数据接口
 export interface InviteMemberResponse {
   inviteRecord: {
@@ -318,7 +326,7 @@ export const getMembers = async (params: {
     }
     
     // 调用真实API获取成员列表
-    const url = `/api/members${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
+    const url = `/members${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
     const response = await request<MembersResponse>(url, {
       method: 'GET'
     })
@@ -360,7 +368,7 @@ export const inviteMember = async (
     console.log('邀请成员:', dormId, inviteData)
     
     // 调用真实API邀请成员
-    const response = await request<InviteMemberResponse>(`/api/dorms/${dormId}/invite`, {
+    const response = await request<InviteMemberResponse>(`/dorms/${dormId}/invite`, {
       method: 'POST',
       body: JSON.stringify(inviteData)
     })
@@ -398,7 +406,7 @@ export const updateMemberRole = async (
     console.log('更新成员角色:', memberId, roleData)
     
     // 使用指定的API端点
-    const endpoint = `/api/dorms/members/${memberId}/role`
+    const endpoint = `/dorms/members/${memberId}/role`
     
     const response = await request<any>(endpoint, {
       method: 'PUT',
@@ -421,31 +429,51 @@ export const updateMemberRole = async (
 }
 
 /**
- * 删除成员
- * @param memberId 成员ID
+ * 删除成员（新版接口）
+ * @param id 用户宿舍关联记录ID（路径参数）
+ * @param deleteParams 删除参数
  * @returns 删除结果
  */
-export const deleteMember = async (memberId: number): Promise<ApiResponse<any>> => {
+export const deleteDormMember = async (
+  id: number,
+  deleteParams: {
+    deleteType?: 'physical' | 'logical',
+    handleUnpaidExpenses?: 'waive' | 'reallocate' | 'keep',
+    refundDeposit?: boolean,
+    newAdminId?: number,
+    notifyUser?: boolean
+  } = {}
+): Promise<ApiResponse<any>> => {
   try {
-    console.log('删除成员:', memberId)
+    console.log('删除宿舍成员:', id, deleteParams)
+    
+    // 设置默认值
+    const params = {
+      deleteType: deleteParams.deleteType || 'logical',
+      handleUnpaidExpenses: deleteParams.handleUnpaidExpenses || 'waive',
+      refundDeposit: deleteParams.refundDeposit !== undefined ? deleteParams.refundDeposit : false,
+      notifyUser: deleteParams.notifyUser !== undefined ? deleteParams.notifyUser : true,
+      ...(deleteParams.newAdminId && { newAdminId: deleteParams.newAdminId })
+    };
     
     // 调用真实API删除成员
-    const response = await request<any>(`/api/members/${memberId}`, {
-      method: 'DELETE'
-    })
+    const response = await request<any>(`/dorms/members/${id}`, {
+      method: 'DELETE',
+      data: params
+    });
     
     return {
       success: true,
       data: response,
       message: '成员删除成功'
-    }
+    };
   } catch (error) {
-    console.error('删除成员失败:', error)
+    console.error('删除宿舍成员失败:', error);
     return {
       success: false,
       data: null,
       message: '删除成员失败'
-    }
+    };
   }
 }
 
@@ -459,21 +487,47 @@ export const getPendingMembers = async (roomName: string): Promise<ApiResponse<a
     console.log('获取待审核成员列表:', roomName)
     
     // 调用真实API获取待审核成员列表
-    const response = await request<any[]>(`/api/members/pending?room=${roomName}`, {
-      method: 'GET'
+    // 注意：根据后端路由配置，可能需要调整API路径
+    // 目前使用的/dorms/members/pending是根据常见RESTful设计推测的，实际路径需要根据后端实现调整
+    const response = await request<any>(`/dorms/members/pending`, {
+      method: 'GET',
+      params: { room: roomName }
     })
     
+    // 处理后端返回的双层嵌套结构
+    const responseData = response.data?.data || response.data || []
+    const membersData = Array.isArray(responseData) ? responseData : []
+    
     return {
-      success: true,
-      data: response,
-      message: '待审核成员列表获取成功'
+      success: response.success,
+      data: membersData,
+      message: response.message || '待审核成员列表获取成功',
+      code: response.code || 200
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('获取待审核成员列表失败:', error)
+    
+    // 提取更详细的错误信息
+    let errorMessage = '获取待审核成员列表失败'
+    if (error.response) {
+      // 服务器返回了错误响应
+      errorMessage = `服务器错误: ${error.response.status}`
+      try {
+        const errorData = await error.response.json()
+        errorMessage = errorData.message || errorData.error || errorMessage
+      } catch (e) {
+        // 无法解析错误响应
+        errorMessage = `服务器错误: ${error.response.status} ${error.response.statusText}`
+      }
+    } else if (error.message) {
+      errorMessage = error.message
+    }
+    
     return {
       success: false,
       data: [],
-      message: '获取待审核成员列表失败'
+      message: errorMessage,
+      code: error.status || 500
     }
   }
 }
@@ -487,6 +541,42 @@ export default {
   getMembers,
   inviteMember,
   updateMemberRole,
-  deleteMember,
-  getPendingMembers
+  deleteDormMember,
+  getPendingMembers,
+  
+  /**
+   * 更新成员状态
+   * @param memberId 成员ID
+   * @param statusData 状态数据
+   * @returns 更新结果
+   */
+  updateMemberStatus: async (
+    memberId: number,
+    statusData: UpdateMemberStatusRequest
+  ): Promise<ApiResponse<any>> => {
+    try {
+      console.log('更新成员状态:', memberId, statusData);
+      
+      // 使用指定的API端点
+      const endpoint = `/dorms/members/${memberId}/status`;
+      
+      const response = await request<any>(endpoint, {
+        method: 'PUT',
+        body: JSON.stringify(statusData)
+      });
+      
+      return {
+        success: true,
+        data: response,
+        message: '成员状态更新成功'
+      };
+    } catch (error) {
+      console.error('更新成员状态失败:', error);
+      return {
+        success: false,
+        data: null,
+        message: '更新成员状态失败'
+      };
+    }
+  }
 }

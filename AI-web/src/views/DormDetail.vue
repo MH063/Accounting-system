@@ -428,14 +428,14 @@
                 <div class="stat-label">总容量</div>
               </div>
               <div class="stat-item">
-                <div class="stat-number">{{ dormData.occupancyRate }}%</div>
+                <div class="stat-number">{{ getSafePercentage(dormData.occupancyRate) }}%</div>
                 <div class="stat-label">入住率</div>
               </div>
               
               <div class="occupancy-bar">
                 <el-progress 
-                  :percentage="dormData.occupancyRate" 
-                  :status="getOccupancyStatus(dormData.occupancyRate)"
+                  :percentage="getSafePercentage(dormData.occupancyRate)" 
+                  :status="getOccupancyStatus(getSafePercentage(dormData.occupancyRate))"
                   :stroke-width="10"
                   :text-inside="true">
                 </el-progress>
@@ -569,7 +569,7 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { dormService } from '@/services/dormService'
+import dormService from '@/services/dormService'
 
 // 路由相关
 const route = useRoute()
@@ -786,9 +786,13 @@ const formatRelativeTime = (date: Date) => {
   return `${days}天前`
 }
 
-// 计算容量百分比
+// 获取容量百分比
 const getCapacityPercentage = () => {
-  return Math.round((dormData.value.currentOccupancy / dormData.value.capacity) * 100)
+  // 添加安全检查，防止除以0导致NaN
+  if (!dormData.value.capacity) return 0
+  const percentage = (dormData.value.currentOccupancy / dormData.value.capacity) * 100
+  // 确保返回的是有效数字
+  return isNaN(percentage) ? 0 : Math.round(percentage)
 }
 
 // 获取容量状态
@@ -797,6 +801,21 @@ const getCapacityStatus = () => {
   if (percentage >= 90) return 'exception'
   if (percentage >= 70) return 'warning'
   return 'success'
+}
+
+// 获取安全的百分比值，防止NaN
+const getSafePercentage = (percentage: any): number => {
+  // 检查值是否为有效数字
+  if (typeof percentage === 'number' && !isNaN(percentage)) {
+    return Math.round(percentage)
+  }
+  // 尝试转换字符串为数字
+  if (typeof percentage === 'string') {
+    const num = parseFloat(percentage)
+    return isNaN(num) ? 0 : Math.round(num)
+  }
+  // 默认返回0
+  return 0
 }
 
 // 获取角色标签类型
@@ -819,6 +838,17 @@ const getRoleText = (role: string) => {
   return texts[role as keyof typeof texts] || '未知'
 }
 
+// 适配后端返回的宿舍详情数据字段
+const adaptDormDetailData = (dormData: any) => {
+  return {
+    ...dormData,
+    // 适配寝室名称：处理后端返回的dorm_name（下划线）和dormName（驼峰）
+    dormName: dormData.dorm_name || dormData.dormName || '',
+    // 适配宿舍编码：处理后端返回的dorm_code（下划线）和dormCode（驼峰）
+    dormCode: dormData.dorm_code || dormData.dormCode || ''
+  }
+}
+
 // 加载宿舍数据
 const loadDormData = async () => {
   try {
@@ -836,7 +866,8 @@ const loadDormData = async () => {
     const response = await dormService.getDormDetail(Number(dormId))
     
     if (response.success) {
-      dormData.value = response.data
+      // 适配后端返回的数据字段
+      dormData.value = adaptDormDetailData(response.data)
       // 初始化编辑表单
       editFormInit()
     } else {

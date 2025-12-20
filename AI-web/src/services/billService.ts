@@ -60,7 +60,7 @@ export const getBillList = async (filter: BillFilter = {}): Promise<BillListResp
     })
 
     // 构建完整的URL
-    const url = `/api/bills?${params.toString()}`
+    const url = `/bills?${params.toString()}`
     
     // 调用真实API
     const response = await request<{
@@ -92,7 +92,7 @@ export const getBillDetail = async (id: string): Promise<Bill> => {
     const response = await request<{
       success: boolean
       data: Bill
-    }>(`/api/bills/${id}`)
+    }>(`/bills/${id}`)
     
     return response.data
   } catch (error) {
@@ -111,7 +111,7 @@ export const createBill = async (billData: Omit<Bill, 'id' | 'createdAt' | 'upda
     const response = await request<{
       success: boolean
       data: Bill
-    }>('/api/bills', {
+    }>('/bills', {
       method: 'POST',
       body: JSON.stringify(billData)
     })
@@ -134,7 +134,7 @@ export const updateBill = async (id: string, billData: Partial<Bill>): Promise<B
     const response = await request<{
       success: boolean
       data: Bill
-    }>(`/api/bills/${id}`, {
+    }>(`/bills/${id}`, {
       method: 'PUT',
       body: JSON.stringify(billData)
     })
@@ -153,7 +153,7 @@ export const updateBill = async (id: string, billData: Partial<Bill>): Promise<B
  */
 export const deleteBill = async (id: string): Promise<void> => {
   try {
-    await request(`/api/bills/${id}`, {
+    await request(`/bills/${id}`, {
       method: 'DELETE'
     })
   } catch (error) {
@@ -169,7 +169,7 @@ export const deleteBill = async (id: string): Promise<void> => {
  */
 export const deleteBillsBatch = async (ids: string[]): Promise<void> => {
   try {
-    await request('/api/bills/batch', {
+    await request('/bills/batch', {
       method: 'DELETE',
       body: JSON.stringify({ ids })
     })
@@ -194,7 +194,7 @@ export const payBill = async (id: string, paymentData: {
     const response = await request<{
       success: boolean
       message: string
-    }>(`/api/bills/${id}/pay`, {
+    }>(`/bills/${id}/pay`, {
       method: 'POST',
       body: JSON.stringify(paymentData)
     })
@@ -230,7 +230,7 @@ export const exportBills = async (filter: BillFilter, format: 'csv' | 'xlsx' = '
     })
     
     // 调用真实API导出账单
-    const url = `/api/bills/export?${params.toString()}`
+    const url = `/bills/export?${params.toString()}`
     const response = await request<{
       success: boolean
       data: {
@@ -278,7 +278,7 @@ export const getPaymentQRCodes = async (params: {
     })
     
     // 调用真实API获取收款码列表
-    const url = `/api/qr-codes?${queryParams.toString()}`
+    const url = `/qr-codes?${queryParams.toString()}`
     const response = await request<{
       success: boolean
       data: {
@@ -334,7 +334,7 @@ export const getReminderSettings = async (): Promise<{
         quietStart: string
         quietEnd: string
       }
-    }>('/api/bills/reminder-settings')
+    }>('/bills/reminder-settings')
     
     return response.data
   } catch (error) {
@@ -366,7 +366,7 @@ export const saveReminderSettings = async (settings: {
     const response = await request<{
       success: boolean
       message: string
-    }>('/api/bills/reminder-settings', {
+    }>('/bills/reminder-settings', {
       method: 'POST',
       body: JSON.stringify(settings)
     })

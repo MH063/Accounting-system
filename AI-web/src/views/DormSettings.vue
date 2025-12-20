@@ -22,21 +22,11 @@
         <div class="settings-section">
           <el-form :model="basicForm" label-width="120px" class="settings-form">
             <el-form-item label="寝室名称">
-              <el-input 
-                v-model="basicForm.dormName" 
-                placeholder="请输入寝室名称"
-                maxlength="20"
-                show-word-limit
-              />
+              <div class="text-display">{{ basicForm.dormName || '暂无名称' }}</div>
             </el-form-item>
             
             <el-form-item label="寝室类型">
-              <el-select v-model="basicForm.dormType" placeholder="选择寝室类型">
-                <el-option label="标准四人间" value="standard_4" />
-                <el-option label="标准六人间" value="standard_6" />
-                <el-option label="豪华双人间" value="luxury_2" />
-                <el-option label="单人间" value="single" />
-              </el-select>
+              <div class="text-display">{{ getDormTypeText(basicForm.dormType) }}</div>
             </el-form-item>
             
             <el-form-item label="开门时间">
@@ -302,6 +292,25 @@
               </el-button>
               
               <el-button 
+                v-if="canCompleteSettlement" 
+                type="primary" 
+                @click="completeSettlement"
+                :loading="processing.settlement"
+                :disabled="!canClickSettlementButton"
+              >
+                完成费用结算
+              </el-button>
+              
+              <el-button 
+                v-if="canCompleteInventory" 
+                type="primary" 
+                @click="completeInventory"
+                :loading="processing.inventory"
+              >
+                完成物品清点
+              </el-button>
+              
+              <el-button 
                 v-if="canConfirmDismiss" 
                 type="primary" 
                 @click="confirmDismiss"
@@ -446,7 +455,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, Delete, Plus } from '@element-plus/icons-vue'
-import { dormService } from '@/services/dormService'
+import dormService from '@/services/dormService'
 import type { 
   DormBasicSettings, 
   DormBillingSettings, 
@@ -502,15 +511,13 @@ const saving = ref({
 const processing = ref({
   dismiss: false,
   confirm: false,
-  cancel: false
+  cancel: false,
+  settlement: false,
+  inventory: false
 })
 
 // 寝室成员
-const dormMembers = ref<DormMember[]>([
-  { id: '1', name: '张三', weight: 1.0 },
-  { id: '2', name: '李四', weight: 1.0 },
-  { id: '3', name: '王五', weight: 1.0 }
-])
+const dormMembers = ref<DormMember[]>([])
 
 // 通知类别
 const notificationCategories = ref<DormNotificationCategory[]>([
@@ -575,18 +582,7 @@ const historyPage = ref({
   total: 0
 })
 
-const historyRecords = ref<HistoryRecord[]>([
-  {
-    id: '1',
-    timestamp: '2024-01-15 14:30:00',
-    type: 'basic',
-    operator: '张三',
-    description: '修改了寝室名称为"温馨小屋"',
-    changes: [
-      { field: '寝室名称', oldValue: '101号寝室', newValue: '温馨小屋' }
-    ]
-  }
-])
+const historyRecords = ref<HistoryRecord[]>([])
 
 // 计算属性
 const canStartDismiss = computed(() => {
@@ -594,41 +590,91 @@ const canStartDismiss = computed(() => {
 })
 
 const canConfirmDismiss = computed(() => {
-  return dismissSteps.value.active === 1
+  return dismissSteps.value.active === 3
 })
 
 const canCancelDismiss = computed(() => {
-  return dismissSteps.value.active > 0 && dismissSteps.value.active < 4
+  return dismissSteps.value.active > 0
+})
+
+const canCompleteSettlement = computed(() => {
+  return dismissSteps.value.active === 1
+})
+
+const canCompleteInventory = computed(() => {
+  return dismissSteps.value.active === 2
 })
 
 const hasPendingFees = computed(() => {
   return pendingFees.value.length > 0
 })
 
-const pendingFees = ref<PendingFee[]>([
-  { member: '张三', item: '电费', amount: 45.50, status: 'pending' },
-  { member: '李四', item: '水费', amount: 23.80, status: 'pending' },
-  { member: '王五', item: '网费', amount: 50.00, status: 'paid' }
-])
+const canClickSettlementButton = computed(() => {
+  // 只有在步骤1时才显示按钮
+  if (dismissSteps.value.active !== 1) {
+    return false
+  }
+  
+  // 如果没有待结算费用，可以点击
+  if (pendingFees.value.length === 0) {
+    return true
+  }
+  
+  // 检查是否所有待结算费用都已缴
+  const allPaid = pendingFees.value.every(fee => fee.status === 'paid')
+  return allPaid
+})
+
+const pendingFees = ref<PendingFee[]>([])
 
 // 方法
 const loadDormSettings = async () => {
   try {
+    // 1. 获取寝室基本信息（包括名称）
+    const detailResponse = await dormService.getDormitoryDetail(dormId.value)
+    console.log('获取寝室基本信息响应:', detailResponse)
+    if (detailResponse.success) {
+      const dormDetail = detailResponse.data || {}
+      // 更新寝室名称
+      basicForm.value.dormName = dormDetail.name || dormDetail.dormName || ''
+      basicForm.value.dormType = dormDetail.type || dormDetail.dormType || basicForm.value.dormType
+      console.log('加载寝室基本信息成功:', { dormName: basicForm.value.dormName, dormType: basicForm.value.dormType })
+    }
+    
+    // 2. 获取寝室设置
     const response = await dormService.getDormSettings(dormId.value)
-    if (response.success && response.data) {
-      const settings = response.data
-      // 加载基本信息
+    console.log('获取寝室设置响应:', response)
+    if (response.success) {
+      // 确保settings数据结构正确
+      const settings = response.data || {}
+      
+      // 加载基本信息设置
       if (settings.basic) {
         basicForm.value = { ...basicForm.value, ...settings.basic }
+        console.log('加载基本信息设置成功:', settings.basic)
       }
       // 加载通知设置
       if (settings.notifications) {
         notificationForm.value.methods = settings.notifications.methods || ['push']
+        notificationForm.value.quietStart = settings.notifications.quietStart || '22:00'
+        notificationForm.value.quietEnd = settings.notifications.quietEnd || '07:00'
+        console.log('加载通知设置成功:', settings.notifications)
       }
+      // 加载费用分摊设置
+      if (settings.billing) {
+        billingForm.value = { ...billingForm.value, ...settings.billing }
+        // 确保publicItems是数组
+        billingForm.value.publicItems = Array.isArray(billingForm.value.publicItems) ? billingForm.value.publicItems : []
+        console.log('加载费用设置成功:', settings.billing)
+      }
+    } else {
+      // 处理API返回的错误
+      console.error('获取寝室设置失败:', response.message)
+      ElMessage.error(response.message || '获取寝室设置失败')
     }
   } catch (error) {
     console.error('加载设置失败:', error)
-    ElMessage.error('加载设置失败')
+    ElMessage.error('加载设置失败: ' + (error as Error).message)
   }
 }
 
@@ -642,10 +688,8 @@ const saveBasicSettings = async () => {
     
     if (response.success) {
       ElMessage.success('基本信息保存成功')
-      // 记录历史
-      addHistoryRecord('basic', '修改基本信息', [
-        { field: '寝室名称', oldValue: '原名称', newValue: basicForm.value.dormName }
-      ])
+      // 重新加载设置和历史记录
+      await Promise.all([loadDormSettings(), loadHistory()])
     } else {
       ElMessage.error(response.message || '保存失败')
     }
@@ -667,7 +711,8 @@ const saveBillingSettings = async () => {
     
     if (response.success) {
       ElMessage.success('费用设置保存成功')
-      addHistoryRecord('billing', '修改费用分摊规则', [])
+      // 重新加载设置和历史记录
+      await Promise.all([loadDormSettings(), loadHistory()])
     } else {
       ElMessage.error(response.message || '保存失败')
     }
@@ -689,7 +734,8 @@ const saveNotificationSettings = async () => {
     
     if (response.success) {
       ElMessage.success('通知设置保存成功')
-      addHistoryRecord('notification', '修改通知偏好', [])
+      // 重新加载设置和历史记录
+      await Promise.all([loadDormSettings(), loadHistory()])
     } else {
       ElMessage.error(response.message || '保存失败')
     }
@@ -722,36 +768,89 @@ const removePublicItem = (id: string) => {
 const startDismissProcess = async () => {
   processing.value.dismiss = true
   try {
-    // 模拟开始解散流程
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    dismissStatus.value = {
-      type: 'warning',
-      text: '解散流程中',
-      description: '正在处理解散相关事务'
+    const response = await dormService.startDismissProcess(dormId.value)
+    if (response.success) {
+      dismissStatus.value = {
+        type: 'warning',
+        text: '解散流程中',
+        description: '正在处理解散相关事务'
+      }
+      dismissSteps.value.active = 1
+      // 保存解散流程状态
+      saveDismissFlowStatus()
+      ElMessage.success('开始解散流程')
+      await loadHistory()
+      await loadDormStatus() // 刷新解散状态
+    } else {
+      ElMessage.error(response.message || '启动解散流程失败')
     }
-    dismissSteps.value.active = 1
-    ElMessage.success('开始解散流程')
-    addHistoryRecord('other', '开始寝室解散流程', [])
   } catch (error) {
+    console.error('启动解散流程失败:', error)
     ElMessage.error('启动解散流程失败')
   } finally {
     processing.value.dismiss = false
   }
 }
 
+const completeSettlement = async () => {
+  processing.value.settlement = true
+  try {
+    // 这里可以添加调用费用结算API的逻辑
+    console.log('完成费用结算')
+    dismissSteps.value.active = 2
+    // 保存解散流程状态
+    saveDismissFlowStatus()
+    ElMessage.success('费用结算完成，进入物品清点阶段')
+    await loadHistory()
+    await loadDormStatus() // 刷新解散状态
+  } catch (error) {
+    console.error('费用结算失败:', error)
+    ElMessage.error('费用结算失败')
+  } finally {
+    processing.value.settlement = false
+  }
+}
+
+const completeInventory = async () => {
+  processing.value.inventory = true
+  try {
+    // 这里可以添加调用物品清点API的逻辑
+    console.log('完成物品清点')
+    dismissSteps.value.active = 3
+    // 保存解散流程状态
+    saveDismissFlowStatus()
+    ElMessage.success('物品清点完成，准备确认解散')
+    await loadHistory()
+    await loadDormStatus() // 刷新解散状态
+  } catch (error) {
+    console.error('物品清点失败:', error)
+    ElMessage.error('物品清点失败')
+  } finally {
+    processing.value.inventory = false
+  }
+}
+
 const confirmDismiss = async () => {
   processing.value.confirm = true
   try {
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    dismissSteps.value.active = 4
-    dismissStatus.value = {
-      type: 'danger',
-      text: '已解散',
-      description: '寝室已正式解散'
+    const response = await dormService.confirmDismiss(dormId.value)
+    if (response.success) {
+      dismissSteps.value.active = 4
+      dismissStatus.value = {
+        type: 'danger',
+        text: '已解散',
+        description: '寝室已正式解散'
+      }
+      // 保存解散流程状态
+      saveDismissFlowStatus()
+      ElMessage.success('寝室解散完成')
+      await loadHistory()
+      await loadDormStatus() // 刷新解散状态
+    } else {
+      ElMessage.error(response.message || '确认解散失败')
     }
-    ElMessage.success('寝室解散完成')
-    addHistoryRecord('other', '完成寝室解散', [])
   } catch (error) {
+    console.error('确认解散失败:', error)
     ElMessage.error('确认解散失败')
   } finally {
     processing.value.confirm = false
@@ -761,32 +860,126 @@ const confirmDismiss = async () => {
 const cancelDismiss = async () => {
   processing.value.cancel = true
   try {
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    dismissStatus.value = {
-      type: 'success',
-      text: '正常运营',
-      description: '寝室运行状态正常'
+    console.log('取消解散操作开始，当前步骤:', dismissSteps.value.active)
+    
+    // 1. 先同步后端状态，确保本地状态与后端一致
+    await syncBackendStatus()
+    console.log('同步后端状态后，当前步骤:', dismissSteps.value.active)
+    
+    // 2. 如果已经到了第四步（已解散）或本地状态显示正常运营，直接更新本地状态
+    if (dismissSteps.value.active === 4 || dismissStatus.value.type === 'success') {
+      // 直接更新本地状态，不调用API
+      dismissStatus.value = {
+        type: 'success',
+        text: '正常运营',
+        description: '寝室运行状态正常'
+      }
+      dismissSteps.value.active = 0
+      // 清除解散流程状态
+      clearDismissFlowStatus()
+      ElMessage.success('已取消解散流程')
+      await loadHistory()
+      await loadDormStatus() // 刷新解散状态
+      return
     }
-    dismissSteps.value.active = 0
-    ElMessage.success('已取消解散流程')
-  } catch (error) {
-    ElMessage.error('取消解散失败')
+    
+    // 3. 非第四步状态，且本地状态显示解散流程中，调用API取消解散
+    console.log('调用API取消解散，寝室ID:', dormId.value)
+    const response = await dormService.cancelDismiss(dormId.value)
+    console.log('取消解散API响应:', response)
+    
+    if (response.success) {
+      // API调用成功，更新本地状态
+      dismissStatus.value = {
+        type: 'success',
+        text: '正常运营',
+        description: '寝室运行状态正常'
+      }
+      dismissSteps.value.active = 0
+      // 清除解散流程状态
+      clearDismissFlowStatus()
+      ElMessage.success('已取消解散流程')
+      await loadHistory()
+      await loadDormStatus() // 刷新解散状态
+    } else {
+      // API调用失败
+      console.error('取消解散API失败:', response.message)
+      ElMessage.error(response.message || '取消解散失败')
+      
+      // 再次同步后端状态，确保本地状态与后端一致
+      await syncBackendStatus()
+    }
+  } catch (error: any) {
+    console.error('取消解散失败:', error)
+    
+    // 处理不同的错误情况
+    if (error.message === '只有正在解散中的宿舍才能取消解散') {
+      // 后端返回该错误，说明后端认为宿舍不在解散流程中
+      console.log('后端认为宿舍不在解散流程中，同步后端状态')
+      // 同步后端状态，更新本地状态
+      await syncBackendStatus()
+      
+      // 更新本地状态为正常运营
+      dismissStatus.value = {
+        type: 'success',
+        text: '正常运营',
+        description: '寝室运行状态正常'
+      }
+      dismissSteps.value.active = 0
+      // 清除解散流程状态
+      clearDismissFlowStatus()
+      ElMessage.success('解散流程已结束，状态已恢复为正常运营')
+      await loadHistory()
+      await loadDormStatus() // 刷新解散状态
+    } else {
+      ElMessage.error('取消解散失败')
+    }
   } finally {
     processing.value.cancel = false
   }
 }
 
-// 历史记录相关
-const addHistoryRecord = (type: string, description: string, changes: HistoryChange[]) => {
-  const newRecord: HistoryRecord = {
-    id: Date.now().toString(),
-    timestamp: new Date().toLocaleString('zh-CN'),
-    type: type as 'basic' | 'billing' | 'notification' | 'other',
-    operator: '当前用户',
-    description,
-    changes
+// 获取寝室类型文本
+const getDormTypeText = (type: string) => {
+  const typeMap: Record<string, string> = {
+    standard_4: '标准四人间',
+    standard_6: '标准六人间',
+    luxury_2: '豪华双人间',
+    single: '单人间'
   }
-  historyRecords.value.unshift(newRecord)
+  return typeMap[type] || '未知类型'
+}
+
+// 历史记录相关
+const loadHistory = async () => {
+  try {
+    const response = await dormService.getDormHistory(dormId.value, {
+      ...historyFilters.value,
+      current: historyPage.value.current,
+      size: historyPage.value.size
+    })
+    
+    if (response.success && response.data) {
+      // 确保historyRecords始终是一个数组
+      const records = response.data.records || response.data.data || response.data || []
+      historyRecords.value = Array.isArray(records) ? records : []
+      historyPage.value.total = response.data.total || historyRecords.value.length
+    }
+  } catch (error) {
+    console.error('加载历史记录失败:', error)
+    ElMessage.error('加载历史记录失败')
+    // 发生错误时，确保historyRecords是一个数组，避免渲染错误
+    historyRecords.value = []
+  }
+}
+
+const resetHistoryFilters = () => {
+  historyFilters.value = {
+    type: '',
+    dateRange: []
+  }
+  historyPage.value.current = 1
+  loadHistory()
 }
 
 const getHistoryTypeColor = (type: string) => {
@@ -796,7 +989,9 @@ const getHistoryTypeColor = (type: string) => {
     notification: 'warning',
     other: 'info'
   }
-  return colors[type as keyof typeof colors] || 'info'
+  // 确保返回有效的颜色值，避免undefined
+  const color = colors[type as keyof typeof colors] || 'info'
+  return color as 'primary' | 'success' | 'warning' | 'danger' | 'info'
 }
 
 const getHistoryTypeText = (type: string) => {
@@ -809,22 +1004,233 @@ const getHistoryTypeText = (type: string) => {
   return texts[type as keyof typeof texts] || '未知'
 }
 
-const loadHistory = () => {
-  // 模拟加载历史记录
-  console.log('加载历史记录', historyFilters.value)
+// 加载寝室成员列表
+const loadDormMembers = async () => {
+  try {
+    const response = await dormService.getDormMembers(dormId.value)
+    if (response.success) {
+      // 确保response.data是数组，否则使用空数组
+      const membersData = response.data.data || response.data || []
+      const members = Array.isArray(membersData) ? membersData : []
+      dormMembers.value = members.map((member: any) => ({
+        id: member.id,
+        name: member.name,
+        weight: 1.0
+      }))
+    }
+  } catch (error) {
+    console.error('加载寝室成员列表失败:', error)
+    ElMessage.error('加载寝室成员列表失败')
+    // 发生错误时，确保dormMembers是一个数组
+    dormMembers.value = []
+  }
 }
 
-const resetHistoryFilters = () => {
-  historyFilters.value = {
-    type: '',
-    dateRange: []
+// 加载待结算费用
+const loadPendingFees = async () => {
+  try {
+    const response = await dormService.getPendingFees(dormId.value)
+    console.log('获取待结算费用响应:', response)
+    console.log('完整响应数据:', JSON.stringify(response))
+    if (response.success) {
+      // 确保response.data是数组，否则检查是否有data.fees或其他可能的字段
+      let feesData = response.data || []
+      
+      // 检查数据结构，处理不同格式的响应
+      if (!Array.isArray(feesData)) {
+        // 如果data是对象，检查是否包含fees、items等可能的数组字段
+        if (feesData.fees && Array.isArray(feesData.fees)) {
+          feesData = feesData.fees
+        } else if (feesData.items && Array.isArray(feesData.items)) {
+          feesData = feesData.items
+        } else if (feesData.pendingFees && Array.isArray(feesData.pendingFees)) {
+          feesData = feesData.pendingFees
+        } else {
+          // 如果找不到数组字段，尝试直接使用对象作为单个费用项
+          feesData = [feesData]
+        }
+      }
+      
+      pendingFees.value = feesData
+      console.log('加载待结算费用成功，共', pendingFees.value.length, '条记录')
+      console.log('待结算费用数据:', pendingFees.value)
+    } else {
+      console.error('获取待结算费用失败:', response.message)
+      ElMessage.error(response.message || '获取待结算费用失败')
+      pendingFees.value = []
+    }
+  } catch (error) {
+    console.error('加载待结算费用失败:', error)
+    ElMessage.error('加载待结算费用失败')
+    // 发生错误时，确保pendingFees是一个数组
+    pendingFees.value = []
   }
-  loadHistory()
+}
+
+// 新增：获取寝室解散状态
+const loadDormStatus = async () => {
+  try {
+    console.log('获取寝室解散状态:', dormId.value)
+    // 通过获取寝室详情来获取解散状态
+    const response = await dormService.getDormitoryDetail(dormId.value)
+    console.log('获取寝室详情响应:', response)
+    if (response.success) {
+      // 注意：后端返回的数据结构是双层嵌套的，需要访问 response.data.dorm
+      const dormDetail = response.data.dorm || response.data.data || response.data
+      console.log('获取寝室详情:', dormDetail)
+      
+      // 检查是否有本地存储的状态，如果有则优先使用
+      const hasLocalStatus = localStorage.getItem(getDismissFlowStorageKey()) !== null
+      if (hasLocalStatus) {
+        console.log('已存在本地存储的解散状态，优先使用')
+        return
+      }
+      
+      // 没有本地存储的状态时，使用后端返回的状态
+      if (dormDetail.dismissalRecord && dormDetail.dismissalRecord.status === 'pending') {
+        dismissStatus.value = {
+          type: 'warning',
+          text: '解散流程中',
+          description: '正在处理解散相关事务'
+        }
+        dismissSteps.value.active = 1
+        // 保存初始状态
+        saveDismissFlowStatus()
+        console.log('更新解散状态为：解散流程中')
+      } else if (dormDetail.status === 'inactive') {
+        dismissStatus.value = {
+          type: 'danger',
+          text: '已解散',
+          description: '寝室已正式解散'
+        }
+        dismissSteps.value.active = 4
+        // 保存初始状态
+        saveDismissFlowStatus()
+        console.log('更新解散状态为：已解散')
+      } else {
+        // 只有当状态不是解散流程中或已解散时，才重置为正常状态
+        dismissStatus.value = {
+          type: 'success',
+          text: '正常运营',
+          description: '寝室运行状态正常'
+        }
+        dismissSteps.value.active = 0
+        // 清除状态
+        clearDismissFlowStatus()
+        console.log('更新解散状态为：正常运营')
+      }
+    }
+  } catch (error) {
+    console.error('获取寝室解散状态失败:', error)
+  }
+}
+
+// 状态持久化相关
+const getDismissFlowStorageKey = () => {
+  return `dorm_dismiss_flow_${dormId.value}`
+}
+
+// 保存解散流程状态
+const saveDismissFlowStatus = () => {
+  const status = {
+    activeStep: dismissSteps.value.active,
+    statusType: dismissStatus.value.type,
+    statusText: dismissStatus.value.text,
+    statusDescription: dismissStatus.value.description,
+    timestamp: Date.now()
+  }
+  localStorage.setItem(getDismissFlowStorageKey(), JSON.stringify(status))
+  console.log('保存解散流程状态:', status)
+}
+
+// 恢复解散流程状态
+const restoreDismissFlowStatus = () => {
+  const savedStatus = localStorage.getItem(getDismissFlowStorageKey())
+  if (savedStatus) {
+    try {
+      const status = JSON.parse(savedStatus)
+      console.log('恢复解散流程状态:', status)
+      dismissSteps.value.active = status.activeStep
+      dismissStatus.value = {
+        type: status.statusType,
+        text: status.statusText,
+        description: status.statusDescription
+      }
+      return true
+    } catch (error) {
+      console.error('恢复解散流程状态失败:', error)
+      // 清除无效的存储数据
+      localStorage.removeItem(getDismissFlowStorageKey())
+      return false
+    }
+  }
+  return false
+}
+
+// 清除解散流程状态
+const clearDismissFlowStatus = () => {
+  localStorage.removeItem(getDismissFlowStorageKey())
+  console.log('清除解散流程状态')
+}
+
+// 同步后端状态到本地
+const syncBackendStatus = async () => {
+  try {
+    // 通过获取寝室详情来获取最新的解散状态
+    const response = await dormService.getDormitoryDetail(dormId.value)
+    console.log('同步后端状态:', response)
+    if (response.success) {
+      // 注意：后端返回的数据结构是双层嵌套的，需要访问 response.data.dorm
+      const dormDetail = response.data.dorm || response.data.data || response.data
+      console.log('获取寝室详情:', dormDetail)
+      
+      // 更新本地状态以匹配后端状态
+      if (dormDetail.dismissalRecord && dormDetail.dismissalRecord.status === 'pending') {
+        // 后端显示正在解散中，保持本地状态
+        console.log('后端状态：正在解散中，保持本地状态')
+      } else if (dormDetail.status === 'inactive') {
+        // 后端显示已解散，更新本地状态到步骤4
+        dismissStatus.value = {
+          type: 'danger',
+          text: '已解散',
+          description: '寝室已正式解散'
+        }
+        dismissSteps.value.active = 4
+        saveDismissFlowStatus()
+        console.log('后端状态：已解散，更新本地状态到步骤4')
+      } else {
+        // 后端显示正常运营，清除本地状态
+        dismissStatus.value = {
+          type: 'success',
+          text: '正常运营',
+          description: '寝室运行状态正常'
+        }
+        dismissSteps.value.active = 0
+        clearDismissFlowStatus()
+        console.log('后端状态：正常运营，清除本地状态')
+      }
+    }
+  } catch (error) {
+    console.error('同步后端状态失败:', error)
+  }
 }
 
 // 生命周期
-onMounted(() => {
-  loadDormSettings()
+onMounted(async () => {
+  // 先恢复本地存储的状态
+  restoreDismissFlowStatus()
+  
+  await Promise.all([
+    loadDormSettings(),
+    loadDormMembers(),
+    loadHistory(),
+    loadPendingFees(),
+    loadDormStatus()
+  ])
+  
+  // 同步后端状态，确保本地状态与后端一致
+  await syncBackendStatus()
+  
   console.log('寝室设置页面已加载，寝室ID:', dormId.value)
 })
 </script>
@@ -832,5 +1238,11 @@ onMounted(() => {
 <style scoped>
 .dorm-settings {
   padding: 20px;
+}
+
+.text-display {
+  line-height: 32px; /* 与表单控件高度一致 */
+  color: #303133;
+  font-size: 14px;
 }
 </style>

@@ -98,4 +98,136 @@ router.put('/members/:id/role',
   }))
 );
 
+/**
+ * 更新宿舍成员状态路由
+ * PUT /api/dorms/members/:id/status
+ * 需要有效的JWT令牌才能访问
+ */
+router.put('/members/:id/status', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await dormController.updateMemberStatus(req, res);
+  }))
+);
+
+/**
+ * 删除宿舍成员路由
+ * DELETE /api/dorms/members/:id
+ * 需要有效的JWT令牌才能访问
+ */
+router.delete('/members/:id', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await dormController.removeMember(req, res);
+  }))
+);
+
+/**
+ * 获取寝室设置路由
+ * GET /api/dorms/:id/settings
+ * 需要有效的JWT令牌才能访问
+ */
+router.get('/:id/settings', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await dormController.getDormSettings(req, res);
+  }))
+);
+
+/**
+ * 更新寝室设置路由
+ * PUT /api/dorms/:id/settings/update
+ * 需要有效的JWT令牌才能访问
+ */
+router.put('/:id/settings/update', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await dormController.updateDormSettings(req, res);
+  }))
+);
+
+/**
+ * 获取寝室变更历史路由
+ * GET /api/dorms/:id/history
+ * 需要有效的JWT令牌才能访问
+ */
+router.get('/:id/history', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await dormController.getDormHistory(req, res);
+  }))
+);
+
+/**
+ * 开始解散流程路由
+ * POST /api/dorms/:id/dismiss/start
+ * 需要有效的JWT令牌才能访问
+ */
+router.post('/:id/dismiss/start', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await dormController.startDismissProcess(req, res);
+  }))
+);
+
+/**
+ * 确认解散路由
+ * POST /api/dorms/:id/dismiss/confirm
+ * 需要有效的JWT令牌才能访问
+ */
+router.post('/:id/dismiss/confirm', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await dormController.confirmDismiss(req, res);
+  }))
+);
+
+/**
+ * 取消解散路由
+ * POST /api/dorms/:id/dismiss/cancel
+ * 需要有效的JWT令牌才能访问
+ */
+router.post('/:id/dismiss/cancel', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await dormController.cancelDismiss(req, res);
+  }))
+);
+
+/**
+ * 获取待结算费用路由
+ * GET /api/dorms/:id/pending-fees
+ * 需要有效的JWT令牌才能访问
+ */
+router.get('/:id/pending-fees', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await dormController.getPendingFees(req, res);
+  }))
+);
+
+/**
+ * 获取寝室成员列表路由
+ * GET /api/dorms/:id/members
+ * 需要有效的JWT令牌才能访问
+ */
+router.get('/:id/members', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await dormController.getDormMembers(req, res);
+  }))
+);
+
+/**
+ * 获取用户所在的寝室信息路由
+ * GET /api/dorms/users/:userId
+ * 需要有效的JWT令牌才能访问
+ */
+router.get('/users/:userId', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await dormController.getCurrentUserDorm(req, res);
+  }))
+);
+
 module.exports = router;

@@ -12,24 +12,21 @@
     <div class="search-bar">
       <el-input
         v-model="searchKeyword"
-        placeholder="请输入宿舍名称"
+        placeholder="请输入宿舍名称或宿舍编码"
         clearable
         @clear="handleSearch"
         @keyup.enter="handleSearch"
         style="width: 300px; margin-right: 20px;"
       >
-        <template #append>
-          <el-button :icon="Search" @click="handleSearch" />
-        </template>
       </el-input>
       <el-button type="primary" @click="handleSearch">搜索</el-button>
     </div>
 
     <!-- 宿舍列表 -->
     <el-table :data="dormList" stripe style="width: 100%">
-      <el-table-column prop="dormNumber" label="宿舍编码" width="100">
+      <el-table-column prop="dormCode" label="宿舍编码" width="100">
         <template #default="scope">
-          <el-tag type="info" effect="plain">{{ getDormNumberShort(scope.row.dormNumber) }}</el-tag>
+          <el-tag type="info" effect="plain">{{ getDormNumberShort(scope.row.dormCode) }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="name" label="寝室名称" />
@@ -159,7 +156,7 @@ import { useRouter } from 'vue-router'
 import { Plus, Document, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import type { DormManagementItem, EditingDorm } from '@/types'
-import { dormService } from '@/services/dormService'
+import dormService from '@/services/dormService'
 import { withLoading } from '@/utils/loadingUtils'
 import { handleApiError } from '@/utils/errorUtils'
 
@@ -222,7 +219,7 @@ const editDorm = (dorm: DormManagementItem) => {
   Object.assign(editingDorm, {
     id: dorm.id,
     name: dorm.name,
-    dormNumber: dorm.dormNumber, // 寝室编号只读显示，不可修改
+    dormNumber: dorm.dormCode, // 寝室编号只读显示，不可修改
     address: dorm.address,
     memberCount: dorm.memberCount,
     status: dorm.status,
@@ -348,9 +345,20 @@ const deleteDorm = async (dorm: DormManagementItem) => {
 }
 
 // 获取寝室编号后四位
-const getDormNumberShort = (dormNumber: string) => {
-  if (!dormNumber) return ''
-  return dormNumber.slice(-4)
+const getDormNumberShort = (dormNumberOrCode: string) => {
+  if (!dormNumberOrCode) return ''
+  return dormNumberOrCode.slice(-4)
+}
+
+// 适配后端返回的数据字段到前端使用的字段名
+const adaptDormData = (dormList: any[]) => {
+  return dormList.map(dorm => ({
+    ...dorm,
+    // 适配寝室名称：处理后端返回的dorm_name（下划线）和dormName（驼峰），前端统一使用name
+    name: dorm.dorm_name || dorm.dormName || dorm.name || '',
+    // 适配宿舍编码：处理后端返回的dorm_code（下划线）和dormCode（驼峰），前端统一使用dormCode
+    dormCode: dorm.dorm_code || dorm.dormCode || dorm.dormNumber || ''
+  }))
 }
 
 // 生命周期钩子
@@ -370,7 +378,9 @@ const loadDormList = async () => {
       console.log('获取宿舍列表成功:', response)
       if (response.success && response.data) {
         // 从返回的数据中提取宿舍列表和分页信息
-        dormList.value = response.data.dorms || []
+        const rawDorms = response.data.dorms || []
+        // 适配后端返回的dormCode字段到前端的dormNumber字段
+        dormList.value = adaptDormData(rawDorms)
         total.value = response.data.pagination?.total || 0
       }
     })

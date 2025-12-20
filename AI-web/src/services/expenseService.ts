@@ -2,8 +2,8 @@
  * 支出服务 - 提供支出相关的API调用
  */
 
-import request from '@/utils/request'
-import type { ApiResponse } from '@/types'
+import { request } from '@/utils/request'
+import type { ApiResponse, ExpenseItem } from '@/types'
 
 // 支出统计相关接口
 export interface ExpenseStatistics {
@@ -98,7 +98,7 @@ export const getExpenseStatistics = async (filter: ExpenseFilter): Promise<Expen
   if (filter.pageSize) params.append('pageSize', filter.pageSize.toString());
   
   const queryString = params.toString() ? `?${params.toString()}` : '';
-  const response = await request.get(`/api/expenses/statistics${queryString}`);
+  const response = await request.get(`/expenses/statistics${queryString}`);
   return response;
 }
 
@@ -106,7 +106,7 @@ export const getExpenseStatistics = async (filter: ExpenseFilter): Promise<Expen
  * 删除支出记录
  */
 export const deleteExpense = async (id: number): Promise<any> => {
-  const response = await request.del(`/api/expenses/${id}`);
+  const response = await request.del(`/expenses/${id}`);
   return response;
 }
 
@@ -114,7 +114,7 @@ export const deleteExpense = async (id: number): Promise<any> => {
  * 获取支出趋势数据
  */
 export const getExpenseTrend = async (timeRange: string): Promise<ExpenseTrendItem[]> => {
-  const response = await request.get(`/api/expenses/trend?timeRange=${encodeURIComponent(timeRange)}`);
+  const response = await request.get(`/expenses/trend?timeRange=${encodeURIComponent(timeRange)}`);
   return response.data;
 }
 
@@ -122,7 +122,7 @@ export const getExpenseTrend = async (timeRange: string): Promise<ExpenseTrendIt
  * 获取支出分类数据
  */
 export const getExpenseCategories = async (timeRange: string): Promise<ExpenseCategoryItem[]> => {
-  const response = await request.get(`/api/expenses/categories?timeRange=${encodeURIComponent(timeRange)}`);
+  const response = await request.get(`/expenses/categories?timeRange=${encodeURIComponent(timeRange)}`);
   return response.data;
 }
 
@@ -130,7 +130,7 @@ export const getExpenseCategories = async (timeRange: string): Promise<ExpenseCa
  * 获取成员支出数据
  */
 export const getExpenseMembers = async (timeRange: string): Promise<ExpenseMemberItem[]> => {
-  const response = await request.get(`/api/expenses/members?timeRange=${encodeURIComponent(timeRange)}`);
+  const response = await request.get(`/expenses/members?timeRange=${encodeURIComponent(timeRange)}`);
   return response.data;
 }
 
@@ -138,7 +138,7 @@ export const getExpenseMembers = async (timeRange: string): Promise<ExpenseMembe
  * 获取时段支出数据
  */
 export const getExpenseTimeDistribution = async (granularity: string, timeRange: string): Promise<ExpenseTimeItem[]> => {
-  const response = await request.get(`/api/expenses/time-distribution?granularity=${encodeURIComponent(granularity)}&timeRange=${encodeURIComponent(timeRange)}`);
+  const response = await request.get(`/expenses/time-distribution?granularity=${encodeURIComponent(granularity)}&timeRange=${encodeURIComponent(timeRange)}`);
   return response.data;
 }
 
@@ -147,7 +147,7 @@ export const getExpenseTimeDistribution = async (granularity: string, timeRange:
  */
 export const getExpenseById = async (id: string): Promise<ApiResponse<ExpenseRecord>> => {
   try {
-    const response = await request.get<ApiResponse<ExpenseRecord>>(`/api/expenses/${id}`);
+    const response = await request.get<ApiResponse<ExpenseRecord>>(`/expenses/${id}`);
     return response;
   } catch (error) {
     console.error('获取支出记录详情失败:', error);
@@ -164,7 +164,7 @@ export const getExpenseById = async (id: string): Promise<ApiResponse<ExpenseRec
  */
 export const updateExpense = async (id: string, data: Partial<ExpenseRecord>): Promise<ApiResponse<ExpenseRecord>> => {
   try {
-    const response = await request.put<ApiResponse<ExpenseRecord>>(`/api/expenses/${id}`, data);
+    const response = await request.put<ApiResponse<ExpenseRecord>>(`/expenses/${id}`, data);
     return response;
   } catch (error) {
     console.error('更新支出记录失败:', error);
@@ -181,7 +181,7 @@ export const updateExpense = async (id: string, data: Partial<ExpenseRecord>): P
  */
 export const saveDraft = async (data: Partial<ExpenseRecord>): Promise<ApiResponse<ExpenseRecord>> => {
   try {
-    const response = await request.post<ApiResponse<ExpenseRecord>>('/api/expenses/draft', data);
+    const response = await request.post<ApiResponse<ExpenseRecord>>('/expenses/draft', data);
     return response;
   } catch (error) {
     console.error('保存草稿失败:', error);
@@ -198,7 +198,7 @@ export const saveDraft = async (data: Partial<ExpenseRecord>): Promise<ApiRespon
  */
 export const uploadFile = async (formData: FormData): Promise<ApiResponse<{ fileUrl: string }>> => {
   try {
-    const response = await request.post<ApiResponse<{ fileUrl: string }>>('/api/expenses/upload', formData);
+    const response = await request.post<ApiResponse<{ fileUrl: string }>>('/expenses/upload', formData);
     return response;
   } catch (error) {
     console.error('文件上传失败:', error);
@@ -215,7 +215,7 @@ export const uploadFile = async (formData: FormData): Promise<ApiResponse<{ file
  */
 export const deleteFile = async (fileUrl: string): Promise<ApiResponse<boolean>> => {
   try {
-    const response = await request.del<ApiResponse<boolean>>(`/api/expenses/files?fileUrl=${encodeURIComponent(fileUrl)}`);
+    const response = await request.del<ApiResponse<boolean>>(`/expenses/files?fileUrl=${encodeURIComponent(fileUrl)}`);
     return response;
   } catch (error) {
     console.error('文件删除失败:', error);
@@ -223,6 +223,24 @@ export const deleteFile = async (fileUrl: string): Promise<ApiResponse<boolean>>
       success: false,
       data: false,
       message: '文件删除失败'
+    };
+  }
+}
+
+/**
+ * 获取支出列表
+ */
+export const getExpenseList = async (params?: { [key: string]: any }): Promise<ApiResponse<ExpenseItem[]>> => {
+  try {
+    const queryString = params ? `?${new URLSearchParams(params as any).toString()}` : '';
+    const response = await request.get<ApiResponse<ExpenseItem[]>>(`/expenses${queryString}`);
+    return response;
+  } catch (error) {
+    console.error('获取支出列表失败:', error);
+    return {
+      success: false,
+      data: [],
+      message: '获取支出列表失败'
     };
   }
 }
@@ -241,7 +259,8 @@ export const expenseService = {
   updateExpense,
   saveDraft,
   uploadFile,
-  deleteFile
+  deleteFile,
+  getExpenseList
 }
 
 export default expenseService

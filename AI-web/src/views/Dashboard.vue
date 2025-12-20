@@ -244,6 +244,14 @@
   </div>
 </template>
 
+<style scoped>
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+</style>
+
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -267,8 +275,7 @@ import {
   List
 } from '@element-plus/icons-vue'
 import { formatRelativeTime } from '@/utils/timeUtils'
-import { useNotifications } from '../services/notificationService'
-import type { Notification } from '../services/notificationService'
+
 import dashboardService from '@/services/dashboardService'
 import { withLoading } from '@/utils/loadingUtils'
 import { handleApiError } from '@/utils/errorUtils'
@@ -277,8 +284,19 @@ import { handleApiError } from '@/utils/errorUtils'
 const route = useRoute()
 const router = useRouter()
 
-// 使用通知服务
-const { notifications, getSmartReminders } = useNotifications()
+// 智能提醒数据
+const smartReminders = ref<any>({  
+  total: 0,
+  overdueExpenseSplits: [],
+  upcomingExpenseSplits: [],
+  pendingExpenses: [],
+  urgentExpenses: [],
+  maintenanceRequests: [],
+  unreadNotifications: [],
+  budgetWarnings: [],
+  pendingApprovals: [],
+  pendingMembers: []
+})
 
 // 活动历史数据类型
 interface Activity {
@@ -343,18 +361,76 @@ const loadActivityHistory = async () => {
   }
 }
 
-// 智能提醒数据 - 改为从通知服务获取
+// 加载智能提醒数据
+const loadSmartReminders = async () => {
+  try {
+    console.log('加载智能提醒数据...')
+    
+    const response = await dashboardService.getSmartReminders()
+    
+    if (response.success && response.data) {
+      // 过滤掉已确认的提醒
+      const filteredData = filterConfirmedNotifications(response.data)
+      smartReminders.value = filteredData
+    }
+  } catch (error) {
+    console.error('加载智能提醒数据失败:', error)
+    handleApiError(error, '加载智能提醒数据失败')
+  }
+}
+
+// 过滤掉已确认的提醒
+const filterConfirmedNotifications = (remindersData: any) => {
+  const filtered = { ...remindersData }
+  let total = 0
+  
+  // 遍历所有提醒类型数组，过滤掉已确认的提醒
+  for (const key in filtered) {
+    if (Array.isArray(filtered[key])) {
+      filtered[key] = filtered[key].filter((reminder: any) => !isNotificationConfirmed(reminder.id))
+      total += filtered[key].length
+    }
+  }
+  
+  // 更新总提醒数量
+  filtered.total = total
+  
+  return filtered
+}
+
+// 智能提醒数据 - 从真实API获取
 const smartNotifications = computed(() => {
-  return getSmartReminders().map(notification => ({
-    id: notification.id,
-    title: notification.title,
-    message: notification.message,
-    priority: notification.isImportant ? (notification.type === 'warning' ? 'danger' : 'warning') : 'info',
-    type: notification.actionPath ? 'action' : 'notification',
-    actionType: notification.type,
-    actionPath: notification.actionPath,
-    time: new Date(notification.createdAt)
-  }))
+  // 合并所有类型的提醒到一个数组
+  const allReminders = [
+    ...smartReminders.value.overdueExpenseSplits.map(item => ({ ...item, reminderType: 'overdue' })),
+    ...smartReminders.value.upcomingExpenseSplits.map(item => ({ ...item, reminderType: 'upcoming' })),
+    ...smartReminders.value.pendingExpenses.map(item => ({ ...item, reminderType: 'pending' })),
+    ...smartReminders.value.urgentExpenses.map(item => ({ ...item, reminderType: 'urgent' })),
+    ...smartReminders.value.maintenanceRequests.map(item => ({ ...item, reminderType: 'maintenance' })),
+    ...smartReminders.value.unreadNotifications.map(item => ({ ...item, reminderType: 'notification' })),
+    ...smartReminders.value.budgetWarnings.map(item => ({ ...item, reminderType: 'budget' })),
+    ...smartReminders.value.pendingApprovals.map(item => ({ ...item, reminderType: 'approval' })),
+    ...smartReminders.value.pendingMembers.map(item => ({ ...item, reminderType: 'member' }))
+  ]
+  
+  // 转换为组件需要的格式并过滤掉超时提醒
+  const now = new Date()
+  return allReminders
+    .filter(reminder => {
+      const reminderDate = new Date(reminder.createdAt)
+      // 过滤掉超过未处理时限的提醒
+      return now - reminderDate < REMINDER_TIMEOUT
+    })
+    .map(notification => ({
+      id: notification.id,
+      title: notification.title,
+      message: notification.message,
+      priority: notification.priority === 'high' ? 'danger' : notification.priority === 'medium' ? 'warning' : 'info',
+      type: 'notification',
+      actionType: notification.type,
+      actionPath: '',
+      time: new Date(notification.createdAt)
+    }))
 })
 
 // 最近活动数据（只显示最近的5条）
@@ -368,10 +444,15 @@ const recentActivities = computed(() => {
 const widgetSettingsVisible = ref(false)
 const activeSettingsTab = ref('')
 
+// 提醒未处理时限（24小时）
+const REMINDER_TIMEOUT = 24 * 60 * 60 * 1000
+
 // 计算属性
 const hasNewNotifications = computed(() => {
   return smartNotifications.value.length > 0
 })
+
+
 
 // 方法
 const toggleAutoRefresh = () => {
@@ -389,6 +470,7 @@ const startAutoRefresh = () => {
     // 自动刷新仪表盘数据
     updateDashboardData()
     loadActivityHistory() // 同时刷新活动历史
+    loadSmartReminders() // 同时刷新智能提醒
     lastUpdateTime.value = new Date()
   }, widgetSettings.refreshInterval * 1000)
 }
@@ -463,6 +545,8 @@ const handleNotificationAction = (notification: any) => {
       // 跳转到相关页面
       router.push(notification.actionPath)
       ElMessage.success('正在跳转到处理页面...')
+      // 从列表中移除该提醒
+      removeNotificationFromList(notification)
     }).catch(() => {
       // 用户选择稍后处理，不做任何操作
       console.log('用户选择稍后处理提醒')
@@ -478,7 +562,113 @@ const handleNotificationAction = (notification: any) => {
       }
     ).then(() => {
       ElMessage.success('提醒已确认')
+      // 从列表中移除该提醒
+      removeNotificationFromList(notification)
     })
+  }
+}
+
+// 从提醒列表中移除指定的提醒
+const removeNotificationFromList = (notification: any) => {
+  console.log('从列表中移除提醒:', notification.id)
+  
+  // 遍历所有提醒类型数组，找到并移除对应的提醒
+  for (const key in smartReminders.value) {
+    if (Array.isArray(smartReminders.value[key])) {
+      const remindersArray = smartReminders.value[key]
+      const index = remindersArray.findIndex((item: any) => item.id === notification.id)
+      if (index !== -1) {
+        remindersArray.splice(index, 1)
+        console.log('提醒已从', key, '列表中移除')
+        break
+      }
+    }
+  }
+  
+  // 更新总提醒数量
+  smartReminders.value.total = Object.values(smartReminders.value)
+    .filter((value: any) => Array.isArray(value))
+    .reduce((total: number, reminders: any[]) => total + reminders.length, 0)
+  
+  console.log('当前总提醒数量:', smartReminders.value.total)
+  
+  // 持久化存储已确认的提醒
+  saveConfirmedNotification(notification)
+}
+
+// 保存已确认的提醒到localStorage
+const saveConfirmedNotification = (notification: any) => {
+  try {
+    // 获取现有的已确认提醒列表
+    const confirmedNotificationsStr = localStorage.getItem('confirmedNotifications') || '{}'
+    const confirmedNotifications = JSON.parse(confirmedNotificationsStr)
+    
+    // 设置过期时间（7天）
+    const expiryDate = new Date()
+    expiryDate.setDate(expiryDate.getDate() + 7)
+    
+    // 添加到已确认列表
+    confirmedNotifications[notification.id] = {
+      confirmedAt: new Date().toISOString(),
+      expiryDate: expiryDate.toISOString(),
+      title: notification.title,
+      type: notification.actionType
+    }
+    
+    // 保存回localStorage
+    localStorage.setItem('confirmedNotifications', JSON.stringify(confirmedNotifications))
+    console.log('已确认提醒已保存到localStorage:', notification.id)
+  } catch (error) {
+    console.error('保存已确认提醒失败:', error)
+  }
+}
+
+// 检查提醒是否已确认且未过期
+const isNotificationConfirmed = (notificationId: number): boolean => {
+  try {
+    const confirmedNotificationsStr = localStorage.getItem('confirmedNotifications') || '{}'
+    const confirmedNotifications = JSON.parse(confirmedNotificationsStr)
+    
+    // 检查是否存在该提醒
+    if (!confirmedNotifications[notificationId]) {
+      return false
+    }
+    
+    // 检查是否过期
+    const now = new Date()
+    const expiryDate = new Date(confirmedNotifications[notificationId].expiryDate)
+    
+    return now < expiryDate
+  } catch (error) {
+    console.error('检查已确认提醒失败:', error)
+    return false
+  }
+}
+
+// 清理过期的已确认提醒
+const cleanupExpiredNotifications = () => {
+  try {
+    const confirmedNotificationsStr = localStorage.getItem('confirmedNotifications') || '{}'
+    const confirmedNotifications = JSON.parse(confirmedNotificationsStr)
+    const now = new Date()
+    let hasChanges = false
+    
+    // 遍历所有已确认提醒，删除过期的
+    for (const id in confirmedNotifications) {
+      const expiryDate = new Date(confirmedNotifications[id].expiryDate)
+      if (now >= expiryDate) {
+        delete confirmedNotifications[id]
+        hasChanges = true
+      }
+    }
+    
+    // 如果有变化，保存回localStorage
+    if (hasChanges) {
+      localStorage.setItem('confirmedNotifications', JSON.stringify(confirmedNotifications))
+      console.log('已清理过期的已确认提醒')
+    }
+  } catch (error) {
+    console.error('清理过期提醒失败:', error)
   }
 }
 
@@ -514,11 +704,17 @@ const toggleWidget = (widgetType: string) => {
 onMounted(async () => {
   loading.value = true
   try {
+    // 清理过期的已确认提醒
+    cleanupExpiredNotifications()
+    
     // 加载仪表盘统计数据
     await updateDashboardData()
     
     // 加载活动历史数据
     await loadActivityHistory()
+    
+    // 加载智能提醒数据
+    await loadSmartReminders()
     
     // 启动自动刷新
     if (widgetSettings.autoRefresh) {

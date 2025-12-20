@@ -70,7 +70,7 @@ export const getMemberStats = async (
     }
     
     // 调用真实API获取成员统计数据
-    const url = `/api/member-stats${params.toString() ? `?${params.toString()}` : ''}`
+    const url = `/member-stats${params.toString() ? `?${params.toString()}` : ''}`
     const response = await request<MemberStatsResponse>(url, {
       method: 'GET'
     })

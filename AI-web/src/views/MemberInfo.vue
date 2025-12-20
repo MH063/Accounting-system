@@ -320,7 +320,7 @@ import {
   CircleCheck,
   ChatDotRound
 } from '@element-plus/icons-vue'
-import { dormService } from '@/services/dormService'
+import dormService from '@/services/dormService'
 import memberService from '@/services/memberService'
 
 interface Member {

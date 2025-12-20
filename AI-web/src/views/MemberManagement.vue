@@ -217,37 +217,133 @@
             </template>
             
             <div class="quick-stats-content">
-              <div class="quick-stat-item">
-                <div class="progress-circle">
-                  <el-progress 
-                    type="circle" 
-                    :percentage="Math.round(stats.summary.activeRate)" 
-                    :width="80"
-                    :stroke-width="6"
-                  />
-                  <span class="progress-text">活跃率</span>
-                </div>
-              </div>
-              
-              <div class="stats-breakdown">
-                <div class="breakdown-item">
-                  <span class="label">管理员</span>
-                  <span class="value">{{ adminCount }}</span>
-                </div>
-                <div class="breakdown-item">
-                  <span class="label">普通成员</span>
-                  <span class="value">{{ memberCount }}</span>
-                </div>
-                <div class="breakdown-item">
-                  <span class="label">平均费用</span>
-                  <span class="value">¥{{ formatAmount(stats.summary.avgSplitAmount) }}</span>
-                </div>
+              <el-row :gutter="20">
+                <!-- 逾期费用数 -->
+                <el-col :xs="12" :sm="6">
+                  <div class="stat-item-card">
+                    <div class="stat-item-icon overdue">
+                      <el-icon><Warning /></el-icon>
+                    </div>
+                    <div class="stat-item-content">
+                      <h3>逾期费用数</h3>
+                      <p class="stat-value">{{ quickStats.overdueExpenses }}</p>
+                    </div>
+                  </div>
+                </el-col>
+                
+                <!-- 未支付金额 -->
+                <el-col :xs="12" :sm="6">
+                  <div class="stat-item-card">
+                    <div class="stat-item-icon unpaid">
+                      <el-icon><Money /></el-icon>
+                    </div>
+                    <div class="stat-item-content">
+                      <h3>未支付金额</h3>
+                      <p class="stat-value">¥{{ formatCurrency(quickStats.totalUnpaidAmount) }}</p>
+                    </div>
+                  </div>
+                </el-col>
+                
+                <!-- 近期费用数 -->
+                <el-col :xs="12" :sm="6">
+                  <div class="stat-item-card">
+                    <div class="stat-item-icon expense">
+                      <el-icon><Document /></el-icon>
+                    </div>
+                    <div class="stat-item-content">
+                      <h3>近期费用数</h3>
+                      <p class="stat-value">{{ quickStats.recentExpenseCount }}</p>
+                    </div>
+                  </div>
+                </el-col>
+                
+                <!-- 平均月分摊费用 -->
+                <el-col :xs="12" :sm="6">
+                  <div class="stat-item-card">
+                    <div class="stat-item-icon avg-share">
+                      <el-icon><Coin /></el-icon>
+                    </div>
+                    <div class="stat-item-content">
+                      <h3>平均月分摊</h3>
+                      <p class="stat-value">¥{{ formatCurrency(quickStats.avgMonthlyShare) }}</p>
+                    </div>
+                  </div>
+                </el-col>
+              </el-row>              
+              <!-- 详细统计 -->
+              <div class="quick-stats-details">
+                <el-row :gutter="20">
+                  <el-col :span="8">
+                    <div class="detail-section">
+                      <h4>风险预警</h4>
+                      <div class="detail-item">
+                        <span class="label">高风险宿舍数</span>
+                        <span class="value">{{ quickStats.highRiskDorms }}</span>
+                      </div>
+                      <div class="detail-item">
+                        <span class="label">长期未支付用户</span>
+                        <span class="value">{{ quickStats.longOverdueUsers }}</span>
+                      </div>
+                      <div class="detail-item">
+                        <span class="label">费用争议数</span>
+                        <span class="value">{{ quickStats.disputedExpenses }}</span>
+                      </div>
+                      <div class="detail-item">
+                        <span class="label">待处理申诉</span>
+                        <span class="value">{{ quickStats.pendingAppeals }}</span>
+                      </div>
+                    </div>
+                  </el-col>
+                  
+                  <el-col :span="8">
+                    <div class="detail-section">
+                      <h4>增长洞察</h4>
+                      <div class="detail-item">
+                        <span class="label">新成员增长率</span>
+                        <span class="value">{{ formatPercentage(quickStats.newMemberGrowthRate) }}</span>
+                      </div>
+                      <div class="detail-item">
+                        <span class="label">费用增长率</span>
+                        <span class="value">{{ formatPercentage(quickStats.expenseGrowthRate) }}</span>
+                      </div>
+                      <div class="detail-item">
+                        <span class="label">宿舍利用率</span>
+                        <span class="value">{{ formatPercentage(quickStats.dormUtilizationRate) }}</span>
+                      </div>
+                      <div class="detail-item">
+                        <span class="label">用户留存率</span>
+                        <span class="value">{{ formatPercentage(quickStats.userRetentionRate) }}</span>
+                      </div>
+                    </div>
+                  </el-col>
+                  
+                  <el-col :span="8">
+                    <div class="detail-section">
+                      <h4>运营健康度</h4>
+                      <div class="detail-item">
+                        <span class="label">系统健康评分</span>
+                        <span class="value">{{ quickStats.systemHealthScore }}/100</span>
+                      </div>
+                      <div class="detail-item">
+                        <span class="label">费用处理时效</span>
+                        <span class="value">{{ quickStats.avgProcessingDays }}天</span>
+                      </div>
+                      <div class="detail-item">
+                        <span class="label">用户满意度</span>
+                        <span class="value">{{ quickStats.userSatisfactionScore }}/5</span>
+                      </div>
+                      <div class="detail-item">
+                        <span class="label">自动化率</span>
+                        <span class="value">{{ formatPercentage(quickStats.automationRate) }}</span>
+                      </div>
+                    </div>
+                  </el-col>
+                </el-row>
               </div>
             </div>
           </el-card>
         </el-col>
       </el-row>
-
       <!-- 成员活动记录 -->
       <el-row :gutter="20" class="activity-section">
         <el-col :span="24">
@@ -353,14 +449,17 @@ import {
   User,
   House,
   Money,
-  Refresh
+  Refresh,
+  Warning,
+  Document,
+  Coin
 } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 import { getMemberStats } from '@/services/memberStatisticsService'
 import { getMemberActivities } from '@/services/memberActivityService'
-import { dormService } from '@/services/dormService'
+import dormService from '@/services/dormService'
+import { getQuickStats } from '@/services/quickStatsService'
 import type { MemberActivity, Pagination } from '@/services/memberActivityService'
-
 const router = useRouter()
 
 // 响应式数据
@@ -440,7 +539,118 @@ const stats = ref<MemberStatsResponse>({
   monthlyTrends: []
 })
 
-// 计算属性
+// 快速统计数据
+interface QuickStats {
+  // 用户概况
+  totalUsers: number
+  activeUsers: number
+  recentActiveUsers: number
+
+  // 宿舍成员统计
+  usersInDorms: number
+  dormsWithMembers: number
+  avgMonthlyShare: number
+
+  // 费用统计
+  usersWithExpenses: number
+  totalSplitAmount: number
+  avgSplitAmount: number
+  totalPaidAmount: number
+  totalUnpaidAmount: number
+  overdueExpenses: number
+
+  // 近期费用统计
+  recentExpenseCount: number
+  recentTotalAmount: number
+  recentAvgAmount: number
+
+  // 宿舍统计
+  totalDorms: number
+  avgDormCapacity: number
+  avgOccupancy: number
+  totalOccupancy: number
+
+  // 比率指标
+  activeRate: number
+  dormMemberRate: number
+  paymentRate: number
+  occupancyRate: number
+  unpaidRate: number
+
+  // 风险预警指标
+  highRiskDorms: number
+  longOverdueUsers: number
+  disputedExpenses: number
+  pendingAppeals: number
+
+  // 增长洞察指标
+  newMemberGrowthRate: number
+  expenseGrowthRate: number
+  dormUtilizationRate: number
+  userRetentionRate: number
+
+  // 运营健康度指标
+  systemHealthScore: number
+  avgProcessingDays: number
+  userSatisfactionScore: number
+  automationRate: number
+}
+
+const quickStats = ref<QuickStats>({
+  // 用户概况
+  totalUsers: 0,
+  activeUsers: 0,
+  recentActiveUsers: 0,
+
+  // 宿舍成员统计
+  usersInDorms: 0,
+  dormsWithMembers: 0,
+  avgMonthlyShare: 0,
+
+  // 费用统计
+  usersWithExpenses: 0,
+  totalSplitAmount: 0,
+  avgSplitAmount: 0,
+  totalPaidAmount: 0,
+  totalUnpaidAmount: 0,
+  overdueExpenses: 0,
+
+  // 近期费用统计
+  recentExpenseCount: 0,
+  recentTotalAmount: 0,
+  recentAvgAmount: 0,
+
+  // 宿舍统计
+  totalDorms: 0,
+  avgDormCapacity: 0,
+  avgOccupancy: 0,
+  totalOccupancy: 0,
+
+  // 比率指标
+  activeRate: 0,
+  dormMemberRate: 0,
+  paymentRate: 0,
+  occupancyRate: 0,
+  unpaidRate: 0,
+
+  // 风险预警指标
+  highRiskDorms: 0,
+  longOverdueUsers: 0,
+  disputedExpenses: 0,
+  pendingAppeals: 0,
+
+  // 增长洞察指标
+  newMemberGrowthRate: 0,
+  expenseGrowthRate: 0,
+  dormUtilizationRate: 0,
+  userRetentionRate: 0,
+
+  // 运营健康度指标
+  systemHealthScore: 0,
+  avgProcessingDays: 0,
+  userSatisfactionScore: 0,
+  automationRate: 0
+})// 计算属性
 const totalMembers = computed(() => stats.value.summary.totalUsers)
 const adminCount = computed(() => 2)
 const memberCount = computed(() => totalMembers.value - adminCount.value)
@@ -451,15 +661,19 @@ const loadData = async () => {
   try {
     console.log('加载成员统计数据...')
     
-    // 调用API获取成员统计数据
-    const response = await getMemberStats(
-      dateRange.value ? dateRange.value[0] : undefined,
-      dateRange.value ? dateRange.value[1] : undefined
-    )
+    // 并行加载成员统计数据和快速统计数据
+    const [memberStatsResponse, quickStatsResponse] = await Promise.all([
+      getMemberStats(
+        dateRange.value ? dateRange.value[0] : undefined,
+        dateRange.value ? dateRange.value[1] : undefined
+      ),
+      getQuickStats()
+    ])
     
-    if (response.success && response.data) {
-      console.log('成员统计数据加载成功:', response.data)
-      stats.value = response.data
+    // 处理成员统计数据
+    if (memberStatsResponse.success && memberStatsResponse.data) {
+      console.log('成员统计数据加载成功:', memberStatsResponse.data)
+      stats.value = memberStatsResponse.data
       
       // 更新图表
       nextTick(() => {
@@ -467,20 +681,27 @@ const loadData = async () => {
           updateTrendChart()
         }
       })
-      
-      ElMessage.success('数据加载成功')
     } else {
-      console.error('获取成员统计数据失败:', response.message)
-      ElMessage.error(response.message || '获取成员统计数据失败')
+      console.error('获取成员统计数据失败:', memberStatsResponse.message)
+      ElMessage.error(memberStatsResponse.message || '获取成员统计数据失败')
     }
+    
+    // 处理快速统计数据
+    if (quickStatsResponse.success && quickStatsResponse.data) {
+      console.log('快速统计数据加载成功:', quickStatsResponse.data)
+      quickStats.value = quickStatsResponse.data
+    } else {
+      console.error('获取快速统计数据失败:', quickStatsResponse.message)
+    }
+    
+    ElMessage.success('数据加载成功')
   } catch (error) {
-    console.error('加载成员统计数据失败:', error)
-    ElMessage.error('加载成员统计数据失败')
+    console.error('加载数据失败:', error)
+    ElMessage.error('加载数据失败')
   } finally {
     loading.value = false
   }
 }
-
 /**
  * 加载成员活动数据
  */
@@ -660,6 +881,36 @@ const formatPercentage = (rate: number) => {
   return `${(rate || 0).toFixed(1)}%`
 }
 
+/**
+ * 格式化货币显示
+ */
+const formatCurrency = (amount: number): string => {
+  return amount.toLocaleString('zh-CN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })
+}
+
+/**
+ * 获取快速统计数据
+ */
+const loadQuickStats = async () => {
+  try {
+    console.log('加载快速统计数据...')
+    
+    // 调用API获取快速统计数据
+    const response = await getQuickStats()
+    
+    if (response.success && response.data) {
+      console.log('快速统计数据加载成功:', response.data)
+      quickStats.value = response.data
+    } else {
+      console.error('获取快速统计数据失败:', response.message)
+    }
+  } catch (error) {
+    console.error('加载快速统计数据失败:', error)
+  }
+}
 /**
  * 更新趋势图表
  */
@@ -894,6 +1145,132 @@ onMounted(() => {
   font-weight: 600;
 }
 
+/* 新的快速统计样式 */
+.stat-item-card {
+  background: white;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  transition: transform 0.3s ease;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.stat-item-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.stat-item-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: white;
+}
+
+.stat-item-icon.users {
+  background: linear-gradient(135deg, #409eff, #64b5f6);
+}
+
+.stat-item-icon.active {
+  background: linear-gradient(135deg, #67c23a, #95d475);
+}
+
+.stat-item-icon.expense {
+  background: linear-gradient(135deg, #e6a23c, #f3d19e);
+}
+
+.stat-item-icon.occupancy {
+  background: linear-gradient(135deg, #f56c6c, #fab6b6);
+}
+
+.stat-item-icon.unpaid {
+  background: linear-gradient(135deg, #e6a23c, #f3d19e);
+}
+
+.stat-item-icon.overdue {
+  background: linear-gradient(135deg, #f56c6c, #fab6b6);
+}
+
+.stat-item-icon.recent {
+  background: linear-gradient(135deg, #67c23a, #95d475);
+}
+
+.stat-item-icon.expense {
+  background: linear-gradient(135deg, #409eff, #64b5f6);
+}
+
+.stat-item-icon.avg-share {
+  background: linear-gradient(135deg, #e6a23c, #f3d19e);
+}
+
+.stat-item-content h3 {
+  margin: 0 0 4px 0;
+  font-size: 13px;
+  color: #909399;
+  font-weight: normal;
+}
+
+.stat-item-content .stat-value {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.quick-stats-details {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #eee;
+}
+
+.detail-section {
+  background: #fafafa;
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.detail-section:last-child {
+  margin-bottom: 0;
+}
+
+.detail-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.detail-section .detail-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.detail-section .detail-item:last-child {
+  border-bottom: none;
+}
+
+.detail-section .detail-item .label {
+  font-size: 13px;
+  color: #606266;
+}
+
+.detail-section .detail-item .value {
+  font-size: 13px;
+  font-weight: 500;
+  color: #303133;
+}
+
 .stats-breakdown {
   text-align: left;
 }
@@ -920,8 +1297,6 @@ onMounted(() => {
   font-weight: 600;
   font-size: 13px;
 }
-
-
 
 .header-actions {
   display: flex;

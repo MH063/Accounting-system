@@ -67,7 +67,7 @@ export const getIncomeStatistics = async (filter: IncomeFilter): Promise<ApiResp
     if (filter.pageSize) params.append('pageSize', filter.pageSize.toString())
     
     const queryString = params.toString() ? `?${params.toString()}` : ''
-    const response = await request<IncomeRecord[]>(`/api/income/statistics${queryString}`)    
+    const response = await request<IncomeRecord[]>(`/income/statistics${queryString}`)    
     return {
       success: true,
       data: response
@@ -87,7 +87,7 @@ export const getIncomeStatistics = async (filter: IncomeFilter): Promise<ApiResp
  */
 export const getIncomeTrend = async (timeRange: string): Promise<IncomeTrendItem[]> => {
   try {
-    const response = await request<IncomeTrendItem[]>(`/api/income/trend?timeRange=${encodeURIComponent(timeRange)}`)
+    const response = await request<IncomeTrendItem[]>(`/income/trend?timeRange=${encodeURIComponent(timeRange)}`)
     return response
   } catch (error) {
     console.error('获取收入趋势数据失败:', error)
@@ -100,7 +100,7 @@ export const getIncomeTrend = async (timeRange: string): Promise<IncomeTrendItem
  */
 export const getIncomeCategories = async (timeRange: string): Promise<IncomeCategoryItem[]> => {
   try {
-    const response = await request<IncomeCategoryItem[]>(`/api/income/categories?timeRange=${encodeURIComponent(timeRange)}`)
+    const response = await request<IncomeCategoryItem[]>(`/income/categories?timeRange=${encodeURIComponent(timeRange)}`)
     return response
   } catch (error) {
     console.error('获取收入分类数据失败:', error)
@@ -113,7 +113,7 @@ export const getIncomeCategories = async (timeRange: string): Promise<IncomeCate
  */
 export const getIncomeSources = async (timeRange: string): Promise<IncomeSourceItem[]> => {
   try {
-    const response = await request<IncomeSourceItem[]>(`/api/income/sources?timeRange=${encodeURIComponent(timeRange)}`)
+    const response = await request<IncomeSourceItem[]>(`/income/sources?timeRange=${encodeURIComponent(timeRange)}`)
     return response
   } catch (error) {
     console.error('获取收入来源数据失败:', error)
@@ -139,7 +139,7 @@ export const exportIncomeData = async (filter: IncomeFilter, format: 'csv' | 'ex
     if (filter.keyword) params.append('keyword', filter.keyword)
     
     const queryString = params.toString() ? `?${params.toString()}` : ''
-    const response = await request<{ downloadUrl: string }>(`/api/income/export${queryString}`)
+    const response = await request<{ downloadUrl: string }>(`/income/export${queryString}`)
     
     // 如果API返回了下载链接，自动触发下载
     if (response.downloadUrl) {

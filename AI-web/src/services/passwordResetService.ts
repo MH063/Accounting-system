@@ -23,7 +23,7 @@ export interface UserInfo {
 export const getUserInfo = async (username: string, email: string): Promise<UserInfo | null> => {
   try {
     // 调用真实的API获取用户信息
-    const response = await fetch('/api/users/info', {
+    const response = await fetch('/users/info', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -53,7 +53,7 @@ export const getUserInfo = async (username: string, email: string): Promise<User
 export const sendResetCode = async (userInfo: UserInfo): Promise<boolean> => {
   try {
     // 调用真实的API发送验证码
-    const response = await fetch('/api/auth/send-reset-code', {
+    const response = await fetch('/auth/send-reset-code', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -94,7 +94,7 @@ export const sendResetCode = async (userInfo: UserInfo): Promise<boolean> => {
 export const verifyResetCode = async (userInfo: UserInfo, code: string): Promise<boolean> => {
   try {
     // 调用真实的API验证验证码
-    const response = await fetch('/api/auth/verify-reset-code', {
+    const response = await fetch('/auth/verify-reset-code', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -141,7 +141,7 @@ export const resetPassword = async (userInfo: UserInfo, newPassword: string): Pr
     }
     
     // 调用真实的API重置密码
-    const response = await fetch('/api/auth/reset-password', {
+    const response = await fetch('/auth/reset-password', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -196,7 +196,7 @@ export const checkSecurityQuestions = (username: string): boolean => {
 export const sendResetNotification = async (userInfo: UserInfo, method: string = 'email'): Promise<void> => {
   try {
     // 调用真实的API发送通知
-    const response = await fetch('/api/auth/send-reset-notification', {
+    const response = await fetch('/auth/send-reset-notification', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

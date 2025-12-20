@@ -74,7 +74,7 @@ export const getMemberActivities = async (
     }
     
     // 调用真实API获取成员活动列表
-    const url = `/api/member-activities?${params.toString()}`
+    const url = `/member-activities?${params.toString()}`
     const response = await request<MemberActivitiesResponse>(url, {
       method: 'GET'
     })

@@ -24,6 +24,7 @@ const dormRoutes = require('./dorms');
 const memberStatsRoutes = require('./memberStats');
 const memberActivitiesRoutes = require('./memberActivities');
 const membersRoutes = require('./members');
+const expenseSummaryRoutes = require('./expenseSummary');
 
 module.exports = {
   authRoutes,
@@ -46,5 +47,6 @@ module.exports = {
   dormRoutes,
   memberStatsRoutes,
   memberActivitiesRoutes,
-  membersRoutes
+  membersRoutes,
+  expenseSummaryRoutes
 };

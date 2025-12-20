@@ -38,7 +38,7 @@ export interface HealthCheckResponse {
 export const checkSystemHealth = async (): Promise<HealthCheckResponse> => {
   try {
     // 调用真实的健康检查API
-    const response = await fetch('/api/system/health', {
+    const response = await fetch('/system/health', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

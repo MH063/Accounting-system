@@ -434,8 +434,8 @@ const createDorm = async () => {
       dormName: basicInfo.name,
       address: basicInfo.address,
       capacity: basicInfo.maxMembers,
-      // 必填字段
-      dormCode: extendedInfo.dormCode || undefined,
+      // 必填字段：宿舍编码
+      dormCode: basicInfo.dormNumber,
       description: extendedInfo.description || undefined,
       type: extendedInfo.type || undefined,
       area: extendedInfo.area,

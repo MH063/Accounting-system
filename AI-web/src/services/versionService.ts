@@ -99,7 +99,7 @@ export const checkForUpdates = async (): Promise<VersionCheckResponse> => {
     const currentVersion = getCurrentVersion();
     
     // 调用真实的API获取最新版本信息
-    const response = await fetch('/api/version/latest', {
+    const response = await fetch('/version/latest', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

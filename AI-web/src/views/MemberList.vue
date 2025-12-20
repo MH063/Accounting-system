@@ -265,6 +265,16 @@
                   </el-button>
                   
                   <el-button 
+                    type="info" 
+                    size="small" 
+                    circle 
+                    @click.stop="handleUpdateStatus(member)"
+                    title="更新状态"
+                  >
+                    <el-icon><Setting /></el-icon>
+                  </el-button>
+                  
+                  <el-button 
                     v-if="canDeleteMember(member)"
                     type="danger" 
                     size="small" 
@@ -347,6 +357,102 @@
         </span>
       </template>
     </el-dialog>
+    
+    <!-- 状态更新对话框 -->
+    <el-dialog
+      v-model="statusUpdateDialogVisible"
+      title="更新成员状态"
+      width="400px"
+      :close-on-click-modal="false"
+    >
+      <div v-if="selectedMemberForStatusUpdate" class="status-update-content">
+        <div class="member-info">
+          <el-avatar 
+            :size="50" 
+            :src="selectedMemberForStatusUpdate.avatar || 'https://picsum.photos/50/50?random=' + selectedMemberForStatusUpdate.id"
+          >
+            {{ selectedMemberForStatusUpdate.name.charAt(0) }}
+          </el-avatar>
+          <div class="member-details">
+            <div class="member-name">{{ selectedMemberForStatusUpdate.name }}</div>
+            <div class="member-id">{{ selectedMemberForStatusUpdate.studentId }}</div>
+            <div class="current-status">
+              当前状态: <el-tag :type="getStatusType(selectedMemberForStatusUpdate.status)">
+                {{ getStatusText(selectedMemberForStatusUpdate.status) }}
+              </el-tag>
+            </div>
+          </div>
+        </div>
+        
+        <div class="status-selection">
+          <el-form label-width="80px">
+            <el-form-item label="新状态">
+              <el-select v-model="newStatus" placeholder="请选择状态" style="width: 100%">
+                <el-option label="活跃" value="active" />
+                <el-option label="已搬离" value="inactive" />
+                <el-option label="待确认" value="pending" />
+              </el-select>
+            </el-form-item>
+            
+            <!-- 搬离日期 (仅当状态为inactive时显示 -->
+            <el-form-item 
+              v-if="newStatus === 'inactive'" 
+              label="搬离日期"
+            >
+              <el-date-picker
+                v-model="moveOutDate"
+                type="date"
+                placeholder="选择搬离日期"
+                format="YYYY-MM-DD"
+                value-format="YYYY-MM-DD"
+                style="width: 100%"
+              />
+            </el-form-item>
+            
+            <!-- 入住日期 (仅当状态为active时显示 -->
+            <el-form-item 
+              v-if="newStatus === 'active'" 
+              label="入住日期"
+            >
+              <el-date-picker
+                v-model="moveInDate"
+                type="date"
+                placeholder="选择入住日期"
+                format="YYYY-MM-DD"
+                value-format="YYYY-MM-DD"
+                style="width: 100%"
+              />
+            </el-form-item>
+            
+            <!-- 未结费用处理 -->
+            <el-form-item label="未结费用">
+              <el-radio-group v-model="handleUnpaidExpenses">
+                <el-radio label="waive">免除</el-radio>
+                <el-radio label="keep">保持</el-radio>
+              </el-radio-group>
+            </el-form-item>
+            
+            <!-- 通知用户 -->
+            <el-form-item label="通知用户">
+              <el-switch v-model="notifyUser" />
+            </el-form-item>
+          </el-form>
+        </div>
+      </div>
+      
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="statusUpdateDialogVisible = false">取消</el-button>
+          <el-button 
+            type="primary" 
+            @click="confirmUpdateStatus"
+            :loading="statusUpdateLoading"
+          >
+            确认更新
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -355,15 +461,14 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { 
   Search, ArrowLeft, Refresh, CircleCheck, Clock, CircleClose, 
-  House, View, ChatDotRound, Delete, Check, Close, User
+  House, View, ChatDotRound, Delete, Check, Close, User, Setting
 } from '@element-plus/icons-vue'
 import { getCurrentUser } from '@/services/userService'
-import { dormService } from '@/services/dormService'
-import memberService from '@/services/memberService'
+import dormService from '@/services/dormService'
+import memberService, { deleteDormMember } from '@/services/memberService'
 import type { UserInfo } from '@/services/userService'
 import type { DormInfo } from '@/services/dormService'
 import { ElMessage, ElMessageBox } from 'element-plus'
-
 // 类型定义
 interface Member {
   id: number
@@ -420,16 +525,16 @@ const loadCurrentUserAndDorm = async () => {
         currentUserRoom.value = `${dormInfo.building}-${dormInfo.dormNumber}`
         console.log('设置寝室号:', currentUserRoom.value)
       } else {
-        // 如果找不到寝室信息，使用默认值
-        currentUserRoom.value = 'A-101'
-        console.log('使用默认寝室号:', currentUserRoom.value)
+        // 如果找不到寝室信息，不使用默认值，保持为空
+        currentUserRoom.value = ''
+        console.log('未找到寝室信息，不设置默认值')
       }
     }
   } catch (error) {
     console.error('加载用户和寝室信息失败:', error)
-    // 出错时使用默认值
-    currentUserRoom.value = 'A-101'
-    console.log('出错时使用默认寝室号:', currentUserRoom.value)
+    // 出错时不使用默认值，保持为空
+    currentUserRoom.value = ''
+    console.log('加载用户和寝室信息失败，不设置默认值')
   }
 }
 
@@ -442,6 +547,15 @@ const selectedMemberForRoleUpdate = ref<Member | null>(null)
 const newRole = ref<'admin' | 'member' | 'viewer'>('member')
 const roleUpdateLoading = ref(false)
 
+// 状态更新相关状态
+const statusUpdateDialogVisible = ref(false)
+const selectedMemberForStatusUpdate = ref<Member | null>(null)
+const newStatus = ref<'active' | 'inactive' | 'pending'>('active')
+const moveOutDate = ref<string | null>(null)
+const moveInDate = ref<string | null>(null)
+const handleUnpaidExpenses = ref<'waive' | 'keep'>('waive')
+const notifyUser = ref<boolean>(true)
+const statusUpdateLoading = ref(false)
 // 加载成员列表
 const loadMembers = async () => {
   try {
@@ -451,13 +565,17 @@ const loadMembers = async () => {
     // 调试：查看currentUserRoom的值
     console.log('currentUserRoom:', currentUserRoom.value)
     
-    // 调试：查看从currentUserRoom提取宿舍ID的过程
-    const roomParts = currentUserRoom.value.split('-');
-    console.log('roomParts:', roomParts);
-    const dormIdStr = roomParts[1];
-    console.log('dormIdStr:', dormIdStr);
-    const dormId = parseInt(dormIdStr) || undefined;
-    console.log('dormId:', dormId);
+    // 提取宿舍ID，仅当currentUserRoom不为空时
+    let dormId: number | undefined = undefined
+    if (currentUserRoom.value) {
+      // 调试：查看currentUserRoom提取宿舍ID的过程
+      const roomParts = currentUserRoom.value.split('-');
+      console.log('roomParts:', roomParts);
+      const dormIdStr = roomParts[1];
+      console.log('dormIdStr:', dormIdStr);
+      dormId = parseInt(dormIdStr) || undefined;
+      console.log('dormId:', dormId);
+    }
     
     const response = await memberService.getMembers({
       page: currentPage.value,
@@ -479,7 +597,7 @@ const loadMembers = async () => {
         return
       }
       
-      // 检查是否有members字段，如果没有则使用空数组
+      // 检查是否有members字段，如果没有则使用空数据
       const membersData = response.data.members || []
       
       // 转换新接口返回的数据格式为当前组件使用的格式
@@ -671,7 +789,7 @@ const handleQuickMessage = async (member: Member) => {
         confirmButtonText: '发送',
         cancelButtonText: '取消',
         inputType: 'textarea',
-        inputPlaceholder: '请输入消息内容...',
+        inputPlaceholder: '请输入消息内容..',
         inputRows: 3,
         inputMaxlength: 200,
         showWordLimit: true,
@@ -769,6 +887,23 @@ const handleUpdateRole = (member: Member) => {
 }
 
 /**
+ * 处理更新成员状态
+ */
+const handleUpdateStatus = (member: Member) => {
+  selectedMemberForStatusUpdate.value = member
+  // 设置当前状态为默认值
+  newStatus.value = member.status === 'active' ? 'active' :
+                   member.status === 'inactive' ? 'inactive' :
+                   'pending'
+  // 重置其他字段
+  moveOutDate.value = null
+  moveInDate.value = null
+  handleUnpaidExpenses.value = 'waive'
+  notifyUser.value = true
+  statusUpdateDialogVisible.value = true
+}
+
+/**
  * 确认更新成员角色
  */
 const confirmUpdateRole = async () => {
@@ -791,7 +926,7 @@ const confirmUpdateRole = async () => {
       ElMessage.success('成员角色更新成功')
       roleUpdateDialogVisible.value = false
       
-      // 更新本地数据以反映角色变化
+      // 更新本地数据以反映角色变更
       if (selectedMemberForRoleUpdate.value) {
         const index = members.value.findIndex(m => m.id === selectedMemberForRoleUpdate.value!.id)
         if (index > -1) {
@@ -812,14 +947,85 @@ const confirmUpdateRole = async () => {
   }
 }
 
+/**
+ * 确认更新成员状态
+ */
+const confirmUpdateStatus = async () => {
+  if (!selectedMemberForStatusUpdate.value) return
+  
+  try {
+    statusUpdateLoading.value = true
+    
+    // 构造状态更新数据
+    const statusData: any = {
+      status: newStatus.value,
+      notifyUser: notifyUser.value
+    }
+    
+    // 根据新状态添加相应的日期字段
+    if (newStatus.value === 'inactive' && moveOutDate.value) {
+      statusData.moveOutDate = moveOutDate.value
+    }
+    
+    if (newStatus.value === 'active' && moveInDate.value) {
+      statusData.moveInDate = moveInDate.value
+    }
+    
+    // 添加未结费用处理选项
+    statusData.handleUnpaidExpenses = handleUnpaidExpenses.value
+    
+    // 调用API更新成员状态
+    const response = await memberService.updateMemberStatus(
+      selectedMemberForStatusUpdate.value.id,
+      statusData
+    )
+    
+    if (response.success) {
+      ElMessage.success('成员状态更新成功')
+      statusUpdateDialogVisible.value = false
+      
+      // 更新本地数据以反映状态变更
+      if (selectedMemberForStatusUpdate.value) {
+        const index = members.value.findIndex(m => m.id === selectedMemberForStatusUpdate.value!.id)
+        if (index > -1) {
+          members.value[index].status = newStatus.value
+        }
+      }
+      
+      // 刷新成员列表
+      await loadMembers()
+    } else {
+      ElMessage.error(response.message || '更新成员状态失败')
+    }
+  } catch (error) {
+    console.error('更新成员状态失败:', error)
+    ElMessage.error('更新成员状态失败')
+  } finally {
+    statusUpdateLoading.value = false
+  }
+}
+
 const handleDeleteMember = async (member: Member) => {
-  const response = await memberService.deleteMember(member.id)
+  // 注意：这里需要传入用户宿舍关联记录ID，而不是用户ID
+  // 由于现有数据结构中没有userDormId，我们假设member.id就是关联记录ID
+  // 在实际应用中，可能需要从member.membership.id获取正确的关联记录ID
+  const userDormId = member.id;
+  
+  const response = await deleteDormMember(userDormId, {
+    deleteType: 'logical',
+    handleUnpaidExpenses: 'waive',
+    refundDeposit: false,
+    notifyUser: true
+  })
   
   if (response.success) {
     const index = members.value.findIndex(m => m.id === member.id)
     if (index > -1) {
       members.value.splice(index, 1)
       ElMessage.success(`成员 ${member.name} 已删除`)
+      
+      // 重新加载成员列表以确保数据一致性
+      await loadMembers()
     }
   } else {
     ElMessage.error(response.message || '删除成员失败')
@@ -997,7 +1203,7 @@ onMounted(async () => {
   min-height: calc(100vh - 180px);
 }
 
-/* 统计摘要区 */
+/* 统计摘要框 */
 .summary-section {
   margin-bottom: 24px;
   padding: 24px;
@@ -1353,7 +1559,7 @@ onMounted(async () => {
   gap: 4px;
 }
 
-/* 成员信息行 */
+/* 成员信息卡 */
 .member-info {
   margin-bottom: 16px;
 }
@@ -1666,6 +1872,47 @@ onMounted(async () => {
 }
 
 .role-update-content .role-selection {
+  margin-top: 16px;
+}
+
+/* 状态更新对话框样式 */
+.status-update-content {
+  padding: 10px 0;
+}
+
+.status-update-content .member-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #f5f7fa;
+  border-radius: 8px;
+}
+
+.status-update-content .member-details {
+  flex: 1;
+}
+
+.status-update-content .member-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 4px;
+}
+
+.status-update-content .member-id {
+  font-size: 14px;
+  color: #606266;
+  margin-bottom: 8px;
+}
+
+.status-update-content .current-status {
+  font-size: 14px;
+  color: #606266;
+}
+
+.status-update-content .status-selection {
   margin-top: 16px;
 }
 </style>

@@ -1,363 +1,403 @@
-// 寝室管理服务
-
-export interface DormBasicInfo {
-  dormNumber: string
-  building: string
-  floor: number
-  roomType: string
-  capacity: number
-  area: number
-  orientation: string
-  remark?: string
-}
-
-export interface DormFacilities {
-  basic: {
-    bed: boolean
-    wardrobe: boolean
-    desk: boolean
-    chair: boolean
-    air_conditioner: boolean
-    heater: boolean
-    fan: boolean
-    lamp: boolean
-    window: boolean
-    curtain: boolean
-  }
-  electronics: {
-    tv: boolean
-    computer: boolean
-    refrigerator: boolean
-    washing_machine: boolean
-    microwave: boolean
-    electric_kettle: boolean
-    hair_dryer: boolean
-    router: boolean
-  }
-  bathroom: {
-    toilet: boolean
-    shower: boolean
-    washbasin: boolean
-    mirror: boolean
-    towel_rack: boolean
-    exhaust_fan: boolean
-    water_heater: boolean
-  }
-  safety: {
-    fire_extinguisher: boolean
-    smoke_detector: boolean
-    emergency_light: boolean
-    first_aid_kit: boolean
-    door_lock: boolean
-    window_lock: boolean
-  }
-  remark?: string
-}
-
-export interface DormFees {
-  monthlyRent: number
-  waterRate: number
-  electricityRate: number
-  internetRate: number
-  managementFee: number
-  deposit: number
-}
-
-export interface DormSettings {
-  basic: {
-    dormName: string
-    dormType: string
-    openTime: string
-    closeTime: string
-    maxVisitors: number
-    visitTimeLimit: number
-    allowOvernightGuests: boolean
-  }
-  rules: {
-    [key: string]: {
-      enabled: boolean
-      title: string
-      description: string
-    }
-  }
-  schedules: {
-    daily: {
-      wakeUpTime: string
-      bedTime: string
-      napTime: [string, string]
-      studyTime: [string, string]
-    }
-    weekend: {
-      wakeUpTime: string
-      bedTime: string
-    }
-    holidays: {
-      wakeUpTime: string
-      bedTime: string
-    }
-  }
-  notifications: {
-    enableSMS: boolean
-    enableEmail: boolean
-    enablePush: boolean
-    quietHours: [string, string]
-    eventTypes: string[]
-  }
-  security: {
-    requireKeyCard: boolean
-    enableSurveillance: boolean
-    visitorCheckIn: boolean
-    lateReturnAlert: boolean
-  }
-  devices: {
-    access: string[]
-    restricted: string[]
-    shared: string[]
-  }
-  maintenance: {
-    autoReport: boolean
-    contactMaintenance: boolean
-    emergencyContact: string
-  }
-}
-
-export interface DormMember {
-  id: string
-  name: string
-  phone: string
-  email: string
-  role: string
-  isLeader: boolean
-  avatar?: string
-  joinDate: string
-}
-
-export interface DormInfo {
-  id: string
-  dormNumber: string
-  building: string
-  floor: number
-  roomType: string
-  capacity: number
-  area: number
-  orientation: string
-  status: 'available' | 'occupied' | 'maintenance' | 'reserved'
-  currentResidents: number
-  createTime: string
-  remark?: string
-  facilities: DormFacilities
-  fees: DormFees
-  members: DormMember[]
-}
-
-// 宿舍详情接口
-export interface DormDetail {
-  id: number
-  dormName: string
-  dormCode: string
-  address: string
-  capacity: number
-  currentOccupancy: number
-  description: string | null
-  status: 'active' | 'inactive' | 'maintenance'
-  type: 'single' | 'double' | 'quad' | 'apartment' | 'standard'
-  area: number | null
-  genderLimit: 'male' | 'female' | 'mixed' | null
-  monthlyRent: string
-  deposit: string
-  utilityIncluded: boolean
-  building: string | null
-  floor: number | null
-  roomNumber: string | null
-  facilities: string[]
-  amenities: string[]
-  createdAt: string
-  updatedAt: string
-  adminInfo: {
-    id: number
-    username: string
-    nickname: string
-    avatar: string | null
-  } | null
-  currentUsers: Array<{
-    id: number
-    name: string
-    status: 'active' | 'inactive'
-  }> | null
-  occupancyRate: number
-}
-
-import type { ApiResponse } from '@/types'
-// 导入请求函数
 import { request } from '@/utils/request'
+import type { ApiResponse } from '@/types'
 
-// 定义宿舍创建请求参数接口
-export interface CreateDormRequest {
-  dormName: string           // ⭐️ 必需：宿舍名称
-  address: string            // ⭐️ 必需：地址
-  capacity: number           // ⭐️ 必需：容量
-  dormCode?: string          // ⭐️ 可选：宿舍编码（唯一）
-  description?: string       // ⭐️ 可选：描述
-  type?: string              // ⭐️ 可选：宿舍类型（single,double,quad,apartment,standard）
-  area?: number              // ⭐️ 可选：面积（平方米）
-  genderLimit?: string       // ⭐️ 可选：性别限制（male,female,mixed）
-  monthlyRent?: number       // ⭐️ 可选：月租金
-  deposit?: number           // ⭐️ 可选：押金
-  utilityIncluded?: boolean  // ⭐️ 可选：是否包含水电
-  contactPerson?: string     // ⭐️ 可选：联系人
-  contactPhone?: string      // ⭐️ 可选：联系电话
-  contactEmail?: string      // ⭐️ 可选：联系邮箱
-  building?: string          // ⭐️ 可选：建筑物
-  floor?: number             // ⭐️ 可选：楼层
-  roomNumber?: string        // ⭐️ 可选：房间号
-  facilities?: string[]      // ⭐️ 可选：设施列表（JSON数组）
-  amenities?: string[]       // ⭐️ 可选：便利设施（JSON数组）
-  adminId?: number           // ⭐️ 可选：管理员ID，关联users表
-}
-
-// 定义宿舍更新请求参数接口
-export interface UpdateDormRequest {
-  dormName?: string          // 宿舍名称 (可选)
-  dormCode?: string          // 宿舍编码 (可选)
-  address?: string           // 地址 (可选)
-  capacity?: number          // 容量 (可选)
-  description?: string       // 描述 (可选)
-  status?: string            // 状态 (可选)
-  type?: string              // 类型 (可选)
-  area?: number              // 面积（平方米）(可选)
-  genderLimit?: string       // 性别限制 (可选)
-  monthlyRent?: number       // 月租金 (可选)
-  deposit?: number           // 押金 (可选)
-  utilityIncluded?: boolean  // 是否包含水电 (可选)
-  contactPerson?: string     // 联系人 (可选)
-  contactPhone?: string      // 联系电话 (可选)
-  contactEmail?: string      // 联系邮箱 (可选)
-  building?: string          // 建筑物 (可选)
-  floor?: number             // 楼层 (可选)
-  roomNumber?: string        // 房间号 (可选)
-  facilities?: string[]      // 设施列表 (可选)
-  amenities?: string[]       // 便利设施 (可选)
-  adminId?: number           // 管理员ID (可选)
-}
-
-class DormService {
-  /**
-   * 获取所有寝室列表
-   */
-  async getDormList(): Promise<ApiResponse<DormInfo[]>> {
-    try {
-      console.log('获取寝室列表')
-      
-      // 调用真实API获取寝室列表
-      const response = await request<DormInfo[]>('/dorms')
-      
-      return response
-    } catch (error) {
-      console.error('获取寝室列表失败:', error)
-      return {
-        success: false,
-        data: [],
-        message: '获取寝室列表失败',
-        code: 500
-      }
-    }
+/**
+ * 寝室设置服务
+ */
+export interface DormSettings {
+  basic?: {
+    name: string
+    description?: string
+    maxCapacity?: number
+    currentCapacity?: number
+    adminId?: number
   }
+  notifications?: {
+    methods: string[]
+    quietStart?: string
+    quietEnd?: string
+  }
+  billing?: {
+    cycle: string
+    dueDay: number
+    publicItems?: string[]
+  }
+}
 
+export interface UpdateDormSettingsRequest {
+  type: 'basic' | 'billing' | 'notification'
+  data: any
+}
+
+export class DormService {
   /**
-   * 获取寝室列表（支持分页和搜索）
-   * @param params 查询参数
+   * 获取寝室列表
    */
   async getDormitoryList(params?: { page?: number; limit?: number; search?: string }): Promise<ApiResponse<any>> {
     try {
-      console.log('获取寝室列表（分页/搜索）:', params)
+      const response = await request<any>(`/dorms`, {
+        method: 'GET',
+        params
+      })
       
-      // 构建查询参数
-      const queryParams = new URLSearchParams();
-      if (params?.page) queryParams.append('page', params.page.toString());
-      if (params?.limit) queryParams.append('limit', params.limit.toString());
-      if (params?.search) queryParams.append('search', params.search);
+      // 处理后端返回的双层嵌套结构
+      const responseData = response.data?.data || response.data || null
       
-      // 构建完整URL
-      const url = `/api/dorms${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      return {
+        success: response.success,
+        data: responseData,
+        message: response.message || '获取成功',
+        code: response.code || 200
+      }
+    } catch (error: any) {
+      console.error('获取寝室列表失败:', error)
       
-      // 调用真实API获取寝室列表
-      const response = await request<any>(url);
+      // 提取更详细的错误信息
+      let errorMessage = '获取寝室列表失败'
+      if (error.response) {
+        // 服务器返回了错误响应
+        errorMessage = `服务器错误: ${error.response.status}`
+        try {
+          const errorData = await error.response.json()
+          errorMessage = errorData.message || errorData.error || errorMessage
+        } catch (e) {
+          // 无法解析错误响应
+          errorMessage = `服务器错误: ${error.response.status} ${error.response.statusText}`
+        }
+      } else if (error.message) {
+        errorMessage = error.message
+      }
       
-      return response;
-    } catch (error) {
-      console.error('获取寝室列表失败:', error);
       return {
         success: false,
         data: null,
-        message: '获取寝室列表失败',
-        code: 500
-      };
+        message: errorMessage,
+        code: error.status || 500
+      }
     }
   }
 
   /**
-   * 根据ID获取寝室详情
+   * 获取单个寝室详情
    */
-  async getDormById(id: string): Promise<ApiResponse<DormInfo>> {
+  async getDormitoryDetail(dormId: string): Promise<ApiResponse<any>> {
     try {
-      console.log('获取寝室详情:', id)
+      // 验证参数
+      if (!dormId) {
+        return {
+          success: false,
+          data: null,
+          message: '寝室ID不能为空',
+          code: 400
+        }
+      }
       
-      // 调用真实API获取寝室详情
-      const response = await request<DormInfo>(`/dorms/${id}`)
+      // 修正：直接调用 /dorms/${dormId} 而不是 /dorms/${dormId}/detail
+      const response = await request<any>(`/dorms/${dormId}`)
       
-      return response
-    } catch (error) {
+      // 处理后端返回的双层嵌套结构
+      const responseData = response.data?.data || response.data || null
+      
+      return {
+        success: response.success,
+        data: responseData,
+        message: response.message || '获取成功',
+        code: response.code || 200
+      }
+    } catch (error: any) {
       console.error('获取寝室详情失败:', error)
+      
+      // 提取更详细的错误信息
+      let errorMessage = '获取寝室详情失败'
+      if (error.response) {
+        // 服务器返回了错误响应
+        errorMessage = `服务器错误: ${error.response.status}`
+        try {
+          const errorData = await error.response.json()
+          errorMessage = errorData.message || errorData.error || errorMessage
+        } catch (e) {
+          // 无法解析错误响应
+          errorMessage = `服务器错误: ${error.response.status} ${error.response.statusText}`
+        }
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
       return {
         success: false,
-        data: {} as DormInfo,
-        message: '获取寝室详情失败',
-        code: 500
+        data: null,
+        message: errorMessage,
+        code: error.status || 500
       }
     }
   }
 
   /**
-   * 根据ID获取宿舍详情（新API）
+   * 获取寝室成员列表
    */
-  async getDormDetail(id: number): Promise<ApiResponse<DormDetail>> {
+  async getDormMembers(dormId: string, params?: { page?: number; limit?: number; search?: string; status?: string }): Promise<ApiResponse<any>> {
     try {
-      console.log('获取宿舍详情:', id)
-      
-      // 调用真实API获取宿舍详情
-      const response = await request<DormDetail>(`/api/dorms/${id}`)
-      
-      return response
-    } catch (error) {
-      console.error('获取宿舍详情失败:', error)
-      return {
-        success: false,
-        data: {} as DormDetail,
-        message: '获取宿舍详情失败',
-        code: 500
+      // 验证参数
+      if (!dormId) {
+        return {
+          success: false,
+          data: null,
+          message: '寝室ID不能为空',
+          code: 400
+        }
       }
-    }
-  }
-
-  /**
-   * 创建新寝室
-   */
-  async createDorm(dormInfo: DormBasicInfo & { facilities: DormFacilities; fees: DormFees }): Promise<ApiResponse<DormInfo>> {
-    try {
-      console.log('创建新寝室:', dormInfo)
       
-      // 调用真实API创建寝室
-      const response = await request<DormInfo>('/dorms', {
-        method: 'POST',
-        data: dormInfo
+      const response = await request<any>(`/dorms/${dormId}/members`, {
+        params
       })
       
-      return response
+      // 处理后端返回的双层嵌套结构
+      const responseData = response.data?.data || response.data || null
+      
+      return {
+        success: response.success,
+        data: responseData,
+        message: response.message || '获取成功',
+        code: response.code || 200
+      }
+    } catch (error: any) {
+      console.error('获取寝室成员列表失败:', error)
+      
+      // 提取更详细的错误信息
+      let errorMessage = '获取寝室成员列表失败'
+      if (error.response) {
+        // 服务器返回了错误响应
+        errorMessage = `服务器错误: ${error.response.status}`
+        try {
+          const errorData = await error.response.json()
+          errorMessage = errorData.message || errorData.error || errorMessage
+        } catch (e) {
+          // 无法解析错误响应
+          errorMessage = `服务器错误: ${error.response.status} ${error.response.statusText}`
+        }
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
+      return {
+        success: false,
+        data: null,
+        message: errorMessage,
+        code: error.status || 500
+      }
+    }
+  }
+
+  /**
+   * 获取寝室设置
+   */
+  async getDormSettings(dormId: string): Promise<ApiResponse<DormSettings>> {
+    try {
+      console.log('获取寝室设置:', dormId)
+      
+      // 验证参数
+      if (!dormId) {
+        return {
+          success: false,
+          data: null,
+          message: '寝室ID不能为空',
+          code: 400
+        }
+      }
+      
+      // 调用真实API获取寝室设置
+      const response = await request<any>(`/dorms/${dormId}/settings`)
+      
+      // 处理后端返回的双层嵌套结构
+      // 根据规则，后端返回的数据结构是 {success: true, data: {xxx: []}}
+      const responseData = response.data?.data || response.data || null
+      
+      return {
+        success: response.success,
+        data: responseData,
+        message: response.message || '获取寝室设置成功',
+        code: response.code || 200
+      }
+    } catch (error: any) {
+      console.error('获取寝室设置失败:', error)
+      
+      // 提取更详细的错误信息
+      let errorMessage = '获取寝室设置失败'
+      if (error.response) {
+        // 服务器返回了错误响应
+        errorMessage = `服务器错误: ${error.response.status}`
+        try {
+          const errorData = await error.response.json()
+          errorMessage = errorData.message || errorData.error || errorMessage
+        } catch (e) {
+          // 无法解析错误响应
+          errorMessage = `服务器错误: ${error.response.status} ${error.response.statusText}`
+        }
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
+      return {
+        success: false,
+        data: null,
+        message: errorMessage,
+        code: error.status || 500
+      }
+    }
+  }
+
+  /**
+   * 更新寝室设置
+   */
+  async updateDormSettings(dormId: string, settings: UpdateDormSettingsRequest | DormSettings): Promise<ApiResponse<boolean>> {
+    try {
+      console.log('更新寝室设置:', dormId, settings)
+      
+      // 验证参数
+      if (!dormId) {
+        return {
+          success: false,
+          data: false,
+          message: '寝室ID不能为空',
+          code: 400
+        }
+      }
+      
+      // 转换数据格式，适配后端接口
+      let requestData = {};
+      if ('type' in settings && 'data' in settings) {
+        // 前端页面传递的格式：{type: 'basic', data: {...}}
+        if (settings.type === 'basic') {
+          requestData = { basic: settings.data };
+        } else if (settings.type === 'billing') {
+          requestData = { billing: settings.data };
+        } else if (settings.type === 'notification') {
+          requestData = { notifications: settings.data };
+        }
+      } else {
+        // 直接传递的格式：{basic: {...}, notifications: {...}}
+        requestData = settings;
+      }
+      
+      console.log('转换后的数据格式:', requestData)
+      
+      // 调用真实API更新设置
+      const response = await request<{ success: boolean }>(`/dorms/${dormId}/settings/update`, {
+        method: 'PUT',
+        data: requestData
+      })
+      
+      // 处理后端返回的双层嵌套结构
+      const success = response.success;
+      const message = response.message || '设置更新成功';
+      
+      return {
+        success: success,
+        data: success,
+        message: message
+      }
+    } catch (error: any) {
+      console.error('更新寝室设置失败:', error)
+      
+      // 提取更详细的错误信息
+      let errorMessage = '更新寝室设置失败'
+      if (error.response) {
+        // 服务器返回了错误响应
+        errorMessage = `服务器错误: ${error.response.status}`
+        try {
+          const errorData = await error.response.json()
+          errorMessage = errorData.message || errorData.error || errorMessage
+        } catch (e) {
+          // 无法解析错误响应
+          errorMessage = `服务器错误: ${error.response.status} ${error.response.statusText}`
+        }
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
+      return {
+        success: false,
+        data: false,
+        message: errorMessage,
+        code: error.status || 500
+      }
+    }
+  }
+
+  /**
+   * 加入寝室
+   */
+  async joinDorm(dormId: string, joinData: { studentId: string; name: string; phone: string; appliedRoom?: string }): Promise<ApiResponse<boolean>> {
+    try {
+      const response = await request<{ success: boolean }>(`/dorms/${dormId}/join`, {
+        method: 'POST',
+        data: joinData
+      })
+      return {
+        success: response.success,
+        data: response.success,
+        message: response.message || '加入寝室成功'
+      }
+    } catch (error) {
+      console.error('加入寝室失败:', error)
+      return {
+        success: false,
+        data: false,
+        message: '加入寝室失败',
+        code: 500
+      }
+    }
+  }
+
+  /**
+   * 退出寝室
+   */
+  async leaveDorm(dormId: string): Promise<ApiResponse<boolean>> {
+    try {
+      const response = await request<{ success: boolean }>(`/dorms/${dormId}/leave`, {
+        method: 'POST'
+      })
+      return {
+        success: response.success,
+        data: response.success,
+        message: response.message || '退出寝室成功'
+      }
+    } catch (error) {
+      console.error('退出寝室失败:', error)
+      return {
+        success: false,
+        data: false,
+        message: '退出寝室失败',
+        code: 500
+      }
+    }
+  }
+
+  /**
+   * 创建寝室
+   */
+  async createDorm(dormData: {
+    name: string
+    description?: string
+    maxCapacity?: number
+    adminId?: number
+    initialMembers?: { studentId: string; name: string; phone: string }[]
+  }): Promise<ApiResponse<number>> {
+    try {
+      const response = await request<{ success: boolean; data: { id: number } }>('/dorms/create', {
+        method: 'POST',
+        data: dormData
+      })
+      return {
+        success: response.success,
+        data: response.data.id,
+        message: response.message || '创建寝室成功'
+      }
     } catch (error) {
       console.error('创建寝室失败:', error)
       return {
         success: false,
-        data: {} as DormInfo,
+        data: null,
         message: '创建寝室失败',
         code: 500
       }
@@ -365,145 +405,118 @@ class DormService {
   }
 
   /**
-   * 创建新宿舍（符合新API格式）
+   * 解散寝室
    */
-  async createNewDorm(dormData: CreateDormRequest): Promise<ApiResponse<any>> {
+  async dismissDorm(dormId: string, reason?: string): Promise<ApiResponse<boolean>> {
     try {
-      console.log('创建新宿舍:', dormData)
-      
-      // 调用真实API创建宿舍
-      const response = await request<any>('/api/dorms', {
+      const response = await request<{ success: boolean }>(`/dorms/${dormId}/dismiss`, {
         method: 'POST',
-        data: dormData
+        data: { reason }
       })
-      
-      return response
+      return {
+        success: response.success,
+        data: response.success,
+        message: response.message || '解散寝室成功'
+      }
     } catch (error) {
-      console.error('创建宿舍失败:', error)
+      console.error('解散寝室失败:', error)
       return {
         success: false,
-        data: null,
-        message: '创建宿舍失败',
+        data: false,
+        message: '解散寝室失败',
         code: 500
       }
     }
   }
 
   /**
-   * 更新宿舍信息（新API）
-   * @param id 宿舍ID
-   * @param dormData 更新的宿舍数据
+   * 邀请成员加入寝室
    */
-  async updateDormInfo(id: number, dormData: UpdateDormRequest): Promise<ApiResponse<any>> {
+  async inviteMembers(dormId: string, invitees: {
+    studentId: string
+    name: string
+    phone: string
+    role?: 'member' | 'admin' | 'viewer'
+  }[]): Promise<ApiResponse<boolean>> {
     try {
-      console.log('更新宿舍信息:', id, dormData)
-      
-      // 调用真实API更新宿舍信息
-      const response = await request<any>(`/api/dorms/${id}`, {
-        method: 'PUT',
-        data: dormData
-      })
-      
-      return response
-    } catch (error) {
-      console.error('更新宿舍信息失败:', error)
-      return {
-        success: false,
-        data: null,
-        message: '更新宿舍信息失败',
-        code: 500
-      }
-    }
-  }
-
-  /**
-   * 删除寝室
-   */
-  async deleteDorm(id: string): Promise<ApiResponse<any>> {
-    try {
-      console.log('删除寝室:', id)
-      
-      // 调用真实API删除寝室
-      const response = await request<any>(`/api/dorms/${id}`, {
-        method: 'DELETE'
-      })
-      
-      return response;
-    } catch (error) {
-      console.error('删除寝室失败:', error)
-      return {
-        success: false,
-        data: null,
-        message: '删除寝室失败',
-        code: 500
-      }
-    }
-  }
-
-  /**
-   * 更新宿舍信息
-   * @param id 宿舍ID
-   * @param dormData 更新的宿舍数据
-   */
-  async updateDormitory(id: number | string, dormData: Partial<Omit<EditingDorm, 'id' | 'dormNumber'>>): Promise<ApiResponse<any>> {
-    try {
-      console.log('更新宿舍信息:', id, dormData)
-      
-      // 调用真实API更新宿舍信息
-      const response = await request<any>(`/api/dorms/${id}`, {
-        method: 'PUT',
-        data: dormData
-      })
-      
-      return response
-    } catch (error) {
-      console.error('更新宿舍信息失败:', error)
-      return {
-        success: false,
-        data: null,
-        message: '更新宿舍信息失败',
-        code: 500
-      }
-    }
-  }
-
-  /**
-   * 添加寝室成员
-   */
-  async addMember(dormId: string, member: Omit<DormMember, 'id' | 'joinDate'>): Promise<ApiResponse<DormMember>> {
-    try {
-      console.log('添加寝室成员:', dormId, member)
-      
-      // 调用真实API添加成员
-      const response = await request<DormMember>(`/dorms/${dormId}/members`, {
+      const response = await request<{ success: boolean }>(`/dorms/${dormId}/invite`, {
         method: 'POST',
-        data: member
+        data: { invitees }
       })
-      
-      return response
+      return {
+        success: response.success,
+        data: response.success,
+        message: response.message || '邀请成员成功'
+      }
     } catch (error) {
-      console.error('添加成员失败:', error)
+      console.error('邀请成员失败:', error)
       return {
         success: false,
-        data: {} as DormMember,
-        message: '添加成员失败',
+        data: false,
+        message: '邀请成员失败',
         code: 500
       }
     }
   }
 
   /**
-   * 移除寝室成员
+   * 获取邀请记录
    */
-  async removeMember(dormId: string, memberId: string): Promise<ApiResponse<boolean>> {
+  async getInviteRecords(dormId: string, params?: { page?: number; limit?: number; status?: string }): Promise<ApiResponse<any>> {
     try {
-      console.log('移除寝室成员:', dormId, memberId)
-      
-      // 调用真实API移除成员
-      const response = await request<{ success: boolean }>(`/dorms/${dormId}/members/${memberId}`, {
-        method: 'DELETE'
+      const response = await request<any>(`/dorms/${dormId}/invite-records`, {
+        params
       })
-      
+      return {
+        success: response.success,
+        data: response.data,
+        message: response.message || '获取邀请记录成功'
+      }
+    } catch (error) {
+      console.error('获取邀请记录失败:', error)
+      return {
+        success: false,
+        data: null,
+        message: '获取邀请记录失败',
+        code: 500
+      }
+    }
+  }
+
+  /**
+   * 处理邀请
+   */
+  async handleInvite(inviteId: string, action: 'accept' | 'reject'): Promise<ApiResponse<boolean>> {
+    try {
+      const response = await request<{ success: boolean }>(`/dorms/invites/${inviteId}/handle`, {
+        method: 'POST',
+        data: { action }
+      })
+      return {
+        success: response.success,
+        data: response.success,
+        message: response.message || '处理邀请成功'
+      }
+    } catch (error) {
+      console.error('处理邀请失败:', error)
+      return {
+        success: false,
+        data: false,
+        message: '处理邀请失败',
+        code: 500
+      }
+    }
+  }
+
+  /**
+   * 移除成员
+   */
+  async removeMember(dormId: string, memberId: string, reason?: string): Promise<ApiResponse<boolean>> {
+    try {
+      const response = await request<{ success: boolean }>(`/dorms/${dormId}/members/${memberId}/remove`, {
+        method: 'POST',
+        data: { reason }
+      })
       return {
         success: response.success,
         data: response.success,
@@ -521,29 +534,49 @@ class DormService {
   }
 
   /**
-   * 转让寝室长
+   * 更新成员角色
    */
-  async transferLeader(dormId: string, newLeaderId: string): Promise<ApiResponse<boolean>> {
+  async updateMemberRole(dormId: string, memberId: string, role: 'member' | 'admin' | 'viewer'): Promise<ApiResponse<boolean>> {
     try {
-      console.log('转让寝室长:', dormId, '新寝室长:', newLeaderId)
-      
-      // 调用真实API转让寝室长
-      const response = await request<{ success: boolean }>(`/dorms/${dormId}/transfer-leader`, {
+      const response = await request<{ success: boolean }>(`/dorms/${dormId}/members/${memberId}/role`, {
         method: 'PUT',
-        data: { newLeaderId }
+        data: { role }
       })
-      
       return {
         success: response.success,
         data: response.success,
-        message: response.message || '转让寝室长成功'
+        message: response.message || '更新成员角色成功'
       }
     } catch (error) {
-      console.error('转让寝室长失败:', error)
+      console.error('更新成员角色失败:', error)
       return {
         success: false,
         data: false,
-        message: '转让寝室长失败',
+        message: '更新成员角色失败',
+        code: 500
+      }
+    }
+  }
+
+  /**
+   * 获取寝室活动日志
+   */
+  async getActivityLogs(dormId: string, params?: { page?: number; limit?: number; type?: string }): Promise<ApiResponse<any>> {
+    try {
+      const response = await request<any>(`/dorms/${dormId}/activity-logs`, {
+        params
+      })
+      return {
+        success: response.success,
+        data: response.data,
+        message: response.message || '获取活动日志成功'
+      }
+    } catch (error) {
+      console.error('获取活动日志失败:', error)
+      return {
+        success: false,
+        data: null,
+        message: '获取活动日志失败',
         code: 500
       }
     }
@@ -552,335 +585,457 @@ class DormService {
   /**
    * 获取寝室统计信息
    */
-  async getDormStatistics(): Promise<ApiResponse<any>> {
+  async getDormStatistics(dormId: string, period?: string): Promise<ApiResponse<any>> {
     try {
-      console.log('获取寝室统计信息')
-      
-      // 调用真实API获取统计信息
-      const response = await request<{
-        total: number
-        available: number
-        occupied: number
-        maintenance: number
-        reserved: number
-        totalCapacity: number
-        totalOccupied: number
-        occupancyRate: string
-      }>('/dorms/statistics')
-      
+      const response = await request<any>(`/dorms/${dormId}/statistics`, {
+        params: { period }
+      })
       return {
-        success: true,
-        data: response
+        success: response.success,
+        data: response.data,
+        message: response.message || '获取统计信息成功'
       }
     } catch (error) {
-      console.error('获取寝室统计失败:', error)
+      console.error('获取统计信息失败:', error)
       return {
         success: false,
         data: null,
-        message: '获取寝室统计失败',
+        message: '获取统计信息失败',
         code: 500
       }
     }
   }
 
   /**
-   * 获取当前用户的寝室信息
-   * @param userId 用户ID
+   * 申请成为寝室管理员
    */
-  async getCurrentUserDorm(userId: string): Promise<ApiResponse<any | null>> {
+  async applyForAdmin(dormId: string, reason: string): Promise<ApiResponse<boolean>> {
     try {
-      console.log('获取用户寝室信息:', userId)
+      const response = await request<{ success: boolean }>(`/dorms/${dormId}/apply-admin`, {
+        method: 'POST',
+        data: { reason }
+      })
+      return {
+        success: response.success,
+        data: response.success,
+        message: response.message || '申请管理员成功'
+      }
+    } catch (error) {
+      console.error('申请管理员失败:', error)
+      return {
+        success: false,
+        data: false,
+        message: '申请管理员失败',
+        code: 500
+      }
+    }
+  }
+
+  /**
+   * 转移管理员权限
+   */
+  async transferAdmin(dormId: string, newAdminId: string, reason?: string): Promise<ApiResponse<boolean>> {
+    try {
+      const response = await request<{ success: boolean }>(`/dorms/${dormId}/transfer-admin`, {
+        method: 'POST',
+        data: { newAdminId, reason }
+      })
+      return {
+        success: response.success,
+        data: response.success,
+        message: response.message || '转移管理员权限成功'
+      }
+    } catch (error) {
+      console.error('转移管理员权限失败:', error)
+      return {
+        success: false,
+        data: false,
+        message: '转移管理员权限失败',
+        code: 500
+      }
+    }
+  }
+
+  /**
+   * 获取寝室公告
+   */
+  async getDormAnnouncements(dormId: string, params?: { page?: number; limit?: number }): Promise<ApiResponse<any>> {
+    try {
+      const response = await request<any>(`/dorms/${dormId}/announcements`, {
+        params
+      })
+      return {
+        success: response.success,
+        data: response.data,
+        message: response.message || '获取寝室公告成功'
+      }
+    } catch (error) {
+      console.error('获取寝室公告失败:', error)
+      return {
+        success: false,
+        data: null,
+        message: '获取寝室公告失败',
+        code: 500
+      }
+    }
+  }
+
+  /**
+   * 创建寝室公告
+   */
+  async createAnnouncement(dormId: string, announcement: {
+    title: string
+    content: string
+    type?: 'notice' | 'event' | 'reminder'
+    expiresAt?: string
+    important?: boolean
+  }): Promise<ApiResponse<number>> {
+    try {
+      const response = await request<{ success: boolean; data: { id: number } }>(`/dorms/${dormId}/announcements`, {
+        method: 'POST',
+        data: announcement
+      })
+      return {
+        success: response.success,
+        data: response.data.id,
+        message: response.message || '创建公告成功'
+      }
+    } catch (error) {
+      console.error('创建公告失败:', error)
+      return {
+        success: false,
+        data: null,
+        message: '创建公告失败',
+        code: 500
+      }
+    }
+  }
+
+  /**
+   * 更新寝室公告
+   */
+  async updateAnnouncement(dormId: string, announcementId: string, announcement: {
+    title?: string
+    content?: string
+    type?: 'notice' | 'event' | 'reminder'
+    expiresAt?: string
+    important?: boolean
+  }): Promise<ApiResponse<boolean>> {
+    try {
+      const response = await request<{ success: boolean }>(`/dorms/${dormId}/announcements/${announcementId}`, {
+        method: 'PUT',
+        data: announcement
+      })
+      return {
+        success: response.success,
+        data: response.success,
+        message: response.message || '更新公告成功'
+      }
+    } catch (error) {
+      console.error('更新公告失败:', error)
+      return {
+        success: false,
+        data: false,
+        message: '更新公告失败',
+        code: 500
+      }
+    }
+  }
+
+  /**
+   * 删除寝室公告
+   */
+  async deleteAnnouncement(dormId: string, announcementId: string): Promise<ApiResponse<boolean>> {
+    try {
+      const response = await request<{ success: boolean }>(`/dorms/${dormId}/announcements/${announcementId}`, {
+        method: 'DELETE'
+      })
+      return {
+        success: response.success,
+        data: response.success,
+        message: response.message || '删除公告成功'
+      }
+    } catch (error) {
+      console.error('删除公告失败:', error)
+      return {
+        success: false,
+        data: false,
+        message: '删除公告失败',
+        code: 500
+      }
+    }
+  }
+
+  /**
+   * 获取寝室历史记录
+   */
+  async getDormHistory(dormId: string, params?: { current?: number; size?: number; type?: string; startDate?: string; endDate?: string }): Promise<ApiResponse<any>> {
+    try {
+      console.log('获取寝室历史记录:', dormId, params)
       
-      // 先获取用户信息，确定其所在的寝室
-      // 注意：这里我们假设寝室长用户ID为4，寝室ID为2
-      // 在实际应用中，应该通过API获取用户与寝室的关联关系
-      const dormId = '2'; // 简化处理，直接使用已知的寝室ID
+      // 调用真实API获取寝室历史记录
+      const response = await request<any>(`/dorms/${dormId}/history`, {
+        method: 'GET',
+        params
+      })
       
-      // 调用真实API获取寝室详情
-      const response = await request<any>(`/api/dorms/${dormId}`)
+      return {
+        success: response.success,
+        data: response.data,
+        message: response.message || '获取寝室历史记录成功',
+        code: 200
+      }
+    } catch (error) {
+      console.error('获取寝室历史记录失败:', error)
+      return {
+        success: false,
+        data: null,
+        message: '获取寝室历史记录失败',
+        code: 500
+      }
+    }
+  }
+
+  /**
+   * 获取当前用户所在寝室信息
+   */
+  async getCurrentUserDorm(userId: string): Promise<ApiResponse<any>> {
+    try {
+      console.log('获取当前用户所在寝室信息:', userId)
       
-      // 提取寝室信息并转换为DormInfo格式
-      const dormData = response.data.dorm;
+      // 验证参数
+      if (!userId) {
+        return {
+          success: false,
+          data: null,
+          message: '用户ID不能为空',
+          code: 400
+        }
+      }
       
-      // 构造符合DormInfo接口的数据
-      const dormInfo: DormInfo = {
-        id: dormData.id,
-        dormNumber: dormData.roomNumber || '',
-        building: dormData.building || 'B栋',
-        floor: dormData.floor || 2,
-        roomType: dormData.type || 'standard',
-        capacity: dormData.capacity,
-        area: dormData.area || 0,
-        orientation: '',
-        status: 'occupied',
-        currentResidents: dormData.currentUsers?.length || 0,
-        createTime: dormData.createdAt,
-        facilities: {
-          basic: {
-            bed: false,
-            wardrobe: false,
-            desk: false,
-            chair: false,
-            air_conditioner: false,
-            heater: false,
-            fan: false,
-            lamp: false,
-            window: false,
-            curtain: false
-          },
-          electronics: {
-            tv: false,
-            computer: false,
-            refrigerator: false,
-            washing_machine: false,
-            microwave: false,
-            electric_kettle: false,
-            hair_dryer: false,
-            router: false
-          },
-          bathroom: {
-            toilet: false,
-            shower: false,
-            washbasin: false,
-            mirror: false,
-            towel_rack: false,
-            exhaust_fan: false,
-            water_heater: false
-          },
-          safety: {
-            fire_extinguisher: false,
-            smoke_detector: false,
-            emergency_light: false,
-            first_aid_kit: false,
-            door_lock: false,
-            window_lock: false
+      // 调用真实API获取用户所在的寝室信息，使用指定的接口路径
+      const response = await request<any>(`/dorms/users/${userId}`, {
+        method: 'GET'
+      })
+      
+      console.log('获取用户寝室信息响应:', response)
+      
+      // 处理后端返回的双层嵌套结构
+      const responseData = response.data?.data || response.data || null
+      
+      return {
+        success: response.success,
+        data: responseData,
+        message: response.message || '获取用户所在寝室信息成功',
+        code: response.code || 200
+      }
+    } catch (error: any) {
+      console.error('获取用户所在寝室信息失败:', error)
+      
+      // 提取更详细的错误信息
+      let errorMessage = '获取用户所在寝室信息失败'
+      let statusCode = error.status || 500
+      
+      if (error.response) {
+        // 服务器返回了错误响应
+        statusCode = error.response.status
+        
+        // 特殊处理：404错误视为用户未加入任何寝室
+        if (error.response.status === 404) {
+          console.log('用户未加入任何寝室，返回空数据')
+          return {
+            success: true,
+            data: null,
+            message: '用户未加入任何寝室',
+            code: 404
           }
-        },
-        fees: {
-          monthlyRent: parseFloat(dormData.monthlyRent) || 0,
-          waterRate: 0,
-          electricityRate: 0,
-          internetRate: 0,
-          managementFee: 0,
-          deposit: parseFloat(dormData.deposit) || 0
-        },
-        members: dormData.currentUsers?.map((user: any) => ({
-          id: user.id,
-          name: user.username,
-          phone: user.phone || '',
-          email: '',
-          role: user.memberRole,
-          isLeader: user.memberRole === 'admin',
-          avatar: user.avatarUrl || '',
-          joinDate: user.moveInDate || ''
-        })) || []
-      };
+        }
+        
+        try {
+          const errorData = await error.response.json()
+          errorMessage = errorData.message || errorData.error || errorMessage
+          
+          // 特殊处理：用户未加入任何寝室
+          if (errorMessage.includes('用户未加入任何寝室') || errorMessage.includes('未加入任何寝室')) {
+            console.log('用户未加入任何寝室，返回空数据')
+            return {
+              success: true,
+              data: null,
+              message: '用户未加入任何寝室',
+              code: error.response.status
+            }
+          }
+        } catch (e) {
+          // 无法解析错误响应
+          errorMessage = `服务器错误: ${error.response.status} ${error.response.statusText}`
+        }
+      } else if (error.message) {
+        errorMessage = error.message
+        
+        // 特殊处理：用户未加入任何寝室
+        if (error.message.includes('用户未加入任何寝室') || error.message.includes('未加入任何寝室') || error.message.includes('404')) {
+          console.log('用户未加入任何寝室，返回空数据')
+          return {
+            success: true,
+            data: null,
+            message: '用户未加入任何寝室',
+            code: 404
+          }
+        }
+      }
       
-      return {
-        success: true,
-        data: dormInfo
-      };
-    } catch (error) {
-      console.error('获取用户寝室信息失败:', error);
       return {
         success: false,
         data: null,
-        message: '获取用户寝室信息失败',
-        code: 500
-      };
+        message: errorMessage,
+        code: statusCode
+      }
     }
   }
 
   /**
-   * 保存寝室设置
+   * 获取用户所在寝室信息（别名，兼容旧版代码）
    */
-  async saveDormSettings(dormId: string, settings: DormSettings): Promise<ApiResponse<boolean>> {
+  async getUserDormitory(userId: string): Promise<ApiResponse<any>> {
+    // 调用getCurrentUserDorm方法，保持兼容
+    return this.getCurrentUserDorm(userId)
+  }
+
+  /**
+   * 获取待结算费用
+   */
+  async getPendingFees(dormId: string): Promise<ApiResponse<any>> {
     try {
-      console.log('保存寝室设置:', dormId, settings)
+      console.log('获取待结算费用:', dormId)
       
-      // 调用真实API保存设置
-      const response = await request<{ success: boolean }>(`/dorms/${dormId}/settings`, {
-        method: 'PUT',
-        data: settings
+      // 调用真实API获取待结算费用
+      const response = await request<any>(`/dorms/${dormId}/pending-fees`, {
+        method: 'GET'
       })
+      
+      // 处理后端返回的双层嵌套结构
+      const responseData = response.data?.data || response.data || null
       
       return {
         success: response.success,
-        data: response.success,
-        message: response.message || '设置保存成功'
+        data: responseData,
+        message: response.message || '获取待结算费用成功',
+        code: response.code || 200
       }
-    } catch (error) {
-      console.error('保存寝室设置失败:', error)
-      return {
-        success: false,
-        data: false,
-        message: '保存寝室设置失败',
-        code: 500
-      }
-    }
-  }
-
-  /**
-   * 重置寝室设置
-   */
-  async resetDormSettings(dormId: string): Promise<ApiResponse<boolean>> {
-    try {
-      console.log('重置寝室设置:', dormId)
+    } catch (error: any) {
+      console.error('获取待结算费用失败:', error)
       
-      // 调用真实API重置设置
-      const response = await request<{ success: boolean }>(`/dorms/${dormId}/settings/reset`, {
-        method: 'PUT'
-      })
-      
-      return {
-        success: response.success,
-        data: response.success,
-        message: response.message || '设置已重置'
+      // 提取更详细的错误信息
+      let errorMessage = '获取待结算费用失败'
+      if (error.response) {
+        // 服务器返回了错误响应
+        errorMessage = `服务器错误: ${error.response.status}`
+        try {
+          const errorData = await error.response.json()
+          errorMessage = errorData.message || errorData.error || errorMessage
+        } catch (e) {
+          // 无法解析错误响应
+          errorMessage = `服务器错误: ${error.response.status} ${error.response.statusText}`
+        }
+      } else if (error.message) {
+        errorMessage = error.message
       }
-    } catch (error) {
-      console.error('重置寝室设置失败:', error)
-      return {
-        success: false,
-        data: false,
-        message: '重置寝室设置失败',
-        code: 500
-      }
-    }
-  }
-
-  /**
-   * 获取寝室设置
-   */
-  async getDormSettings(dormId: string): Promise<ApiResponse<any>> {
-    try {
-      console.log('获取寝室设置:', dormId)
       
-      // 调用真实API获取寝室设置
-      const response = await request<any>(`/dorms/${dormId}/settings`)
-      
-      return {
-        success: true,
-        data: response
-      }
-    } catch (error) {
-      console.error('获取寝室设置失败:', error)
       return {
         success: false,
         data: null,
-        message: '获取寝室设置失败',
+        message: errorMessage,
+        code: error.status || 500
+      }
+    }
+  }
+
+  /**
+   * 开始解散流程
+   */
+  async startDismissProcess(dormId: string): Promise<ApiResponse<boolean>> {
+    try {
+      console.log('开始解散流程:', dormId)
+      
+      // 调用真实API开始解散流程
+      const response = await request<any>(`/dorms/${dormId}/dismiss/start`, {
+        method: 'POST'
+      })
+      
+      return {
+        success: response.success,
+        data: response.success,
+        message: response.message || '开始解散流程成功',
+        code: 200
+      }
+    } catch (error) {
+      console.error('开始解散流程失败:', error)
+      return {
+        success: false,
+        data: false,
+        message: '开始解散流程失败',
         code: 500
       }
     }
   }
 
   /**
-   * 更新寝室设置
+   * 确认解散
    */
-  async updateDormSettings(dormId: string, settings: any): Promise<ApiResponse<boolean>> {
+  async confirmDismiss(dormId: string): Promise<ApiResponse<boolean>> {
     try {
-      console.log('更新寝室设置:', dormId, settings)
+      console.log('确认解散:', dormId)
       
-      // 调用真实API更新设置
-      const response = await request<{ success: boolean }>(`/dorms/${dormId}/settings/update`, {
-        method: 'PUT',
-        data: settings
+      // 调用真实API确认解散
+      const response = await request<any>(`/dorms/${dormId}/dismiss/confirm`, {
+        method: 'POST'
       })
       
       return {
         success: response.success,
         data: response.success,
-        message: response.message || '设置更新成功'
+        message: response.message || '确认解散成功',
+        code: 200
       }
     } catch (error) {
-      console.error('更新寝室设置失败:', error)
+      console.error('确认解散失败:', error)
       return {
         success: false,
         data: false,
-        message: '更新寝室设置失败',
+        message: '确认解散失败',
+        code: 500
+      }
+    }
+  }
+
+  /**
+   * 取消解散
+   */
+  async cancelDismiss(dormId: string): Promise<ApiResponse<boolean>> {
+    try {
+      console.log('取消解散:', dormId)
+      
+      // 调用真实API取消解散
+      const response = await request<any>(`/dorms/${dormId}/dismiss/cancel`, {
+        method: 'POST'
+      })
+      
+      return {
+        success: response.success,
+        data: response.success,
+        message: response.message || '取消解散成功',
+        code: 200
+      }
+    } catch (error) {
+      console.error('取消解散失败:', error)
+      return {
+        success: false,
+        data: false,
+        message: '取消解散失败',
         code: 500
       }
     }
   }
 }
 
-export const dormService = new DormService()
-export { DormService }
-
-// 导出默认设置
-export const defaultDormSettings: DormSettings = {
-  basic: {
-    dormName: '',
-    dormType: 'standard_4',
-    openTime: '06:00',
-    closeTime: '22:30',
-    maxVisitors: 2,
-    visitTimeLimit: 4,
-    allowOvernightGuests: false
-  },
-  rules: {
-    quiet_hours: {
-      enabled: true,
-      title: '熄灯时间',
-      description: '23:00后保持安静'
-    },
-    visitor_registration: {
-      enabled: true,
-      title: '访客登记',
-      description: '访客需登记信息'
-    },
-    cleanup_duty: {
-      enabled: true,
-      title: '值日制度',
-      description: '轮流值日保持卫生'
-    },
-    equipment_care: {
-      enabled: true,
-      title: '设备爱护',
-      description: '爱护公共设备'
-    },
-    fire_safety: {
-      enabled: true,
-      title: '消防安全',
-      description: '严禁私拉电线'
-    }
-  },
-  schedules: {
-    daily: {
-      wakeUpTime: '07:00',
-      bedTime: '23:00',
-      napTime: ['12:30', '14:00'],
-      studyTime: ['19:00', '21:30']
-    },
-    weekend: {
-      wakeUpTime: '08:00',
-      bedTime: '23:30'
-    },
-    holidays: {
-      wakeUpTime: '09:00',
-      bedTime: '00:00'
-    }
-  },
-  notifications: {
-    enableSMS: true,
-    enableEmail: true,
-    enablePush: true,
-    quietHours: ['23:00', '07:00'],
-    eventTypes: ['fee_reminder', 'announcement', 'maintenance', 'visitor_alert']
-  },
-  security: {
-    requireKeyCard: false,
-    enableSurveillance: true,
-    visitorCheckIn: true,
-    lateReturnAlert: true
-  },
-  devices: {
-    access: ['router', 'washing_machine'],
-    restricted: ['high_power_devices'],
-    shared: ['refrigerator', 'microwave']
-  },
-  maintenance: {
-    autoReport: true,
-    contactMaintenance: true,
-    emergencyContact: '13800138000'
-  }
-}
+export default new DormService()

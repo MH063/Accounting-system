@@ -180,11 +180,15 @@ app.use('/api/queues', require('./routes/messageQueue'));
 // 仪表盘路由
 app.use('/api/dashboard', require('./routes/dashboard'));
 
+// 智能提醒路由
+app.use('/api', require('./routes/smartReminders'));
+
 // 客户端功能控制路由
 app.use('/api/dorms', require('./routes/dorms'));
 app.use('/api/member-stats', require('./routes/memberStats'));
 app.use('/api/member-activities', require('./routes/memberActivities'));
 app.use('/api/members', require('./routes/members'));
+app.use('/api/quick-stats', require('./routes/quickStats'));
 
 // 初始化Swagger中间件（在路由注册后）
 initSwaggerMiddleware(app);
@@ -192,6 +196,9 @@ app.use('/api/health', require('./routes/health'));
 app.use('/api/virus-scan', require('./routes/virusScan'));
 app.use('/api/cors', require('./routes/corsManagement'));
 app.use('/api/audit', require('./routes/audit'));
+
+// 费用摘要路由
+app.use('/api/expense-summary', require('./routes/expenseSummary'));
 
 // 服务器端口
 // 优先使用环境变量PORT（例如在Zeabur等平台上通常为3000）

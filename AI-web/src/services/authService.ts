@@ -206,7 +206,7 @@ export const login = async (loginData: LoginRequest): Promise<ApiResponse<LoginR
     console.log('用户登录:', loginData.username || loginData.email)
     
     // 调用真实API进行登录
-    const response = await request<ApiResponse<LoginResponse>>('/api/auth/login', {
+    const response = await request<ApiResponse<LoginResponse>>('/auth/login', {
       method: 'POST',
       body: JSON.stringify(loginData)
     })
@@ -255,7 +255,7 @@ export const validateAccessToken = async (sessionToken: string): Promise<ApiResp
     console.log('验证访问令牌')
     
     // 调用真实API验证令牌
-    const response = await request<ApiResponse<ValidateTokenResponse>>('/api/auth/validate-token', {
+    const response = await request<ApiResponse<ValidateTokenResponse>>('/auth/validate-token', {
       method: 'POST',
       body: JSON.stringify({ sessionToken })
     })
@@ -338,7 +338,7 @@ export const logout = async (): Promise<ApiResponse<LogoutResponse>> => {
     console.log('调用登出API，请求参数:', logoutData)
     
     // 调用真实API进行登出，路径为 /api/auth/logout
-    const response = await request<ApiResponse<LogoutResponse>>('/api/auth/logout', {
+    const response = await request<ApiResponse<LogoutResponse>>('/auth/logout', {
       method: 'POST',
       body: JSON.stringify(logoutData)
     })
@@ -420,7 +420,7 @@ export const refreshToken = async (refreshTokenData?: RefreshTokenRequest): Prom
     }
     
     // 调用真实API刷新令牌
-    const response = await request<ApiResponse<RefreshTokenResponse>>('/api/auth/refresh-token', {
+    const response = await request<ApiResponse<RefreshTokenResponse>>('/auth/refresh-token', {
       method: 'POST',
       body: JSON.stringify({ refreshToken: token })
     })
@@ -636,7 +636,7 @@ export const verifyTwoFactor = async (verifyData: TwoFactorVerifyRequest): Promi
   try {
     console.log('验证两步验证码:', { userId: verifyData.userId, codeType: verifyData.codeType })
     
-    const response = await request<ApiResponse<TwoFactorVerifyResponse>>('/api/auth/two-factor/verify', {
+    const response = await request<ApiResponse<TwoFactorVerifyResponse>>('/auth/two-factor/verify', {
       method: 'POST',
       body: JSON.stringify(verifyData)
     })
@@ -668,7 +668,7 @@ export const getTwoFactorStatus = async (userId: number): Promise<ApiResponse<Tw
     const token = localStorage.getItem('access_token')
     console.log('当前访问令牌:', token ? token.slice(0, 20) + '...' : '未找到')
     
-    const response = await request<ApiResponse<TwoFactorStatusResponse>>(`/api/auth/two-factor/status?userId=${userId}`, {
+    const response = await request<ApiResponse<TwoFactorStatusResponse>>(`/auth/two-factor/status?userId=${userId}`, {
       method: 'GET'
     })
     
@@ -701,7 +701,7 @@ export const enableTwoFactor = async (enableData: TwoFactorEnableRequest): Promi
   try {
     console.log('启用两步验证:', enableData)
     
-    const response = await request<ApiResponse<TwoFactorEnableResponse>>('/api/auth/two-factor/enable', {
+    const response = await request<ApiResponse<TwoFactorEnableResponse>>('/auth/two-factor/enable', {
       method: 'POST',
       body: JSON.stringify(enableData)
     })
@@ -729,7 +729,7 @@ export const disableTwoFactor = async (method: string): Promise<ApiResponse<{ di
   try {
     console.log('禁用两步验证:', method)
     
-    const response = await request<ApiResponse<{ disabled: boolean; method: string }>>('/api/auth/two-factor/disable', {
+    const response = await request<ApiResponse<{ disabled: boolean; method: string }>>('/auth/two-factor/disable', {
       method: 'POST',
       body: JSON.stringify({ method })
     })
@@ -757,7 +757,7 @@ export const generateTwoFactorCode = async (generateData: TwoFactorCodeGenerateR
   try {
     console.log('生成两步验证验证码:', generateData)
     
-    const response = await request<ApiResponse<TwoFactorCodeGenerateResponse>>('/api/auth/two-factor/generate', {
+    const response = await request<ApiResponse<TwoFactorCodeGenerateResponse>>('/auth/two-factor/generate', {
       method: 'POST',
       body: JSON.stringify(generateData)
     })
