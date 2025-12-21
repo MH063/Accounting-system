@@ -84,7 +84,7 @@
                   style="width: 100%"
                   filterable
                 >
-                  <el-optgroup 
+                  <ElOptionGroup 
                     v-for="group in expenseCategories" 
                     :key="group.label"
                     :label="group.label"
@@ -95,7 +95,7 @@
                       :label="option.label" 
                       :value="option.value" 
                     />
-                  </el-optgroup>
+                  </ElOptionGroup>
                 </el-select>
               </el-form-item>
             </el-col>
@@ -537,10 +537,15 @@ import {
   ArrowLeft, Plus, Document, User, UserFilled, Paperclip, DocumentChecked,
   Check, DocumentCopy, TrendCharts, Search, CircleCheck, Select, Refresh
 } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElOptionGroup, ElOption, ElSelect } from 'element-plus'
 import type { FormInstance, FormRules, UploadUserFile } from 'element-plus'
 import * as userService from '@/services/userService'
 import * as expenseService from '@/services/expenseService'
+
+// 显式声明使用的 Element Plus 组件
+const components = {
+  ElOptionGroup
+}
 
 // 组件挂载时初始化数据
 onMounted(async () => {
@@ -626,9 +631,20 @@ const allMembers = ref<Member[]>([])
 // 加载成员列表
 const loadMembers = async () => {
   try {
-    const response = await userService.getMembers()
+    // 使用 getUserList 替代 getMembers，因为 userService 中没有 getMembers 方法
+    const response = await userService.getUserList()
     if (response.success) {
-      allMembers.value = response.data
+      // 转换为 Member 类型
+      // 处理双层嵌套的数据结构：response.data.data.records
+      const userData = response.data.data || response.data;
+      allMembers.value = (userData.records || []).map((user: any) => ({
+        id: parseInt(user.id),
+        name: user.name,
+        room: '101', // 默认房间号，实际应从用户信息中获取
+        avatar: user.avatar || '',
+        role: user.role || 'member',
+        status: 'online'
+      }))
     } else {
       throw new Error(response.message || '获取成员列表失败')
     }

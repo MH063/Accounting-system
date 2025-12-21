@@ -2,7 +2,7 @@
  * 支出服务 - 提供支出相关的API调用
  */
 
-import { request } from '@/utils/request'
+import request from '@/utils/request'
 import type { ApiResponse, ExpenseItem } from '@/types'
 
 // 支出统计相关接口
@@ -81,6 +81,24 @@ export interface ExpenseFilter {
   keyword?: string
   page?: number
   pageSize?: number
+}
+
+// 支付相关接口
+export interface PaymentQRCode {
+  id: number
+  platform: string
+  qrCodeUrl: string
+  status: string
+  isUserUploaded: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ConfirmPaymentRequest {
+  expenseId: number
+  paymentMethod: string
+  amount: number
+  transactionId?: string
 }
 
 /**
@@ -234,6 +252,26 @@ export const getExpenseList = async (params?: { [key: string]: any }): Promise<A
   try {
     const queryString = params ? `?${new URLSearchParams(params as any).toString()}` : '';
     const response = await request.get<ApiResponse<ExpenseItem[]>>(`/expenses${queryString}`);
+    // 确保返回的数据结构符合预期
+    if (response.success && response.data) {
+      // 处理后端返回的双层嵌套结构，可能是 { data: { items: [...] } } 或 { data: { data: [...] } } 或 { data: [...] }
+      if (response.data.items) {
+        // 如果是 { data: { items: [...] } } 格式，提取 items 作为 data
+        return {
+          ...response,
+          data: response.data.items
+        };
+      } else if (Array.isArray(response.data)) {
+        // 如果直接是数组，保持原样
+        return response;
+      } else if (response.data.data) {
+        // 兼容 { data: { data: [...] } } 格式
+        return {
+          ...response,
+          data: response.data.data
+        };
+      }
+    }
     return response;
   } catch (error) {
     console.error('获取支出列表失败:', error);
@@ -241,6 +279,155 @@ export const getExpenseList = async (params?: { [key: string]: any }): Promise<A
       success: false,
       data: [],
       message: '获取支出列表失败'
+    };
+  }
+}
+
+/**
+ * 批量审核通过费用
+ */
+export const batchApproveExpenses = async (ids: number[]): Promise<ApiResponse<any>> => {
+  try {
+    const response = await request.put<ApiResponse<any>>('/expenses/batch/approve', { ids });
+    return response;
+  } catch (error) {
+    console.error('批量审核通过失败:', error);
+    return {
+      success: false,
+      data: null,
+      message: '批量审核通过失败'
+    };
+  }
+}
+
+/**
+ * 批量拒绝费用
+ */
+export const batchRejectExpenses = async (ids: number[], comment?: string): Promise<ApiResponse<any>> => {
+  try {
+    const response = await request.put<ApiResponse<any>>('/expenses/batch/reject', { ids, comment });
+    return response;
+  } catch (error) {
+    console.error('批量拒绝失败:', error);
+    return {
+      success: false,
+      data: null,
+      message: '批量拒绝失败'
+    };
+  }
+}
+
+/**
+ * 批量删除费用
+ */
+export const batchDeleteExpenses = async (ids: number[]): Promise<ApiResponse<any>> => {
+  try {
+    const response = await request.del<ApiResponse<any>>('/expenses/batch', { data: { ids } });
+    return response;
+  } catch (error) {
+    console.error('批量删除失败:', error);
+    return {
+      success: false,
+      data: null,
+      message: '批量删除失败'
+    };
+  }
+}
+
+/**
+ * 导出费用数据
+ */
+export const exportExpenses = async (params?: { [key: string]: any }): Promise<ApiResponse<any>> => {
+  try {
+    const queryString = params ? `?${new URLSearchParams(params as any).toString()}` : '';
+    const response = await request.get<ApiResponse<any>>(`/expenses/export${queryString}`);
+    return response;
+  } catch (error) {
+    console.error('导出费用数据失败:', error);
+    return {
+      success: false,
+      data: null,
+      message: '导出费用数据失败'
+    };
+  }
+}
+
+/**
+ * 获取收款码列表
+ */
+export const getQRCodes = async (params?: { [key: string]: any }): Promise<ApiResponse<PaymentQRCode[]>> => {
+  try {
+    const queryString = params ? `?${new URLSearchParams(params as any).toString()}` : '';
+    const response = await request.get<ApiResponse<PaymentQRCode[]>>(`/payment/qrcodes${queryString}`);
+    // 确保返回的数据结构符合预期
+    if (response.success && response.data && response.data.data) {
+      return {
+        ...response,
+        data: response.data.data
+      };
+    }
+    return response;
+  } catch (error) {
+    console.error('获取收款码失败:', error);
+    return {
+      success: false,
+      data: [],
+      message: '获取收款码失败'
+    };
+  }
+}
+
+/**
+ * 确认支付
+ */
+export const confirmPayment = async (data: ConfirmPaymentRequest): Promise<ApiResponse<any>> => {
+  try {
+    const response = await request.post<ApiResponse<any>>('/payment/confirm', data);
+    return response;
+  } catch (error) {
+    console.error('确认支付失败:', error);
+    return {
+      success: false,
+      data: null,
+      message: '确认支付失败'
+    };
+  }
+}
+
+/**
+ * 获取待审核支出列表
+ */
+export const getPendingExpenses = async (params?: { [key: string]: any }): Promise<ApiResponse<ExpenseItem[]>> => {
+  try {
+    const queryString = params ? `?${new URLSearchParams(params as any).toString()}` : '';
+    const response = await request.get<ApiResponse<ExpenseItem[]>>(`/expenses/pending${queryString}`);
+    // 确保返回的数据结构符合预期
+    if (response.success && response.data) {
+      // 处理后端返回的双层嵌套结构，可能是 { data: { items: [...] } } 或 { data: [...] }
+      if (response.data.items) {
+        // 如果是 { data: { items: [...] } } 格式，提取 items 作为 data
+        return {
+          ...response,
+          data: response.data.items
+        };
+      } else if (Array.isArray(response.data)) {
+        // 如果直接是数组，保持原样
+        return response;
+      } else if (response.data.data) {
+        // 兼容 { data: { data: [...] } } 格式
+        return {
+          ...response,
+          data: response.data.data
+        };
+      }
+    }
+    return response;
+  } catch (error) {
+    console.error('获取待审核支出列表失败:', error);
+    return {
+      success: false,
+      data: [],
+      message: '获取待审核支出列表失败'
     };
   }
 }
@@ -260,7 +447,14 @@ export const expenseService = {
   saveDraft,
   uploadFile,
   deleteFile,
-  getExpenseList
+  getExpenseList,
+  getPendingExpenses,
+  batchApproveExpenses,
+  batchRejectExpenses,
+  batchDeleteExpenses,
+  exportExpenses,
+  getQRCodes,
+  confirmPayment
 }
 
 export default expenseService

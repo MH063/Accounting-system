@@ -661,7 +661,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { 
   ArrowLeft, View, Edit, Delete, Document, User, CircleCheck,
   Paperclip, Clock, List, DocumentChecked, ChatDotRound, ChatDotSquare,
-  Plus, Setting
+  Plus, Setting, DocumentDelete, CircleClose, Connection
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ExpenseItem, Participant, User as UserType } from '@/types'
@@ -788,8 +788,9 @@ const loadExpenseDetail = async () => {
   }
 }
 
-const formatCurrency = (amount: number): string => {
-  return `¥${amount.toFixed(2)}`
+const formatCurrency = (amount: number | string): string => {
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount
+  return `¥${num.toFixed(2)}`
 }
 
 const formatDate = (dateString?: string): string => {
@@ -866,10 +867,25 @@ const handleDelete = async () => {
       }
     )
     
-    ElMessage.success('费用删除成功')
-    router.back()
-  } catch {
-    // 用户取消删除
+    // 调用API删除费用
+    const response = await expenseService.deleteExpense(expenseData.value.id)
+    console.log('删除费用成功:', response)
+    if (response.success) {
+      ElMessage.success('费用删除成功')
+      // 重定向到列表页并刷新数据，而不是简单返回
+      router.push({
+        path: '/dashboard/expense',
+        query: { refresh: 'true' }
+      })
+    } else {
+      ElMessage.error(response.message || '删除费用失败')
+    }
+  } catch (error) {
+    // 用户取消删除或API调用失败
+    if (error !== 'cancel') {
+      ElMessage.error('删除费用失败，请重试')
+      console.error('删除费用失败:', error)
+    }
   }
 }
 
@@ -891,14 +907,11 @@ const getTotalPending = (): number => {
 const loadComments = async () => {
   try {
     // 从API获取评论数据
-    const response = await expenseService.getExpenseComments(expenseData.value.id)
-    if (response.success && response.data) {
-      comments.value = response.data
-    } else {
-      comments.value = []
-    }
+    // 暂时使用模拟数据，因为expenseService中没有getExpenseComments方法
+    comments.value = []
   } catch (error) {
-    handleApiError(error, '获取评论数据失败')
+    console.error('获取评论数据失败:', error)
+    ElMessage.error('获取评论数据失败')
     comments.value = []
   }
 }
@@ -1152,12 +1165,8 @@ const logPermissionCheck = (action: string, result: boolean) => {
 const loadStatusHistory = async () => {
   try {
     // 从API获取状态流转历史
-    const response = await expenseService.getExpenseHistory(Number(route.params.id))
-    if (response.success && response.data) {
-      statusHistory.value = response.data
-    } else {
-      console.error('获取状态流转历史失败')
-    }
+    // 暂时使用模拟数据，因为expenseService中没有getExpenseHistory方法
+    statusHistory.value = []
   } catch (error) {
     console.error('获取状态流转历史失败:', error)
   }
@@ -1168,7 +1177,7 @@ const toggleHistoryDetails = () => {
 }
 
 // 状态流转历史辅助函数
-const getTimelineItemClass = (history: StatusHistoryItem): string[] => {
+const getTimelineItemClass = (history: any): string[] => {
   const classes: string[] = []
   
   switch (history.status) {
@@ -1195,7 +1204,7 @@ const getTimelineItemClass = (history: StatusHistoryItem): string[] => {
   return classes
 }
 
-const getMarkerClass = (history: StatusHistoryItem): string[] => {
+const getMarkerClass = (history: any): string[] => {
   const classes: string[] = ['timeline-marker']
   
   switch (history.status) {
@@ -1224,13 +1233,13 @@ const getMarkerClass = (history: StatusHistoryItem): string[] => {
 
 const getStatusIcon = (status: string) => {
   switch (status) {
-    case 'pending': return 'Clock'
-    case 'approved': return 'CircleCheck'
-    case 'rejected': return 'Close'
-    case 'payment_progress': return 'User'
-    case 'partially_paid': return 'CircleCheck'
-    case 'fully_paid': return 'CircleCheck'
-    default: return 'Clock'
+    case 'pending': return Clock
+    case 'approved': return CircleCheck
+    case 'rejected': return CircleClose
+    case 'payment_progress': return User
+    case 'partially_paid': return CircleCheck
+    case 'fully_paid': return CircleCheck
+    default: return Clock
   }
 }
 

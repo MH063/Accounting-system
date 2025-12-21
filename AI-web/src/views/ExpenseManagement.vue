@@ -673,8 +673,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { 
   Plus, Search, Refresh, Wallet, Clock, CircleCheck,
   Calendar, Money, Document, DocumentChecked, Download, View, Edit, Delete, Grid, List, User, More,
@@ -712,6 +712,7 @@ const categoryFilter = ref('')
 const monthFilter = ref('')
 const currentPage = ref(1)
 const pageSize = ref(5)
+const route = useRoute()
 
 // 支付相关状态
 const showPaymentDialog = ref(false)
@@ -733,14 +734,20 @@ const expenses = ref<Expense[]>([])
 const totalExpense = computed(() => {
   return expenses.value
     .filter(e => e.status === 'approved')
-    .reduce((sum, e) => sum + e.amount, 0)
+    .reduce((sum, e) => {
+      const amount = typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount
+      return sum + amount
+    }, 0)
 })
 
 const monthlyExpense = computed(() => {
   const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM
   return expenses.value
-    .filter(e => e.date.startsWith(currentMonth) && e.status === 'approved')
-    .reduce((sum, e) => sum + e.amount, 0)
+    .filter(e => typeof e.date === 'string' && e.date.startsWith(currentMonth) && e.status === 'approved')
+    .reduce((sum, e) => {
+      const amount = typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount
+      return sum + amount
+    }, 0)
 })
 
 const pendingCount = computed(() => {
@@ -752,7 +759,9 @@ const approvedCount = computed(() => {
 })
 
 const availableMonths = computed(() => {
-  const months = [...new Set(expenses.value.map(e => e.date.slice(0, 7)))]
+  // 过滤掉无效的日期值
+  const validExpenses = expenses.value.filter(e => typeof e.date === 'string' && e.date)
+  const months = [...new Set(validExpenses.map(e => e.date.slice(0, 7)))]
   return months.map(month => ({
     value: month,
     label: new Date(month + '-01').toLocaleDateString('zh-CN', { 
@@ -800,11 +809,14 @@ const groupedExpenses = computed(() => {
   const groups: Record<string, Expense[]> = {}
   
   filteredExpenses.value.forEach(expense => {
-    const month = expense.date.slice(0, 7) // YYYY-MM
-    if (!groups[month]) {
-      groups[month] = []
+    // 确保 date 是有效的字符串
+    if (typeof expense.date === 'string' && expense.date) {
+      const month = expense.date.slice(0, 7) // YYYY-MM
+      if (!groups[month]) {
+        groups[month] = []
+      }
+      groups[month].push(expense)
     }
-    groups[month].push(expense)
   })
   
   // 转换为数组并按月份倒序排列
@@ -815,15 +827,25 @@ const groupedExpenses = computed(() => {
         year: 'numeric', 
         month: 'long' 
       }),
-      expenses: expenses.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-      totalAmount: expenses.reduce((sum, e) => sum + e.amount, 0)
+      expenses: expenses.sort((a, b) => {
+        // 确保 createdAt 是有效的字符串
+        const dateA = typeof a.createdAt === 'string' ? new Date(a.createdAt).getTime() : 0
+        const dateB = typeof b.createdAt === 'string' ? new Date(b.createdAt).getTime() : 0
+        return dateB - dateA
+      }),
+      totalAmount: expenses.reduce((sum, e) => {
+        // 确保 amount 是有效的数字
+        const amount = typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount
+        return sum + amount
+      }, 0)
     }))
     .sort((a, b) => b.month.localeCompare(a.month))
 })
 
 // 方法
-const formatCurrency = (amount: number): string => {
-  return `¥${amount.toFixed(2)}`
+const formatCurrency = (amount: number | string): string => {
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount
+  return `¥${num.toFixed(2)}`
 }
 
 // 处理支付 - 第一步：打开支付对话框
@@ -856,6 +878,7 @@ const handleSelectPaymentMethod = async (method: string) => {
   // 获取最新的收款码数据
   try {
     const response = await expenseService.getQRCodes()
+    console.log('获取收款码数据成功:', response)
     if (response.success && response.data) {
       // 根据支付方式检查收款码状态
       const platformMap: Record<string, string> = {
@@ -913,7 +936,7 @@ const handleConfirmPayment = async () => {
         paymentMethod: selectedPaymentMethod.value,
         amount: currentExpense.value.amount
       })
-      
+      console.log('现金支付结果:', response)
       if (response.success) {
         ElMessage.success('现金支付已完成')
         handleClosePaymentDialog()
@@ -930,6 +953,7 @@ const handleConfirmPayment = async () => {
   // 其他支付方式获取收款码
   try {
     const response = await expenseService.getQRCodes()
+    console.log('获取收款码数据成功:', response)
     if (response.success && response.data) {
       // 根据支付方式筛选收款码
       const platformMap: Record<string, string> = {
@@ -1067,25 +1091,28 @@ const handleLoadMore = async () => {
   loadingMore.value = true
   try {
     // 从API获取更多费用数据
-    try {
-      const response = await expenseService.getExpenses({
-        page: currentPage.value + 1,
-        pageSize: pageSize.value,
-        search: searchQuery.value,
-        status: statusFilter.value,
-        category: categoryFilter.value,
-        month: monthFilter.value
-      })
-      
-      if (response.success && response.data) {
+    const response = await expenseService.getExpenseList({
+      page: currentPage.value + 1,
+      pageSize: pageSize.value,
+      search: searchQuery.value,
+      status: statusFilter.value,
+      category: categoryFilter.value,
+      month: monthFilter.value
+    })
+    
+    console.log('加载更多费用数据结果:', response)
+    if (response.success && response.data && response.data.items) {
+      if (response.data.items.length === 0) {
+        ElMessage.info('没有更多数据了')
+      } else {
         expenses.value.push(...response.data.items)
         currentPage.value += 1
-      } else {
-        ElMessage.info('没有更多数据了')
       }
-    } catch (error) {
-       handleApiError(error, '加载更多费用数据失败')
-     }
+    } else {
+      ElMessage.info('没有更多数据了')
+    }
+  } catch (error) {
+    handleApiError(error, '加载更多费用数据失败')
   } finally {
     loadingMore.value = false
   }
@@ -1156,6 +1183,7 @@ const handleDelete = async (row: Expense) => {
     
     // 调用API删除费用
     const response = await expenseService.deleteExpense(row.id)
+    console.log('删除费用成功:', response)
     if (response.success) {
       expenses.value = expenses.value.filter(e => e.id !== row.id)
       ElMessage.success('费用删除成功')
@@ -1283,9 +1311,18 @@ const exportExpenses = async (format: 'csv' | 'xlsx' = 'csv') => {
 const loadExpenses = async () => {
   await withLoading(async () => {
     try {
-      const response = await expenseService.getExpenseList()
+      const response = await expenseService.getExpenseList({
+        page: currentPage.value,
+        pageSize: pageSize.value,
+        search: searchQuery.value,
+        status: statusFilter.value,
+        category: categoryFilter.value,
+        month: monthFilter.value
+      })
+      console.log('获取费用数据成功:', response)
       if (response.success && response.data) {
         expenses.value = response.data
+        // 这里可以添加总页数等信息的处理
       } else {
         ElMessage.error('获取费用数据失败')
       }
@@ -1294,6 +1331,22 @@ const loadExpenses = async () => {
     }
   }, '加载费用数据...')
 }
+
+// 监听路由变化，当从详情页返回时检查是否需要刷新数据
+watch(
+  () => route.query.refresh,
+  (newValue) => {
+    if (newValue === 'true') {
+      loadExpenses()
+      // 移除URL中的refresh参数，避免刷新页面时重复加载
+      router.replace({
+        path: '/dashboard/expense',
+        query: {}
+      })
+    }
+  },
+  { immediate: true }
+)
 
 // 生命周期
 onMounted(() => {
@@ -1318,7 +1371,9 @@ const handleBatchApprove = async () => {
   
   try {
     batchProcessing.value = true
+    console.log('开始批量审核通过，ID列表:', pendingItems.map(item => item.id))
     const response = await expenseService.batchApproveExpenses(pendingItems.map(item => item.id))
+    console.log('批量审核通过结果:', response)
     if (response.success) {
       ElMessage.success(`批量审核通过 ${pendingItems.length} 条费用记录`)
       await loadExpenses()
@@ -1354,7 +1409,9 @@ const handleBatchReject = async () => {
     )
     
     batchProcessing.value = true
-    const response = await expenseService.batchRejectExpenses(pendingItems.map(item => item.id))
+    console.log('开始批量拒绝，ID列表:', pendingItems.map(item => item.id))
+    const response = await expenseService.batchRejectExpenses(pendingItems.map(item => item.id), '批量拒绝')
+    console.log('批量拒绝结果:', response)
     
     if (response.success) {
       clearSelection()
@@ -1388,7 +1445,9 @@ const handleBatchDelete = async () => {
     )
     
     batchProcessing.value = true
+    console.log('开始批量删除，ID列表:', selectedItems.value.map(item => item.id))
     const response = await expenseService.batchDeleteExpenses(selectedItems.value.map(item => item.id))
+    console.log('批量删除结果:', response)
     
     if (response.success) {
       clearSelection()

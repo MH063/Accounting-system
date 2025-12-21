@@ -209,7 +209,7 @@ const errorLeakProtection = () => {
       // 发送安全的错误响应
       res.status(err.status || 500).json({
         success: false,
-        error: sanitizedError
+        message: sanitizedError.message || '服务器内部错误'
       });
     } catch (err) {
       loggerModule.error('错误处理中间件失败:', { error: err.message });

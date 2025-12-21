@@ -1248,50 +1248,26 @@ const handleBackToExpenses = (): void => {
   router.push('/dashboard/expense')
 }
 
-// 模拟获取待审核费用数据的函数
+// 从真实API获取待审核费用数据的函数
 const getPendingExpenses = async (): Promise<{ data: ExpenseItem[] }> => {
-  // 模拟API延迟
-  await new Promise(resolve => setTimeout(resolve, 800))
-  
-  // 模拟数据 - 实际应用中应从真实API获取
-  const mockData: ExpenseItem[] = [
-    {
-      id: '1',
-      title: '会议室租赁费用',
-      category: 'accommodation',
-      amount: 1200,
-      date: '2023-06-15',
-      description: '租用公司大会议室一天用于季度会议',
-      applicant: '张三',
-      phone: '13800138000',
-      department: '技术部',
-      position: '高级工程师',
-      attachments: [],
-      status: 'pending',
-      isUrgent: true,
-      createdAt: '2023-06-10T09:30:00Z',
-      updatedAt: '2023-06-10T09:30:00Z'
-    },
-    {
-      id: '2',
-      title: '办公用品采购',
-      category: 'other',
-      amount: 350,
-      date: '2023-06-18',
-      description: '购买打印机墨盒和A4纸',
-      applicant: '李四',
-      phone: '13900139000',
-      department: '行政部',
-      position: '行政助理',
-      attachments: [],
-      status: 'pending',
-      isUrgent: false,
-      createdAt: '2023-06-12T14:20:00Z',
-      updatedAt: '2023-06-12T14:20:00Z'
+  try {
+    // 直接使用专门的getPendingExpenses方法获取待审核费用数据
+    const response = await expenseService.getPendingExpenses()
+    console.log('从API获取的待审核费用数据:', response)
+    
+    if (response.success && response.data) {
+      // 返回待审核费用数据
+      return { data: response.data }
+    } else {
+      // 如果API返回格式不符合预期，返回空数组
+      console.error('API返回格式不符合预期:', response)
+      return { data: [] }
     }
-  ]
-  
-  return { data: mockData }
+  } catch (error) {
+    console.error('获取待审核费用数据失败:', error)
+    // 发生错误时返回空数组，避免页面崩溃
+    return { data: [] }
+  }
 }
 
 const loadExpenseData = (): void => {

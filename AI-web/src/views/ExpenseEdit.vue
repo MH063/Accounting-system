@@ -356,9 +356,36 @@ const loadExpenseData = async () => {
       const expenseId = route.params.id as string
       const response = await expenseService.getExpenseById(expenseId)
       if (response.success) {
-        formData.value = response.data
+        // 转换数据类型以匹配表单组件的要求
+        const data = response.data
+        
+        // 确保 amount 是数字类型
+        let amount = data.amount
+        if (typeof amount === 'string') {
+          amount = parseFloat(amount)
+        }
+        
+        // 确保 date 是字符串或 Date 类型
+        let date = data.date
+        if (date && typeof date === 'object' && !(date instanceof Date)) {
+          // 如果是对象,尝试转换为字符串
+          date = date.toString()
+        }
+        
+        formData.value = {
+          title: data.title || '',
+          category: data.category || '',
+          amount: amount || 0,
+          date: date || '',
+          description: data.description || '',
+          applicant: data.applicant || '',
+          phone: data.phone || '',
+          department: data.department || '',
+          position: data.position || ''
+        }
+        
         fileList.value = response.data.attachments || []
-        console.log('费用数据加载成功:', response.data)
+        console.log('费用数据加载成功:', formData.value)
       } else {
         throw new Error(response.message || '获取费用详情失败')
       }

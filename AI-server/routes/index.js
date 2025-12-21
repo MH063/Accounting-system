@@ -25,6 +25,8 @@ const memberStatsRoutes = require('./memberStats');
 const memberActivitiesRoutes = require('./memberActivities');
 const membersRoutes = require('./members');
 const expenseSummaryRoutes = require('./expenseSummary');
+const expenseRoutes = require('./expenses');
+const paymentRoutes = require('./payment');
 
 module.exports = {
   authRoutes,
@@ -48,5 +50,7 @@ module.exports = {
   memberStatsRoutes,
   memberActivitiesRoutes,
   membersRoutes,
-  expenseSummaryRoutes
+  expenseSummaryRoutes,
+  expenseRoutes,
+  paymentRoutes
 };
