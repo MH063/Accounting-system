@@ -1,4 +1,4 @@
-const BaseService = require('./BaseService');
+﻿const BaseService = require('./BaseService');
 const DormRepository = require('../repositories/DormRepository');
 const logger = require('../config/logger');
 
@@ -10,23 +10,21 @@ class DormService extends BaseService {
   }
 
   /**
-   * 获取宿舍列表
-   * @param {Object} filters - 筛选条件
-   * @param {Object} pagination - 分页参数
-   * @returns {Promise<Object>} 宿舍列表结果
+   * 鑾峰彇瀹胯垗鍒楄〃
+   * @param {Object} filters - 绛涢€夋潯浠?   * @param {Object} pagination - 鍒嗛〉鍙傛暟
+   * @returns {Promise<Object>} 瀹胯垗鍒楄〃缁撴灉
    */
   async getDormList(filters = {}, pagination = {}) {
     try {
-      logger.info('[DormService] 获取宿舍列表', { filters, pagination });
+      logger.info('[DormService] 鑾峰彇瀹胯垗鍒楄〃', { filters, pagination });
       
-      // 验证分页参数
+      // 楠岃瘉鍒嗛〉鍙傛暟
       const page = Math.max(1, parseInt(pagination.page) || 1);
       const limit = Math.min(100, Math.max(1, parseInt(pagination.limit) || 10));
       
-      // 调用仓库层获取宿舍列表
-      const result = await this.dormRepository.getDormList(filters, { page, limit });
+      // 璋冪敤浠撳簱灞傝幏鍙栧鑸嶅垪琛?      const result = await this.dormRepository.getDormList(filters, { page, limit });
       
-      logger.info('[DormService] 宿舍列表获取成功', { 
+      logger.info('[DormService] 瀹胯垗鍒楄〃鑾峰彇鎴愬姛', { 
         total: result.total, 
         page: result.page, 
         limit: result.limit 
@@ -70,49 +68,48 @@ class DormService extends BaseService {
             totalPages: Math.ceil(result.total / result.limit)
           }
         },
-        message: '宿舍列表获取成功'
+        message: '瀹胯垗鍒楄〃鑾峰彇鎴愬姛'
       };
       
     } catch (error) {
-      logger.error('[DormService] 获取宿舍列表失败', { error: error.message });
+      logger.error('[DormService] 鑾峰彇瀹胯垗鍒楄〃澶辫触', { error: error.message });
       throw error;
     }
   }
 
   /**
-   * 根据ID获取宿舍详情
-   * @param {number} dormId - 宿舍ID
-   * @returns {Promise<Object>} 宿舍详情结果
+   * 鏍规嵁ID鑾峰彇瀹胯垗璇︽儏
+   * @param {number} dormId - 瀹胯垗ID
+   * @returns {Promise<Object>} 瀹胯垗璇︽儏缁撴灉
    */
   async getDormById(dormId) {
     try {
-      logger.info('[DormService] 获取宿舍详情', { dormId });
+      logger.info('[DormService] 鑾峰彇瀹胯垗璇︽儏', { dormId });
       
-      // 参数验证
+      // 鍙傛暟楠岃瘉
       if (!dormId || isNaN(dormId)) {
         return {
           success: false,
-          message: '宿舍ID无效'
+          message: '瀹胯垗ID鏃犳晥'
         };
       }
 
-      // 调用仓库层获取宿舍详情
-      const dorm = await this.dormRepository.getDormById(dormId);
+      // 璋冪敤浠撳簱灞傝幏鍙栧鑸嶈鎯?      const dorm = await this.dormRepository.getDormById(dormId);
       
       if (!dorm) {
         return {
           success: false,
-          message: '宿舍不存在'
+          message: '瀹胯垗涓嶅瓨鍦?
         };
       }
       
-      // 获取宿舍成员列表
+      // 鑾峰彇瀹胯垗鎴愬憳鍒楄〃
       const members = await this.dormRepository.getDormMembers(dormId);
       
-      // 获取宿舍费用统计
+      // 鑾峰彇瀹胯垗璐圭敤缁熻
       const expenseStats = await this.dormRepository.getDormExpenseStats(dormId);
       
-      logger.info('[DormService] 宿舍详情获取成功', { dormId });
+      logger.info('[DormService] 瀹胯垗璇︽儏鑾峰彇鎴愬姛', { dormId });
       
       return {
         success: true,
@@ -167,7 +164,7 @@ class DormService extends BaseService {
               overdueCount: parseInt(expenseStats.overdue_count) || 0
             },
             occupancyRate: dorm.capacity > 0 ? Math.round((dorm.current_occupancy / dorm.capacity) * 10000) / 100 : 0,
-            // 添加解散流程信息
+            // 娣诲姞瑙ｆ暎娴佺▼淇℃伅
             dismissalRecord: dorm.dismissal_id ? {
               id: dorm.dismissal_id,
               status: dorm.dismissal_status,
@@ -177,31 +174,29 @@ class DormService extends BaseService {
             } : null
           }
         },
-        message: '宿舍详情获取成功'
+        message: '瀹胯垗璇︽儏鑾峰彇鎴愬姛'
       };
       
     } catch (error) {
-      logger.error('[DormService] 获取宿舍详情失败', { error: error.message, dormId });
+      logger.error('[DormService] 鑾峰彇瀹胯垗璇︽儏澶辫触', { error: error.message, dormId });
       throw error;
     }
   }
 
   /**
-   * 更新宿舍成员状态
-   * @param {number} userDormId - user_dorms表的ID
-   * @param {Object} statusData - 状态数据
-   * @param {Object} currentUser - 当前用户信息
-   * @returns {Promise<Object>} 更新结果
+   * 鏇存柊瀹胯垗鎴愬憳鐘舵€?   * @param {number} userDormId - user_dorms琛ㄧ殑ID
+   * @param {Object} statusData - 鐘舵€佹暟鎹?   * @param {Object} currentUser - 褰撳墠鐢ㄦ埛淇℃伅
+   * @returns {Promise<Object>} 鏇存柊缁撴灉
    */
   async updateMemberStatus(userDormId, statusData, currentUser) {
     try {
-      logger.info('[DormService] 更新宿舍成员状态', { userDormId, statusData, currentUser });
+      logger.info('[DormService] 鏇存柊瀹胯垗鎴愬憳鐘舵€?, { userDormId, statusData, currentUser });
       
-      // 1. 参数验证
+      // 1. 鍙傛暟楠岃瘉
       if (!userDormId || isNaN(userDormId)) {
         return {
           success: false,
-          message: '用户宿舍关系ID无效'
+          message: '鐢ㄦ埛瀹胯垗鍏崇郴ID鏃犳晥'
         };
       }
       
@@ -210,38 +205,36 @@ class DormService extends BaseService {
       if (!status || !['active', 'inactive', 'pending'].includes(status)) {
         return {
           success: false,
-          message: '状态必须是active、inactive或pending之一'
+          message: '鐘舵€佸繀椤绘槸active銆乮nactive鎴杙ending涔嬩竴'
         };
       }
       
-      // 2. 验证当前用户权限
+      // 2. 楠岃瘉褰撳墠鐢ㄦ埛鏉冮檺
       const hasPermission = await this.dormRepository.validateOperatorPermissionForStatusUpdate(userDormId, currentUser.id, status);
-      logger.info('[DormService] 权限验证结果', { hasPermission, userDormId, operatorId: currentUser.id, status });
+      logger.info('[DormService] 鏉冮檺楠岃瘉缁撴灉', { hasPermission, userDormId, operatorId: currentUser.id, status });
       if (!hasPermission) {
         return {
           success: false,
-          message: '权限不足，无法更新成员状态'
+          message: '鏉冮檺涓嶈冻锛屾棤娉曟洿鏂版垚鍛樼姸鎬?
         };
       }
       
-      // 3. 获取当前的成员信息和宿舍信息
+      // 3. 鑾峰彇褰撳墠鐨勬垚鍛樹俊鎭拰瀹胯垗淇℃伅
       console.log('[DEBUG] DormService calling getUserDormById with userDormId:', userDormId);
       const currentRecord = await this.dormRepository.getUserDormById(userDormId);
       console.log('[DEBUG] DormService currentRecord:', currentRecord);
-      logger.info('[DormService] 获取当前记录', { currentRecord });
+      logger.info('[DormService] 鑾峰彇褰撳墠璁板綍', { currentRecord });
       if (!currentRecord) {
         return {
           success: false,
-          message: '用户宿舍关系记录不存在'
+          message: '鐢ㄦ埛瀹胯垗鍏崇郴璁板綍涓嶅瓨鍦?
         };
       }
       
-      // 4. 验证状态变更的合法性
-      let validationMessage = 'ok';
+      // 4. 楠岃瘉鐘舵€佸彉鏇寸殑鍚堟硶鎬?      let validationMessage = 'ok';
       if (status === 'active' && currentRecord.status === 'inactive') {
-        validationMessage = 'ok'; // 允许重新激活
-      } else if (status === 'inactive' && currentRecord.status === 'pending') {
-        validationMessage = '无法将待确认成员直接标记为搬离';
+        validationMessage = 'ok'; // 鍏佽閲嶆柊婵€娲?      } else if (status === 'inactive' && currentRecord.status === 'pending') {
+        validationMessage = '鏃犳硶灏嗗緟纭鎴愬憳鐩存帴鏍囪涓烘惉绂?;
       }
       
       if (validationMessage !== 'ok') {
@@ -251,29 +244,26 @@ class DormService extends BaseService {
         };
       }
       
-      // 5. 检查未结清费用（重要业务逻辑）
-      if (status === 'inactive') {
+      // 5. 妫€鏌ユ湭缁撴竻璐圭敤锛堥噸瑕佷笟鍔￠€昏緫锛?      if (status === 'inactive') {
         const unpaidInfo = await this.dormRepository.checkUnpaidExpenses(currentRecord.user_id, currentRecord.dorm_id);
         const pendingAmount = parseFloat(unpaidInfo.pending_amount) || 0;
         
-        // 如果有未结清费用且未指定处理方式，提示用户
-        if (pendingAmount > 0 && !handleUnpaidExpenses) {
+        // 濡傛灉鏈夋湭缁撴竻璐圭敤涓旀湭鎸囧畾澶勭悊鏂瑰紡锛屾彁绀虹敤鎴?        if (pendingAmount > 0 && !handleUnpaidExpenses) {
           return {
             success: false,
-            message: `成员有未结清费用 ${pendingAmount.toFixed(2)} 元，请指定如何处理这些费用（waive-免除、keep-保持）`
+            message: `鎴愬憳鏈夋湭缁撴竻璐圭敤 ${pendingAmount.toFixed(2)} 鍏冿紝璇锋寚瀹氬浣曞鐞嗚繖浜涜垂鐢紙waive-鍏嶉櫎銆乲eep-淇濇寔锛塦
           };
         }
       }
       
-      // 6. 记录更新前的信息用于审计
+      // 6. 璁板綍鏇存柊鍓嶇殑淇℃伅鐢ㄤ簬瀹¤
       const oldValues = {
         status: currentRecord.status,
         move_in_date: currentRecord.move_in_date,
         move_out_date: currentRecord.move_out_date
       };
       
-      // 7. 执行状态更新操作
-      const updateData = {
+      // 7. 鎵ц鐘舵€佹洿鏂版搷浣?      const updateData = {
         moveOutDate: moveOutDate,
         moveInDate: moveInDate,
         handleUnpaidExpenses: handleUnpaidExpenses
@@ -281,7 +271,7 @@ class DormService extends BaseService {
       
       const updatedRecord = await this.dormRepository.updateUserDormStatus(userDormId, status, updateData);
       
-      // 8. 记录审计日志
+      // 8. 璁板綍瀹¤鏃ュ織
       await this.dormRepository.logAuditAction({
         tableName: 'user_dorms',
         operation: 'UPDATE',
@@ -298,22 +288,22 @@ class DormService extends BaseService {
         userAgent: currentUser.userAgent
       });
       
-      // 9. 发送通知
+      // 9. 鍙戦€侀€氱煡
       if (notifyUser) {
-        let title = '状态更新通知';
-        let content = `您在宿舍"${updatedRecord.dorm_name}"的状态已变更为"${status}"`;
+        let title = '鐘舵€佹洿鏂伴€氱煡';
+        let content = `鎮ㄥ湪瀹胯垗"${updatedRecord.dorm_name}"鐨勭姸鎬佸凡鍙樻洿涓?${status}"`;
         let type = 'info';
         
         if (status === 'inactive') {
-          title = '成员搬离通知';
-          content += '，请确保已结清所有费用。';
+          title = '鎴愬憳鎼閫氱煡';
+          content += '锛岃纭繚宸茬粨娓呮墍鏈夎垂鐢ㄣ€?;
           type = 'warning';
         } else if (status === 'active' && oldValues.status === 'inactive') {
-          title = '成员激活通知';
+          title = '鎴愬憳婵€娲婚€氱煡';
         } else if (status === 'active' && oldValues.status === 'pending') {
-          title = '成员状态确认';
+          title = '鎴愬憳鐘舵€佺‘璁?;
         } else if (status === 'pending') {
-          title = '成员状态待确认';
+          title = '鎴愬憳鐘舵€佸緟纭';
         }
         
         await this.dormRepository.sendNotification({
@@ -328,14 +318,14 @@ class DormService extends BaseService {
         });
       }
       
-      logger.info('[DormService] 宿舍成员状态更新成功', { 
+      logger.info('[DormService] 瀹胯垗鎴愬憳鐘舵€佹洿鏂版垚鍔?, { 
         userDormId: updatedRecord.id, 
         userId: updatedRecord.user_id,
         dormId: updatedRecord.dorm_id,
         newStatus: updatedRecord.status 
       });
       
-      // 10. 计算费用信息
+      // 10. 璁＄畻璐圭敤淇℃伅
       const pendingAmount = parseFloat(updatedRecord.pending_amount) || 0;
       const overdueAmount = parseFloat(updatedRecord.overdue_amount) || 0;
       
@@ -372,31 +362,31 @@ class DormService extends BaseService {
             overdueAmount: overdueAmount
           }
         },
-        message: '成员状态更新成功'
+        message: '鎴愬憳鐘舵€佹洿鏂版垚鍔?
       };
       
     } catch (error) {
-      logger.error('[DormService] 更新宿舍成员状态失败', { error: error.message, userDormId, userId: currentUser?.id });
+      logger.error('[DormService] 鏇存柊瀹胯垗鎴愬憳鐘舵€佸け璐?, { error: error.message, userDormId, userId: currentUser?.id });
       throw error;
     }
   }
 
   /**
-   * 更新宿舍成员角色
-   * @param {number} userDormId - user_dorms表的ID
-   * @param {Object} roleData - 角色数据
-   * @param {Object} currentUser - 当前用户信息
-   * @returns {Promise<Object>} 更新结果
+   * 鏇存柊瀹胯垗鎴愬憳瑙掕壊
+   * @param {number} userDormId - user_dorms琛ㄧ殑ID
+   * @param {Object} roleData - 瑙掕壊鏁版嵁
+   * @param {Object} currentUser - 褰撳墠鐢ㄦ埛淇℃伅
+   * @returns {Promise<Object>} 鏇存柊缁撴灉
    */
   async updateMemberRole(userDormId, roleData, currentUser) {
     try {
-      logger.info('[DormService] 更新宿舍成员角色', { userDormId, roleData, currentUser });
+      logger.info('[DormService] 鏇存柊瀹胯垗鎴愬憳瑙掕壊', { userDormId, roleData, currentUser });
       
-      // 1. 参数验证
+      // 1. 鍙傛暟楠岃瘉
       if (!userDormId || isNaN(userDormId)) {
         return {
           success: false,
-          message: '用户宿舍关系ID无效'
+          message: '鐢ㄦ埛瀹胯垗鍏崇郴ID鏃犳晥'
         };
       }
       
@@ -405,34 +395,33 @@ class DormService extends BaseService {
       if (!memberRole || !['admin', 'member', 'viewer'].includes(memberRole)) {
         return {
           success: false,
-          message: '角色必须是admin、member或viewer之一'
+          message: '瑙掕壊蹇呴』鏄痑dmin銆乵ember鎴杤iewer涔嬩竴'
         };
       }
       
-      // 2. 验证当前用户权限
+      // 2. 楠岃瘉褰撳墠鐢ㄦ埛鏉冮檺
       const hasPermission = await this.dormRepository.validateOperatorPermission(userDormId, currentUser.id);
       if (!hasPermission) {
         return {
           success: false,
-          message: '权限不足，无法更新成员角色'
+          message: '鏉冮檺涓嶈冻锛屾棤娉曟洿鏂版垚鍛樿鑹?
         };
       }
       
-      // 3. 获取当前的成员信息和宿舍信息
+      // 3. 鑾峰彇褰撳墠鐨勬垚鍛樹俊鎭拰瀹胯垗淇℃伅
       const currentRecord = await this.dormRepository.getUserDormById(userDormId);
       if (!currentRecord) {
         return {
           success: false,
-          message: '用户宿舍关系记录不存在'
+          message: '鐢ㄦ埛瀹胯垗鍏崇郴璁板綍涓嶅瓨鍦?
         };
       }
       
-      // 4. 验证角色变更的合法性
-      // 不能将宿舍管理员（admin_id）的角色降级（如果业务逻辑不允许）
+      // 4. 楠岃瘉瑙掕壊鍙樻洿鐨勫悎娉曟€?      // 涓嶈兘灏嗗鑸嶇鐞嗗憳锛坅dmin_id锛夌殑瑙掕壊闄嶇骇锛堝鏋滀笟鍔￠€昏緫涓嶅厑璁革級
       if (currentRecord.member_role === 'admin' && 
           currentRecord.dorm_admin_id === currentRecord.user_id && 
           memberRole !== 'admin') {
-        // 检查是否是最后一个管理员
+        // 妫€鏌ユ槸鍚︽槸鏈€鍚庝竴涓鐞嗗憳
         const adminCountQuery = `
           SELECT COUNT(*) as admin_count
           FROM user_dorms
@@ -446,12 +435,12 @@ class DormService extends BaseService {
         if (adminCount <= 1) {
           return {
             success: false,
-            message: '不能移除最后一个宿舍管理员，请先指定新的管理员'
+            message: '涓嶈兘绉婚櫎鏈€鍚庝竴涓鑸嶇鐞嗗憳锛岃鍏堟寚瀹氭柊鐨勭鐞嗗憳'
           };
         }
       }
       
-      // 5. 记录更新前的信息用于审计
+      // 5. 璁板綍鏇存柊鍓嶇殑淇℃伅鐢ㄤ簬瀹¤
       const oldValues = {
         member_role: currentRecord.member_role,
         can_approve_expenses: currentRecord.can_approve_expenses,
@@ -459,10 +448,10 @@ class DormService extends BaseService {
         can_manage_facilities: currentRecord.can_manage_facilities
       };
       
-      // 6. 执行角色更新操作
+      // 6. 鎵ц瑙掕壊鏇存柊鎿嶄綔
       const updatedRecord = await this.dormRepository.updateUserDormRole(userDormId, memberRole, updatePermissions);
       
-      // 7. 记录审计日志
+      // 7. 璁板綍瀹¤鏃ュ織
       await this.dormRepository.logAuditAction({
         tableName: 'user_dorms',
         operation: 'UPDATE',
@@ -480,11 +469,11 @@ class DormService extends BaseService {
         userAgent: currentUser.userAgent
       });
       
-      // 8. 发送通知
+      // 8. 鍙戦€侀€氱煡
       if (notifyUser) {
         await this.dormRepository.sendNotification({
-          title: '角色更新通知',
-          content: `您在宿舍"${updatedRecord.dorm_name}"的角色已变更为"${memberRole}"`,
+          title: '瑙掕壊鏇存柊閫氱煡',
+          content: `鎮ㄥ湪瀹胯垗"${updatedRecord.dorm_name}"鐨勮鑹插凡鍙樻洿涓?${memberRole}"`,
           type: 'info',
           userId: updatedRecord.user_id,
           dormId: updatedRecord.dorm_id,
@@ -494,7 +483,7 @@ class DormService extends BaseService {
         });
       }
       
-      logger.info('[DormService] 宿舍成员角色更新成功', { 
+      logger.info('[DormService] 瀹胯垗鎴愬憳瑙掕壊鏇存柊鎴愬姛', { 
         userDormId: updatedRecord.id, 
         userId: updatedRecord.user_id,
         dormId: updatedRecord.dorm_id,
@@ -532,47 +521,44 @@ class DormService extends BaseService {
             dormAdminId: updatedRecord.dorm_admin_id
           }
         },
-        message: '成员角色更新成功'
+        message: '鎴愬憳瑙掕壊鏇存柊鎴愬姛'
       };
       
     } catch (error) {
-      logger.error('[DormService] 更新宿舍成员角色失败', { error: error.message, userDormId, userId: currentUser?.id });
+      logger.error('[DormService] 鏇存柊瀹胯垗鎴愬憳瑙掕壊澶辫触', { error: error.message, userDormId, userId: currentUser?.id });
       throw error;
     }
   }
 
   /**
-   * 更新宿舍信息
-   * @param {number} dormId - 宿舍ID
-   * @param {Object} dormData - 宿舍数据
-   * @param {Object} currentUser - 当前用户信息
-   * @returns {Promise<Object>} 更新结果
+   * 鏇存柊瀹胯垗淇℃伅
+   * @param {number} dormId - 瀹胯垗ID
+   * @param {Object} dormData - 瀹胯垗鏁版嵁
+   * @param {Object} currentUser - 褰撳墠鐢ㄦ埛淇℃伅
+   * @returns {Promise<Object>} 鏇存柊缁撴灉
    */
   async updateDorm(dormId, dormData, currentUser) {
     try {
-      logger.info('[DormService] 更新宿舍信息', { dormId, dormData });
+      logger.info('[DormService] 鏇存柊瀹胯垗淇℃伅', { dormId, dormData });
       
-      // 1. 参数验证
+      // 1. 鍙傛暟楠岃瘉
       if (!dormId || isNaN(dormId)) {
         return {
           success: false,
-          message: '宿舍ID无效'
+          message: '瀹胯垗ID鏃犳晥'
         };
       }
       
-      // 2. 验证当前用户权限
-      // 根据数据库的行级安全策略（RLS），只有以下用户可以更新宿舍信息：
-      // 系统管理员（system_admin角色）、普通管理员（admin角色）、该宿舍的管理员（admin_id等于当前用户ID）
-      const dormInfo = await this.dormRepository.validateDormExists(dormId);
+      // 2. 楠岃瘉褰撳墠鐢ㄦ埛鏉冮檺
+      // 鏍规嵁鏁版嵁搴撶殑琛岀骇瀹夊叏绛栫暐锛圧LS锛夛紝鍙湁浠ヤ笅鐢ㄦ埛鍙互鏇存柊瀹胯垗淇℃伅锛?      // 绯荤粺绠＄悊鍛橈紙system_admin瑙掕壊锛夈€佹櫘閫氱鐞嗗憳锛坅dmin瑙掕壊锛夈€佽瀹胯垗鐨勭鐞嗗憳锛坅dmin_id绛変簬褰撳墠鐢ㄦ埛ID锛?      const dormInfo = await this.dormRepository.validateDormExists(dormId);
       if (!dormInfo) {
         return {
           success: false,
-          message: '宿舍不存在或已被删除'
+          message: '瀹胯垗涓嶅瓨鍦ㄦ垨宸茶鍒犻櫎'
         };
       }
       
-      // 检查用户权限（系统管理员、普通管理员或宿舍管理员）
-      const userRole = currentUser.role;
+      // 妫€鏌ョ敤鎴锋潈闄愶紙绯荤粺绠＄悊鍛樸€佹櫘閫氱鐞嗗憳鎴栧鑸嶇鐞嗗憳锛?      const userRole = currentUser.role;
       const isAuthorized = userRole === 'system_admin' || 
                           userRole === 'admin' || 
                           dormInfo.admin_id === currentUser.id;
@@ -580,11 +566,11 @@ class DormService extends BaseService {
       if (!isAuthorized) {
         return {
           success: false,
-          message: '权限不足，无法更新此宿舍信息'
+          message: '鏉冮檺涓嶈冻锛屾棤娉曟洿鏂版瀹胯垗淇℃伅'
         };
       }
       
-      // 3. 数据验证
+      // 3. 鏁版嵁楠岃瘉
       const validation = this._validateUpdateDormData(dormData);
       if (!validation.isValid) {
         return {
@@ -593,58 +579,54 @@ class DormService extends BaseService {
         };
       }
       
-      // 4. 验证必填字段（如果提供）
+      // 4. 楠岃瘉蹇呭～瀛楁锛堝鏋滄彁渚涳級
       if ((dormData.dormName !== undefined && dormData.dormName === '') ||
           (dormData.address !== undefined && dormData.address === '') ||
           (dormData.capacity !== undefined && (isNaN(dormData.capacity) || dormData.capacity <= 0))) {
         return {
           success: false,
-          message: '宿舍名称、地址不能为空，容量必须是大于0的数字'
+          message: '瀹胯垗鍚嶇О銆佸湴鍧€涓嶈兘涓虹┖锛屽閲忓繀椤绘槸澶т簬0鐨勬暟瀛?
         };
       }
       
-      // 5. 验证容量约束（如果更新capacity）
-      if (dormData.capacity !== undefined) {
+      // 5. 楠岃瘉瀹归噺绾︽潫锛堝鏋滄洿鏂癱apacity锛?      if (dormData.capacity !== undefined) {
         const currentOccupancy = await this.dormRepository.getDormCurrentOccupancy(dormId);
         if (dormData.capacity < currentOccupancy) {
           return {
             success: false,
-            message: `新容量不能小于当前入住人数(${currentOccupancy})`
+            message: `鏂板閲忎笉鑳藉皬浜庡綋鍓嶅叆浣忎汉鏁?${currentOccupancy})`
           };
         }
       }
       
-      // 6. 检查管理员ID（如提供）
-      if (dormData.adminId) {
+      // 6. 妫€鏌ョ鐞嗗憳ID锛堝鎻愪緵锛?      if (dormData.adminId) {
         const isAdminValid = await this._validateAdmin(dormData.adminId);
         if (!isAdminValid) {
           return {
             success: false,
-            message: '指定的管理员不存在或状态无效'
+            message: '鎸囧畾鐨勭鐞嗗憳涓嶅瓨鍦ㄦ垨鐘舵€佹棤鏁?
           };
         }
       }
       
-      // 7. 检查宿舍编码唯一性（如提供且不同于当前编码）
+      // 7. 妫€鏌ュ鑸嶇紪鐮佸敮涓€鎬э紙濡傛彁渚涗笖涓嶅悓浜庡綋鍓嶇紪鐮侊級
       if (dormData.dormCode && dormData.dormCode !== dormInfo.dorm_code) {
         const duplicateDorm = await this.dormRepository.checkDormCodeUnique(dormData.dormCode, dormId);
         if (duplicateDorm) {
           return {
             success: false,
-            message: '宿舍编码已存在'
+            message: '瀹胯垗缂栫爜宸插瓨鍦?
           };
         }
       }
       
-      // 8. 调用仓库层更新宿舍
-      const updatedDorm = await this.dormRepository.updateDorm(dormId, dormData);
+      // 8. 璋冪敤浠撳簱灞傛洿鏂板鑸?      const updatedDorm = await this.dormRepository.updateDorm(dormId, dormData);
       
-      // 9. 如果宿舍的管理员变更，可能需要同步更新 user_dorms 表中的成员角色
-      if (dormData.adminId && dormData.adminId !== dormInfo.admin_id) {
+      // 9. 濡傛灉瀹胯垗鐨勭鐞嗗憳鍙樻洿锛屽彲鑳介渶瑕佸悓姝ユ洿鏂?user_dorms 琛ㄤ腑鐨勬垚鍛樿鑹?      if (dormData.adminId && dormData.adminId !== dormInfo.admin_id) {
         await this._adjustMemberRoles(dormId, dormInfo.admin_id, dormData.adminId);
       }
       
-      logger.info('[DormService] 宿舍信息更新成功', { 
+      logger.info('[DormService] 瀹胯垗淇℃伅鏇存柊鎴愬姛', { 
         dormId: updatedDorm.id, 
         dormName: updatedDorm.dorm_name 
       });
@@ -677,74 +659,66 @@ class DormService extends BaseService {
             updatedAt: updatedDorm.updated_at
           }
         },
-        message: '宿舍信息更新成功'
+        message: '瀹胯垗淇℃伅鏇存柊鎴愬姛'
       };
       
     } catch (error) {
-      logger.error('[DormService] 更新宿舍信息失败', { error: error.message, dormId });
+      logger.error('[DormService] 鏇存柊瀹胯垗淇℃伅澶辫触', { error: error.message, dormId });
       throw error;
     }
   }
 
   /**
-   * 验证更新宿舍数据
-   * @param {Object} dormData - 宿舍数据
-   * @returns {Object} 验证结果
+   * 楠岃瘉鏇存柊瀹胯垗鏁版嵁
+   * @param {Object} dormData - 瀹胯垗鏁版嵁
+   * @returns {Object} 楠岃瘉缁撴灉
    */
   _validateUpdateDormData(dormData) {
-    // 如果提供了宿舍名称，不能为为空
-    if (dormData.dormName !== undefined && dormData.dormName === '') {
-      return { isValid: false, message: '宿舍名称不能为空' };
+    // 濡傛灉鎻愪緵浜嗗鑸嶅悕绉帮紝涓嶈兘涓轰负绌?    if (dormData.dormName !== undefined && dormData.dormName === '') {
+      return { isValid: false, message: '瀹胯垗鍚嶇О涓嶈兘涓虹┖' };
     }
     
-    // 如果提供了宿舍编码，不能为空
+    // 濡傛灉鎻愪緵浜嗗鑸嶇紪鐮侊紝涓嶈兘涓虹┖
     if (dormData.dormCode !== undefined && dormData.dormCode === '') {
-      return { isValid: false, message: '宿舍编码不能为空' };
+      return { isValid: false, message: '瀹胯垗缂栫爜涓嶈兘涓虹┖' };
     }
     
-    // 如果提供了地址，不能为空
-    if (dormData.address !== undefined && dormData.address === '') {
-      return { isValid: false, message: '宿舍地址不能为空' };
+    // 濡傛灉鎻愪緵浜嗗湴鍧€锛屼笉鑳戒负绌?    if (dormData.address !== undefined && dormData.address === '') {
+      return { isValid: false, message: '瀹胯垗鍦板潃涓嶈兘涓虹┖' };
     }
     
-    // 如果提供了容量，必须是大于0的数字
-    if (dormData.capacity !== undefined && (isNaN(dormData.capacity) || dormData.capacity <= 0)) {
-      return { isValid: false, message: '宿舍容量必须是大于0的数字' };
+    // 濡傛灉鎻愪緵浜嗗閲忥紝蹇呴』鏄ぇ浜?鐨勬暟瀛?    if (dormData.capacity !== undefined && (isNaN(dormData.capacity) || dormData.capacity <= 0)) {
+      return { isValid: false, message: '瀹胯垗瀹归噺蹇呴』鏄ぇ浜?鐨勬暟瀛? };
     }
     
-    // 如果提供了面积，验证其有效性
-    if (dormData.area !== undefined && dormData.area !== null && (isNaN(dormData.area) || dormData.area <= 0)) {
-      return { isValid: false, message: '宿舍面积必须是大于0的数字' };
+    // 濡傛灉鎻愪緵浜嗛潰绉紝楠岃瘉鍏舵湁鏁堟€?    if (dormData.area !== undefined && dormData.area !== null && (isNaN(dormData.area) || dormData.area <= 0)) {
+      return { isValid: false, message: '瀹胯垗闈㈢Н蹇呴』鏄ぇ浜?鐨勬暟瀛? };
     }
     
-    // 如果提供了月租金，验证其有效性
-    if (dormData.monthlyRent !== undefined && dormData.monthlyRent !== null && (isNaN(dormData.monthlyRent) || dormData.monthlyRent < 0)) {
-      return { isValid: false, message: '月租金不能为负数' };
+    // 濡傛灉鎻愪緵浜嗘湀绉熼噾锛岄獙璇佸叾鏈夋晥鎬?    if (dormData.monthlyRent !== undefined && dormData.monthlyRent !== null && (isNaN(dormData.monthlyRent) || dormData.monthlyRent < 0)) {
+      return { isValid: false, message: '鏈堢閲戜笉鑳戒负璐熸暟' };
     }
     
-    // 如果提供了押金，验证其有效性
-    if (dormData.deposit !== undefined && dormData.deposit !== null && (isNaN(dormData.deposit) || dormData.deposit < 0)) {
-      return { isValid: false, message: '押金不能为负数' };
+    // 濡傛灉鎻愪緵浜嗘娂閲戯紝楠岃瘉鍏舵湁鏁堟€?    if (dormData.deposit !== undefined && dormData.deposit !== null && (isNaN(dormData.deposit) || dormData.deposit < 0)) {
+      return { isValid: false, message: '鎶奸噾涓嶈兘涓鸿礋鏁? };
     }
     
-    // 如果提供了楼层，验证其有效性
-    if (dormData.floor !== undefined && dormData.floor !== null && (isNaN(dormData.floor) || dormData.floor <= 0)) {
-      return { isValid: false, message: '楼层必须是大于0的数字' };
+    // 濡傛灉鎻愪緵浜嗘ゼ灞傦紝楠岃瘉鍏舵湁鏁堟€?    if (dormData.floor !== undefined && dormData.floor !== null && (isNaN(dormData.floor) || dormData.floor <= 0)) {
+      return { isValid: false, message: '妤煎眰蹇呴』鏄ぇ浜?鐨勬暟瀛? };
     }
     
     return { isValid: true };
   }
 
   /**
-   * 创建新宿舍
-   * @param {Object} dormData - 宿舍数据
-   * @returns {Promise<Object>} 创建结果
+   * 鍒涘缓鏂板鑸?   * @param {Object} dormData - 瀹胯垗鏁版嵁
+   * @returns {Promise<Object>} 鍒涘缓缁撴灉
    */
   async createDorm(dormData) {
     try {
-      logger.info('[DormService] 创建宿舍', { dormData });
+      logger.info('[DormService] 鍒涘缓瀹胯垗', { dormData });
       
-      // 1. 数据验证
+      // 1. 鏁版嵁楠岃瘉
       const validation = this._validateDormData(dormData);
       if (!validation.isValid) {
         return {
@@ -753,32 +727,30 @@ class DormService extends BaseService {
         };
       }
 
-      // 2. 检查管理员ID（如提供）
-      if (dormData.adminId) {
+      // 2. 妫€鏌ョ鐞嗗憳ID锛堝鎻愪緵锛?      if (dormData.adminId) {
         const isAdminValid = await this._validateAdmin(dormData.adminId);
         if (!isAdminValid) {
           return {
             success: false,
-            message: '指定的管理员不存在或状态无效'
+            message: '鎸囧畾鐨勭鐞嗗憳涓嶅瓨鍦ㄦ垨鐘舵€佹棤鏁?
           };
         }
       }
 
-      // 3. 检查宿舍编码唯一性（如提供）
+      // 3. 妫€鏌ュ鑸嶇紪鐮佸敮涓€鎬э紙濡傛彁渚涳級
       if (dormData.dormCode) {
         const isCodeUnique = await this._checkDormCodeUnique(dormData.dormCode);
         if (!isCodeUnique) {
           return {
             success: false,
-            message: '宿舍编码已存在'
+            message: '瀹胯垗缂栫爜宸插瓨鍦?
           };
         }
       }
 
-      // 4. 调用仓库层创建宿舍
-      const createdDorm = await this.dormRepository.createDorm(dormData);
+      // 4. 璋冪敤浠撳簱灞傚垱寤哄鑸?      const createdDorm = await this.dormRepository.createDorm(dormData);
       
-      logger.info('[DormService] 宿舍创建成功', { 
+      logger.info('[DormService] 瀹胯垗鍒涘缓鎴愬姛', { 
         dormId: createdDorm.id, 
         dormName: createdDorm.dorm_name 
       });
@@ -811,63 +783,59 @@ class DormService extends BaseService {
             updatedAt: createdDorm.updated_at
           }
         },
-        message: '宿舍创建成功'
+        message: '瀹胯垗鍒涘缓鎴愬姛'
       };
       
     } catch (error) {
-      logger.error('[DormService] 创建宿舍失败', { error: error.message });
+      logger.error('[DormService] 鍒涘缓瀹胯垗澶辫触', { error: error.message });
       throw error;
     }
   }
 
   /**
-   * 验证宿舍数据
-   * @param {Object} dormData - 宿舍数据
-   * @returns {Object} 验证结果
+   * 楠岃瘉瀹胯垗鏁版嵁
+   * @param {Object} dormData - 瀹胯垗鏁版嵁
+   * @returns {Object} 楠岃瘉缁撴灉
    */
   _validateDormData(dormData) {
-    // 检查必需字段
+    // 妫€鏌ュ繀闇€瀛楁
     if (!dormData.dormName) {
-      return { isValid: false, message: '宿舍名称不能为空' };
+      return { isValid: false, message: '瀹胯垗鍚嶇О涓嶈兘涓虹┖' };
     }
     
     if (!dormData.dormCode) {
-      return { isValid: false, message: '宿舍编码不能为空' };
+      return { isValid: false, message: '瀹胯垗缂栫爜涓嶈兘涓虹┖' };
     }
     
     if (!dormData.address) {
-      return { isValid: false, message: '宿舍地址不能为空' };
+      return { isValid: false, message: '瀹胯垗鍦板潃涓嶈兘涓虹┖' };
     }
     
     if (!dormData.capacity || isNaN(dormData.capacity) || dormData.capacity <= 0) {
-      return { isValid: false, message: '宿舍容量必须是大于0的数字' };
+      return { isValid: false, message: '瀹胯垗瀹归噺蹇呴』鏄ぇ浜?鐨勬暟瀛? };
     }
     
-    // 如果提供了面积，验证其有效性
-    if (dormData.area !== undefined && dormData.area !== null) {
+    // 濡傛灉鎻愪緵浜嗛潰绉紝楠岃瘉鍏舵湁鏁堟€?    if (dormData.area !== undefined && dormData.area !== null) {
       if (isNaN(dormData.area) || dormData.area <= 0) {
-        return { isValid: false, message: '宿舍面积必须是大于0的数字' };
+        return { isValid: false, message: '瀹胯垗闈㈢Н蹇呴』鏄ぇ浜?鐨勬暟瀛? };
       }
     }
     
-    // 如果提供了月租金，验证其有效性
-    if (dormData.monthlyRent !== undefined && dormData.monthlyRent !== null) {
+    // 濡傛灉鎻愪緵浜嗘湀绉熼噾锛岄獙璇佸叾鏈夋晥鎬?    if (dormData.monthlyRent !== undefined && dormData.monthlyRent !== null) {
       if (isNaN(dormData.monthlyRent) || dormData.monthlyRent < 0) {
-        return { isValid: false, message: '月租金不能为负数' };
+        return { isValid: false, message: '鏈堢閲戜笉鑳戒负璐熸暟' };
       }
     }
     
-    // 如果提供了押金，验证其有效性
-    if (dormData.deposit !== undefined && dormData.deposit !== null) {
+    // 濡傛灉鎻愪緵浜嗘娂閲戯紝楠岃瘉鍏舵湁鏁堟€?    if (dormData.deposit !== undefined && dormData.deposit !== null) {
       if (isNaN(dormData.deposit) || dormData.deposit < 0) {
-        return { isValid: false, message: '押金不能为负数' };
+        return { isValid: false, message: '鎶奸噾涓嶈兘涓鸿礋鏁? };
       }
     }
     
-    // 如果提供了楼层，验证其有效性
-    if (dormData.floor !== undefined && dormData.floor !== null) {
+    // 濡傛灉鎻愪緵浜嗘ゼ灞傦紝楠岃瘉鍏舵湁鏁堟€?    if (dormData.floor !== undefined && dormData.floor !== null) {
       if (isNaN(dormData.floor) || dormData.floor <= 0) {
-        return { isValid: false, message: '楼层必须是大于0的数字' };
+        return { isValid: false, message: '妤煎眰蹇呴』鏄ぇ浜?鐨勬暟瀛? };
       }
     }
     
@@ -875,90 +843,84 @@ class DormService extends BaseService {
   }
 
   /**
-   * 验证管理员ID
-   * @param {number} adminId - 管理员ID
-   * @returns {Promise<boolean>} 是否有效
+   * 楠岃瘉绠＄悊鍛業D
+   * @param {number} adminId - 绠＄悊鍛業D
+   * @returns {Promise<boolean>} 鏄惁鏈夋晥
    */
   async _validateAdmin(adminId) {
     try {
       const admin = await this.dormRepository.getUserById(adminId);
       return admin && admin.status === 'active';
     } catch (error) {
-      logger.error('[DormService] 验证管理员失败', { error: error.message, adminId });
+      logger.error('[DormService] 楠岃瘉绠＄悊鍛樺け璐?, { error: error.message, adminId });
       return false;
     }
   }
 
   /**
-   * 检查宿舍编码唯一性
-   * @param {string} dormCode - 宿舍编码
-   * @returns {Promise<boolean>} 是否唯一
+   * 妫€鏌ュ鑸嶇紪鐮佸敮涓€鎬?   * @param {string} dormCode - 瀹胯垗缂栫爜
+   * @returns {Promise<boolean>} 鏄惁鍞竴
    */
   async _checkDormCodeUnique(dormCode) {
     try {
       const existingDorm = await this.dormRepository.getDormByCode(dormCode);
       return !existingDorm;
     } catch (error) {
-      logger.error('[DormService] 检查宿舍编码唯一性失败', { error: error.message, dormCode });
+      logger.error('[DormService] 妫€鏌ュ鑸嶇紪鐮佸敮涓€鎬уけ璐?, { error: error.message, dormCode });
       return false;
     }
   }
 
   /**
-   * 调整宿舍成员角色（当管理员变更时）
-   * @param {number} dormId - 宿舍ID
-   * @param {number} oldAdminId - 原管理员ID
-   * @param {number} newAdminId - 新管理员ID
+   * 璋冩暣瀹胯垗鎴愬憳瑙掕壊锛堝綋绠＄悊鍛樺彉鏇存椂锛?   * @param {number} dormId - 瀹胯垗ID
+   * @param {number} oldAdminId - 鍘熺鐞嗗憳ID
+   * @param {number} newAdminId - 鏂扮鐞嗗憳ID
    * @returns {Promise<void>}
    */
   async _adjustMemberRoles(dormId, oldAdminId, newAdminId) {
     try {
-      // 将原管理员降级为普通成员
-      if (oldAdminId) {
+      // 灏嗗師绠＄悊鍛橀檷绾т负鏅€氭垚鍛?      if (oldAdminId) {
         await this.dormRepository.updateMemberRole(dormId, oldAdminId, 'member');
       }
       
-      // 将新管理员设置为admin角色
+      // 灏嗘柊绠＄悊鍛樿缃负admin瑙掕壊
       await this.dormRepository.setMemberAsAdmin(dormId, newAdminId);
       
-      logger.info('[DormService] 宿舍成员角色调整成功', { dormId, oldAdminId, newAdminId });
+      logger.info('[DormService] 瀹胯垗鎴愬憳瑙掕壊璋冩暣鎴愬姛', { dormId, oldAdminId, newAdminId });
     } catch (error) {
-      logger.error('[DormService] 调整宿舍成员角色失败', { error: error.message, dormId, oldAdminId, newAdminId });
+      logger.error('[DormService] 璋冩暣瀹胯垗鎴愬憳瑙掕壊澶辫触', { error: error.message, dormId, oldAdminId, newAdminId });
       throw error;
     }
   }
 
   /**
-   * 删除宿舍
-   * @param {number} dormId - 宿舍ID
-   * @param {Object} currentUser - 当前用户信息
-   * @returns {Promise<Object>} 删除结果
+   * 鍒犻櫎瀹胯垗
+   * @param {number} dormId - 瀹胯垗ID
+   * @param {Object} currentUser - 褰撳墠鐢ㄦ埛淇℃伅
+   * @returns {Promise<Object>} 鍒犻櫎缁撴灉
    */
   async deleteDorm(dormId, currentUser) {
     try {
-      logger.info('[DormService] 删除宿舍', { dormId, userId: currentUser.id });
+      logger.info('[DormService] 鍒犻櫎瀹胯垗', { dormId, userId: currentUser.id });
       
-      // 1. 参数验证
+      // 1. 鍙傛暟楠岃瘉
       if (!dormId || isNaN(dormId)) {
         return {
           success: false,
-          message: '宿舍ID无效'
+          message: '瀹胯垗ID鏃犳晥'
         };
       }
       
-      // 2. 验证当前用户权限
-      // 根据数据库的行级安全策略（RLS），只有以下用户可以删除宿舍：
-      // 系统管理员（system_admin角色）、普通管理员（admin角色）、该宿舍的管理员（admin_id等于当前用户ID）
-      const dormInfo = await this.dormRepository.validateDormExists(dormId);
+      // 2. 楠岃瘉褰撳墠鐢ㄦ埛鏉冮檺
+      // 鏍规嵁鏁版嵁搴撶殑琛岀骇瀹夊叏绛栫暐锛圧LS锛夛紝鍙湁浠ヤ笅鐢ㄦ埛鍙互鍒犻櫎瀹胯垗锛?      // 绯荤粺绠＄悊鍛橈紙system_admin瑙掕壊锛夈€佹櫘閫氱鐞嗗憳锛坅dmin瑙掕壊锛夈€佽瀹胯垗鐨勭鐞嗗憳锛坅dmin_id绛変簬褰撳墠鐢ㄦ埛ID锛?      const dormInfo = await this.dormRepository.validateDormExists(dormId);
       if (!dormInfo) {
         return {
           success: false,
-          message: '宿舍不存在或已被删除'
+          message: '瀹胯垗涓嶅瓨鍦ㄦ垨宸茶鍒犻櫎'
         };
       }
       
-      // 检查用户权限（系统管理员、普通管理员或宿舍管理员）
-      const userRole = currentUser.role;
+      // 妫€鏌ョ敤鎴锋潈闄愶紙绯荤粺绠＄悊鍛樸€佹櫘閫氱鐞嗗憳鎴栧鑸嶇鐞嗗憳锛?      const userRole = currentUser.role;
       const isAuthorized = userRole === 'system_admin' || 
                           userRole === 'admin' || 
                           dormInfo.admin_id === currentUser.id;
@@ -966,12 +928,11 @@ class DormService extends BaseService {
       if (!isAuthorized) {
         return {
           success: false,
-          message: '权限不足，无法删除此宿舍'
+          message: '鏉冮檺涓嶈冻锛屾棤娉曞垹闄ゆ瀹胯垗'
         };
       }
       
-      // 3. 调用仓库层删除宿舍
-      const result = await this.dormRepository.deleteDorm(dormId, currentUser.id);
+      // 3. 璋冪敤浠撳簱灞傚垹闄ゅ鑸?      const result = await this.dormRepository.deleteDorm(dormId, currentUser.id);
       
       if (!result.success) {
         return {
@@ -980,7 +941,7 @@ class DormService extends BaseService {
         };
       }
       
-      logger.info('[DormService] 宿舍删除成功', { 
+      logger.info('[DormService] 瀹胯垗鍒犻櫎鎴愬姛', { 
         dormId: result.data.id, 
         dormName: result.data.dorm_name 
       });
@@ -995,119 +956,111 @@ class DormService extends BaseService {
             updatedAt: result.data.updated_at
           }
         },
-        message: '宿舍删除成功'
+        message: '瀹胯垗鍒犻櫎鎴愬姛'
       };
       
     } catch (error) {
-      logger.error('[DormService] 删除宿舍失败', { error: error.message, dormId });
+      logger.error('[DormService] 鍒犻櫎瀹胯垗澶辫触', { error: error.message, dormId });
       throw error;
     }
   }
 
   /**
-   * 删除宿舍成员
-   * @param {number} userDormId - user_dorms表的ID
-   * @param {Object} deleteData - 删除参数
-   * @param {Object} currentUser - 当前用户信息
-   * @returns {Promise<Object>} 删除结果
+   * 鍒犻櫎瀹胯垗鎴愬憳
+   * @param {number} userDormId - user_dorms琛ㄧ殑ID
+   * @param {Object} deleteData - 鍒犻櫎鍙傛暟
+   * @param {Object} currentUser - 褰撳墠鐢ㄦ埛淇℃伅
+   * @returns {Promise<Object>} 鍒犻櫎缁撴灉
    */
   async removeMember(userDormId, deleteData, currentUser) {
     try {
-      logger.info('[DormService] 删除宿舍成员', { userDormId, deleteData, currentUser });
+      logger.info('[DormService] 鍒犻櫎瀹胯垗鎴愬憳', { userDormId, deleteData, currentUser });
       
-      // 1. 参数验证
+      // 1. 鍙傛暟楠岃瘉
       if (!userDormId || isNaN(userDormId)) {
         return {
           success: false,
-          message: '用户宿舍关系ID无效'
+          message: '鐢ㄦ埛瀹胯垗鍏崇郴ID鏃犳晥'
         };
       }
       
       const { 
-        deleteType = 'logical',  // 删除类型：'physical'（物理删除）或'logical'（逻辑删除）
-        handleUnpaidExpenses = 'waive',  // 处理未结费用：'waive'（免除）、'reallocate'（重新分摊）、'keep'（保持）
-        refundDeposit = false,  // 是否退还押金
-        newAdminId,  // 如果删除的是管理员，指定新的管理员用户ID
-        notifyUser = true  // 是否发送通知给用户
-      } = deleteData;
+        deleteType = 'logical',  // 鍒犻櫎绫诲瀷锛?physical'锛堢墿鐞嗗垹闄わ級鎴?logical'锛堥€昏緫鍒犻櫎锛?        handleUnpaidExpenses = 'waive',  // 澶勭悊鏈粨璐圭敤锛?waive'锛堝厤闄わ級銆?reallocate'锛堥噸鏂板垎鎽婏級銆?keep'锛堜繚鎸侊級
+        refundDeposit = false,  // 鏄惁閫€杩樻娂閲?        newAdminId,  // 濡傛灉鍒犻櫎鐨勬槸绠＄悊鍛橈紝鎸囧畾鏂扮殑绠＄悊鍛樼敤鎴稩D
+        notifyUser = true  // 鏄惁鍙戦€侀€氱煡缁欑敤鎴?      } = deleteData;
       
-      // 2. 验证当前用户权限
+      // 2. 楠岃瘉褰撳墠鐢ㄦ埛鏉冮檺
       const hasPermission = await this.dormRepository.validateOperatorPermission(userDormId, currentUser.id);
-      logger.info('[DormService] 权限验证结果', { hasPermission, userDormId, operatorId: currentUser.id });
+      logger.info('[DormService] 鏉冮檺楠岃瘉缁撴灉', { hasPermission, userDormId, operatorId: currentUser.id });
       if (!hasPermission) {
         return {
           success: false,
-          message: '权限不足，无法删除成员'
+          message: '鏉冮檺涓嶈冻锛屾棤娉曞垹闄ゆ垚鍛?
         };
       }
       
-      // 3. 获取当前的成员信息和宿舍信息
+      // 3. 鑾峰彇褰撳墠鐨勬垚鍛樹俊鎭拰瀹胯垗淇℃伅
       const currentRecord = await this.dormRepository.getUserDormById(userDormId);
-      logger.info('[DormService] 获取当前记录', { currentRecord });
+      logger.info('[DormService] 鑾峰彇褰撳墠璁板綍', { currentRecord });
       if (!currentRecord) {
         return {
           success: false,
-          message: '用户宿舍关系记录不存在'
+          message: '鐢ㄦ埛瀹胯垗鍏崇郴璁板綍涓嶅瓨鍦?
         };
       }
       
-      // 4. 检查未结清费用（重要业务逻辑）
-      const unpaidInfo = await this.dormRepository.checkUnpaidExpenses(currentRecord.user_id, currentRecord.dorm_id);
+      // 4. 妫€鏌ユ湭缁撴竻璐圭敤锛堥噸瑕佷笟鍔￠€昏緫锛?      const unpaidInfo = await this.dormRepository.checkUnpaidExpenses(currentRecord.user_id, currentRecord.dorm_id);
       const pendingAmount = parseFloat(unpaidInfo.pending_amount) || 0;
       
-      // 如果有未结清费用且未指定处理方式，提示用户
-      if (pendingAmount > 0 && !handleUnpaidExpenses) {
+      // 濡傛灉鏈夋湭缁撴竻璐圭敤涓旀湭鎸囧畾澶勭悊鏂瑰紡锛屾彁绀虹敤鎴?      if (pendingAmount > 0 && !handleUnpaidExpenses) {
         return {
           success: false,
-          message: `成员有未结清费用 ${pendingAmount.toFixed(2)} 元，请指定如何处理这些费用（waive-免除、keep-保持）`
+          message: `鎴愬憳鏈夋湭缁撴竻璐圭敤 ${pendingAmount.toFixed(2)} 鍏冿紝璇锋寚瀹氬浣曞鐞嗚繖浜涜垂鐢紙waive-鍏嶉櫎銆乲eep-淇濇寔锛塦
         };
       }
       
-      // 5. 检查是否是宿舍管理员（重要业务逻辑）
-      let newAdminAssigned = false;
+      // 5. 妫€鏌ユ槸鍚︽槸瀹胯垗绠＄悊鍛橈紙閲嶈涓氬姟閫昏緫锛?      let newAdminAssigned = false;
       if (currentRecord.dorm_admin_id === currentRecord.user_id) {
-        // 如果删除的是宿舍管理员，需要指定新的管理员
+        // 濡傛灉鍒犻櫎鐨勬槸瀹胯垗绠＄悊鍛橈紝闇€瑕佹寚瀹氭柊鐨勭鐞嗗憳
         if (!newAdminId) {
-          // 检查当前宿舍是否有其他成员可以成为管理员
-          const alternativeAdmin = await this.dormRepository.findAlternativeAdmin(currentRecord.dorm_id, currentRecord.user_id);
+          // 妫€鏌ュ綋鍓嶅鑸嶆槸鍚︽湁鍏朵粬鎴愬憳鍙互鎴愪负绠＄悊鍛?          const alternativeAdmin = await this.dormRepository.findAlternativeAdmin(currentRecord.dorm_id, currentRecord.user_id);
           if (alternativeAdmin) {
             newAdminId = alternativeAdmin.user_id;
           } else {
             return {
               success: false,
-              message: '删除的是宿舍管理员，但宿舍中没有其他成员可以成为新管理员'
+              message: '鍒犻櫎鐨勬槸瀹胯垗绠＄悊鍛橈紝浣嗗鑸嶄腑娌℃湁鍏朵粬鎴愬憳鍙互鎴愪负鏂扮鐞嗗憳'
             };
           }
         }
         
-        // 更新宿舍管理员
-        await this.dormRepository.updateDormAdmin(currentRecord.dorm_id, newAdminId);
+        // 鏇存柊瀹胯垗绠＄悊鍛?        await this.dormRepository.updateDormAdmin(currentRecord.dorm_id, newAdminId);
         newAdminAssigned = true;
       }
       
-      // 6. 执行删除操作
+      // 6. 鎵ц鍒犻櫎鎿嶄綔
       let deletedRecord;
       if (deleteType === 'physical') {
-        // 物理删除
+        // 鐗╃悊鍒犻櫎
         deletedRecord = await this.dormRepository.physicalDeleteMember(userDormId);
       } else {
-        // 逻辑删除（推荐）
+        // 閫昏緫鍒犻櫎锛堟帹鑽愶級
         deletedRecord = await this.dormRepository.logicalDeleteMember(userDormId, handleUnpaidExpenses);
       }
       
-      // 7. 处理宿舍管理员变更（如果需要）
+      // 7. 澶勭悊瀹胯垗绠＄悊鍛樺彉鏇达紙濡傛灉闇€瑕侊級
       if (newAdminAssigned) {
-        // 更新新管理员的角色为admin
+        // 鏇存柊鏂扮鐞嗗憳鐨勮鑹蹭负admin
         await this.dormRepository.updateMemberRole(currentRecord.dorm_id, newAdminId, 'admin');
       }
       
-      // 8. 处理费用分摊记录（逻辑删除时需要处理）
+      // 8. 澶勭悊璐圭敤鍒嗘憡璁板綍锛堥€昏緫鍒犻櫎鏃堕渶瑕佸鐞嗭級
       if (deleteType !== 'physical' && handleUnpaidExpenses === 'waive') {
-        // 标记为已免除
+        // 鏍囪涓哄凡鍏嶉櫎
         await this.dormRepository.waiveUnpaidExpenses(currentRecord.user_id, currentRecord.dorm_id);
       }
       
-      // 9. 记录审计日志
+      // 9. 璁板綍瀹¤鏃ュ織
       await this.dormRepository.logAuditAction({
         tableName: 'user_dorms',
         operation: 'DELETE',
@@ -1126,12 +1079,12 @@ class DormService extends BaseService {
         userAgent: currentUser.userAgent
       });
       
-      // 10. 发送通知
+      // 10. 鍙戦€侀€氱煡
       if (notifyUser) {
-        // 给被删除的成员发送通知
+        // 缁欒鍒犻櫎鐨勬垚鍛樺彂閫侀€氱煡
         await this.dormRepository.sendNotification({
-          title: '成员移除通知',
-          content: `您已被从宿舍"${currentRecord.dorm_name}"中移除`,
+          title: '鎴愬憳绉婚櫎閫氱煡',
+          content: `鎮ㄥ凡琚粠瀹胯垗"${currentRecord.dorm_name}"涓Щ闄,
           type: 'warning',
           userId: currentRecord.user_id,
           dormId: currentRecord.dorm_id,
@@ -1140,11 +1093,11 @@ class DormService extends BaseService {
           relatedTable: 'user_dorms'
         });
         
-        // 给宿舍管理员发送通知（如果操作人不是管理员）
+        // 缁欏鑸嶇鐞嗗憳鍙戦€侀€氱煡锛堝鏋滄搷浣滀汉涓嶆槸绠＄悊鍛橈級
         if (currentUser.id !== currentRecord.dorm_admin_id) {
           await this.dormRepository.sendNotification({
-            title: '成员移除通知',
-            content: `成员"${currentRecord.nickname || currentRecord.username}"已被从宿舍"${currentRecord.dorm_name}"中移除`,
+            title: '鎴愬憳绉婚櫎閫氱煡',
+            content: `鎴愬憳"${currentRecord.nickname || currentRecord.username}"宸茶浠庡鑸?${currentRecord.dorm_name}"涓Щ闄,
             type: 'info',
             userId: currentRecord.dorm_admin_id,
             dormId: currentRecord.dorm_id,
@@ -1155,7 +1108,7 @@ class DormService extends BaseService {
         }
       }
       
-      logger.info('[DormService] 宿舍成员删除成功', { 
+      logger.info('[DormService] 瀹胯垗鎴愬憳鍒犻櫎鎴愬姛', { 
         userDormId: deletedRecord.id, 
         userId: deletedRecord.user_id,
         dormId: deletedRecord.dorm_id
@@ -1192,37 +1145,35 @@ class DormService extends BaseService {
             dormCode: deletedRecord.dorm_code
           }
         },
-        message: '成员删除成功'
+        message: '鎴愬憳鍒犻櫎鎴愬姛'
       };
       
     } catch (error) {
-      logger.error('[DormService] 删除宿舍成员失败', { error: error.message, userDormId, userId: currentUser?.id });
+      logger.error('[DormService] 鍒犻櫎瀹胯垗鎴愬憳澶辫触', { error: error.message, userDormId, userId: currentUser?.id });
       throw error;
     }
   }
 
   /**
-   * 获取寝室设置
-   * @param {number} dormId - 宿舍ID
-   * @returns {Promise<Object>} 寝室设置结果
+   * 鑾峰彇瀵濆璁剧疆
+   * @param {number} dormId - 瀹胯垗ID
+   * @returns {Promise<Object>} 瀵濆璁剧疆缁撴灉
    */
   async getDormSettings(dormId) {
     try {
-      logger.info('[DormService] 获取寝室设置', { dormId });
+      logger.info('[DormService] 鑾峰彇瀵濆璁剧疆', { dormId });
       
-      // 1. 参数验证
+      // 1. 鍙傛暟楠岃瘉
       if (!dormId || isNaN(dormId)) {
         return {
           success: false,
-          message: '宿舍ID无效'
+          message: '瀹胯垗ID鏃犳晥'
         };
       }
       
-      // 2. 调用仓库层获取设置
-      const settings = await this.dormRepository.getDormSettings(dormId);
+      // 2. 璋冪敤浠撳簱灞傝幏鍙栬缃?      const settings = await this.dormRepository.getDormSettings(dormId);
       
-      // 3. 解析JSON字段 - 检查字段类型，只有字符串才需要解析
-      const parsedSettings = {
+      // 3. 瑙ｆ瀽JSON瀛楁 - 妫€鏌ュ瓧娈电被鍨嬶紝鍙湁瀛楃涓叉墠闇€瑕佽В鏋?      const parsedSettings = {
         ...settings,
         basic: settings.basic 
           ? (typeof settings.basic === 'string' ? JSON.parse(settings.basic) : settings.basic)
@@ -1232,45 +1183,45 @@ class DormService extends BaseService {
           : {}
       };
       
-      logger.info('[DormService] 寝室设置获取成功', { dormId });
+      logger.info('[DormService] 瀵濆璁剧疆鑾峰彇鎴愬姛', { dormId });
       
       return {
         success: true,
         data: parsedSettings,
-        message: '寝室设置获取成功'
+        message: '瀵濆璁剧疆鑾峰彇鎴愬姛'
       };
       
     } catch (error) {
-      logger.error('[DormService] 获取寝室设置失败', { error: error.message, dormId });
+      logger.error('[DormService] 鑾峰彇瀵濆璁剧疆澶辫触', { error: error.message, dormId });
       throw error;
     }
   }
 
   /**
-   * 更新寝室设置
-   * @param {number} dormId - 宿舍ID
-   * @param {Object} settings - 设置数据
-   * @param {Object} currentUser - 当前用户信息
-   * @returns {Promise<Object>} 更新结果
+   * 鏇存柊瀵濆璁剧疆
+   * @param {number} dormId - 瀹胯垗ID
+   * @param {Object} settings - 璁剧疆鏁版嵁
+   * @param {Object} currentUser - 褰撳墠鐢ㄦ埛淇℃伅
+   * @returns {Promise<Object>} 鏇存柊缁撴灉
    */
   async updateDormSettings(dormId, settings, currentUser) {
     try {
-      logger.info('[DormService] 更新寝室设置', { dormId, settings });
+      logger.info('[DormService] 鏇存柊瀵濆璁剧疆', { dormId, settings });
       
-      // 1. 参数验证
+      // 1. 鍙傛暟楠岃瘉
       if (!dormId || isNaN(dormId)) {
         return {
           success: false,
-          message: '宿舍ID无效'
+          message: '瀹胯垗ID鏃犳晥'
         };
       }
       
-      // 2. 验证当前用户权限
+      // 2. 楠岃瘉褰撳墠鐢ㄦ埛鏉冮檺
       const dormInfo = await this.dormRepository.validateDormExists(dormId);
       if (!dormInfo) {
         return {
           success: false,
-          message: '宿舍不存在或已被删除'
+          message: '瀹胯垗涓嶅瓨鍦ㄦ垨宸茶鍒犻櫎'
         };
       }
       
@@ -1282,20 +1233,19 @@ class DormService extends BaseService {
       if (!isAuthorized) {
         return {
           success: false,
-          message: '权限不足，无法更新此宿舍设置'
+          message: '鏉冮檺涓嶈冻锛屾棤娉曟洿鏂版瀹胯垗璁剧疆'
         };
       }
       
-      // 3. 调用仓库层更新设置
-      const updatedSettings = await this.dormRepository.updateDormSettings(dormId, settings);
+      // 3. 璋冪敤浠撳簱灞傛洿鏂拌缃?      const updatedSettings = await this.dormRepository.updateDormSettings(dormId, settings);
       
-      // 4. 解析JSON字段
+      // 4. 瑙ｆ瀽JSON瀛楁
       const parsedSettings = {
         ...updatedSettings,
         basic: updatedSettings.basic ? (typeof updatedSettings.basic === 'string' ? JSON.parse(updatedSettings.basic) : updatedSettings.basic) : {},
         notifications: updatedSettings.notifications ? (typeof updatedSettings.notifications === 'string' ? JSON.parse(updatedSettings.notifications) : updatedSettings.notifications) : {}
       };      
-      // 5. 记录审计日志
+      // 5. 璁板綍瀹¤鏃ュ織
       await this.dormRepository.logAuditAction({
         tableName: 'dorm_settings',
         operation: 'UPDATE',
@@ -1311,46 +1261,45 @@ class DormService extends BaseService {
         userAgent: currentUser.userAgent
       });
       
-      logger.info('[DormService] 寝室设置更新成功', { dormId });
+      logger.info('[DormService] 瀵濆璁剧疆鏇存柊鎴愬姛', { dormId });
       
       return {
         success: true,
         data: parsedSettings,
-        message: '寝室设置更新成功'
+        message: '瀵濆璁剧疆鏇存柊鎴愬姛'
       };
       
     } catch (error) {
-      logger.error('[DormService] 更新寝室设置失败', { error: error.message, dormId });
+      logger.error('[DormService] 鏇存柊瀵濆璁剧疆澶辫触', { error: error.message, dormId });
       throw error;
     }
   }
 
   /**
-   * 获取寝室变更历史
-   * @param {number} dormId - 宿舍ID
-   * @param {Object} pagination - 分页参数
-   * @returns {Promise<Object>} 变更历史结果
+   * 鑾峰彇瀵濆鍙樻洿鍘嗗彶
+   * @param {number} dormId - 瀹胯垗ID
+   * @param {Object} pagination - 鍒嗛〉鍙傛暟
+   * @returns {Promise<Object>} 鍙樻洿鍘嗗彶缁撴灉
    */
   async getDormHistory(dormId, pagination = {}) {
     try {
-      logger.info('[DormService] 获取寝室变更历史', { dormId, pagination });
+      logger.info('[DormService] 鑾峰彇瀵濆鍙樻洿鍘嗗彶', { dormId, pagination });
       
-      // 1. 参数验证
+      // 1. 鍙傛暟楠岃瘉
       if (!dormId || isNaN(dormId)) {
         return {
           success: false,
-          message: '宿舍ID无效'
+          message: '瀹胯垗ID鏃犳晥'
         };
       }
       
-      // 2. 验证分页参数
+      // 2. 楠岃瘉鍒嗛〉鍙傛暟
       const page = Math.max(1, parseInt(pagination.page) || 1);
       const limit = Math.min(100, Math.max(1, parseInt(pagination.limit) || 10));
       
-      // 3. 调用仓库层获取历史记录
-      const history = await this.dormRepository.getDormHistory(dormId, { page, limit });
+      // 3. 璋冪敤浠撳簱灞傝幏鍙栧巻鍙茶褰?      const history = await this.dormRepository.getDormHistory(dormId, { page, limit });
       
-      logger.info('[DormService] 寝室变更历史获取成功', { dormId, total: history.total });
+      logger.info('[DormService] 瀵濆鍙樻洿鍘嗗彶鑾峰彇鎴愬姛', { dormId, total: history.total });
       
       return {
         success: true,
@@ -1372,39 +1321,38 @@ class DormService extends BaseService {
             totalPages: Math.ceil(history.total / limit)
           }
         },
-        message: '寝室变更历史获取成功'
+        message: '瀵濆鍙樻洿鍘嗗彶鑾峰彇鎴愬姛'
       };
       
     } catch (error) {
-      logger.error('[DormService] 获取寝室变更历史失败', { error: error.message, dormId });
+      logger.error('[DormService] 鑾峰彇瀵濆鍙樻洿鍘嗗彶澶辫触', { error: error.message, dormId });
       throw error;
     }
   }
 
   /**
-   * 开始解散流程
-   * @param {number} dormId - 宿舍ID
-   * @param {Object} currentUser - 当前用户信息
-   * @returns {Promise<Object>} 操作结果
+   * 寮€濮嬭В鏁ｆ祦绋?   * @param {number} dormId - 瀹胯垗ID
+   * @param {Object} currentUser - 褰撳墠鐢ㄦ埛淇℃伅
+   * @returns {Promise<Object>} 鎿嶄綔缁撴灉
    */
   async startDismissProcess(dormId, currentUser) {
     try {
-      logger.info('[DormService] 开始解散流程', { dormId, userId: currentUser.id });
+      logger.info('[DormService] 寮€濮嬭В鏁ｆ祦绋?, { dormId, userId: currentUser.id });
       
-      // 1. 参数验证
+      // 1. 鍙傛暟楠岃瘉
       if (!dormId || isNaN(dormId)) {
         return {
           success: false,
-          message: '宿舍ID无效'
+          message: '瀹胯垗ID鏃犳晥'
         };
       }
       
-      // 2. 验证当前用户权限
+      // 2. 楠岃瘉褰撳墠鐢ㄦ埛鏉冮檺
       const dormInfo = await this.dormRepository.validateDormExists(dormId);
       if (!dormInfo) {
         return {
           success: false,
-          message: '宿舍不存在或已被删除'
+          message: '瀹胯垗涓嶅瓨鍦ㄦ垨宸茶鍒犻櫎'
         };
       }
       
@@ -1416,22 +1364,20 @@ class DormService extends BaseService {
       if (!isAuthorized) {
         return {
           success: false,
-          message: '权限不足，无法开始解散流程'
+          message: '鏉冮檺涓嶈冻锛屾棤娉曞紑濮嬭В鏁ｆ祦绋?
         };
       }
       
-      // 3. 检查宿舍当前状态
-      if (dormInfo.status !== 'active') {
+      // 3. 妫€鏌ュ鑸嶅綋鍓嶇姸鎬?      if (dormInfo.status !== 'active') {
         return {
           success: false,
-          message: '只有正常状态的宿舍才能开始解散流程'
+          message: '鍙湁姝ｅ父鐘舵€佺殑瀹胯垗鎵嶈兘寮€濮嬭В鏁ｆ祦绋?
         };
       }
       
-      // 4. 调用仓库层开始解散流程
-      const result = await this.dormRepository.startDismissProcess(dormId, currentUser.id);
+      // 4. 璋冪敤浠撳簱灞傚紑濮嬭В鏁ｆ祦绋?      const result = await this.dormRepository.startDismissProcess(dormId, currentUser.id);
       
-      logger.info('[DormService] 解散流程开始成功', { dormId });
+      logger.info('[DormService] 瑙ｆ暎娴佺▼寮€濮嬫垚鍔?, { dormId });
       
       return {
         success: true,
@@ -1447,42 +1393,42 @@ class DormService extends BaseService {
             createdAt: result.dismissal.created_at
           }
         },
-        message: '解散流程开始成功'
+        message: '瑙ｆ暎娴佺▼寮€濮嬫垚鍔?
       };
       
     } catch (error) {
-      logger.error('[DormService] 开始解散流程失败', { error: error.message, dormId });
+      logger.error('[DormService] 寮€濮嬭В鏁ｆ祦绋嬪け璐?, { error: error.message, dormId });
       return {
         success: false,
-        message: '开始解散流程失败: ' + error.message
+        message: '寮€濮嬭В鏁ｆ祦绋嬪け璐? ' + error.message
       };
     }
   }
 
   /**
-   * 确认解散
-   * @param {number} dormId - 宿舍ID
-   * @param {Object} currentUser - 当前用户信息
-   * @returns {Promise<Object>} 操作结果
+   * 纭瑙ｆ暎
+   * @param {number} dormId - 瀹胯垗ID
+   * @param {Object} currentUser - 褰撳墠鐢ㄦ埛淇℃伅
+   * @returns {Promise<Object>} 鎿嶄綔缁撴灉
    */
   async confirmDismiss(dormId, currentUser) {
     try {
-      logger.info('[DormService] 确认解散', { dormId, userId: currentUser.id });
+      logger.info('[DormService] 纭瑙ｆ暎', { dormId, userId: currentUser.id });
       
-      // 1. 参数验证
+      // 1. 鍙傛暟楠岃瘉
       if (!dormId || isNaN(dormId)) {
         return {
           success: false,
-          message: '宿舍ID无效'
+          message: '瀹胯垗ID鏃犳晥'
         };
       }
       
-      // 2. 验证当前用户权限
+      // 2. 楠岃瘉褰撳墠鐢ㄦ埛鏉冮檺
       const dormInfo = await this.dormRepository.validateDormExists(dormId);
       if (!dormInfo) {
         return {
           success: false,
-          message: '宿舍不存在或已被删除'
+          message: '瀹胯垗涓嶅瓨鍦ㄦ垨宸茶鍒犻櫎'
         };
       }
       
@@ -1494,22 +1440,20 @@ class DormService extends BaseService {
       if (!isAuthorized) {
         return {
           success: false,
-          message: '权限不足，无法确认解散'
+          message: '鏉冮檺涓嶈冻锛屾棤娉曠‘璁よВ鏁?
         };
       }
       
-      // 3. 检查宿舍当前状态
-      if (dormInfo.status !== 'dismissing') {
+      // 3. 妫€鏌ュ鑸嶅綋鍓嶇姸鎬?      if (dormInfo.status !== 'dismissing') {
         return {
           success: false,
-          message: '只有正在解散中的宿舍才能确认解散'
+          message: '鍙湁姝ｅ湪瑙ｆ暎涓殑瀹胯垗鎵嶈兘纭瑙ｆ暎'
         };
       }
       
-      // 4. 调用仓库层确认解散
-      const result = await this.dormRepository.confirmDismiss(dormId, currentUser.id);
+      // 4. 璋冪敤浠撳簱灞傜‘璁よВ鏁?      const result = await this.dormRepository.confirmDismiss(dormId, currentUser.id);
       
-      logger.info('[DormService] 确认解散成功', { dormId });
+      logger.info('[DormService] 纭瑙ｆ暎鎴愬姛', { dormId });
       
       return {
         success: true,
@@ -1525,42 +1469,42 @@ class DormService extends BaseService {
             completedAt: result.dismissal.completed_at
           }
         },
-        message: '确认解散成功'
+        message: '纭瑙ｆ暎鎴愬姛'
       };
       
     } catch (error) {
-      logger.error('[DormService] 确认解散失败', { error: error.message, dormId });
+      logger.error('[DormService] 纭瑙ｆ暎澶辫触', { error: error.message, dormId });
       return {
         success: false,
-        message: '确认解散失败: ' + error.message
+        message: '纭瑙ｆ暎澶辫触: ' + error.message
       };
     }
   }
 
   /**
-   * 取消解散
-   * @param {number} dormId - 宿舍ID
-   * @param {Object} currentUser - 当前用户信息
-   * @returns {Promise<Object>} 操作结果
+   * 鍙栨秷瑙ｆ暎
+   * @param {number} dormId - 瀹胯垗ID
+   * @param {Object} currentUser - 褰撳墠鐢ㄦ埛淇℃伅
+   * @returns {Promise<Object>} 鎿嶄綔缁撴灉
    */
   async cancelDismiss(dormId, currentUser) {
     try {
-      logger.info('[DormService] 取消解散', { dormId, userId: currentUser.id });
+      logger.info('[DormService] 鍙栨秷瑙ｆ暎', { dormId, userId: currentUser.id });
       
-      // 1. 参数验证
+      // 1. 鍙傛暟楠岃瘉
       if (!dormId || isNaN(dormId)) {
         return {
           success: false,
-          message: '宿舍ID无效'
+          message: '瀹胯垗ID鏃犳晥'
         };
       }
       
-      // 2. 验证当前用户权限
+      // 2. 楠岃瘉褰撳墠鐢ㄦ埛鏉冮檺
       const dormInfo = await this.dormRepository.validateDormExists(dormId);
       if (!dormInfo) {
         return {
           success: false,
-          message: '宿舍不存在或已被删除'
+          message: '瀹胯垗涓嶅瓨鍦ㄦ垨宸茶鍒犻櫎'
         };
       }
       
@@ -1572,22 +1516,20 @@ class DormService extends BaseService {
       if (!isAuthorized) {
         return {
           success: false,
-          message: '权限不足，无法取消解散'
+          message: '鏉冮檺涓嶈冻锛屾棤娉曞彇娑堣В鏁?
         };
       }
       
-      // 3. 检查宿舍当前状态
-      if (dormInfo.status !== 'dismissing') {
+      // 3. 妫€鏌ュ鑸嶅綋鍓嶇姸鎬?      if (dormInfo.status !== 'dismissing') {
         return {
           success: false,
-          message: '只有正在解散中的宿舍才能取消解散'
+          message: '鍙湁姝ｅ湪瑙ｆ暎涓殑瀹胯垗鎵嶈兘鍙栨秷瑙ｆ暎'
         };
       }
       
-      // 4. 调用仓库层取消解散
-      const result = await this.dormRepository.cancelDismiss(dormId, currentUser.id);
+      // 4. 璋冪敤浠撳簱灞傚彇娑堣В鏁?      const result = await this.dormRepository.cancelDismiss(dormId, currentUser.id);
       
-      logger.info('[DormService] 取消解散成功', { dormId });
+      logger.info('[DormService] 鍙栨秷瑙ｆ暎鎴愬姛', { dormId });
       
       return {
         success: true,
@@ -1603,39 +1545,37 @@ class DormService extends BaseService {
             cancelledAt: result.dismissal.cancelled_at
           }
         },
-        message: '取消解散成功'
+        message: '鍙栨秷瑙ｆ暎鎴愬姛'
       };
       
     } catch (error) {
-      logger.error('[DormService] 取消解散失败', { error: error.message, dormId });
+      logger.error('[DormService] 鍙栨秷瑙ｆ暎澶辫触', { error: error.message, dormId });
       return {
         success: false,
-        message: '取消解散失败: ' + error.message
+        message: '鍙栨秷瑙ｆ暎澶辫触: ' + error.message
       };
     }
   }
 
   /**
-   * 获取待结算费用
-   * @param {number} dormId - 宿舍ID
-   * @returns {Promise<Object>} 待结算费用结果
-   */
+   * 鑾峰彇寰呯粨绠楄垂鐢?   * @param {number} dormId - 瀹胯垗ID
+   * @returns {Promise<Object>} 寰呯粨绠楄垂鐢ㄧ粨鏋?   */
   async getPendingFees(dormId) {
     try {
-      logger.info('[DormService] 获取待结算费用', { dormId });
+      logger.info('[DormService] 鑾峰彇寰呯粨绠楄垂鐢?, { dormId });
       
-      // 1. 参数验证
+      // 1. 鍙傛暟楠岃瘉
       if (!dormId || isNaN(dormId)) {
         return {
           success: false,
-          message: '宿舍ID无效'
+          message: '瀹胯垗ID鏃犳晥'
         };
       }
       
-      // 2. 调用仓库层获取待结算费用
+      // 2. 璋冪敤浠撳簱灞傝幏鍙栧緟缁撶畻璐圭敤
       const pendingFees = await this.dormRepository.getPendingFees(dormId);
       
-      logger.info('[DormService] 待结算费用获取成功', { dormId, count: pendingFees.length });
+      logger.info('[DormService] 寰呯粨绠楄垂鐢ㄨ幏鍙栨垚鍔?, { dormId, count: pendingFees.length });
       
       return {
         success: true,
@@ -1647,40 +1587,39 @@ class DormService extends BaseService {
             status: fee.status
           }))
         },
-        message: '待结算费用获取成功'
+        message: '寰呯粨绠楄垂鐢ㄨ幏鍙栨垚鍔?
       };
       
     } catch (error) {
-      logger.error('[DormService] 获取待结算费用失败', { error: error.message, dormId });
+      logger.error('[DormService] 鑾峰彇寰呯粨绠楄垂鐢ㄥけ璐?, { error: error.message, dormId });
       return {
         success: false,
         data: { pendingFees: [] },
-        message: '获取待结算费用失败: ' + error.message
+        message: '鑾峰彇寰呯粨绠楄垂鐢ㄥけ璐? ' + error.message
       };
     }
   }
 
   /**
-   * 获取寝室成员列表
-   * @param {number} dormId - 宿舍ID
-   * @returns {Promise<Object>} 寝室成员列表结果
+   * 鑾峰彇瀵濆鎴愬憳鍒楄〃
+   * @param {number} dormId - 瀹胯垗ID
+   * @returns {Promise<Object>} 瀵濆鎴愬憳鍒楄〃缁撴灉
    */
   async getDormMembers(dormId) {
     try {
-      logger.info('[DormService] 获取寝室成员列表', { dormId });
+      logger.info('[DormService] 鑾峰彇瀵濆鎴愬憳鍒楄〃', { dormId });
       
-      // 1. 参数验证
+      // 1. 鍙傛暟楠岃瘉
       if (!dormId || isNaN(dormId)) {
         return {
           success: false,
-          message: '宿舍ID无效'
+          message: '瀹胯垗ID鏃犳晥'
         };
       }
       
-      // 2. 调用仓库层获取成员列表
-      const members = await this.dormRepository.getDormMembers(dormId);
+      // 2. 璋冪敤浠撳簱灞傝幏鍙栨垚鍛樺垪琛?      const members = await this.dormRepository.getDormMembers(dormId);
       
-      logger.info('[DormService] 寝室成员列表获取成功', { dormId, count: members.length });
+      logger.info('[DormService] 瀵濆鎴愬憳鍒楄〃鑾峰彇鎴愬姛', { dormId, count: members.length });
       
       return {
         success: true,
@@ -1701,133 +1640,49 @@ class DormService extends BaseService {
             lastPaymentDate: member.last_payment_date
           }))
         },
-        message: '寝室成员列表获取成功'
+        message: '瀵濆鎴愬憳鍒楄〃鑾峰彇鎴愬姛'
       };
       
     } catch (error) {
-      logger.error('[DormService] 获取寝室成员列表失败', { error: error.message, dormId });
+      logger.error('[DormService] 鑾峰彇瀵濆鎴愬憳鍒楄〃澶辫触', { error: error.message, dormId });
       return {
         success: false,
         data: { members: [] },
-        message: '获取寝室成员列表失败: ' + error.message
+        message: '鑾峰彇瀵濆鎴愬憳鍒楄〃澶辫触: ' + error.message
       };
     }
   }
 
   /**
-   * 获取待审核成员列表
-   * @param {string} room - 房间名称（可选）
-   * @returns {Promise<Object>} 待审核成员列表结果
-   */
-  async getPendingMembers(room) {
-    try {
-      logger.info('[DormService] 获取待审核成员列表', { room });
-      
-      const { query } = require('../config/database');
-      
-      // 构建查询SQL
-      let sql = `
-        SELECT 
-          ud.id,
-          ud.user_id,
-          ud.dorm_id,
-          u.username,
-          u.nickname,
-          u.email,
-          u.phone,
-          u.avatar_url,
-          ud.member_role,
-          ud.status,
-          ud.bed_number,
-          ud.room_number,
-          ud.monthly_share,
-          ud.joined_at,
-          d.dorm_name,
-          d.dorm_code
-        FROM user_dorms ud
-        LEFT JOIN users u ON ud.user_id = u.id
-        LEFT JOIN dorms d ON ud.dorm_id = d.id
-        WHERE ud.status = 'pending'
-      `;
-      
-      const params = [];
-      
-      // 如果提供了房间名称，添加过滤条件
-      if (room) {
-        sql += ` AND d.dorm_name LIKE $1`;
-        params.push(`%${room}%`);
-      }
-      
-      sql += ` ORDER BY ud.joined_at DESC`;
-      
-      const result = await query(sql, params);
-      
-      const members = result.rows.map(row => ({
-        id: row.id,
-        userId: row.user_id,
-        dormId: row.dorm_id,
-        username: row.username,
-        nickname: row.nickname,
-        email: row.email,
-        phone: row.phone,
-        avatarUrl: row.avatar_url,
-        memberRole: row.member_role,
-        status: row.status,
-        bedNumber: row.bed_number,
-        roomNumber: row.room_number,
-        monthlyShare: parseFloat(row.monthly_share) || 0,
-        joinedAt: row.joined_at,
-        dormName: row.dorm_name,
-        dormCode: row.dorm_code
-      }));
-      
-      logger.info('[DormService] 待审核成员列表获取成功', { count: members.length });
-      
-      return {
-        success: true,
-        data: {
-          members: members
-        },
-        message: '待审核成员列表获取成功'
-      };
-      
-    } catch (error) {
-      logger.error('[DormService] 获取待审核成员列表失败', { error: error.message, room });
-      throw error;
-    }
-  }
-
-  /**
-   * 获取用户所在的寝室信息
-   * @param {number} userId - 用户ID
-   * @returns {Promise<Object>} 用户所在的寝室信息结果
+   * 鑾峰彇鐢ㄦ埛鎵€鍦ㄧ殑瀵濆淇℃伅
+   * @param {number} userId - 鐢ㄦ埛ID
+   * @returns {Promise<Object>} 鐢ㄦ埛鎵€鍦ㄧ殑瀵濆淇℃伅缁撴灉
    */
   async getCurrentUserDorm(userId) {
     try {
-      logger.info('[DormService] 获取用户所在的寝室信息', { userId });
+      logger.info('[DormService] 鑾峰彇鐢ㄦ埛鎵€鍦ㄧ殑瀵濆淇℃伅', { userId });
       
-      // 参数验证
+      // 鍙傛暟楠岃瘉
       if (!userId || isNaN(userId)) {
         return {
           success: false,
-          message: '用户ID无效'
+          message: '鐢ㄦ埛ID鏃犳晥'
         };
       }
       
-      // 调用仓库层获取用户所在的寝室信息
+      // 璋冪敤浠撳簱灞傝幏鍙栫敤鎴锋墍鍦ㄧ殑瀵濆淇℃伅
       const dormInfo = await this.dormRepository.getDormByUserId(userId);
       
       if (!dormInfo) {
         return {
           success: false,
-          message: '用户未加入任何寝室'
+          message: '鐢ㄦ埛鏈姞鍏ヤ换浣曞瘽瀹?
         };
       }
       
-      logger.info('[DormService] 用户所在的寝室信息获取成功', { userId, dormId: dormInfo.id });
+      logger.info('[DormService] 鐢ㄦ埛鎵€鍦ㄧ殑瀵濆淇℃伅鑾峰彇鎴愬姛', { userId, dormId: dormInfo.id });
       
-      // 格式化返回数据
-      const formattedDormInfo = {
+      // 鏍煎紡鍖栬繑鍥炴暟鎹?      const formattedDormInfo = {
         id: dormInfo.id,
         dormName: dormInfo.dorm_name,
         dormCode: dormInfo.dorm_code,
@@ -1869,14 +1724,14 @@ class DormService extends BaseService {
       return {
         success: true,
         data: { dorm: formattedDormInfo },
-        message: '用户所在的寝室信息获取成功'
+        message: '鐢ㄦ埛鎵€鍦ㄧ殑瀵濆淇℃伅鑾峰彇鎴愬姛'
       };
       
     } catch (error) {
-      logger.error('[DormService] 获取用户所在的寝室信息失败', { error: error.message, userId });
+      logger.error('[DormService] 鑾峰彇鐢ㄦ埛鎵€鍦ㄧ殑瀵濆淇℃伅澶辫触', { error: error.message, userId });
       return {
         success: false,
-        message: '获取用户所在的寝室信息失败: ' + error.message
+        message: '鑾峰彇鐢ㄦ埛鎵€鍦ㄧ殑瀵濆淇℃伅澶辫触: ' + error.message
       };
     }
   }

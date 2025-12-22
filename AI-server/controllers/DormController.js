@@ -811,6 +811,48 @@ class DormController extends BaseController {
   }
 
   /**
+   * 获取待审核成员列表
+   * GET /api/dorms/members/pending
+   */
+  async getPendingMembers(req, res) {
+    try {
+      // 记录获取待审核成员列表尝试
+      logger.audit(req, '获取待审核成员列表', { 
+        timestamp: new Date().toISOString(),
+        ip: req.ip,
+        query: req.query
+      });
+
+      // 获取查询参数
+      const { room } = req.query;
+
+      // 调用服务层获取待审核成员列表
+      const result = await this.dormService.getPendingMembers(room);
+      
+      if (!result.success) {
+        logger.error('[DormController] 获取待审核成员列表失败', { 
+          reason: result.message
+        });
+        return this.sendError(res, result.message, 400);
+      }
+
+      const { members } = result.data;
+
+      logger.audit(req, '获取待审核成员列表成功', { 
+        timestamp: new Date().toISOString(),
+        count: members.length
+      });
+
+      // 返回成功响应
+      return this.sendSuccess(res, { members }, '待审核成员列表获取成功');
+
+    } catch (error) {
+      logger.error('[DormController] 获取待审核成员列表异常', { error: error.message });
+      throw error;
+    }
+  }
+
+  /**
    * 获取用户所在的寝室信息
    * GET /api/dorms/users/:userId
    */

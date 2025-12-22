@@ -27,6 +27,7 @@ const membersRoutes = require('./members');
 const expenseSummaryRoutes = require('./expenseSummary');
 const expenseRoutes = require('./expenses');
 const paymentRoutes = require('./payment');
+const qrCodesRoutes = require('./qrCodes');
 
 module.exports = {
   authRoutes,
@@ -52,5 +53,6 @@ module.exports = {
   membersRoutes,
   expenseSummaryRoutes,
   expenseRoutes,
-  paymentRoutes
+  paymentRoutes,
+  qrCodesRoutes
 };

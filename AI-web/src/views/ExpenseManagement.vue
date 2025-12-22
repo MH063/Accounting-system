@@ -1101,11 +1101,18 @@ const handleLoadMore = async () => {
     })
     
     console.log('加载更多费用数据结果:', response)
-    if (response.success && response.data && response.data.items) {
-      if (response.data.items.length === 0) {
+    if (response.success && response.data) {
+      // 处理后端返回的数据结构 { data: { items: [...], total: 3 } }
+      const items = response.data.items && Array.isArray(response.data.items) 
+        ? response.data.items 
+        : Array.isArray(response.data) 
+          ? response.data 
+          : []
+      
+      if (items.length === 0) {
         ElMessage.info('没有更多数据了')
       } else {
-        expenses.value.push(...response.data.items)
+        expenses.value.push(...items)
         currentPage.value += 1
       }
     } else {
@@ -1321,7 +1328,14 @@ const loadExpenses = async () => {
       })
       console.log('获取费用数据成功:', response)
       if (response.success && response.data) {
-        expenses.value = response.data
+        // 处理后端返回的数据结构 { data: { items: [...], total: 3 } }
+        if (response.data.items && Array.isArray(response.data.items)) {
+          expenses.value = response.data.items
+        } else if (Array.isArray(response.data)) {
+          expenses.value = response.data
+        } else {
+          expenses.value = []
+        }
         // 这里可以添加总页数等信息的处理
       } else {
         ElMessage.error('获取费用数据失败')

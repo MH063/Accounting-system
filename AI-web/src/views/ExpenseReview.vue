@@ -122,7 +122,7 @@
                   v-if="selectedTotalAmount > 0"
                   style="margin-left: 12px"
                 >
-                  选中总金额：¥{{ (selectedTotalAmount || 0).toFixed(2) }}
+                  选中总金额：{{ formatCurrency(selectedTotalAmount || 0) }}
                 </el-tag>
               </div>
             </div>
@@ -170,7 +170,7 @@
           <el-table-column label="费用金额" width="120" align="center">
             <template #default="{ row }">
               <div class="amount-cell">
-                <span class="amount-value-list">¥{{ (row.amount || 0).toFixed(2) }}</span>
+                <span class="amount-value-list">{{ formatCurrency(row.amount || 0) }}</span>
               </div>
             </template>
           </el-table-column>
@@ -1211,11 +1211,17 @@ const filteredPendingExpenses = computed(() => {
 })
 
 const pendingTotalAmount = computed(() => {
-  return filteredPendingExpenses.value.reduce((total, expense) => total + expense.amount, 0)
+  return filteredPendingExpenses.value.reduce((total, expense) => {
+    const amount = typeof expense.amount === 'string' ? parseFloat(expense.amount) : expense.amount
+    return total + (isNaN(amount) ? 0 : amount)
+  }, 0)
 })
 
 const selectedTotalAmount = computed(() => {
-  return selectedExpenses.value.reduce((total, expense) => total + expense.amount, 0)
+  return selectedExpenses.value.reduce((total, expense) => {
+    const amount = typeof expense.amount === 'string' ? parseFloat(expense.amount) : expense.amount
+    return total + (isNaN(amount) ? 0 : amount)
+  }, 0)
 })
 
 const urgentCount = computed(() => {
@@ -1875,8 +1881,24 @@ const getHistoryItemClass = (history: ReviewHistoryItem): string => {
 }
 
 // 工具方法
-const formatCurrency = (amount: number): string => {
-  return `¥${(amount || 0).toFixed(2)}`
+const formatCurrency = (amount: number | string | undefined): string => {
+  // 处理可能不是数字的值
+  let num: number;
+  
+  if (typeof amount === 'number') {
+    num = amount;
+  } else if (typeof amount === 'string') {
+    num = parseFloat(amount);
+  } else {
+    num = 0;
+  }
+  
+  // 如果转换失败或结果不是有限数字，返回默认值
+  if (isNaN(num) || !isFinite(num)) {
+    num = 0;
+  }
+  
+  return `¥${num.toFixed(2)}`
 }
 
 const formatDate = (dateString?: string): string => {
@@ -2023,12 +2045,12 @@ const handleApprove = async (): Promise<void> => {
     submitting.value = true
     
     // 调用真实API接口提交审核结果
-    await submitExpenseReview({
-      expenseId: selectedExpense.value?.id,
-      status: 'approved',
-      comment: reviewForm.value.comment,
-      suggestion: reviewForm.value.suggestion
-    })
+    if (selectedExpense.value) {
+      await expenseService.reviewExpense(selectedExpense.value.id, {
+        status: 'approved',
+        comment: reviewForm.value.comment
+      })
+    }
     
     ElMessage.success('费用申请已通过审核')
     router.push('/dashboard/bills')
@@ -2056,12 +2078,12 @@ const handleReject = async (): Promise<void> => {
     submitting.value = true
     
     // 调用真实API接口提交审核结果
-    await submitExpenseReview({
-      expenseId: selectedExpense.value?.id,
-      status: 'rejected',
-      comment: reviewForm.value.comment,
-      suggestion: reviewForm.value.suggestion
-    })
+    if (selectedExpense.value) {
+      await expenseService.reviewExpense(selectedExpense.value.id, {
+        status: 'rejected',
+        comment: reviewForm.value.comment
+      })
+    }
     
     ElMessage.success('费用申请已拒绝')
     router.push('/dashboard/bills')
@@ -2157,11 +2179,9 @@ const submitQuickApproval = async (): Promise<void> => {
   
   try {
     // 调用真实API接口提交审核结果
-    await submitExpenseReview({
-      expenseId: selectedExpense.value.id,
+    await expenseService.reviewExpense(selectedExpense.value.id, {
       status: reviewForm.value.status,
-      comment: reviewForm.value.comment,
-      suggestion: reviewForm.value.suggestion
+      comment: reviewForm.value.comment
     })
     
     // 更新本地数据状态

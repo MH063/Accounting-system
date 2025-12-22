@@ -263,8 +263,16 @@ const payExpense = () => {
   ElMessage.info('跳转到支付页面')
 }
 
-const formatCurrency = (amount: number): string => {
-  return amount.toFixed(2)
+const formatCurrency = (amount: number | string): string => {
+  // 处理可能不是数字的值
+  const num = typeof amount === 'number' ? amount : parseFloat(amount)
+  
+  // 如果转换失败，返回默认值
+  if (isNaN(num)) {
+    return '0.00'
+  }
+  
+  return num.toFixed(2)
 }
 
 const formatDate = (dateString: string): string => {

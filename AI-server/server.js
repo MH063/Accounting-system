@@ -206,6 +206,9 @@ app.use('/api/expenses', require('./routes/expenses'));
 // 支付相关路由
 app.use('/api/payment', require('./routes/payment'));
 
+// 收款码相关路由
+app.use('/api/qr-codes', require('./routes/qrCodes'));
+
 // 服务器端口
 // 优先使用环境变量PORT（例如在Zeabur等平台上通常为3000）
 // 本地开发默认使用4000端口，以匹配测试脚本和文档

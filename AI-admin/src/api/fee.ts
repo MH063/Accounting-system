@@ -51,7 +51,11 @@ export const feeApi = {
   
   // 获取缴费历史
   getPaymentHistory: (feeId: number) => 
-    api.get(`/fee-records/${feeId}/payment-history`)
+    api.get(`/fee-records/${feeId}/payment-history`),
+  
+  // 获取待审核费用列表
+  getPendingExpenses: (params?: any) => 
+    api.get('/expenses/pending', { params })
 }
 
 /**

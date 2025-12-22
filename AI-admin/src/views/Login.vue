@@ -108,8 +108,8 @@ const handleLogin = async () => {
         console.log('管理员登录接口响应:', response)
         
         // 检查响应数据结构
-        if (response.data && response.data.success) {
-          const adminData = response.data.data
+        if (response && response.user && response.tokens) {
+          const adminData = response
           
           // 构建管理员用户数据
           const userData = {
@@ -120,8 +120,8 @@ const handleLogin = async () => {
             avatar: adminData.avatar || '',
             email: adminData.email || `${loginForm.username}@example.com`,
             loginTime: Date.now(),
-            token: adminData.token,
-            refreshToken: adminData.refreshToken
+            token: adminData.tokens.accessToken,
+            refreshToken: adminData.tokens.refreshToken
           }
           
           console.log('管理员登录成功，用户数据:', userData)
@@ -141,7 +141,7 @@ const handleLogin = async () => {
           // 跳转到首页
           router.push('/')
         } else {
-          throw new Error(response.data?.message || '登录失败')
+          throw new Error(response?.message || '登录失败')
         }
       } catch (error: any) {
         console.error('管理员登录失败:', error)

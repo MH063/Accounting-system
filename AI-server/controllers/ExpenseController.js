@@ -22,7 +22,7 @@ class ExpenseController extends BaseController {
       let whereConditions = `
         LEFT JOIN expense_categories ec ON e.category_id = ec.id
         LEFT JOIN users applicant ON e.applicant_id = applicant.id
-        LEFT JOIN users reviewer ON e.approved_by = reviewer.id
+        LEFT JOIN users reviewer_user ON e.approved_by = reviewer_user.id
       `;
       let params = [];
       let paramIndex = 1;
@@ -64,7 +64,7 @@ class ExpenseController extends BaseController {
         SELECT 
           e.id, e.title, e.description, e.amount, ec.category_name as category, 
           applicant.nickname as applicant, e.expense_date as date, e.status,
-          reviewer.nickname as reviewer, e.approved_at as reviewDate, e.review_comment as reviewComment,
+          reviewer_user.nickname as reviewer, e.approved_at as reviewDate, e.review_comment as reviewComment,
           e.created_at as createdAt
         FROM expenses e${whereConditions}
         ORDER BY e.created_at DESC
@@ -74,11 +74,19 @@ class ExpenseController extends BaseController {
       
       const listResult = await query(listSql, params);
       
+      // 处理日期字段，确保它们被正确序列化为字符串
+      const processedRows = listResult.rows.map(row => ({
+        ...row,
+        date: row.date ? (typeof row.date === 'object' && row.date.toISOString ? row.date.toISOString().split('T')[0] : row.date.toString()) : null,
+        reviewDate: row.reviewDate ? (typeof row.reviewDate === 'object' && row.reviewDate.toISOString ? row.reviewDate.toISOString() : row.reviewDate.toString()) : null,
+        createdAt: row.createdAt ? (typeof row.createdAt === 'object' && row.createdAt.toISOString ? row.createdAt.toISOString() : row.createdAt.toString()) : null
+      }));
+      
       // 返回结果
       return res.json({
         success: true,
         data: {
-          items: listResult.rows,
+          items: processedRows,
           total
         }
       });
@@ -100,12 +108,12 @@ class ExpenseController extends BaseController {
         SELECT 
           e.id, e.title, e.description, e.amount, ec.category_name as category, 
           applicant.nickname as applicant, e.expense_date as date, e.status,
-          reviewer.nickname as reviewer, e.approved_at as reviewDate, e.review_comment as reviewComment,
+          reviewer_user.nickname as reviewer, e.approved_at as reviewDate, e.review_comment as reviewComment,
           e.created_at as createdAt
         FROM expenses e
         LEFT JOIN expense_categories ec ON e.category_id = ec.id
         LEFT JOIN users applicant ON e.applicant_id = applicant.id
-        LEFT JOIN users reviewer ON e.approved_by = reviewer.id
+        LEFT JOIN users reviewer_user ON e.approved_by = reviewer_user.id
         WHERE e.id = $1
       `;
       
@@ -118,9 +126,18 @@ class ExpenseController extends BaseController {
         });
       }
       
+      // 处理日期字段，确保它们被正确序列化为字符串
+      const row = result.rows[0];
+      const processedRow = {
+        ...row,
+        date: row.date ? (typeof row.date === 'object' && row.date.toISOString ? row.date.toISOString().split('T')[0] : row.date.toString()) : null,
+        reviewDate: row.reviewDate ? (typeof row.reviewDate === 'object' && row.reviewDate.toISOString ? row.reviewDate.toISOString() : row.reviewDate.toString()) : null,
+        createdAt: row.createdAt ? (typeof row.createdAt === 'object' && row.createdAt.toISOString ? row.createdAt.toISOString() : row.createdAt.toString()) : null
+      };
+      
       return res.json({
         success: true,
-        data: result.rows[0]
+        data: processedRow
       });
     } catch (error) {
       console.error('获取费用详情失败:', error);
@@ -144,9 +161,9 @@ class ExpenseController extends BaseController {
         });
       }
       
-      // 先查询费用类别ID
+      // 先查询费用类别ID（支持类别名称或类别代码）
       const categoryQuery = await query(
-        'SELECT id FROM expense_categories WHERE category_name = $1', 
+        'SELECT id FROM expense_categories WHERE category_name = $1 OR category_code = $1', 
         [category]
       );
       
@@ -159,17 +176,32 @@ class ExpenseController extends BaseController {
       
       const categoryId = categoryQuery.rows[0].id;
       
-      // 假设申请人是当前登录用户（这里使用默认ID 1）
-      const applicantId = 1; // 实际应用中应该从登录信息获取
+      // 假设申请人是当前登录用户（这里使用默认ID 4）
+      const applicantId = 4; // 实际应用中应该从登录信息获取
+      
+      // 查询用户所属的宿舍ID
+      const dormQuery = await query(
+        'SELECT dorm_id FROM user_dorms WHERE user_id = $1 AND status = $2 LIMIT 1',
+        [applicantId, 'active']
+      );
+      
+      if (dormQuery.rows.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: '用户未加入任何宿舍'
+        });
+      }
+      
+      const dormId = dormQuery.rows[0].dorm_id;
       
       // 先插入费用记录
       const insertSql = `
-        INSERT INTO expenses (title, description, amount, category_id, applicant_id, expense_date, status, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6, 'pending', NOW())
+        INSERT INTO expenses (title, description, amount, category_id, applicant_id, dorm_id, expense_date, status, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', NOW())
         RETURNING id
       `;
       
-      const insertResult = await query(insertSql, [title, description, amount, categoryId, applicantId, date]);
+      const insertResult = await query(insertSql, [title, description, amount, categoryId, applicantId, dormId, date]);
       const expenseId = insertResult.rows[0].id;
       
       // 查询刚插入的费用详情
@@ -177,20 +209,29 @@ class ExpenseController extends BaseController {
         SELECT 
           e.id, e.title, e.description, e.amount, ec.category_name as category, 
           applicant.nickname as applicant, e.expense_date as date, e.status,
-          reviewer.nickname as reviewer, e.approved_at as reviewDate, e.review_comment as reviewComment,
+          reviewer_user.nickname as reviewer, e.approved_at as reviewDate, e.review_comment as reviewComment,
           e.created_at as createdAt
         FROM expenses e
         LEFT JOIN expense_categories ec ON e.category_id = ec.id
         LEFT JOIN users applicant ON e.applicant_id = applicant.id
-        LEFT JOIN users reviewer ON e.approved_by = reviewer.id
+        LEFT JOIN users reviewer_user ON e.approved_by = reviewer_user.id
         WHERE e.id = $1
       `;
       
       const selectResult = await query(selectSql, [expenseId]);
       
+      // 处理日期字段，确保它们被正确序列化为字符串
+      const row = selectResult.rows[0];
+      const processedRow = {
+        ...row,
+        date: row.date ? (typeof row.date === 'object' && row.date.toISOString ? row.date.toISOString().split('T')[0] : row.date.toString()) : null,
+        reviewDate: row.reviewDate ? (typeof row.reviewDate === 'object' && row.reviewDate.toISOString ? row.reviewDate.toISOString() : row.reviewDate.toString()) : null,
+        createdAt: row.createdAt ? (typeof row.createdAt === 'object' && row.createdAt.toISOString ? row.createdAt.toISOString() : row.createdAt.toString()) : null
+      };
+      
       return res.json({
         success: true,
-        data: selectResult.rows[0]
+        data: processedRow
       });
     } catch (error) {
       console.error('创建费用失败:', error);
@@ -219,17 +260,16 @@ class ExpenseController extends BaseController {
         UPDATE expenses
         SET 
           status = $1,
-          reviewer = $2,
-          review_date = NOW(),
+          approved_by = $2,
+          approved_at = NOW(),
           review_comment = $3
         WHERE id = $4
-        RETURNING id, title, status, reviewer, review_date as reviewDate, review_comment as reviewComment
+        RETURNING id, title, status, approved_by as reviewer, approved_at as reviewDate, review_comment as reviewComment
       `;
+      // 假设审核人是当前登录用户（使用用户ID 40）
+      const reviewerId = 40; // 实际应用中应该从登录信息获取用户ID
       
-      // 假设审核人是当前登录用户
-      const reviewer = '李四'; // 实际应用中应该从登录信息获取
-      
-      const result = await query(sql, [status, reviewer, comment, id]);
+      const result = await query(sql, [status, reviewerId, comment, id]);
       
       if (result.rows.length === 0) {
         return res.status(404).json({
@@ -238,9 +278,16 @@ class ExpenseController extends BaseController {
         });
       }
       
+      // 处理日期字段，确保它们被正确序列化为字符串
+      const row = result.rows[0];
+      const processedRow = {
+        ...row,
+        reviewDate: row.reviewDate ? (typeof row.reviewDate === 'object' && row.reviewDate.toISOString ? row.reviewDate.toISOString() : row.reviewDate.toString()) : null
+      };
+      
       return res.json({
         success: true,
-        data: result.rows[0]
+        data: processedRow
       });
     } catch (error) {
       console.error('审核费用失败:', error);
@@ -341,17 +388,16 @@ class ExpenseController extends BaseController {
         UPDATE expenses
         SET 
           status = 'approved',
-          reviewer = $1,
-          review_date = NOW()
+          approved_by = $1,
+          approved_at = NOW()
         WHERE id = ANY($2::int[])
         RETURNING id
       `;
       
-      // 假设审核人是当前登录用户
-      const reviewer = '李四'; // 实际应用中应该从登录信息获取
-      
-      const result = await query(sql, [reviewer, ids]);
-      
+      // 假设审核人是当前登录用户（使用用户ID 40）
+      const reviewerId = 40; // 实际应用中应该从登录信息获取用户ID
+            
+      const result = await query(sql, [reviewerId, ids]);
       return res.json({
         success: true,
         data: {
@@ -384,18 +430,17 @@ class ExpenseController extends BaseController {
         UPDATE expenses
         SET 
           status = 'rejected',
-          reviewer = $1,
-          review_date = NOW(),
+          approved_by = $1,
+          approved_at = NOW(),
           review_comment = $2
         WHERE id = ANY($3::int[])
         RETURNING id
       `;
       
-      // 假设审核人是当前登录用户
-      const reviewer = '李四'; // 实际应用中应该从登录信息获取
-      
-      const result = await query(sql, [reviewer, comment, ids]);
-      
+      // 假设审核人是当前登录用户（使用用户ID 40）
+      const reviewerId = 40; // 实际应用中应该从登录信息获取用户ID
+            
+      const result = await query(sql, [reviewerId, comment, ids]);
       return res.json({
         success: true,
         data: {
@@ -481,7 +526,7 @@ class ExpenseController extends BaseController {
       const sql = `
         SELECT 
           e.id, e.title, e.description, e.amount, ec.category_name as category, e.applicant, e.date, e.status,
-          e.reviewer, e.review_date as reviewDate, e.review_comment as reviewComment,
+          e.approved_by as reviewer, e.approved_at as reviewDate, e.review_comment as reviewComment,
           e.created_at as createdAt
         FROM expenses e${whereConditions}
         ORDER BY e.created_at DESC

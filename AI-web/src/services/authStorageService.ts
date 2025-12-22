@@ -84,6 +84,18 @@ class AuthStorageService {
     session: any
   }): void {
     try {
+      // 验证用户信息完整性
+      if (!authData || !authData.user || !authData.user.id || !authData.user.username) {
+        console.warn('用户信息不完整，拒绝保存认证数据')
+        return
+      }
+      
+      // 验证令牌信息
+      if (!authData.tokens || !authData.tokens.accessToken) {
+        console.warn('令牌信息不完整，拒绝保存认证数据')
+        return
+      }
+      
       // 保存用户信息
       this.saveUserInfo(authData.user)
       
@@ -109,6 +121,12 @@ class AuthStorageService {
    */
   saveUserInfo(user: any): void {
     try {
+      // 验证用户信息完整性
+      if (!user || !user.id || !user.username) {
+        console.warn('用户信息不完整，拒绝保存')
+        return
+      }
+      
       const userInfo: StoredUserInfo = {
         id: user.id?.toString() || '',
         username: user.username || '',
@@ -206,15 +224,18 @@ class AuthStorageService {
    */
   getAuthState(): AuthState {
     try {
-      const isAuthenticated = localStorage.getItem(STORAGE_KEYS.IS_AUTHENTICATED) === 'true'
+      // 检查用户信息是否有效
       const user = this.getUserInfo()
+      const hasValidUser = user && user.id && user.username
+      
+      const isAuthenticated = hasValidUser && localStorage.getItem(STORAGE_KEYS.IS_AUTHENTICATED) === 'true'
       const tokens = this.getTokenInfo()
       const session = this.getSessionInfo()
       
       return {
-        isAuthenticated,
-        user,
-        tokens,
+        isAuthenticated: isAuthenticated && !!tokens && !this.isTokenExpired(),
+        user: hasValidUser ? user : null,
+        tokens: isAuthenticated ? tokens : null,
         session
       }
     } catch (error) {
@@ -237,7 +258,16 @@ class AuthStorageService {
       const userInfoStr = localStorage.getItem(STORAGE_KEYS.USER_INFO)
       if (!userInfoStr) return null
       
-      return JSON.parse(userInfoStr) as StoredUserInfo
+      const userInfo = JSON.parse(userInfoStr) as StoredUserInfo
+      
+      // 验证用户信息完整性
+      if (!userInfo.id || !userInfo.username) {
+        console.warn('用户信息不完整，返回null')
+        this.clearAuthData() // 清除不完整的认证数据
+        return null
+      }
+      
+      return userInfo
     } catch (error) {
       console.error('获取用户信息失败:', error)
       return null
@@ -370,6 +400,12 @@ class AuthStorageService {
    */
   isAuthenticated(): boolean {
     try {
+      // 检查本地存储中是否有用户信息
+      const userInfo = this.getUserInfo()
+      if (!userInfo || !userInfo.id) {
+        return false
+      }
+      
       const isAuthenticated = localStorage.getItem(STORAGE_KEYS.IS_AUTHENTICATED) === 'true'
       const hasAccessToken = !!this.getAccessToken()
       const tokenNotExpired = !this.isTokenExpired()
@@ -440,6 +476,12 @@ class AuthStorageService {
     try {
       const currentInfo = this.getUserInfo()
       if (!currentInfo) return
+      
+      // 确保关键字段不被清空
+      if (updates.id === '' || updates.username === '') {
+        console.warn('拒绝更新关键用户信息为空值')
+        return
+      }
       
       const updatedInfo = { ...currentInfo, ...updates }
       this.saveUserInfo(updatedInfo)

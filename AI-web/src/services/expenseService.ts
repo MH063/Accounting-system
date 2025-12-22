@@ -195,6 +195,23 @@ export const updateExpense = async (id: string, data: Partial<ExpenseRecord>): P
 }
 
 /**
+ * 创建费用
+ */
+export const createExpense = async (data: Partial<ExpenseRecord>): Promise<ApiResponse<ExpenseRecord>> => {
+  try {
+    const response = await request.post<ApiResponse<ExpenseRecord>>('/expenses', data);
+    return response;
+  } catch (error) {
+    console.error('创建费用失败:', error);
+    return {
+      success: false,
+      data: {} as ExpenseRecord,
+      message: '创建费用失败'
+    };
+  }
+}
+
+/**
  * 保存草稿
  */
 export const saveDraft = async (data: Partial<ExpenseRecord>): Promise<ApiResponse<ExpenseRecord>> => {
@@ -207,6 +224,23 @@ export const saveDraft = async (data: Partial<ExpenseRecord>): Promise<ApiRespon
       success: false,
       data: {} as ExpenseRecord,
       message: '保存草稿失败'
+    };
+  }
+}
+
+/**
+ * 审核费用
+ */
+export const reviewExpense = async (id: string, data: { status: string; comment?: string }): Promise<ApiResponse<any>> => {
+  try {
+    const response = await request.put<ApiResponse<any>>(`/expenses/${id}/review`, data);
+    return response;
+  } catch (error) {
+    console.error('审核费用失败:', error);
+    return {
+      success: false,
+      data: null,
+      message: '审核费用失败'
     };
   }
 }
@@ -358,7 +392,7 @@ export const exportExpenses = async (params?: { [key: string]: any }): Promise<A
 export const getQRCodes = async (params?: { [key: string]: any }): Promise<ApiResponse<PaymentQRCode[]>> => {
   try {
     const queryString = params ? `?${new URLSearchParams(params as any).toString()}` : '';
-    const response = await request.get<ApiResponse<PaymentQRCode[]>>(`/payment/qrcodes${queryString}`);
+    const response = await request.get<ApiResponse<PaymentQRCode[]>>(`/qr-codes${queryString}`);
     // 确保返回的数据结构符合预期
     if (response.success && response.data && response.data.data) {
       return {
@@ -444,6 +478,7 @@ export const expenseService = {
   getExpenseTimeDistribution,
   getExpenseById,
   updateExpense,
+  createExpense,
   saveDraft,
   uploadFile,
   deleteFile,
@@ -454,7 +489,8 @@ export const expenseService = {
   batchDeleteExpenses,
   exportExpenses,
   getQRCodes,
-  confirmPayment
+  confirmPayment,
+  reviewExpense
 }
 
 export default expenseService

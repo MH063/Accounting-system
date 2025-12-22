@@ -99,6 +99,18 @@ router.put('/members/:id/role',
 );
 
 /**
+ * 获取待审核成员列表路由
+ * GET /api/dorms/members/pending
+ * 需要有效的JWT令牌才能访问
+ */
+router.get('/members/pending', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await dormController.getPendingMembers(req, res);
+  }))
+);
+
+/**
  * 更新宿舍成员状态路由
  * PUT /api/dorms/members/:id/status
  * 需要有效的JWT令牌才能访问
