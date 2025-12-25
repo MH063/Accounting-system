@@ -7,9 +7,10 @@ const BaseService = require('./BaseService');
 const UserRepository = require('../repositories/UserRepository');
 const TwoFactorRepository = require('../repositories/TwoFactorRepository');
 const UserModel = require('../models/UserModel');
-const bcrypt = require('bcryptjs');
+const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const logger = require('../config/logger');
+const TotpService = require('./TotpService');
 const { 
   generateTokenPair, 
   refreshAccessToken, 
@@ -24,6 +25,7 @@ class UserService extends BaseService {
     super(userRepository);
     this.userRepository = userRepository;
     this.twoFactorRepository = new TwoFactorRepository();
+    this.totpService = new TotpService();
   }
 
   /**
@@ -258,11 +260,11 @@ class UserService extends BaseService {
 
       // 验证必填字段
       if (!password) {
-        throw new Error('密码为必填项');
+        return { success: false, message: '密码为必填项' };
       }
 
       if (!username && !email) {
-        throw new Error('用户名或邮箱为必填项');
+        return { success: false, message: '用户名或邮箱为必填项' };
       }
 
       // 验证验证码（如果提供）
@@ -273,7 +275,7 @@ class UserService extends BaseService {
             sessionId,
             ip
           });
-          throw new Error('验证码错误，请重新输入');
+          return { success: false, message: '验证码错误，请重新输入' };
         }
       }
 
@@ -281,20 +283,12 @@ class UserService extends BaseService {
       const loginIdentifier = email || username;
       const user = await this.userRepository.findUserWithRoles(loginIdentifier);
 
-      // 添加调试日志
-      logger.info('[UserService] 查找用户结果', { 
-        loginIdentifier,
-        userFound: !!user,
-        userId: user ? user.id : null,
-        username: user ? user.username : null,
-        passwordHashExists: user ? !!user.passwordHash : null
-      });
+      // 添加调试日志 - 将详细信息包含在message中以便控制台显示
+      logger.info(`[UserService] 查找用户结果 - loginIdentifier: ${loginIdentifier}, userFound: ${!!user}, userId: ${user ? user.id : null}, username: ${user ? user.username : null}, passwordHashExists: ${user ? !!user.passwordHash : null}`);
 
       if (!user) {
-        logger.warn('[UserService] 用户登录失败: 用户不存在', { 
-          username: username || email 
-        });
-        throw new Error('用户名或密码错误');
+        logger.warn(`[UserService] 用户登录失败: 用户不存在 - username: ${username || email}`);
+        return { success: false, message: '用户名或密码错误' };
       }
 
       // 检查用户状态
@@ -310,7 +304,7 @@ class UserService extends BaseService {
           username: user.username,
           status: user.status
         });
-        throw new Error(statusMessages[user.status] || '账户状态异常，请联系管理员');
+        return { success: false, message: statusMessages[user.status] || '账户状态异常，请联系管理员' };
       }
 
       // 检查用户是否被锁定
@@ -320,7 +314,7 @@ class UserService extends BaseService {
           username: user.username,
           lockedUntil: user.lockedUntil 
         });
-        throw new Error(`账户已被锁定，请于 ${new Date(user.lockedUntil).toLocaleString()} 后再试`);
+        return { success: false, message: `账户已被锁定，请于 ${new Date(user.lockedUntil).toLocaleString()} 后再试` };
       }
 
       // DEBUG: 打印密码哈希信息
@@ -342,7 +336,7 @@ class UserService extends BaseService {
           userId: user.id,
           username: user.username 
         });
-        throw new Error('用户名或密码错误');
+        return { success: false, message: '用户名或密码错误' };
       }
 
       // 密码正确，重置登录失败次数
@@ -401,7 +395,7 @@ class UserService extends BaseService {
    */
   async handleLoginFailure(userId, identifier) {
     try {
-      const result = await this.userRepository.incrementLoginAttempts(userId);
+      const result = await this.userRepository.increaseFailedAttempts(userId);
       
       if (result.success) {
         const { loginAttempts, lockedUntil } = result;
@@ -935,7 +929,7 @@ class UserService extends BaseService {
       }
 
       // 验证更新数据
-      const allowedFields = ['full_name', 'phone', 'avatar', 'bio'];
+      const allowedFields = ['real_name', 'phone', 'avatar', 'bio'];
       const filteredData = {};
       
       for (const field of allowedFields) {
@@ -970,8 +964,7 @@ class UserService extends BaseService {
         filteredData.email = updateData.email;
       }
 
-      // 更新用户
-      filteredData.updated_at = new Date();
+      // 更新用户（updated_at由BaseRepository自动处理）
       const updatedUser = await this.userRepository.update(userId, filteredData);
 
       logger.info('[UserService] 更新用户资料成功', { 
@@ -1009,12 +1002,16 @@ class UserService extends BaseService {
 
       // 验证必填字段
       if (!currentPassword || !newPassword) {
-        throw new Error('当前密码和新密码为必填项');
+        const err = new Error('当前密码和新密码为必填项');
+        err.statusCode = 400;
+        throw err;
       }
 
       // 验证新密码强度
       if (!this.isValidPassword(newPassword)) {
-        throw new Error('新密码不符合安全要求（至少8位，包含大小写字母、数字和特殊字符）');
+        const err = new Error('新密码不符合安全要求（至少8位，包含大小写字母、数字和特殊字符）');
+        err.statusCode = 400;
+        throw err;
       }
 
       // 查找用户
@@ -1022,12 +1019,16 @@ class UserService extends BaseService {
       
       if (!user) {
         logger.warn('[UserService] 修改密码失败: 用户不存在', { userId });
-        throw new Error('用户不存在');
+        const err = new Error('用户不存在');
+        err.statusCode = 404;
+        throw err;
       }
 
       if (user.status !== 'active') {
         logger.warn('[UserService] 修改密码失败: 用户未激活', { userId });
-        throw new Error('用户未激活');
+        const err = new Error('用户未激活');
+        err.statusCode = 403;
+        throw err;
       }
 
       // 验证当前密码
@@ -1035,7 +1036,9 @@ class UserService extends BaseService {
       
       if (!isCurrentPasswordValid) {
         logger.warn('[UserService] 修改密码失败: 当前密码错误', { userId });
-        throw new Error('当前密码错误');
+        const err = new Error('当前密码错误');
+        err.statusCode = 400;
+        throw err;
       }
 
       // 加密新密码
@@ -1046,7 +1049,9 @@ class UserService extends BaseService {
       const success = await this.userRepository.updatePassword(userId, newPasswordHash);
 
       if (!success) {
-        throw new Error('密码更新失败');
+        const err = new Error('密码更新失败');
+        err.statusCode = 500;
+        throw err;
       }
 
       logger.info('[UserService] 修改密码成功', { userId });
@@ -1103,7 +1108,8 @@ class UserService extends BaseService {
    */
   isValidPassword(password) {
     // 至少8位，包含大小写字母、数字和特殊字符
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    // 允许的特殊字符：: 、 \ . ， ？ 《 》 < > / = + - * ~ @ # $ % ^ & ( ) ——
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[:、\\.,？《》<>/=+\-*~@#$%^&()——])[A-Za-z\d:、\\.,？《》<>/=+\-*~@#$%^&()——]{8,}$/;
     return passwordRegex.test(password);
   }
 
@@ -1711,15 +1717,19 @@ class UserService extends BaseService {
       const adminAuthService = new AdminAuthService();
       
       // 调用管理员认证服务获取资料
-      const adminProfile = await adminAuthService.getAdminProfile(userId);
+      const result = await adminAuthService.getAdminProfile(userId);
       
-      return adminProfile;
+      if (!result.success) {
+        return null;
+      }
+      
+      return result.data;
     } catch (error) {
       logger.error('[UserService] 获取管理员资料失败', { 
         error: error.message,
         userId
       });
-      throw error;
+      return null;
     }
   }
 
@@ -1732,27 +1742,59 @@ class UserService extends BaseService {
    */
   async validateCaptcha(captchaCode, sessionId, ip) {
     try {
-      // 这里应该查询captcha_codes表验证验证码
-      // 由于没有相应的Repository，这里简化处理
-      // 实际项目中应该创建CaptchaRepository并实现验证逻辑
+      if (!captchaCode || !sessionId) {
+        logger.warn('[UserService] 验证码或会话ID缺失', { sessionId, ip });
+        return false;
+      }
+
+      // 查询验证码记录
+      const selectQuery = `
+        SELECT id, captcha_answer, expires_at, usage_count, max_usage 
+        FROM captcha_codes 
+        WHERE captcha_id = $1 
+        AND expires_at > NOW() 
+        AND usage_count < max_usage
+        ORDER BY id DESC 
+        LIMIT 1
+      `;
       
-      // 模拟验证码验证（实际应该查询数据库）
-      // 1. 检查验证码是否存在且未使用
-      // 2. 检查验证码是否过期
-      // 3. 检查IP地址或会话ID是否匹配
-      // 4. 验证码正确后标记为已使用
+      const result = await this.userRepository.executeQuery(selectQuery, [sessionId]);
       
-      logger.info('[UserService] 验证码验证', { 
+      if (!result || result.rows.length === 0) {
+        logger.warn('[UserService] 验证码记录不存在、已过期或使用次数超限', { sessionId, ip });
+        return false;
+      }
+      
+      const captcha = result.rows[0];
+      
+      // 记录验证尝试
+      logger.info('[UserService] 验证码验证尝试', { 
         sessionId,
         ip,
-        captchaCode: captchaCode.substring(0, 1) + '***' // 只记录第一个字符，避免记录完整验证码
+        captchaId: captcha.id,
+        providedCode: captchaCode.substring(0, 1) + '***'
       });
       
-      // 这里应该返回实际的验证结果
-      // 暂时返回true，实际项目中应该实现完整的验证逻辑
+      // 验证答案（不区分大小写）
+      const isValid = captcha.captcha_answer.toLowerCase() === captchaCode.toLowerCase();
+      
+      // 增加使用次数
+      const updateQuery = `
+        UPDATE captcha_codes 
+        SET usage_count = usage_count + 1 
+        WHERE id = $1
+      `;
+      await this.userRepository.executeQuery(updateQuery, [captcha.id]);
+      
+      if (!isValid) {
+        logger.warn('[UserService] 验证码答案错误', { sessionId, ip });
+        return false;
+      }
+      
+      logger.info('[UserService] 验证码验证成功', { sessionId, ip });
       return true;
     } catch (error) {
-      logger.error('[UserService] 验证码验证失败', { 
+      logger.error('[UserService] 验证码验证过程中发生错误', { 
         error: error.message,
         sessionId,
         ip
@@ -2010,7 +2052,7 @@ class UserService extends BaseService {
         success: true,
         data: {
           userId,
-          twoFactorEnabled: true
+          enabled: true
         },
         message: '两步验证已启用'
       };
@@ -2051,7 +2093,7 @@ class UserService extends BaseService {
         success: true,
         data: {
           userId,
-          twoFactorEnabled: false
+          enabled: false
         },
         message: '两步验证已禁用'
       };
@@ -2086,7 +2128,7 @@ class UserService extends BaseService {
         success: true,
         data: {
           userId,
-          twoFactorEnabled: user.twoFactorEnabled || false,
+          enabled: user.twoFactorEnabled || false,
           createdAt: user.createdAt,
           updatedAt: user.updatedAt
         },
@@ -3069,6 +3111,313 @@ class UserService extends BaseService {
       throw error;
     } finally {
       client.release();
+    }
+  }
+
+  /**
+   * 生成TOTP两步验证密钥
+   * @param {number} userId - 用户ID
+   * @returns {Promise<Object>} 密钥信息
+   */
+  async generateTotpSecret(userId) {
+    try {
+      logger.info('[UserService] 生成TOTP密钥', { userId });
+
+      const user = await this.userRepository.findById(userId);
+      if (!user) {
+        throw new Error('用户不存在');
+      }
+
+      const secretInfo = this.totpService.generateSecret('AccountingSystem', user.username);
+      
+      const qrCode = await this.totpService.generateQRCode(secretInfo.otpauthUrl);
+      const backupCodes = this.totpService.generateBackupCodes();
+
+      logger.info('[UserService] TOTP密钥生成成功', { userId });
+
+      return {
+        success: true,
+        data: {
+          secret: secretInfo.secret,
+          qrCode: qrCode,
+          backupCodes: backupCodes,
+          appName: 'AccountingSystem',
+          username: user.username
+        },
+        message: 'TOTP密钥生成成功'
+      };
+    } catch (error) {
+      logger.error('[UserService] 生成TOTP密钥失败', { 
+        error: error.message,
+        userId 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 启用TOTP两步验证
+   * @param {number} userId - 用户ID
+   * @param {Object} enableData - 启用数据
+   * @returns {Promise<Object>} 启用结果
+   */
+  async enableTotpAuth(userId, enableData) {
+    try {
+      const { secret, code, backupCodes } = enableData;
+      logger.info('[UserService] 启用TOTP两步验证', { userId });
+
+      const user = await this.userRepository.findById(userId);
+      if (!user) {
+        throw new Error('用户不存在');
+      }
+
+      const isValid = this.totpService.verifyToken(secret, code);
+      if (!isValid) {
+        throw new Error('验证码无效');
+      }
+
+      const existingAuth = await this.twoFactorRepository.getTwoFactorAuthByUserId(userId);
+      if (existingAuth) {
+        await this.twoFactorRepository.updateTwoFactorAuth(existingAuth.id, {
+          secretKey: secret,
+          backupCodes: backupCodes,
+          isEnabled: true
+        });
+      } else {
+        await this.twoFactorRepository.createTwoFactorAuth({
+          userId: userId,
+          secretKey: secret,
+          backupCodes: backupCodes,
+          isEnabled: true
+        });
+      }
+
+      await this.userRepository.update(userId, {
+        two_factor_enabled: true
+      });
+
+      logger.info('[UserService] TOTP两步验证启用成功', { userId });
+
+      return {
+        success: true,
+        data: {
+          userId,
+          enabled: true
+        },
+        message: 'TOTP两步验证已启用'
+      };
+    } catch (error) {
+      logger.error('[UserService] 启用TOTP两步验证失败', { 
+        error: error.message,
+        userId 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 禁用TOTP两步验证
+   * @param {number} userId - 用户ID
+   * @param {Object} disableData - 禁用数据
+   * @returns {Promise<Object>} 禁用结果
+   */
+  async disableTotpAuth(userId, disableData) {
+    try {
+      const { code } = disableData;
+      logger.info('[UserService] 禁用TOTP两步验证', { userId });
+
+      const user = await this.userRepository.findById(userId);
+      if (!user) {
+        throw new Error('用户不存在');
+      }
+
+      const auth = await this.twoFactorRepository.getTwoFactorAuthByUserId(userId);
+      if (!auth || !auth.isEnabled) {
+        throw new Error('两步验证未启用');
+      }
+
+      const isValid = this.totpService.verifyToken(auth.secretKey, code);
+      if (!isValid) {
+        const isBackupCodeValid = this.totpService.verifyBackupCode(auth.backupCodes, code);
+        if (!isBackupCodeValid) {
+          throw new Error('验证码无效');
+        }
+      }
+
+      await this.twoFactorRepository.deleteTwoFactorAuth(userId);
+      await this.userRepository.update(userId, {
+        two_factor_enabled: false
+      });
+
+      logger.info('[UserService] TOTP两步验证禁用成功', { userId });
+
+      return {
+        success: true,
+        data: {
+          userId,
+          enabled: false
+        },
+        message: 'TOTP两步验证已禁用'
+      };
+    } catch (error) {
+      logger.error('[UserService] 禁用TOTP两步验证失败', { 
+        error: error.message,
+        userId 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 验证TOTP两步验证码
+   * @param {number} userId - 用户ID
+   * @param {string} code - 验证码
+   * @param {string} secret - 可选的密钥，用于启用过程中验证
+   * @returns {Promise<Object>} 验证结果
+   */
+  async verifyTotpCode(userId, code, secret = null) {
+    try {
+      logger.info('[UserService] 验证TOTP两步验证码', { userId });
+
+      const user = await this.userRepository.findById(userId);
+      if (!user) {
+        throw new Error('用户不存在');
+      }
+
+      let secretKey = secret;
+      let auth = null;
+
+      if (!secretKey) {
+        auth = await this.twoFactorRepository.getTwoFactorAuthByUserId(userId);
+        if (!auth || !auth.isEnabled) {
+          throw new Error('两步验证未启用');
+        }
+        secretKey = auth.secretKey;
+      }
+
+      const isValid = this.totpService.verifyToken(secretKey, code);
+      if (!isValid) {
+        if (auth) {
+          const isBackupCodeValid = this.totpService.verifyBackupCode(auth.backupCodes, code);
+          if (!isBackupCodeValid) {
+            await this.twoFactorRepository.incrementVerificationAttempts(userId);
+            throw new Error('验证码无效');
+          }
+        } else {
+          throw new Error('验证码无效');
+        }
+      }
+
+      if (auth) {
+        await this.twoFactorRepository.resetVerificationAttempts(userId);
+        await this.twoFactorRepository.updateTwoFactorAuth(auth.id, {
+          lastUsedAt: new Date()
+        });
+      }
+
+      logger.info('[UserService] TOTP两步验证码验证成功', { userId });
+
+      return {
+        success: true,
+        data: {
+          userId,
+          verified: true
+        },
+        message: '验证成功'
+      };
+    } catch (error) {
+      logger.error('[UserService] 验证TOTP两步验证码失败', { 
+        error: error.message,
+        userId 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 获取TOTP两步验证状态
+   * @param {number} userId - 用户ID
+   * @returns {Promise<Object>} 状态信息
+   */
+  async getTotpStatus(userId) {
+    try {
+      logger.info('[UserService] 获取TOTP两步验证状态', { userId });
+
+      const user = await this.userRepository.findById(userId);
+      if (!user) {
+        throw new Error('用户不存在');
+      }
+
+      const auth = await this.twoFactorRepository.getTwoFactorAuthByUserId(userId);
+
+      logger.info('[UserService] 获取TOTP两步验证状态成功', { userId });
+
+      return {
+        success: true,
+        data: {
+          userId,
+          enabled: auth ? auth.isEnabled : false,
+          createdAt: auth ? auth.createdAt : null,
+          lastUsedAt: auth ? auth.lastUsedAt : null
+        },
+        message: '获取TOTP两步验证状态成功'
+      };
+    } catch (error) {
+      logger.error('[UserService] 获取TOTP两步验证状态失败', { 
+        error: error.message,
+        userId 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 重新生成备用码
+   * @param {number} userId - 用户ID
+   * @param {Object} regenerateData - 重新生成数据
+   * @returns {Promise<Object>} 重新生成结果
+   */
+  async regenerateBackupCodes(userId, regenerateData) {
+    try {
+      const { code } = regenerateData;
+      logger.info('[UserService] 重新生成备用码', { userId });
+
+      const user = await this.userRepository.findById(userId);
+      if (!user) {
+        throw new Error('用户不存在');
+      }
+
+      const auth = await this.twoFactorRepository.getTwoFactorAuthByUserId(userId);
+      if (!auth || !auth.isEnabled) {
+        throw new Error('两步验证未启用');
+      }
+
+      const isValid = this.totpService.verifyToken(auth.secretKey, code);
+      if (!isValid) {
+        throw new Error('验证码无效');
+      }
+
+      const newBackupCodes = this.totpService.generateBackupCodes();
+      await this.twoFactorRepository.updateTwoFactorAuth(auth.id, {
+        backupCodes: newBackupCodes
+      });
+
+      logger.info('[UserService] 备用码重新生成成功', { userId });
+
+      return {
+        success: true,
+        data: {
+          userId,
+          backupCodes: newBackupCodes
+        },
+        message: '备用码已重新生成'
+      };
+    } catch (error) {
+      logger.error('[UserService] 重新生成备用码失败', { 
+        error: error.message,
+        userId 
+      });
+      throw error;
     }
   }
 }

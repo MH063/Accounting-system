@@ -1,16 +1,17 @@
-import type { ApiResponse } from '@/types'
-import { request } from '@/utils/request'
+import { get, put } from '@/utils/request'
 
-// 通知设置接口
+/**
+ * 通知设置接口
+ */
 export interface NotificationSettings {
-  systemNotifications: boolean
   emailNotifications: boolean
-  smsNotifications: boolean
   pushNotifications: boolean
   soundEnabled: boolean
   vibrationEnabled: boolean
+  smsNotifications: boolean
+  systemNotifications: boolean
   billReminder: boolean
-  reminderTime: string // ISO格式时间字符串
+  reminderTime: string
   categories: {
     [key: string]: {
       enabled: boolean
@@ -20,39 +21,18 @@ export interface NotificationSettings {
   }
   quietHours: {
     enabled: boolean
-    start: string // HH:mm格式
-    end: string // HH:mm格式
+    start: string
+    end: string
   }
 }
 
 /**
- * 保存通知设置
- * @param settings 通知设置
- * @returns 保存结果
+ * API响应包装器
  */
-export const saveNotificationSettings = async (settings: NotificationSettings): Promise<ApiResponse<boolean>> => {
-  try {
-    console.log('保存通知设置:', settings)
-    
-    // 调用真实API保存通知设置
-    const response = await request<boolean>('/notifications/settings', {
-      method: 'POST',
-      body: JSON.stringify(settings)
-    })
-    
-    return {
-      success: true,
-      data: response,
-      message: '通知设置保存成功'
-    }
-  } catch (error) {
-    console.error('保存通知设置失败:', error)
-    return {
-      success: false,
-      data: false,
-      message: '保存通知设置失败: ' + (error as Error).message
-    }
-  }
+export interface ApiResponse<T> {
+  success: boolean
+  data: T
+  message?: string
 }
 
 /**
@@ -63,12 +43,14 @@ export const getNotificationSettings = async (): Promise<ApiResponse<Notificatio
   try {
     console.log('获取通知设置')
     
-    // 调用真实API获取通知设置
-    const response = await request<NotificationSettings>('/notifications/settings')
+    const response = await get<NotificationSettings>(
+      '/notifications/settings'
+    )
     
+    console.log('通知设置获取成功:', response.data)
     return {
       success: true,
-      data: response
+      data: response.data
     }
   } catch (error) {
     console.error('获取通知设置失败:', error)
@@ -80,8 +62,38 @@ export const getNotificationSettings = async (): Promise<ApiResponse<Notificatio
   }
 }
 
-// 导出默认实例
+/**
+ * 保存通知设置
+ * @param settings 通知设置
+ * @returns 保存结果
+ */
+export const saveNotificationSettings = async (
+  settings: NotificationSettings
+): Promise<ApiResponse<{ message: string }>> => {
+  try {
+    console.log('保存通知设置:', settings)
+    
+    const response = await put<{ success: boolean; data: { message: string } }>(
+      '/notifications/settings',
+      settings
+    )
+    
+    console.log('通知设置保存成功')
+    return {
+      success: true,
+      data: response.data
+    }
+  } catch (error) {
+    console.error('保存通知设置失败:', error)
+    return {
+      success: false,
+      data: { message: '保存失败' },
+      message: '保存通知设置失败: ' + (error as Error).message
+    }
+  }
+}
+
 export default {
-  saveNotificationSettings,
-  getNotificationSettings
+  getNotificationSettings,
+  saveNotificationSettings
 }

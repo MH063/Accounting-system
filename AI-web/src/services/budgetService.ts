@@ -56,9 +56,15 @@ export const getBudgetList = async (page: number = 1, size: number = 10, categor
       page: number
       size: number
       pages: number
-    }>(`/budgets?${params.toString()}`)
+    }>(`/budget?${params.toString()}`)
     
-    return response
+    // 处理后端返回的双层嵌套结构
+    const actualData = response.data.data || response.data;
+    
+    return {
+      ...response,
+      data: actualData
+    };
   } catch (error) {
     console.error('获取预算列表失败:', error)
     return {
@@ -91,15 +97,33 @@ export const createBudget = async (budgetData: {
   remark: string
 }): Promise<ApiResponse<BudgetItem>> => {
   try {
-    console.log('调用创建预算API:', budgetData)
+    console.log('调用创庻预算API:', budgetData)
     
-    // 调用真实API创建预算
-    const response = await request<BudgetItem>('/budgets', {
+    // 将period转换为数据库约束要求的大写格式
+    const periodMap: Record<string, string> = {
+      'monthly': 'MONTHLY',
+      'quarterly': 'QUARTERLY',
+      'yearly': 'ANNUAL'
+    };
+    
+    const requestData = {
+      ...budgetData,
+      period: periodMap[budgetData.period] || budgetData.period.toUpperCase()
+    }
+    
+    // 调用真实API创庻预算
+    const response = await request<BudgetItem>('/budget', {
       method: 'POST',
-      body: JSON.stringify(budgetData)
+      body: JSON.stringify(requestData)
     })
     
-    return response
+    // 处理后端返回的双层嵌套结构
+    const actualData = response.data.data || response.data;
+    
+    return {
+      ...response,
+      data: actualData
+    };
   } catch (error) {
     console.error('创建预算失败:', error)
     return {
@@ -129,13 +153,31 @@ export const updateBudget = async (budgetId: number, budgetData: {
   try {
     console.log(`调用更新预算API: budgetId=${budgetId}`, budgetData)
     
+    // 将period转换为数据库约束要求的大写格式
+    const periodMap: Record<string, string> = {
+      'monthly': 'MONTHLY',
+      'quarterly': 'QUARTERLY',
+      'yearly': 'ANNUAL'
+    };
+    
+    const requestData = {
+      ...budgetData,
+      period: periodMap[budgetData.period] || budgetData.period.toUpperCase()
+    }
+    
     // 调用真实API更新预算
-    const response = await request<BudgetItem>(`/budgets/${budgetId}`, {
+    const response = await request<BudgetItem>(`/budget/${budgetId}`, {
       method: 'PUT',
-      body: JSON.stringify(budgetData)
+      body: JSON.stringify(requestData)
     })
     
-    return response
+    // 处理后端返回的双层嵌套结构
+    const actualData = response.data.data || response.data;
+    
+    return {
+      ...response,
+      data: actualData
+    };
   } catch (error) {
     console.error('更新预算失败:', error)
     return {
@@ -157,11 +199,17 @@ export const deleteBudget = async (budgetId: number): Promise<ApiResponse<void>>
     console.log(`调用删除预算API: budgetId=${budgetId}`)
     
     // 调用真实API删除预算
-    const response = await request<void>(`/budgets/${budgetId}`, {
+    const response = await request<void>(`/budget/${budgetId}`, {
       method: 'DELETE'
     })
     
-    return response
+    // 处理后端返回的双层嵌套结构
+    const actualData = response.data.data || response.data;
+    
+    return {
+      ...response,
+      data: actualData
+    };
   } catch (error) {
     console.error('删除预算失败:', error)
     return {
@@ -183,9 +231,15 @@ export const getBudgetHistory = async (period: '3m' | '6m' | '12m'): Promise<Api
     console.log(`调用获取预算历史数据API: period=${period}`)
     
     // 调用真实API获取预算历史数据
-    const response = await request<BudgetHistoryData>(`/budgets/history?period=${period}`)
+    const response = await request<BudgetHistoryData>(`/budget/history?period=${period}`)
     
-    return response
+    // 处理后端返回的双层嵌套结构
+    const actualData = response.data.data || response.data;
+    
+    return {
+      ...response,
+      data: actualData
+    };
   } catch (error) {
     console.error('获取预算历史数据失败:', error)
     return {
@@ -222,9 +276,9 @@ export const checkBudgetAlerts = async (budgetId?: number): Promise<ApiResponse<
     console.log(`调用检查预算预警API: budgetId=${budgetId}`)
     
     // 构建请求路径
-    let url = '/budgets/alerts'
+    let url = '/budget/alerts'
     if (budgetId) {
-      url = `/budgets/${budgetId}/alerts`
+      url = `/budget/${budgetId}/alerts`
     }
     
     // 调用真实API检查预算预警
@@ -241,7 +295,13 @@ export const checkBudgetAlerts = async (budgetId?: number): Promise<ApiResponse<
       totalAlerts: number
     }>(url)
     
-    return response
+    // 处理后端返回的双层嵌套结构
+    const actualData = response.data.data || response.data;
+    
+    return {
+      ...response,
+      data: actualData
+    };
   } catch (error) {
     console.error('检查预算预警失败:', error)
     return {

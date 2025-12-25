@@ -49,7 +49,7 @@ export interface BillListResponse {
  * @param filter 筛选条件
  * @returns 账单列表和分页信息
  */
-export const getBillList = async (filter: BillFilter = {}): Promise<BillListResponse> => {
+export const getBillList = async (filter: BillFilter = {}): Promise<any> => {
   try {
     // 构建查询参数
     const params = new URLSearchParams()
@@ -75,6 +75,7 @@ export const getBillList = async (filter: BillFilter = {}): Promise<BillListResp
       }
     }>(url)
     
+    // 根据后端返回的数据结构 {success: true, data: {...}} 返回整个响应对象
     return response.data
   } catch (error) {
     console.error('[BillService] 获取账单列表失败:', error)
@@ -87,13 +88,14 @@ export const getBillList = async (filter: BillFilter = {}): Promise<BillListResp
  * @param id 账单ID
  * @returns 账单详情
  */
-export const getBillDetail = async (id: string): Promise<Bill> => {
+export const getBillDetail = async (id: string): Promise<any> => {
   try {
     const response = await request<{
       success: boolean
       data: Bill
     }>(`/bills/${id}`)
     
+    // 根据后端返回的数据结构 {success: true, data: {...}} 返回整个响应对象
     return response.data
   } catch (error) {
     console.error('[BillService] 获取账单详情失败:', error)
@@ -106,7 +108,7 @@ export const getBillDetail = async (id: string): Promise<Bill> => {
  * @param billData 账单数据
  * @returns 创建的账单
  */
-export const createBill = async (billData: Omit<Bill, 'id' | 'createdAt' | 'updatedAt'>): Promise<Bill> => {
+export const createBill = async (billData: Omit<Bill, 'id' | 'createdAt' | 'updatedAt'>): Promise<any> => {
   try {
     const response = await request<{
       success: boolean
@@ -116,6 +118,7 @@ export const createBill = async (billData: Omit<Bill, 'id' | 'createdAt' | 'upda
       body: JSON.stringify(billData)
     })
     
+    // 根据后端返回的数据结构 {success: true, data: {...}} 返回整个响应对象
     return response.data
   } catch (error) {
     console.error('[BillService] 创建账单失败:', error)
@@ -129,7 +132,7 @@ export const createBill = async (billData: Omit<Bill, 'id' | 'createdAt' | 'upda
  * @param billData 账单数据
  * @returns 更新后的账单
  */
-export const updateBill = async (id: string, billData: Partial<Bill>): Promise<Bill> => {
+export const updateBill = async (id: string, billData: Partial<Bill>): Promise<any> => {
   try {
     const response = await request<{
       success: boolean
@@ -139,6 +142,7 @@ export const updateBill = async (id: string, billData: Partial<Bill>): Promise<B
       body: JSON.stringify(billData)
     })
     
+    // 根据后端返回的数据结构 {success: true, data: {...}} 返回整个响应对象
     return response.data
   } catch (error) {
     console.error('[BillService] 更新账单失败:', error)
@@ -199,7 +203,8 @@ export const payBill = async (id: string, paymentData: {
       body: JSON.stringify(paymentData)
     })
     
-    return response
+    // 根据后端返回的数据结构 {success: true, data: {...}} 正确访问数据
+    return response.data
   } catch (error) {
     console.error('[BillService] 支付账单失败:', error)
     throw new Error('支付账单失败')
@@ -212,11 +217,7 @@ export const payBill = async (id: string, paymentData: {
  * @param format 导出格式
  * @returns 导出结果
  */
-export const exportBills = async (filter: BillFilter, format: 'csv' | 'xlsx' = 'csv'): Promise<{
-  downloadUrl: string
-  recordCount: number
-  format: string
-}> => {
+export const exportBills = async (filter: BillFilter, format: 'csv' | 'xlsx' = 'csv'): Promise<any> => {
   try {
     // 构建查询参数
     const params = new URLSearchParams()
@@ -240,16 +241,7 @@ export const exportBills = async (filter: BillFilter, format: 'csv' | 'xlsx' = '
       }
     }>(url)
     
-    // 如果API返回了下载链接，自动触发下载
-    if (response.data.downloadUrl) {
-      const link = document.createElement('a')
-      link.href = response.data.downloadUrl
-      link.download = `账单记录_${new Date().toISOString().split('T')[0]}.${format}`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-    }
-    
+    // 根据后端返回的数据结构 {success: true, data: {...}} 返回整个响应对象
     return response.data
   } catch (error) {
     console.error('[BillService] 导出账单失败:', error)
@@ -267,7 +259,7 @@ export const getPaymentQRCodes = async (params: {
   size?: number
   status?: 'active' | 'inactive'
   platform?: 'alipay' | 'wechat' | 'unionpay'
-} = {}) => {
+} = {}): Promise<any> => {
   try {
     // 构建查询参数
     const queryParams = new URLSearchParams()
@@ -306,6 +298,7 @@ export const getPaymentQRCodes = async (params: {
       }
     }>(url)
     
+    // 根据后端返回的数据结构 {success: true, data: {...}} 返回整个响应对象
     return response.data
   } catch (error) {
     console.error('[BillService] 获取收款码列表失败:', error)
@@ -317,13 +310,7 @@ export const getPaymentQRCodes = async (params: {
  * 获取提醒设置
  * @returns 提醒设置
  */
-export const getReminderSettings = async (): Promise<{
-  methods: string[]
-  remindTime: string
-  frequency: string
-  quietStart: string
-  quietEnd: string
-}> => {
+export const getReminderSettings = async (): Promise<any> => {
   try {
     const response = await request<{
       success: boolean
@@ -336,6 +323,7 @@ export const getReminderSettings = async (): Promise<{
       }
     }>('/bills/reminder-settings')
     
+    // 根据后端返回的数据结构 {success: true, data: {...}} 返回整个响应对象
     return response.data
   } catch (error) {
     console.error('[BillService] 获取提醒设置失败:', error)
@@ -361,7 +349,7 @@ export const saveReminderSettings = async (settings: {
   frequency: string
   quietStart: string
   quietEnd: string
-}): Promise<{ success: boolean; message: string }> => {
+}): Promise<any> => {
   try {
     const response = await request<{
       success: boolean
@@ -371,7 +359,8 @@ export const saveReminderSettings = async (settings: {
       body: JSON.stringify(settings)
     })
     
-    return response
+    // 根据后端返回的数据结构 {success: true, data: {...}} 返回整个响应对象
+    return response.data
   } catch (error) {
     console.error('[BillService] 保存提醒设置失败:', error)
     throw new Error('保存提醒设置失败')

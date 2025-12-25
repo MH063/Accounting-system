@@ -367,6 +367,12 @@ const handleLogin = async (): Promise<void> => {
           
           console.log('登录成功:', response)
           
+          // 检查响应是否成功
+          if (!response.success) {
+            ElMessage.error(response.message || '登录失败，请检查用户名和密码')
+            return
+          }
+          
           // 验证身份验证状态
           const authState = authStorageService.getAuthState()
           if (!authState.isAuthenticated) {
@@ -450,7 +456,7 @@ const handleSmsLogin = async (): Promise<void> => {
           console.log('短信登录请求:', smsLoginForm)
           
           // 调用短信登录接口
-          const response = await request<any>('http://127.0.0.1:4000/api/auth/sms-login', {
+          const response = await request<any>('/auth/sms-login', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
@@ -464,21 +470,24 @@ const handleSmsLogin = async (): Promise<void> => {
           if (response.success) {
             console.log('短信登录成功:', response)
             
+            // 正确处理双层嵌套结构: {success: true, data: {data: {user, tokens}, message}}
+            const actualData = response.data?.data || response.data;
+            
             // 保存认证信息
-            if (response.data?.tokens?.accessToken) {
-              localStorage.setItem('access_token', response.data.tokens.accessToken)
-              localStorage.setItem('refresh_token', response.data.tokens.refreshToken)
-              localStorage.setItem('token_expires', (Date.now() + response.data.tokens.expiresIn * 1000).toString())
+            if (actualData?.tokens?.accessToken) {
+              localStorage.setItem('access_token', actualData.tokens.accessToken)
+              localStorage.setItem('refresh_token', actualData.tokens.refreshToken)
+              localStorage.setItem('token_expires', (Date.now() + actualData.tokens.expiresIn * 1000).toString())
               localStorage.setItem('isAuthenticated', 'true')
               
               // 保存用户信息
-              if (response.data.user) {
-                localStorage.setItem('user_info', JSON.stringify(response.data.user))
+              if (actualData.user) {
+                localStorage.setItem('user_info', JSON.stringify(actualData.user))
               }
               
               // 保存会话信息
-              if (response.data.session) {
-                localStorage.setItem('session_id', response.data.session.sessionId)
+              if (actualData.session) {
+                localStorage.setItem('session_id', actualData.session.sessionId)
               }
             }
             

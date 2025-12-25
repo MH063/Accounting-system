@@ -123,7 +123,7 @@
             </div>
             <div class="metric-content">
               <div class="metric-label">预测准确率</div>
-              <div class="metric-value">{{ predictionAccuracy }}%</div>
+              <div class="metric-value">{{ predictionSummary.confidence }}%</div>
               <div class="metric-desc">基于历史数据</div>
             </div>
           </div>
@@ -326,7 +326,7 @@ import {
 } from '@element-plus/icons-vue'
 
 // 导入趋势分析服务
-import { getTrendAnalysis } from '@/services/trendAnalysisService'
+import { getTrendAnalysis, getPredictionData } from '@/services/trendAnalysisService'
 
 const router = useRouter()
 
@@ -351,7 +351,6 @@ const comparisonValue = ref(0)
 const comparisonChange = ref(0)
 const anomalyCount = ref(0)
 const anomalyStatus = ref('')
-const predictionAccuracy = ref(0)
 
 // 趋势分析
 const trendDirection = ref<'up' | 'down' | 'stable'>('stable')
@@ -492,8 +491,16 @@ const fetchTrendData = async () => {
       granularity: timeGranularity.value
     }
     
+    console.log('请求趋势分析数据参数:', params)
+    
     const response = await getTrendAnalysis(params)
-    return response.data || []
+    console.log('趋势分析API响应:', response)
+    
+    // 趋势分析服务已经处理了数据结构，直接使用response.data即可
+    const data = response.data || []
+    console.log('提取的趋势数据:', data)
+    
+    return data
   } catch (error) {
     console.error('获取趋势数据失败:', error)
     ElMessage.error('获取趋势数据失败')
@@ -505,8 +512,21 @@ const fetchTrendData = async () => {
 const initMainChart = async () => {
   if (!mainChartRef.value) return
   
+  // 确保图表实例已销毁再重新初始化
+  if (mainChart) {
+    mainChart.dispose()
+  }
   mainChart = echarts.init(mainChartRef.value)
   const data = await fetchTrendData()
+  
+  // 添加调试日志
+  console.log('主图表获取的数据:', data)
+  
+  // 确保有数据
+  if (data.length === 0) {
+    console.warn('没有数据用于主图表')
+    return
+  }
   
   currentPeriodTotal.value = data.reduce((sum: number, item: { date: string, value: number }) => sum + item.value, 0)
   
@@ -630,9 +650,17 @@ const detectAnomalies = (data: Array<{ date: string, value: number }>) => {
 const initComparisonChart = async () => {
   if (!comparisonChartRef.value || comparisonType.value === 'none') return
   
+  // 确保图表实例已销毁再重新初始化
+  if (comparisonChart) {
+    comparisonChart.dispose()
+  }
   comparisonChart = echarts.init(comparisonChartRef.value)
   const currentData = await fetchTrendData()
   const comparisonData = await fetchTrendData() // 获取对比期数据
+  
+  // 添加调试日志
+  console.log('对比图表获取的本期数据:', currentData)
+  console.log('对比图表获取的对比期数据:', comparisonData)
   
   comparisonValue.value = comparisonData.reduce((sum, item) => sum + item.value, 0)
   const change = ((currentPeriodTotal.value - comparisonValue.value) / comparisonValue.value) * 100
@@ -714,8 +742,15 @@ const initComparisonChart = async () => {
 const initPredictionChart = async () => {
   if (!predictionChartRef.value || !enablePrediction.value) return
   
+  // 确保图表实例已销毁再重新初始化
+  if (predictionChart) {
+    predictionChart.dispose()
+  }
   predictionChart = echarts.init(predictionChartRef.value)
   const historicalData = await fetchTrendData()
+  
+  // 添加调试日志
+  console.log('预测图表获取的历史数据:', historicalData)
   
   // 确保有历史数据
   if (historicalData.length === 0) {
@@ -726,117 +761,100 @@ const initPredictionChart = async () => {
   try {
     // 调用真实的趋势预测API
     const predictionDays = predictionPeriod.value === '7d' ? 7 : predictionPeriod.value === '30d' ? 30 : 90
-    // 确保历史数据的最后一项存在
-    if (historicalData.length > 0 && historicalData[historicalData.length - 1]) {
-      const lastItem = historicalData[historicalData.length - 1];
-      const firstItem = historicalData[0];
-            
-      // 添加类型检查以避免TypeScript错误
-      if (lastItem && firstItem) {
-        const lastDate = new Date(lastItem.date);
-              
-        console.log(`调用趋势预测API: days=${predictionDays}`);
-              
-        // 模拟调用真实API（在实际应用中应替换为真实API）
-        // 这里暂时使用简化版本：基于历史趋势的线性预测
-        const predictionData: Array<{ date: string, value: number }> = [];
-        const trend = historicalData.length > 1 && firstItem ? 
-          (lastItem.value - firstItem.value) / historicalData.length : 0;
-        const lastValue = lastItem.value;
-              
-        for (let i = 1; i <= predictionDays; i++) {
-          const date = new Date(lastDate);
-          date.setDate(date.getDate() + i);
-                
-          // 确保日期字符串存在
-          const dateString = date.toISOString().split('T')[0];
-          if (dateString) {
-            // 基于历史趋势的线性预测（不包含随机波动）
-            const predictedValue = Math.max(0, lastValue + trend * i);
-                  
-            predictionData.push({
-              date: dateString,
-              value: Math.round(predictedValue)
-            });
-          }
-        }
-              
-        predictionSummary.total = predictionData.reduce((sum: number, item: { date: string, value: number }) => sum + item.value, 0);
-              
-        // 分析预测趋势
-        const avgHistorical = historicalData.reduce((sum: number, item: { date: string, value: number }) => sum + item.value, 0) / historicalData.length;
-        const avgPrediction = predictionData.reduce((sum: number, item: { date: string, value: number }) => sum + item.value, 0) / predictionData.length;
-        const predictionTrendChange = avgHistorical > 0 ? ((avgPrediction - avgHistorical) / avgHistorical) * 100 : 0;
-              
-        if (predictionTrendChange > 5) {
-          predictionDirection.value = 'up';
-          predictionText.value = '上升';
-        } else if (predictionTrendChange < -5) {
-          predictionDirection.value = 'down';
-          predictionText.value = '下降';
-        } else {
-          predictionDirection.value = 'stable';
-          predictionText.value = '稳定';
-        }
-              
-        const option = {
-          title: {
-            text: '趋势预测',
-            left: 'center'
-          },
-          tooltip: {
-            trigger: 'axis'
-          },
-          legend: {
-            data: ['历史数据', '预测数据'],
-            top: 30
-          },
-          xAxis: {
-            type: 'category',
-            data: [...historicalData.map((item: { date: string, value: number }) => item.date), ...predictionData.map((item: { date: string, value: number }) => item.date)],
-            axisLabel: {
-              formatter: (value: string) => {
-                const date = new Date(value);
-                return `${date.getMonth() + 1}/${date.getDate()}`;
-              }
-            }
-          },
-          yAxis: {
-            type: 'value',
-            axisLabel: {
-              formatter: '¥{value}'
-            }
-          },
-          series: [
-            {
-              name: '历史数据',
-              type: 'line',
-              data: [...historicalData.map((item: { date: string, value: number }) => item.value), ...Array(predictionDays).fill(null)],
-              smooth: true,
-              lineStyle: { width: 3 },
-              itemStyle: { color: '#409EFF' }
-            },
-            {
-              name: '预测数据',
-              type: 'line',
-              data: [...Array(historicalData.length).fill(null), ...predictionData.map((item: { date: string, value: number }) => item.value)],
-              smooth: true,
-              lineStyle: { width: 3, type: 'dashed' },
-              itemStyle: { color: '#E6A23C' }
-            }
-          ],
-          grid: {
-            left: '3%',
-            right: '4%',
-            bottom: '3%',
-            top: '15%',
-            containLabel: true
-          }
-        };
-              
-        predictionChart.setOption(option);
-      }
+    
+    // 调用真实的预测数据API
+    const predictionResponse = await getPredictionData(predictionDays)
+    console.log('预测API响应:', predictionResponse)
+    
+    // 确保API调用成功
+    if (!predictionResponse.success) {
+      throw new Error(predictionResponse.message || '获取预测数据失败')
     }
+    
+    const predictionData = predictionResponse.data || []
+    console.log('预测数据:', predictionData)
+    
+    // 确保有预测数据
+    if (predictionData.length === 0) {
+      console.warn('预测API返回空数据')
+      return
+    }
+    
+    // 更新预测摘要
+    predictionSummary.total = predictionData.reduce((sum: number, item: { date: string, value: number }) => sum + item.value, 0);
+    
+    // 分析预测趋势
+    const avgHistorical = historicalData.reduce((sum: number, item: { date: string, value: number }) => sum + item.value, 0) / historicalData.length;
+    const avgPrediction = predictionData.reduce((sum: number, item: { date: string, value: number }) => sum + item.value, 0) / predictionData.length;
+    const predictionTrendChange = avgHistorical > 0 ? ((avgPrediction - avgHistorical) / avgHistorical) * 100 : 0;
+    
+    if (predictionTrendChange > 5) {
+      predictionDirection.value = 'up';
+      predictionText.value = '上升';
+    } else if (predictionTrendChange < -5) {
+      predictionDirection.value = 'down';
+      predictionText.value = '下降';
+    } else {
+      predictionDirection.value = 'stable';
+      predictionText.value = '稳定';
+    }
+    
+    const option = {
+      title: {
+        text: '趋势预测',
+        left: 'center'
+      },
+      tooltip: {
+        trigger: 'axis'
+      },
+      legend: {
+        data: ['历史数据', '预测数据'],
+        top: 30
+      },
+      xAxis: {
+        type: 'category',
+        data: [...historicalData.map((item: { date: string, value: number }) => item.date), ...predictionData.map((item: { date: string, value: number }) => item.date)],
+        axisLabel: {
+          formatter: (value: string) => {
+            const date = new Date(value);
+            return `${date.getMonth() + 1}/${date.getDate()}`;
+          }
+        }
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: {
+          formatter: '¥{value}'
+        }
+      },
+      series: [
+        {
+          name: '历史数据',
+          type: 'line',
+          data: [...historicalData.map((item: { date: string, value: number }) => item.value), ...Array(predictionData.length).fill(null)],
+          smooth: true,
+          lineStyle: { width: 3 },
+          itemStyle: { color: '#409EFF' }
+        },
+        {
+          name: '预测数据',
+          type: 'line',
+          data: [...Array(historicalData.length).fill(null), ...predictionData.map((item: { date: string, value: number }) => item.value)],
+          smooth: true,
+          lineStyle: { width: 3, type: 'dashed' },
+          itemStyle: { color: '#E6A23C' }
+        }
+      ],
+      grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '3%',
+        top: '15%',
+        containLabel: true
+      }
+    };
+    
+    predictionChart.setOption(option);
   } catch (error) {
     console.error('获取预测数据失败:', error)
     ElMessage.error('获取预测数据失败，请稍后重试')
@@ -954,7 +972,7 @@ const handleExportReport = async () => {
     csvLines.push(`变化率,${currentPeriodChange.value > 0 ? '+' : ''}${currentPeriodChange.value}%`)
     csvLines.push(`异常检测数量,${anomalyCount.value}`)
     csvLines.push(`异常检测状态,${anomalyStatus.value}`)
-    csvLines.push(`预测准确率,${predictionAccuracy.value}%`)
+    csvLines.push(`预测准确率,${predictionSummary.confidence}%`)
     csvLines.push('')
     csvLines.push('趋势分析')
     csvLines.push(`增长趋势,${trendDirection.value === 'up' ? '上升' : trendDirection.value === 'down' ? '下降' : '稳定'}`)
@@ -1027,7 +1045,9 @@ const handleExportReport = async () => {
     
     // 生成CSV文件内容
     const csvContent = csvLines.join('\n')
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    // 添加BOM标记解决Excel中文乱码问题
+    const csvWithBom = '\uFEFF' + csvContent
+    const blob = new Blob([csvWithBom], { type: 'text/csv;charset=utf-8;' })
     
     // 生成文件名
     const fileName = `趋势分析报告_${new Date().toISOString().split('T')[0]}_${Date.now()}.csv`

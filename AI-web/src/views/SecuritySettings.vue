@@ -389,13 +389,13 @@
     </div>
     
     <!-- 修改密码对话框 -->
-    <el-dialog v-model="showPasswordDialog" title="修改密码" width="400px">
+    <el-dialog v-model="showPasswordDialog" title="修改密码" width="500px">
       <el-form :model="passwordForm" label-width="80px" :rules="passwordRules" ref="passwordFormRef">
         <el-form-item label="当前密码" prop="currentPassword">
-          <el-input v-model="passwordForm.currentPassword" type="password" show-password />
+          <el-input v-model="passwordForm.currentPassword" type="password" show-password placeholder="请输入当前密码" />
         </el-form-item>
         <el-form-item label="新密码" prop="newPassword">
-          <el-input v-model="passwordForm.newPassword" type="password" show-password @input="updatePasswordStrength" />
+          <el-input v-model="passwordForm.newPassword" type="password" show-password @input="updatePasswordStrength" placeholder="请输入新密码" />
           <div class="password-strength-indicator" v-if="passwordForm.newPassword">
             <div class="strength-label">密码强度：</div>
             <div class="strength-bar-container">
@@ -416,6 +416,7 @@
           
           <!-- 密码要求检查 -->
           <div class="password-requirements" v-if="passwordForm.newPassword">
+            <div class="requirements-title">密码要求检查：</div>
             <div class="requirement-item" :class="{ 'met': calculatedStrength.requirements.minLength }">
               <span class="requirement-icon">{{ calculatedStrength.requirements.minLength ? '✓' : '○' }}</span>
               <span class="requirement-text">至少8个字符</span>
@@ -434,7 +435,7 @@
             </div>
             <div class="requirement-item" :class="{ 'met': calculatedStrength.requirements.special }">
               <span class="requirement-icon">{{ calculatedStrength.requirements.special ? '✓' : '○' }}</span>
-              <span class="requirement-text">特殊字符（例如 !@#$%^&*）</span>
+              <span class="requirement-text">特殊字符（: 、 \ . ， ？ 《 》 < > / = + - * ~ @ # $ % ^ & ( ) ——）</span>
             </div>
             <div class="requirement-item" :class="{ 'met': calculatedStrength.requirements.noConsecutive }">
               <span class="requirement-icon">{{ calculatedStrength.requirements.noConsecutive ? '✓' : '○' }}</span>
@@ -443,12 +444,12 @@
           </div>
         </el-form-item>
         <el-form-item label="确认密码" prop="confirmPassword">
-          <el-input v-model="passwordForm.confirmPassword" type="password" show-password />
+          <el-input v-model="passwordForm.confirmPassword" type="password" show-password placeholder="请再次输入新密码" />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="showPasswordDialog = false">取消</el-button>
-        <el-button type="primary" @click="changePassword">确定</el-button>
+        <el-button type="primary" @click="changePassword" :disabled="!isPasswordValid">确定</el-button>
       </template>
     </el-dialog>
     
@@ -1052,7 +1053,7 @@
               :src="twoFactorQrCode" 
               alt="两步验证二维码" 
               class="qr-code-image"
-              v-if="twoFactorQrCode && twoFactorQrCode.startsWith('data:image')"
+              v-if="twoFactorQrCode && twoFactorQrCode.length > 0"
             />
             <div v-else class="qr-placeholder">
               <div class="qr-content">
@@ -1098,6 +1099,11 @@
               <span class="code-text">{{ code }}</span>
             </div>
           </div>
+
+          <div class="backup-codes-actions-inline">
+            <el-button size="small" type="primary" plain @click="downloadNewBackupCodes">下载备用码</el-button>
+            <el-button size="small" type="info" plain @click="copyAllNewBackupCodes">复制所有</el-button>
+          </div>
           
           <el-alert 
             title="重要提醒" 
@@ -1138,7 +1144,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import QRCode from 'qrcode'
 import dataEncryptionManager from '@/services/dataEncryptionManager'
-import { changePassword as changeUserPassword } from '@/services/authService'
+import { changePassword as changeUserPassword, generateTotpSecret, verifyTotpCode, enableTotpAuth, disableTotpAuth, checkTotpStatus, regenerateBackupCodes as apiRegenerateBackupCodes } from '@/services/authService'
 import { validateUserToken } from '@/utils/tokenValidator'
 import { 
   checkBiometricSupport,
@@ -1169,15 +1175,6 @@ import {
   type ActiveDeviceSession
 } from '@/services/loginDeviceLimitService'
 import { 
-  enableTwoFactor,
-  disableTwoFactor,
-  activateTwoFactor,
-  getTwoFactorStatus,
-  getTwoFactorConfig,
-  verifyTwoFactorToken,
-  regenerateBackupCodes as generateNewBackupCodes
-} from '@/services/twoFactorService'
-import {
   getSecurityQuestionConfig,
   saveSecurityQuestionConfig
 } from '@/services/securityQuestionService'
@@ -1353,7 +1350,6 @@ const twoFactorQrCode = ref('')
 const twoFactorCode = ref('')
 const isTwoFactorCodeValid = ref(false)
 const newBackupCodes = ref<string[]>([])
-const twoFactorAccountId = ref('') // 实际应用中应从用户信息获取
 // 用于跟踪用户真实意图的临时变量
 const intendedTwoFactorState = ref(false)
 // 保存原始状态，用于在取消操作时恢复
@@ -1414,6 +1410,9 @@ watch(showSecurityQuestionDialog, (newVal: boolean) => {
 })
 
 const showRiskDetails = ref(false)
+
+// 客户端IP地址
+const clientIpAddress = ref('127.0.0.1')
 
 // 加载安全问题
 const loadSecurityQuestions = (): void => {
@@ -1578,6 +1577,15 @@ const calculatePasswordStrength = (password: string): { level: string; score: nu
 
 const calculatedStrength = computed(() => {
   return calculatePasswordStrength(passwordForm.newPassword)
+})
+
+const isPasswordValid = computed(() => {
+  const requirements = calculatedStrength.value.requirements
+  return requirements.minLength && 
+         requirements.lowercase && 
+         requirements.uppercase && 
+         requirements.number && 
+         requirements.special
 })
 
 const strengthClass = computed(() => {
@@ -1792,7 +1800,7 @@ const performSecurityCheck = async (): Promise<void> => {  try {
       userId,
       operation: 'perform_security_check',
       description: `执行安全检查，评分: ${assessment.overallScore}，风险等级: ${assessment.riskLevel}`,
-      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      ip: clientIpAddress.value,
       userAgent: navigator.userAgent,
       status: 'success'
     });
@@ -1811,7 +1819,7 @@ const performSecurityCheck = async (): Promise<void> => {  try {
       userId,
       operation: 'perform_security_check_failed',
       description: '执行安全检查失败',
-      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      ip: clientIpAddress.value,
       userAgent: navigator.userAgent,
       status: 'failed',
       details: { error: (error as Error).message }
@@ -1905,77 +1913,118 @@ const toggleTwoFactor = async (value: boolean): Promise<void> => {
       // 保存原始状态
       originalTwoFactorState.value = twoFactorEnabled.value
       
-      // 检查是否已有有效的两步验证配置
-      const twoFactorStatus = getTwoFactorStatus(twoFactorAccountId.value)
+      // 总是生成TOTP密钥和二维码
+      const result = await generateTotpSecret()
       
-      if (twoFactorStatus.enabled) {
-        // 如果已有有效的两步验证配置，直接进入验证码验证步骤
-        const config = getTwoFactorConfig(twoFactorAccountId.value)
-        if (config) {
-          twoFactorSecret.value = config.secret
-          newBackupCodes.value = config.backupCodes
-          twoFactorStep.value = 0
-          twoFactorCode.value = ''
-          isTwoFactorCodeValid.value = false
-          
-          // 不需要生成二维码，直接显示验证码输入界面
-          twoFactorQrCode.value = '' // 清空二维码
-          twoFactorEnabled.value = false // 临时设为false，验证通过后再设为true
-          showTwoFactorSetupDialog.value = true
+      console.log('generateTotpSecret完整返回:', JSON.stringify(result, null, 2))
+      console.log('result.data类型:', typeof result.data)
+      console.log('result.data内容:', result.data)
+      
+      if (result.success && result.data) {
+        // 关键点：处理双层 data 结构 (Rule 5)
+        // 更加健壮的解析逻辑
+        let actualData = result.data;
+        if (actualData && actualData.data && typeof actualData.data === 'object' && !Array.isArray(actualData.data)) {
+          actualData = actualData.data;
         }
-      } else {
-        // 如果没有有效的两步验证配置，初始化新的设置
-        const result = enableTwoFactor(twoFactorAccountId.value)
-        twoFactorSecret.value = result.secret
-        newBackupCodes.value = result.backupCodes
+        
+        console.log('解析后的两步验证数据:', actualData)
+        
+        twoFactorSecret.value = actualData.secret || ''
+        newBackupCodes.value = actualData.backupCodes || []
         twoFactorStep.value = 0
         twoFactorCode.value = ''
         isTwoFactorCodeValid.value = false
-        twoFactorQrCode.value = '' // 先清空，避免显示旧数据
+        twoFactorQrCode.value = ''
         
-        // 生成二维码
-        // 密钥已经是Base32格式，直接使用
-        const totpUrl = `otpauth://totp/AccountingSystem:${twoFactorAccountId.value}?secret=${result.secret}&issuer=AccountingSystem`
+        const qrCode = actualData.qrCode
+        console.log('后端返回的原始 qrCode 预览:', qrCode ? (typeof qrCode === 'string' ? qrCode.substring(0, 50) + '...' : '非字符串类型') : 'null')
         
-        // 使用Promise确保异步操作正确完成
-        QRCode.toDataURL(totpUrl, {
-          errorCorrectionLevel: 'M',
-          margin: 1,
-          width: 256
-        }).then((url: string) => {
-          twoFactorQrCode.value = url
-          console.log('二维码生成成功')
-        }).catch((error: Error) => {
-          console.error('生成二维码失败:', error)
-          ElMessage.warning('二维码生成失败，请使用密钥手动添加')
-          twoFactorQrCode.value = ''
-        })
+        if (qrCode && typeof qrCode === 'string') {
+          // 彻底修复：智能补全 Data URI 前缀，避免重复添加
+          if (qrCode.startsWith('data:')) {
+            // 已经是完整的 Data URI
+            twoFactorQrCode.value = qrCode
+          } else if (qrCode.startsWith('image/')) {
+            // 只有媒体类型，补全 data:
+            twoFactorQrCode.value = 'data:' + qrCode
+          } else if (qrCode.includes('base64,')) {
+            // 包含 base64 标记但没有 data:，补全 data:
+            twoFactorQrCode.value = 'data:' + qrCode
+          } else {
+            // 假设是纯 Base64 字符串
+            twoFactorQrCode.value = 'data:image/png;base64,' + qrCode
+          }
+          console.log('处理后的 twoFactorQrCode 预览:', twoFactorQrCode.value.substring(0, 50) + '...')
+        } else if (actualData.secret) {
+          // 后端未返回二维码但返回了密钥，前端尝试本地生成
+          console.log('后端未返回有效二维码，前端尝试本地生成...')
+          const appName = actualData.appName || 'AccountingSystem'
+          const username = actualData.username || localStorage.getItem('username') || 'user'
+          const otpauthUrl = `otpauth://totp/${encodeURIComponent(appName)}:${encodeURIComponent(username)}?secret=${actualData.secret}&issuer=${encodeURIComponent(appName)}`
+          try {
+            twoFactorQrCode.value = await QRCode.toDataURL(otpauthUrl, {
+              width: 256,
+              margin: 2
+            })
+            console.log('前端本地生成二维码成功')
+          } catch (err) {
+            console.error('前端本地生成二维码失败:', err)
+            ElMessage.error('二维码加载失败，请使用密钥手动添加')
+          }
+        } else {
+          console.error('qrCode 为空且没有密钥！')
+          ElMessage.error('获取两步验证信息失败，请重试')
+        }
         
-        // 注意：此时不立即启用两步验证，需要用户完成验证码验证后才真正启用
-        // 先将开关状态设为false，等用户完成设置后再设为true
         twoFactorEnabled.value = false
         showTwoFactorSetupDialog.value = true
+      } else {
+        console.error('生成TOTP密钥失败:', result)
+        ElMessage.error(result.message || '生成密钥失败')
+        intendedTwoFactorState.value = false
       }
     } else {
-      // 禁用两步验证
-      disableTwoFactor(twoFactorAccountId.value)
+      // 禁用两步验证 - 需要密码确认
+      try {
+        const { value: password } = await ElMessageBox.prompt('请输入密码以禁用两步验证', '确认禁用', {
+          confirmButtonText: '确认',
+          cancelButtonText: '取消',
+          inputType: 'password',
+          inputPattern: /.+/,
+          inputErrorMessage: '密码不能为空'
+        })
+        
+        const response = await disableTotpAuth(password)
+        
+        if (response.success) {
       twoFactorEnabled.value = false
       intendedTwoFactorState.value = false
+      originalTwoFactorState.value = false
+      backupCodesCount.value = 0
       ElMessage.success('两步验证已关闭')
-      
-      // 记录安全操作日志
-      const userId = localStorage.getItem('userId') || 'default_user'
-      logSecurityOperation({
-        userId,
-        operation: 'disable_two_factor',
-        description: '关闭两步验证',
-        ip: '127.0.0.1', // 实际应用中应获取真实IP
-        userAgent: navigator.userAgent,
-        status: 'success'
-      })
-      
-      // 重新加载安全日志
-      initializeSecurityLogs()
+          
+          // 记录安全操作日志
+          const userId = localStorage.getItem('userId') || 'default_user'
+          logSecurityOperation({
+            userId,
+            operation: 'disable_two_factor',
+            description: '关闭两步验证',
+            ip: '127.0.0.1', // 实际应用中应获取真实IP
+            userAgent: navigator.userAgent,
+            status: 'success'
+          })
+          
+          // 重新加载安全日志
+          initializeSecurityLogs()
+        } else {
+          ElMessage.error(response.message || '禁用失败')
+          intendedTwoFactorState.value = true
+        }
+      } catch (error) {
+        // 用户取消操作
+        intendedTwoFactorState.value = true
+      }
     }
   } catch (error) {
     console.error('切换两步验证失败:', error)
@@ -2000,17 +2049,18 @@ const verifyTwoFactorCode = async (): Promise<void> => {
   }
   
   try {
-    // 验证TOTP代码
-    const isValid = await verifyTwoFactorToken(twoFactorAccountId.value, twoFactorCode.value)
+    // 验证TOTP代码，传递 secret 参数用于启用过程中的验证
+    const response = await verifyTotpCode({ 
+      code: twoFactorCode.value,
+      secret: twoFactorSecret.value 
+    })
     
-    if (isValid) {
-      // 验证通过，激活两步验证
-      activateTwoFactor(twoFactorAccountId.value)
-      
-      // 更新状态
+    // 关键点：处理双层 data 结构 (Rule 5)
+    const actualData = response.data?.data || response.data;
+    
+    if (response.success && actualData?.verified) {
+      // 验证通过，进入下一步
       twoFactorStep.value = 1
-      twoFactorEnabled.value = true
-      intendedTwoFactorState.value = true
       ElMessage.success('验证通过')
       
       // 记录安全操作日志
@@ -2027,7 +2077,7 @@ const verifyTwoFactorCode = async (): Promise<void> => {
       // 重新加载安全日志
       initializeSecurityLogs();
     } else {
-      ElMessage.error('验证码错误，请重新输入')
+      ElMessage.error(response.message || '验证码错误，请重新输入')
       
       // 记录安全操作日志
       const userId = localStorage.getItem('userId') || 'default_user';
@@ -2064,51 +2114,76 @@ const verifyTwoFactorCode = async (): Promise<void> => {
   }
 }
 
-const completeTwoFactorSetup = (): void => {
-  // 真正启用两步验证
-  const twoFactorStatus = getTwoFactorStatus(twoFactorAccountId.value)
-  if (twoFactorStatus.enabled) {
-    twoFactorEnabled.value = true
-    intendedTwoFactorState.value = true
-    showTwoFactorSetupDialog.value = false
-    twoFactorStep.value = 0
-    ElMessage.success('两步验证已成功启用')
-    
-    // 记录安全操作日志
-    const userId = localStorage.getItem('userId') || 'default_user'
-    logSecurityOperation({
-      userId,
-      operation: 'enable_two_factor',
-      description: '启用两步验证',
-      ip: '127.0.0.1', // 实际应用中应获取真实IP
-      userAgent: navigator.userAgent,
-      status: 'success'
+const completeTwoFactorSetup = async (): Promise<void> => {
+  try {
+    // 启用两步验证
+    const response = await enableTotpAuth({
+      secret: twoFactorSecret.value,
+      code: twoFactorCode.value,
+      backupCodes: newBackupCodes.value
     })
     
-    // 重新加载安全日志
-    initializeSecurityLogs()
-  } else {
-    ElMessage.error('两步验证设置未完成，请先验证验证码')
+    // 关键点：处理双层 data 结构 (Rule 5)
+    const actualData = response.data?.data || response.data;
+    
+    if (response.success && actualData?.enabled) {
+      twoFactorEnabled.value = true
+      intendedTwoFactorState.value = true
+      originalTwoFactorState.value = true
+      showTwoFactorSetupDialog.value = false
+      twoFactorStep.value = 0
+      backupCodesCount.value = newBackupCodes.value.length
+      ElMessage.success('两步验证已成功启用')
+      
+      // 记录安全操作日志
+      const userId = localStorage.getItem('userId') || 'default_user'
+      logSecurityOperation({
+        userId,
+        operation: 'enable_two_factor',
+        description: '启用两步验证',
+        ip: '127.0.0.1', // 实际应用中应获取真实IP
+        userAgent: navigator.userAgent,
+        status: 'success'
+      })
+      
+      // 重新加载安全日志
+      initializeSecurityLogs()
+    } else {
+      ElMessage.error(response.message || '两步验证设置未完成，请先验证验证码')
+    }
+  } catch (error) {
+    console.error('完成两步验证设置失败:', error)
+    ElMessage.error('设置失败，请稍后重试')
   }
 }
 
-const cancelTwoFactorSetup = (): void => {
+const cancelTwoFactorSetup = async (): Promise<void> => {
   showTwoFactorSetupDialog.value = false
   twoFactorStep.value = 0
   
-  // 检查用户是否已完成两步验证设置
-  const twoFactorStatus = getTwoFactorStatus(twoFactorAccountId.value)
-  
-  // 只有在真正完成设置的情况下才保持开启状态
-  if (twoFactorStatus.enabled) {
-    // 已完成设置，保持开关开启状态
-    twoFactorEnabled.value = true
-    intendedTwoFactorState.value = true
-  } else {
-    // 未完成设置，回滚到原始状态
+  try {
+    // 检查用户是否已完成两步验证设置
+    const statusResponse = await checkTotpStatus()
+    
+    // 关键点：处理双层 data 结构 (Rule 5)
+    const actualData = statusResponse.data?.data || statusResponse.data;
+    
+    // 只有在真正完成设置的情况下才保持开启状态
+    if (statusResponse.success && actualData?.enabled) {
+      // 已完成设置，保持开关开启状态
+      twoFactorEnabled.value = true
+      intendedTwoFactorState.value = true
+    } else {
+      // 未完成设置，回滚到原始状态
+      twoFactorEnabled.value = originalTwoFactorState.value
+      intendedTwoFactorState.value = originalTwoFactorState.value
+      // 不再清理配置，保留已有的配置以便下次使用
+    }
+  } catch (error) {
+    console.error('检查两步验证状态失败:', error)
+    // 出错时回滚到原始状态
     twoFactorEnabled.value = originalTwoFactorState.value
     intendedTwoFactorState.value = originalTwoFactorState.value
-    // 不再清理配置，保留已有的配置以便下次使用
   }
   
   // 记录安全操作日志
@@ -2126,20 +2201,30 @@ const cancelTwoFactorSetup = (): void => {
   initializeSecurityLogs();
 }
 
-const handleTwoFactorDialogClose = (): void => {
-  // 检查用户是否已完成两步验证设置
-  const twoFactorStatus = getTwoFactorStatus(twoFactorAccountId.value)
-  
-  // 只有在真正完成设置的情况下才保持开启状态
-  if (twoFactorStatus.enabled) {
-    // 已完成设置，保持开关开启状态
-    twoFactorEnabled.value = true
-    intendedTwoFactorState.value = true
-  } else {
-    // 未完成设置，回滚到原始状态
+const handleTwoFactorDialogClose = async (): Promise<void> => {
+  try {
+    // 检查用户是否已完成两步验证设置
+    const statusResponse = await checkTotpStatus()
+    
+    // 关键点：处理双层 data 结构 (Rule 5)
+    const actualData = statusResponse.data?.data || statusResponse.data;
+    
+    // 只有在真正完成设置的情况下才保持开启状态
+    if (statusResponse.success && actualData?.enabled) {
+      // 已完成设置，保持开关开启状态
+      twoFactorEnabled.value = true
+      intendedTwoFactorState.value = true
+    } else {
+      // 未完成设置，回滚到原始状态
+      twoFactorEnabled.value = originalTwoFactorState.value
+      intendedTwoFactorState.value = originalTwoFactorState.value
+      // 不再清理配置，保留已有的配置以便下次使用
+    }
+  } catch (error) {
+    console.error('检查两步验证状态失败:', error)
+    // 出错时回滚到原始状态
     twoFactorEnabled.value = originalTwoFactorState.value
     intendedTwoFactorState.value = originalTwoFactorState.value
-    // 不再清理配置，保留已有的配置以便下次使用
   }
   
   // 重置步骤
@@ -2158,6 +2243,68 @@ const handleTwoFactorDialogClose = (): void => {
   
   // 重新加载安全日志
   initializeSecurityLogs();
+}
+
+/**
+ * 复制所有备用验证码
+ */
+const copyAllNewBackupCodes = async (): Promise<void> => {
+  try {
+    const codesText = newBackupCodes.value.join('\n')
+    await navigator.clipboard.writeText(codesText)
+    ElMessage.success('所有备用验证码已复制到剪贴板')
+    
+    // 记录安全操作日志
+    const userId = localStorage.getItem('userId') || 'default_user';
+    logSecurityOperation({
+      userId,
+      operation: 'copy_all_backup_codes',
+      description: '复制所有备用验证码',
+      ip: '127.0.0.1',
+      userAgent: navigator.userAgent,
+      status: 'success'
+    });
+    initializeSecurityLogs();
+  } catch (err) {
+    ElMessage.error('复制失败')
+  }
+}
+
+/**
+ * 下载备用验证码
+ */
+const downloadNewBackupCodes = (): void => {
+  try {
+    const codesText = `两步验证备用验证码 (生成时间: ${new Date().toLocaleString()})\n\n` + 
+                     newBackupCodes.value.map((code, index) => `${index + 1}. ${code}`).join('\n') + 
+                     '\n\n请妥善保管这些验证码。每个验证码只能使用一次。'
+    
+    const blob = new Blob([codesText], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'backup-codes.txt'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    
+    ElMessage.success('备用验证码已下载')
+    
+    // 记录安全操作日志
+    const userId = localStorage.getItem('userId') || 'default_user';
+    logSecurityOperation({
+      userId,
+      operation: 'download_backup_codes',
+      description: '下载备用验证码文件',
+      ip: '127.0.0.1',
+      userAgent: navigator.userAgent,
+      status: 'success'
+    });
+    initializeSecurityLogs();
+  } catch (err) {
+    ElMessage.error('下载失败')
+  }
 }
 
 const copySecretKey = async (): Promise<void> => {
@@ -3085,16 +3232,25 @@ const copyBackupCode = async (code: string): Promise<void> => {
   }
 }
 
-const regenerateBackupCodes = (): void => {
-  ElMessageBox.confirm('重新生成备用验证码将使之前的验证码失效，是否继续？', '提示', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning'
-  }).then(() => {
+const regenerateBackupCodes = async (): Promise<void> => {
+  try {
+    const { value: password } = await ElMessageBox.prompt('请输入密码以重新生成备用验证码', '确认操作', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      inputType: 'password',
+      inputPattern: /.+/,
+      inputErrorMessage: '密码不能为空'
+    })
+    
     // 重新生成备份验证码
-    try {
-      const newCodes = generateNewBackupCodes(twoFactorAccountId.value)
-      backupCodes.value = newCodes
+    const response = await apiRegenerateBackupCodes(password)
+    
+    // 关键点：处理双层 data 结构 (Rule 5)
+    const actualData = response.data?.data || response.data;
+    
+    if (response.success && actualData?.backupCodes) {
+      backupCodes.value = actualData.backupCodes
+      backupCodesCount.value = actualData.backupCodes.length
       ElMessage.success('备用验证码已重新生成')
       
       // 记录安全操作日志
@@ -3110,7 +3266,11 @@ const regenerateBackupCodes = (): void => {
       
       // 重新加载安全日志
       initializeSecurityLogs();
-    } catch (error) {
+    } else {
+      ElMessage.error(response.message || '重新生成失败，请稍后重试')
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
       console.error('重新生成备份验证码失败:', error)
       ElMessage.error('重新生成失败，请稍后重试')
       
@@ -3129,9 +3289,7 @@ const regenerateBackupCodes = (): void => {
       // 重新加载安全日志
       initializeSecurityLogs();
     }
-  }).catch(() => {
-    // 取消操作
-  })
+  }
 }
 
 const saveLoginLimit = async (): Promise<void> => {
@@ -3406,8 +3564,8 @@ const manuallyLockAccount = async (): Promise<void> => {
   try {
     lockOperationLoading.value = true
     
-    // 获取当前用户ID（模拟）
-    const accountId = 'default_user'
+    // 获取当前用户ID
+    const accountId = localStorage.getItem('userId') || 'default_user'
     
     // 获取锁定时长配置
     const config = getSecurityConfig()
@@ -3649,8 +3807,8 @@ const formatRemainingTime = (seconds: number): string => {
 // 检查账户锁定状态
 const checkAccountLockStatus = (): void => {
   try {
-    // 获取当前用户ID（模拟）
-    const accountId = 'default_user'
+    // 获取当前用户ID
+    const accountId = localStorage.getItem('userId') || 'default_user'
     
     // 获取安全配置
     const config = getSecurityConfig()
@@ -3769,13 +3927,22 @@ onMounted(async () => {
     console.error('令牌验证异常:', error)
   }
   
+  // 获取客户端IP地址
+  try {
+    const ip = await getClientIpAddress()
+    clientIpAddress.value = ip
+    console.log('客户端IP地址:', ip)
+  } catch (error) {
+    console.error('获取客户端IP地址失败:', error)
+  }
+  
   // 记录页面访问日志
   const userId = localStorage.getItem('userId') || 'default_user';
   logSecurityOperation({
     userId,
     operation: 'page_view',
     description: '访问安全设置页面',
-    ip: '127.0.0.1', // 实际应用中应获取真实IP
+    ip: clientIpAddress.value,
     userAgent: navigator.userAgent,
     status: 'success'
   });
@@ -3981,6 +4148,13 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.backup-codes-actions-inline {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin: 15px 0;
+}
+
 .security-settings {
   padding: 20px;
   max-width: 1200px;
@@ -4700,6 +4874,13 @@ onUnmounted(() => {
   padding: 12px;
   background-color: #f5f7fa;
   border-radius: 4px;
+}
+
+.password-requirements .requirements-title {
+  font-weight: 600;
+  color: #606266;
+  margin-bottom: 8px;
+  font-size: 14px;
 }
 
 /* 账户状态 */

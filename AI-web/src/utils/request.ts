@@ -36,7 +36,7 @@ const requestInterceptors: RequestInterceptor[] = []
 const responseInterceptors: ResponseInterceptor[] = []
 
 // 基础URL - 添加/api前缀
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:4000/api'
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://10.111.53.9:4000/api'
 
 /**
  * 添加请求拦截器
@@ -110,7 +110,12 @@ const isTokenExpiredError = (error: any): boolean => {
       ]
       
       // 检查errorData中的各个字段
-      const errorText = JSON.stringify(errorData).toLowerCase()
+      let errorText = ''
+      try {
+        errorText = errorData ? JSON.stringify(errorData).toLowerCase() : ''
+      } catch (e) {
+        errorText = String(errorData).toLowerCase()
+      }
       for (const msg of errorMessages) {
         if (errorText.includes(msg.toLowerCase())) {
           console.log(`检测到令牌过期错误: ${msg}`)
@@ -119,7 +124,13 @@ const isTokenExpiredError = (error: any): boolean => {
       }
       
       // 检查原始错误信息
-      if (error.message && errorMessages.some(msg => error.message.toLowerCase().includes(msg.toLowerCase()))) {
+      if (error.message && errorMessages.some(msg => {
+        try {
+          return error.message.toLowerCase().includes(msg.toLowerCase())
+        } catch (e) {
+          return false
+        }
+      })) {
         console.log(`从错误消息中检测到令牌过期: ${error.message}`)
         return true
       }
@@ -291,6 +302,14 @@ export async function request<T = any>(
           ...mergedConfig.headers,
           'Authorization': `Bearer ${token}`
         }
+      } else {
+        // 对于登录和注册等不需要认证的接口，不显示警告
+        const noAuthEndpoints = ['/auth/login', '/auth/register', '/auth/reset-password']
+        const isNoAuthEndpoint = noAuthEndpoints.some(endpoint => url.includes(endpoint))
+        
+        if (!isNoAuthEndpoint) {
+          console.warn('警告: 请求未携带认证令牌', fullUrl)
+        }
       }
       
       // 处理请求体
@@ -330,6 +349,19 @@ export async function request<T = any>(
           errorMessage = `HTTP ${processedResponse.status}: ${processedResponse.statusText}`
         }
         
+        // 特殊处理401错误
+        if (processedResponse.status === 401) {
+          const noAuthEndpoints = ['/auth/login', '/auth/register', '/auth/reset-password']
+          const isNoAuthEndpoint = noAuthEndpoints.some(endpoint => url.includes(endpoint))
+          
+          if (isNoAuthEndpoint) {
+            console.log('登录/注册接口401错误，保持原始错误信息:', errorMessage)
+          } else {
+            console.log('检测到401未授权错误，可能需要重新登录')
+            errorMessage = '身份验证已过期，请重新登录'
+          }
+        }
+        
         const error = new Error(errorMessage)
         ;(error as any).status = processedResponse.status
         ;(error as any).response = processedResponse
@@ -343,7 +375,18 @@ export async function request<T = any>(
       let data: T
       
       if (contentType && contentType.includes('application/json')) {
-        data = await processedResponse.json()
+        // 尝试解析JSON响应，如果失败则返回默认响应结构
+        try {
+          data = await processedResponse.json()
+        } catch (parseError) {
+          console.warn('JSON解析失败，返回默认响应结构:', parseError)
+          // 返回默认的成功响应结构
+          data = {
+            success: true,
+            message: '请求成功但无数据返回',
+            data: null
+          } as unknown as T
+        }
       } else if (contentType && contentType.includes('text/')) {
         data = await processedResponse.text() as unknown as T
       } else {
@@ -357,7 +400,10 @@ export async function request<T = any>(
       console.error(`请求失败: ${config.method || 'GET'} ${url}`, error)
       
       // 检查是否是令牌过期错误，并且没有超过重试次数，并且不是刷新令牌请求本身
-      if (!isRefreshTokenRequest && retryCount < maxRetryCount && isTokenExpiredError(error)) {
+      const noAuthEndpoints = ['/auth/login', '/auth/register', '/auth/reset-password']
+      const isNoAuthEndpoint = noAuthEndpoints.some(endpoint => url.includes(endpoint))
+
+      if (!isNoAuthEndpoint && !isRefreshTokenRequest && retryCount < maxRetryCount && isTokenExpiredError(error)) {
         console.log('检测到令牌过期，尝试刷新令牌...')
         retryCount++
         

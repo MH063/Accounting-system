@@ -81,10 +81,15 @@ export const register = async (registerData: RegisterRequest): Promise<ApiRespon
     
     // 注册成功后保存令牌到本地存储
     if (response.success && response.data) {
-      localStorage.setItem('access_token', response.data.token)
-      localStorage.setItem('refresh_token', response.data.refreshToken)
-      localStorage.setItem('token_expires', (Date.now() + 24 * 60 * 60 * 1000).toString()) // 默认24小时
-      localStorage.setItem('user_info', JSON.stringify(response.data.user))
+      // 正确处理双层嵌套结构: {success: true, data: {data: {user, token}, message}}
+      const actualData = response.data.data || response.data;
+      
+      if (actualData.token) {
+        localStorage.setItem('access_token', actualData.token)
+        localStorage.setItem('refresh_token', actualData.refreshToken)
+        localStorage.setItem('token_expires', (Date.now() + 24 * 60 * 60 * 1000).toString()) // 默认24小时
+        localStorage.setItem('user_info', JSON.stringify(actualData.user))
+      }
     }
     
     return response
@@ -216,7 +221,7 @@ export const login = async (loginData: LoginRequest): Promise<ApiResponse<LoginR
     // 登录成功后保存令牌到本地存储
     if (response.success && response.data) {
       // 正确处理双层嵌套结构 response.data.data.xxx
-      const actualData = response.data
+      const actualData = response.data.data || response.data;
       
       // 使用身份验证存储服务保存完整的认证信息
       authStorageService.saveAuthData({
@@ -478,25 +483,14 @@ export const resetPassword = async (resetData: ResetPasswordRequest): Promise<Ap
  * @returns 修改结果的API响应
  */
 export const changePassword = async (changeData: ChangePasswordRequest): Promise<ApiResponse<null>> => {
-  try {
-    console.log('修改密码')
-    
-    // 调用真实API修改密码
-    const response = await request<ApiResponse<null>>('/auth/change-password', {
-      method: 'POST',
-      body: JSON.stringify(changeData)
-    })
-    
-    return response
-  } catch (error) {
-    console.error('修改密码失败:', error)
-    return {
-      success: false,
-      data: null,
-      message: '修改密码失败',
-      code: 400
-    }
-  }
+  console.log('修改密码')
+  
+  const response = await request<ApiResponse<null>>('/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify(changeData)
+  })
+  
+  return response
 }
 
 /**
@@ -568,7 +562,283 @@ export const clearLocalAuth = (): void => {
   localStorage.removeItem('user_info')
 }
 
-// 两步验证相关接口
+// TOTP两步验证相关接口
+
+// TOTP密钥生成响应
+export interface TotpSecretResponse {
+  secret: string
+  qrCode: string
+  backupCodes: string[]
+  appName: string
+  username: string
+}
+
+// TOTP验证请求
+export interface TotpVerifyRequest {
+  code: string
+  secret?: string
+}
+
+// TOTP验证响应
+export interface TotpVerifyResponse {
+  verified: boolean
+  token?: string
+}
+
+// TOTP状态响应
+export interface TotpStatusResponse {
+  enabled: boolean
+  hasBackupCodes: boolean
+}
+
+// TOTP启用请求
+export interface TotpEnableRequest {
+  secret: string
+  code: string
+  backupCodes: string[]
+}
+
+// TOTP启用响应
+export interface TotpEnableResponse {
+  enabled: boolean
+  message: string
+}
+
+// 备份代码重新生成响应
+export interface BackupCodesRegenerateResponse {
+  backupCodes: string[]
+  message: string
+}
+
+/**
+ * 生成TOTP两步验证密钥
+ * @returns TOTP密钥生成结果的API响应
+ */
+export const generateTotpSecret = async (): Promise<ApiResponse<TotpSecretResponse>> => {
+  try {
+    console.log('生成TOTP密钥请求开始')
+    
+    const response = await request<ApiResponse<TotpSecretResponse>>('/auth/totp/generate', {
+      method: 'POST'
+    })
+    
+    console.log('生成TOTP密钥API完整响应:', JSON.stringify(response, null, 2))
+    
+    if (response && response.success && response.data) {
+      // 更加健壮的解析逻辑，兼容处理双层嵌套 (Rule 5)
+      let data = response.data;
+      if (data && data.data && typeof data.data === 'object' && !Array.isArray(data.data)) {
+        data = data.data;
+      }
+      
+      console.log('服务层解析后的TOTP数据:', data)
+      if (!data.qrCode && !data.secret) {
+        console.warn('后端响应数据不完整，缺少 qrCode 或 secret 字段')
+      }
+      
+      return {
+        ...response,
+        data
+      }
+    }
+    
+    return response
+  } catch (error) {
+    console.error('生成TOTP密钥失败:', error)
+    return {
+      success: false,
+      data: {} as TotpSecretResponse,
+      message: '生成密钥失败',
+      code: 400
+    }
+  }
+}
+
+/**
+ * 验证TOTP两步验证码
+ * @param verifyData 验证数据
+ * @returns 验证结果的API响应
+ */
+export const verifyTotpCode = async (verifyData: TotpVerifyRequest): Promise<ApiResponse<TotpVerifyResponse>> => {
+  try {
+    console.log('验证TOTP两步验证码')
+    
+    const response = await request<ApiResponse<TotpVerifyResponse>>('/auth/totp/verify', {
+      method: 'POST',
+      body: JSON.stringify(verifyData)
+    })
+    
+    console.log('验证TOTP验证码API返回响应:', response)
+    
+    // 关键点：处理双层 data 结构 (Rule 5)
+    if (response.data && response.data.data && typeof response.data.data === 'object' && !Array.isArray(response.data.data)) {
+      return {
+        ...response,
+        data: response.data.data
+      }
+    }
+    
+    return response
+  } catch (error) {
+    console.error('验证TOTP验证码失败:', error)
+    return {
+      success: false,
+      data: { verified: false },
+      message: '验证码验证失败',
+      code: 400
+    }
+  }
+}
+
+/**
+ * 启用TOTP两步验证
+ * @param enableData 启用数据
+ * @returns 启用结果的API响应
+ */
+export const enableTotpAuth = async (enableData: TotpEnableRequest): Promise<ApiResponse<TotpEnableResponse>> => {
+  try {
+    console.log('启用TOTP两步验证')
+    
+    const response = await request<ApiResponse<TotpEnableResponse>>('/auth/totp/enable', {
+      method: 'POST',
+      body: JSON.stringify(enableData)
+    })
+    
+    console.log('启用TOTP两步验证API返回响应:', response)
+    
+    // 关键点：处理双层 data 结构 (Rule 5)
+    if (response.data && response.data.data && typeof response.data.data === 'object' && !Array.isArray(response.data.data)) {
+      return {
+        ...response,
+        data: response.data.data
+      }
+    }
+    
+    return response
+  } catch (error) {
+    console.error('启用TOTP两步验证失败:', error)
+    return {
+      success: false,
+      data: { enabled: false, message: '启用失败' },
+      message: '启用两步验证失败',
+      code: 400
+    }
+  }
+}
+
+/**
+ * 禁用TOTP两步验证
+ * @param password 用户密码
+ * @returns 禁用结果的API响应
+ */
+export const disableTotpAuth = async (password: string): Promise<ApiResponse<{ disabled: boolean; message: string }>> => {
+  try {
+    console.log('禁用TOTP两步验证')
+    
+    const response = await request<ApiResponse<{ disabled: boolean; message: string }>>('/auth/totp/disable', {
+      method: 'POST',
+      body: JSON.stringify({ password })
+    })
+    
+    console.log('禁用TOTP两步验证API返回响应:', response)
+    
+    // 关键点：处理双层 data 结构 (Rule 5)
+    if (response.data && response.data.data && typeof response.data.data === 'object' && !Array.isArray(response.data.data)) {
+      return {
+        ...response,
+        data: response.data.data
+      }
+    }
+    
+    return response
+  } catch (error) {
+    console.error('禁用TOTP两步验证失败:', error)
+    return {
+      success: false,
+      data: { disabled: false, message: '禁用失败' },
+      message: '禁用两步验证失败',
+      code: 400
+    }
+  }
+}
+
+/**
+ * 检查TOTP两步验证状态
+ * @returns 状态查询结果的API响应
+ */
+export const checkTotpStatus = async (): Promise<ApiResponse<TotpStatusResponse>> => {
+  try {
+    console.log('检查TOTP两步验证状态')
+    
+    const response = await request<ApiResponse<TotpStatusResponse>>('/auth/totp/status', {
+      method: 'GET'
+    })
+    
+    console.log('检查TOTP状态API完整响应:', JSON.stringify(response, null, 2))
+    
+    if (response && response.success && response.data) {
+      console.log('TOTP状态数据内容:', response.data)
+      
+      // 关键点：处理双层 data 结构 (Rule 5)
+      if (response.data && response.data.data && typeof response.data.data === 'object' && !Array.isArray(response.data.data)) {
+        return {
+          ...response,
+          data: response.data.data
+        }
+      }
+    } else {
+      console.warn('TOTP状态检查返回异常结构:', response)
+    }
+    
+    return response
+  } catch (error) {
+    console.error('检查TOTP状态失败:', error)
+    return {
+      success: false,
+      data: { enabled: false, hasBackupCodes: false },
+      message: '检查状态失败',
+      code: 400
+    }
+  }
+}
+
+/**
+ * 重新生成备份代码
+ * @param password 用户密码
+ * @returns 生成结果的API响应
+ */
+export const regenerateBackupCodes = async (password: string): Promise<ApiResponse<BackupCodesRegenerateResponse>> => {
+  try {
+    console.log('重新生成备份代码')
+    
+    const response = await request<ApiResponse<BackupCodesRegenerateResponse>>('/auth/totp/backup-codes/regenerate', {
+      method: 'POST',
+      body: JSON.stringify({ password })
+    })
+    
+    console.log('重新生成备份代码API返回响应:', response)
+    
+    // 关键点：处理双层 data 结构 (Rule 5)
+    if (response.data && response.data.data && typeof response.data.data === 'object' && !Array.isArray(response.data.data)) {
+      return {
+        ...response,
+        data: response.data.data
+      }
+    }
+    
+    return response
+  } catch (error) {
+    console.error('重新生成备份代码失败:', error)
+    return {
+      success: false,
+      data: { backupCodes: [], message: '生成失败' },
+      message: '重新生成备份代码失败',
+      code: 400
+    }
+  }
+}
+
+// 两步验证相关接口（保留原有接口以兼容现有代码）
 
 // 两步验证请求参数
 export interface TwoFactorVerifyRequest {
@@ -643,6 +913,14 @@ export const verifyTwoFactor = async (verifyData: TwoFactorVerifyRequest): Promi
     
     console.log('两步验证API返回响应:', response)
     
+    // 关键点：处理双层 data 结构 (Rule 5)
+    if (response.data && response.data.data && typeof response.data.data === 'object' && !Array.isArray(response.data.data)) {
+      return {
+        ...response,
+        data: response.data.data
+      }
+    }
+    
     return response
   } catch (error) {
     console.error('两步验证失败:', error)
@@ -673,6 +951,14 @@ export const getTwoFactorStatus = async (userId: number): Promise<ApiResponse<Tw
     })
     
     console.log('两步验证状态API返回响应:', response)
+    
+    // 关键点：处理双层 data 结构 (Rule 5)
+    if (response.data && response.data.data && typeof response.data.data === 'object' && !Array.isArray(response.data.data)) {
+      return {
+        ...response,
+        data: response.data.data
+      }
+    }
     
     return response
   } catch (error) {
@@ -708,6 +994,14 @@ export const enableTwoFactor = async (enableData: TwoFactorEnableRequest): Promi
     
     console.log('启用两步验证API返回响应:', response)
     
+    // 关键点：处理双层 data 结构 (Rule 5)
+    if (response.data && response.data.data && typeof response.data.data === 'object' && !Array.isArray(response.data.data)) {
+      return {
+        ...response,
+        data: response.data.data
+      }
+    }
+    
     return response
   } catch (error) {
     console.error('启用两步验证失败:', error)
@@ -735,6 +1029,14 @@ export const disableTwoFactor = async (method: string): Promise<ApiResponse<{ di
     })
     
     console.log('禁用两步验证API返回响应:', response)
+    
+    // 关键点：处理双层 data 结构 (Rule 5)
+    if (response.data && response.data.data && typeof response.data.data === 'object' && !Array.isArray(response.data.data)) {
+      return {
+        ...response,
+        data: response.data.data
+      }
+    }
     
     return response
   } catch (error) {
@@ -764,6 +1066,14 @@ export const generateTwoFactorCode = async (generateData: TwoFactorCodeGenerateR
     
     console.log('生成验证码API返回响应:', response)
     
+    // 关键点：处理双层 data 结构 (Rule 5)
+    if (response.data && response.data.data && typeof response.data.data === 'object' && !Array.isArray(response.data.data)) {
+      return {
+        ...response,
+        data: response.data.data
+      }
+    }
+    
     return response
   } catch (error) {
     console.error('生成验证码失败:', error)
@@ -771,6 +1081,32 @@ export const generateTwoFactorCode = async (generateData: TwoFactorCodeGenerateR
       success: false,
       data: { sent: false, method: generateData.method, expiresAt: '', cooldown: 0 },
       message: '生成验证码失败',
+      code: 400
+    }
+  }
+}
+
+/**
+ * 获取客户端IP地址
+ * @returns 客户端IP地址的API响应
+ */
+export const getClientIpAddress = async (): Promise<ApiResponse<{ ip: string }>> => {
+  try {
+    console.log('获取客户端IP地址')
+    
+    const response = await request<ApiResponse<{ ip: string }>>('/auth/client-ip', {
+      method: 'GET'
+    })
+    
+    console.log('获取客户端IP地址API返回响应:', response)
+    
+    return response
+  } catch (error) {
+    console.error('获取客户端IP地址失败:', error)
+    return {
+      success: false,
+      data: { ip: '0.0.0.0' },
+      message: '获取客户端IP地址失败',
       code: 400
     }
   }
@@ -793,5 +1129,6 @@ export default {
   getTwoFactorStatus,
   enableTwoFactor,
   disableTwoFactor,
-  generateTwoFactorCode
+  generateTwoFactorCode,
+  getClientIpAddress
 }

@@ -1,6 +1,9 @@
 import { ref, Ref, onMounted, onUnmounted } from 'vue'
+import * as notificationApi from './notificationApi'
 
-// 通知类型定义
+/**
+ * 通知类型定义
+ */
 export interface Notification {
   id: number
   title: string
@@ -11,129 +14,142 @@ export interface Notification {
   actionText?: string
   createdAt: string
   actionPath?: string
-  reminderType?: 'immediate' | 'delayed' | 'historical' // 新增字段：提醒类型
-  priorityLevel?: 'high' | 'medium' | 'low' // 新增字段：优先级
+  reminderType?: 'immediate' | 'delayed' | 'historical'
+  priorityLevel?: 'high' | 'medium' | 'low'
 }
 
-// 通知服务类
+/**
+ * 通知筛选参数
+ */
+export interface NotificationFilters {
+  type?: string
+  isRead?: boolean
+  page?: number
+  pageSize?: number
+}
+
+/**
+ * 通知服务类
+ * 使用后端API进行通知管理
+ */
 class NotificationService {
   private notifications: Ref<Notification[]>
+  private unreadCount: Ref<number>
   private listeners: Array<() => void> = []
+  private isLoading: Ref<boolean>
+  private error: Ref<string | null>
   
   constructor() {
-    // 从localStorage加载通知数据
-    this.notifications = ref<Notification[]>(this.loadFromStorage())
-    
-    // 监听storage事件以实现跨标签页同步
-    this.setupStorageListener()
+    this.notifications = ref<Notification[]>([])
+    this.unreadCount = ref(0)
+    this.isLoading = ref(false)
+    this.error = ref(null)
   }
   
-  // 加载存储的通知数据
-  private loadFromStorage(): Notification[] {
-    try {
-      const stored = localStorage.getItem('notifications')
-      if (stored) {
-        return JSON.parse(stored)
-      }
-    } catch (error) {
-      console.error('加载通知数据失败:', error)
-    }
-    
-    // 默认通知数据
-    return [
-      {
-        id: 1,
-        title: '费用报销申请待审批',
-        message: '您的费用报销申请已提交，等待管理员审批处理。',
-        type: 'expense',
-        isRead: false,
-        isImportant: true,
-        actionText: '查看详情',
-        actionPath: '/dashboard/expense',
-        createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
-      },
-      {
-        id: 2,
-        title: '月度账单生成完成',
-        message: '2024年1月份的集体账单已生成完成，请及时查看。',
-        type: 'bill',
-        isRead: false,
-        isImportant: false,
-        actionText: '查看账单',
-        actionPath: '/dashboard/bills',
-        createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString()
-      },
-      {
-        id: 3,
-        title: '新成员加入申请',
-        message: '张三申请加入您的寝室，需要您进行审核。',
-        type: 'member',
-        isRead: false,
-        isImportant: true,
-        actionText: '审核申请',
-        actionPath: '/dashboard/member',
-        createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString()
-      },
-      {
-        id: 4,
-        title: '预算提醒',
-        message: '本月支出已达到预算的80%，请注意控制开支',
-        type: 'warning',
-        isRead: false,
-        isImportant: true,
-        actionPath: '/dashboard/budget',
-        createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString()
-      },
-      {
-        id: 5,
-        title: '账单提醒',
-        message: '有3笔账单等待确认，请及时处理',
-        type: 'info',
-        isRead: false,
-        isImportant: true,
-        actionPath: '/dashboard/bills',
-        createdAt: new Date(Date.now() - 15 * 60 * 60 * 1000).toISOString()
-      }
-    ]
-  }
-  
-  // 保存通知数据到localStorage
-  private saveToStorage(): void {
-    try {
-      localStorage.setItem('notifications', JSON.stringify(this.notifications.value))
-    } catch (error) {
-      console.error('保存通知数据失败:', error)
+  /**
+   * 转换后端通知数据为前端格式
+   */
+  private transformNotification(apiNotification: notificationApi.Notification): Notification {
+    return {
+      id: apiNotification.id,
+      title: apiNotification.title,
+      message: apiNotification.content,
+      type: apiNotification.type,
+      isRead: apiNotification.is_read,
+      isImportant: apiNotification.is_important,
+      createdAt: apiNotification.created_at,
+      actionPath: this.getActionPath(apiNotification)
     }
   }
   
-  // 设置存储监听器以实现跨标签页同步
-  private setupStorageListener(): void {
-    const handler = (event: StorageEvent) => {
-      if (event.key === 'notifications' && event.newValue) {
-        try {
-          this.notifications.value = JSON.parse(event.newValue)
-          // 通知所有监听器
-          this.listeners.forEach(listener => listener())
-        } catch (error) {
-          console.error('解析存储的通知数据失败:', error)
-        }
-      }
+  /**
+   * 根据通知类型获取操作路径
+   */
+  private getActionPath(notification: notificationApi.Notification): string | undefined {
+    const typeToPath: Record<string, string> = {
+      'expense': '/dashboard/expense',
+      'bill': '/dashboard/bills',
+      'member': '/dashboard/member',
+      'warning': '/dashboard/budget',
+      'info': '/dashboard/bills',
+      'success': '/dashboard',
+      'error': '/dashboard',
+      'system': '/dashboard'
     }
-    
-    if (typeof window !== 'undefined') {
-      window.addEventListener('storage', handler)
-    }
+    return typeToPath[notification.type]
   }
   
-  // 获取所有通知
+  /**
+   * 获取所有通知
+   */
   getAllNotifications(): Ref<Notification[]> {
     return this.notifications
   }
   
-  // 获取智能提醒（近期重要通知）
+  /**
+   * 获取未读数量
+   */
+  getUnreadCount(): Ref<number> {
+    return this.unreadCount
+  }
+  
+  /**
+   * 获取加载状态
+   */
+  getIsLoading(): Ref<boolean> {
+    return this.isLoading
+  }
+  
+  /**
+   * 获取错误信息
+   */
+  getError(): Ref<string | null> {
+    return this.error
+  }
+  
+  /**
+   * 从后端加载通知列表
+   */
+  async loadNotifications(filters?: NotificationFilters): Promise<void> {
+    try {
+      this.isLoading.value = true
+      this.error.value = null
+      
+      const response = await notificationApi.getNotifications(filters)
+      this.notifications.value = response.notifications.map(n => this.transformNotification(n))
+      
+      console.log('通知列表加载成功，共', this.notifications.value.length, '条通知')
+    } catch (error) {
+      console.error('加载通知列表失败:', error)
+      this.error.value = '加载通知列表失败: ' + (error as Error).message
+      throw error
+    } finally {
+      this.isLoading.value = false
+    }
+  }
+  
+  /**
+   * 从后端加载未读数量
+   */
+  async loadUnreadCount(): Promise<void> {
+    try {
+      const response = await notificationApi.getUnreadCount()
+      this.unreadCount.value = response.unreadCount
+      
+      console.log('未读数量加载成功:', this.unreadCount.value)
+    } catch (error) {
+      console.error('加载未读数量失败:', error)
+      this.error.value = '加载未读数量失败: ' + (error as Error).message
+      throw error
+    }
+  }
+  
+  /**
+   * 获取智能提醒（近期重要通知）
+   */
   getSmartReminders(): Notification[] {
     const now = new Date()
-    const recentTime = new Date(now.getTime() - 60 * 60 * 1000) // 1小时内
+    const recentTime = new Date(now.getTime() - 60 * 60 * 1000)
     
     return this.notifications.value.filter(n => 
       !n.isRead && 
@@ -141,30 +157,32 @@ class NotificationService {
       new Date(n.createdAt) > recentTime
     ).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   }
-
-  // 获取历史未处理通知
+  
+  /**
+   * 获取历史未处理通知
+   */
   getHistoricalUnread(): Notification[] {
     const now = new Date()
-    const recentTime = new Date(now.getTime() - 60 * 60 * 1000) // 1小时前
+    const recentTime = new Date(now.getTime() - 60 * 60 * 1000)
     
     return this.notifications.value.filter(n => 
       !n.isRead && 
       new Date(n.createdAt) <= recentTime
     ).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   }
-
-  // 获取最近的通知（用于Header中的弹窗）- 修改为优先显示历史未处理的通知
+  
+  /**
+   * 获取最近的通知（用于Header中的弹窗）
+   */
   getRecentNotifications(count: number = 5): Notification[] {
     const now = new Date()
-    const recentTime = new Date(now.getTime() - 60 * 60 * 1000) // 1小时前
+    const recentTime = new Date(now.getTime() - 60 * 60 * 1000)
     
-    // 优先显示历史未处理的通知
     const historicalUnread = this.notifications.value.filter(n => 
       !n.isRead && 
       new Date(n.createdAt) <= recentTime
     )
     
-    // 然后是近期的通知
     const recentUnread = this.notifications.value.filter(n => 
       !n.isRead && 
       new Date(n.createdAt) > recentTime &&
@@ -174,12 +192,16 @@ class NotificationService {
     return [...historicalUnread, ...recentUnread].slice(0, count)
   }
   
-  // 添加通知监听器
+  /**
+   * 添加通知监听器
+   */
   addListener(listener: () => void): void {
     this.listeners.push(listener)
   }
   
-  // 移除通知监听器
+  /**
+   * 移除通知监听器
+   */
   removeListener(listener: () => void): void {
     const index = this.listeners.indexOf(listener)
     if (index > -1) {
@@ -187,153 +209,220 @@ class NotificationService {
     }
   }
   
-  // 添加新通知
-  addNotification(notification: Omit<Notification, 'id' | 'createdAt'>): void {
-    const newNotification: Notification = {
-      ...notification,
-      id: Date.now(), // 使用时间戳作为ID
-      createdAt: new Date().toISOString()
-    }
-    
-    this.notifications.value.unshift(newNotification)
-    this.saveToStorage()
-    
-    // 通知所有监听器
+  /**
+   * 通知所有监听器
+   */
+  private notifyListeners(): void {
     this.listeners.forEach(listener => listener())
   }
   
-  // 删除通知
-  deleteNotification(id: number): void {
-    const index = this.notifications.value.findIndex(n => n.id === id)
-    if (index > -1) {
-      this.notifications.value.splice(index, 1)
-      this.saveToStorage()
+  /**
+   * 删除通知
+   */
+  async deleteNotification(id: number): Promise<void> {
+    try {
+      await notificationApi.deleteNotification(id)
       
-      // 通知所有监听器
-      this.listeners.forEach(listener => listener())
+      const index = this.notifications.value.findIndex(n => n.id === id)
+      if (index > -1) {
+        this.notifications.value.splice(index, 1)
+      }
+      
+      this.notifyListeners()
+      console.log('通知删除成功，通知ID:', id)
+    } catch (error) {
+      console.error('删除通知失败:', error)
+      this.error.value = '删除通知失败: ' + (error as Error).message
+      throw error
     }
   }
   
-  // 标记为已读
-  markAsRead(id: number): void {
-    const notification = this.notifications.value.find(n => n.id === id)
-    if (notification) {
-      notification.isRead = true
-      this.saveToStorage()
+  /**
+   * 标记为已读
+   */
+  async markAsRead(id: number): Promise<void> {
+    try {
+      await notificationApi.markAsRead(id)
       
-      // 通知所有监听器
-      this.listeners.forEach(listener => listener())
-    }
-  }
-  
-  // 标记为未读
-  markAsUnread(id: number): void {
-    const notification = this.notifications.value.find(n => n.id === id)
-    if (notification) {
-      notification.isRead = false
-      this.saveToStorage()
-      
-      // 通知所有监听器
-      this.listeners.forEach(listener => listener())
-    }
-  }
-  
-  // 切换重要性标记
-  toggleImportance(id: number): void {
-    const notification = this.notifications.value.find(n => n.id === id)
-    if (notification) {
-      notification.isImportant = !notification.isImportant
-      this.saveToStorage()
-      
-      // 通知所有监听器
-      this.listeners.forEach(listener => listener())
-    }
-  }
-  
-  // 批量删除通知
-  batchDelete(ids: number[]): void {
-    this.notifications.value = this.notifications.value.filter(n => !ids.includes(n.id))
-    this.saveToStorage()
-    
-    // 通知所有监听器
-    this.listeners.forEach(listener => listener())
-  }
-  
-  // 批量标记为已读
-  batchMarkAsRead(ids: number[]): void {
-    this.notifications.value.forEach(notification => {
-      if (ids.includes(notification.id)) {
+      const notification = this.notifications.value.find(n => n.id === id)
+      if (notification) {
         notification.isRead = true
       }
-    })
-    this.saveToStorage()
-    
-    // 通知所有监听器
-    this.listeners.forEach(listener => listener())
+      
+      this.notifyListeners()
+      console.log('通知已标记为已读，通知ID:', id)
+    } catch (error) {
+      console.error('标记已读失败:', error)
+      this.error.value = '标记已读失败: ' + (error as Error).message
+      throw error
+    }
   }
   
-  // 批量标记为未读
-  batchMarkAsUnread(ids: number[]): void {
-    this.notifications.value.forEach(notification => {
-      if (ids.includes(notification.id)) {
+  /**
+   * 标记为未读
+   */
+  async markAsUnread(id: number): Promise<void> {
+    try {
+      await notificationApi.markAsUnread(id)
+      
+      const notification = this.notifications.value.find(n => n.id === id)
+      if (notification) {
         notification.isRead = false
       }
-    })
-    this.saveToStorage()
-    
-    // 通知所有监听器
-    this.listeners.forEach(listener => listener())
+      
+      this.notifyListeners()
+      console.log('通知已标记为未读，通知ID:', id)
+    } catch (error) {
+      console.error('标记未读失败:', error)
+      this.error.value = '标记未读失败: ' + (error as Error).message
+      throw error
+    }
   }
   
-  // 批量切换重要性标记
-  batchToggleImportance(ids: number[]): void {
-    this.notifications.value.forEach(notification => {
-      if (ids.includes(notification.id)) {
+  /**
+   * 切换重要性标记
+   */
+  async toggleImportance(id: number): Promise<void> {
+    try {
+      const notification = this.notifications.value.find(n => n.id === id)
+      if (notification) {
         notification.isImportant = !notification.isImportant
       }
-    })
-    this.saveToStorage()
-    
-    // 通知所有监听器
-    this.listeners.forEach(listener => listener())
+      
+      this.notifyListeners()
+      console.log('通知重要性已切换，通知ID:', id)
+    } catch (error) {
+      console.error('切换重要性失败:', error)
+      this.error.value = '切换重要性失败: ' + (error as Error).message
+      throw error
+    }
   }
   
-  // 获取未读通知数量
-  getUnreadCount(): number {
-    return this.notifications.value.filter(n => !n.isRead).length
+  /**
+   * 批量删除通知
+   */
+  async batchDelete(ids: number[]): Promise<void> {
+    try {
+      await notificationApi.batchDelete(ids)
+      
+      this.notifications.value = this.notifications.value.filter(n => !ids.includes(n.id))
+      
+      this.notifyListeners()
+      console.log('批量删除成功，影响行数:', ids.length)
+    } catch (error) {
+      console.error('批量删除失败:', error)
+      this.error.value = '批量删除失败: ' + (error as Error).message
+      throw error
+    }
   }
   
-  // 标记所有通知为已读
-  markAllAsRead(): void {
-    this.notifications.value.forEach(notification => {
-      notification.isRead = true
-    })
-    this.saveToStorage()
-    
-    // 通知所有监听器
-    this.listeners.forEach(listener => listener())
+  /**
+   * 批量标记为已读
+   */
+  async batchMarkAsRead(ids: number[]): Promise<void> {
+    try {
+      await notificationApi.batchMarkAsRead(ids)
+      
+      this.notifications.value.forEach(notification => {
+        if (ids.includes(notification.id)) {
+          notification.isRead = true
+        }
+      })
+      
+      this.notifyListeners()
+      console.log('批量标记已读成功，影响行数:', ids.length)
+    } catch (error) {
+      console.error('批量标记已读失败:', error)
+      this.error.value = '批量标记已读失败: ' + (error as Error).message
+      throw error
+    }
+  }
+  
+  /**
+   * 批量标记为未读
+   */
+  async batchMarkAsUnread(ids: number[]): Promise<void> {
+    try {
+      await notificationApi.batchMarkAsUnread(ids)
+      
+      this.notifications.value.forEach(notification => {
+        if (ids.includes(notification.id)) {
+          notification.isRead = false
+        }
+      })
+      
+      this.notifyListeners()
+      console.log('批量标记未读成功，影响行数:', ids.length)
+    } catch (error) {
+      console.error('批量标记未读失败:', error)
+      this.error.value = '批量标记未读失败: ' + (error as Error).message
+      throw error
+    }
+  }
+  
+  /**
+   * 批量切换重要性标记
+   */
+  async batchToggleImportance(ids: number[]): Promise<void> {
+    try {
+      this.notifications.value.forEach(notification => {
+        if (ids.includes(notification.id)) {
+          notification.isImportant = !notification.isImportant
+        }
+      })
+      
+      this.notifyListeners()
+      console.log('批量切换重要性成功，影响行数:', ids.length)
+    } catch (error) {
+      console.error('批量切换重要性失败:', error)
+      this.error.value = '批量切换重要性失败: ' + (error as Error).message
+      throw error
+    }
+  }
+  
+  /**
+   * 标记所有通知为已读
+   */
+  async markAllAsRead(): Promise<void> {
+    try {
+      await notificationApi.markAllAsRead()
+      
+      this.notifications.value.forEach(notification => {
+        notification.isRead = true
+      })
+      
+      this.notifyListeners()
+      console.log('所有通知已标记为已读')
+    } catch (error) {
+      console.error('标记全部已读失败:', error)
+      this.error.value = '标记全部已读失败: ' + (error as Error).message
+      throw error
+    }
   }
 }
 
-// 创建通知服务实例
+/**
+ * 创建通知服务实例
+ */
 export const notificationService = new NotificationService()
 
-// Composable hook for using notification service in Vue components
+/**
+ * Composable hook for using notification service in Vue components
+ */
 export function useNotifications() {
   const notifications = notificationService.getAllNotifications()
-  const unreadCount = ref(notificationService.getUnreadCount())
+  const unreadCount = notificationService.getUnreadCount()
+  const isLoading = notificationService.getIsLoading()
+  const error = notificationService.getError()
   
-  // 更新未读数量的回调
   const updateUnreadCount = () => {
-    unreadCount.value = notificationService.getUnreadCount()
+    notificationService.loadUnreadCount()
   }
   
-  // 添加监听器
   onMounted(() => {
     notificationService.addListener(updateUnreadCount)
   })
   
-  // 移除监听器
   onUnmounted(() => {
     notificationService.removeListener(updateUnreadCount)
   })
@@ -341,11 +430,13 @@ export function useNotifications() {
   return {
     notifications,
     unreadCount,
+    isLoading,
+    error,
+    loadNotifications: (filters?: NotificationFilters) => notificationService.loadNotifications(filters),
+    loadUnreadCount: () => notificationService.loadUnreadCount(),
     getRecentNotifications: (count?: number) => notificationService.getRecentNotifications(count),
     getSmartReminders: () => notificationService.getSmartReminders(),
     getHistoricalUnread: () => notificationService.getHistoricalUnread(),
-    addNotification: (notification: Omit<Notification, 'id' | 'createdAt'>) => 
-      notificationService.addNotification(notification),
     deleteNotification: (id: number) => notificationService.deleteNotification(id),
     markAsRead: (id: number) => notificationService.markAsRead(id),
     markAsUnread: (id: number) => notificationService.markAsUnread(id),

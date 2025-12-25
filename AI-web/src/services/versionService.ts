@@ -51,6 +51,12 @@ export const compareVersions = (currentVersion: string, targetVersion: string): 
   // 简单的版本号比较实现
   // 实际项目中可能需要更复杂的版本号解析逻辑
   
+  // 添加参数验证
+  if (!currentVersion || !targetVersion) {
+    console.warn('版本号比较时发现空值:', { currentVersion, targetVersion });
+    return 'same';
+  }
+  
   const currentParts = currentVersion.split('.').map(Number);
   const targetParts = targetVersion.split('.').map(Number);
   
@@ -99,7 +105,8 @@ export const checkForUpdates = async (): Promise<VersionCheckResponse> => {
     const currentVersion = getCurrentVersion();
     
     // 调用真实的API获取最新版本信息
-    const response = await fetch('/version/latest', {
+    const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://10.111.53.9:4000/api';
+    const response = await fetch(`${BASE_URL}/version/latest`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -110,7 +117,8 @@ export const checkForUpdates = async (): Promise<VersionCheckResponse> => {
       throw new Error(`获取版本信息失败: ${response.status}`);
     }
     
-    const latestVersion: AppVersion = await response.json();
+    const apiResponse = await response.json();
+    const latestVersion: AppVersion = apiResponse.data;
     
     // 检查用户是否已忽略此版本
     if (isVersionIgnored(latestVersion.version)) {

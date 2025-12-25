@@ -178,7 +178,7 @@
     
     <!-- 通知列表 -->
     <div class="notifications-section">
-      <div v-if="loading" class="loading-container">
+      <div v-if="isLoading" class="loading-container">
         <el-skeleton animated>
           <template #template>
             <div v-for="i in 5" :key="i" class="notification-skeleton">
@@ -360,10 +360,15 @@
           
           <div class="setting-item" v-if="notificationSettings.billReminder">
             <span class="setting-label">提醒时间</span>
-            <el-time-picker 
-              v-model="notificationSettings.reminderTime" 
-              format="HH:mm" 
-              value-format="HH:mm"
+            <el-time-select
+              v-model="notificationSettings.reminderTime"
+              :picker-options="{
+                start: '00:00',
+                step: '00:15',
+                end: '23:59'
+              }"
+              placeholder="选择提醒时间"
+              style="width: 150px"
               @change="saveNotificationPreferences"
             />
           </div>
@@ -535,14 +540,17 @@ const {
   batchMarkAsUnread, 
   batchDelete, 
   batchToggleImportance,
-  markAllAsRead
+  markAllAsRead,
+  loadNotifications,
+  loadUnreadCount,
+  isLoading,
+  error
 } = useNotifications()
 
 // 状态管理
-const loading = ref(false)
 const settingsVisible = ref(false)
 const activeSettingsTab = ref('')
-const selectedCategory = ref('')
+const selectedCategory = ref('all')
 const filterType = ref<'all' | 'unread' | 'important'>('all')
 const sortBy = ref<'time-desc' | 'time-asc' | 'importance'>('time-desc')
 const selectedNotifications = ref<number[]>([])
@@ -566,7 +574,7 @@ interface NotificationSettings {
   smsNotifications: boolean
   systemNotifications: boolean
   billReminder: boolean
-  reminderTime: Date
+  reminderTime: string
   categories: Record<string, NotificationCategory>
   quietHours: {
     enabled: boolean
@@ -584,7 +592,7 @@ const notificationSettings = ref<NotificationSettings>({
   smsNotifications: false,
   systemNotifications: true,
   billReminder: true,
-  reminderTime: new Date(2023, 0, 1, 9, 0, 0), // 默认早上9点
+  reminderTime: '09:00',
   categories: {
     expense: { enabled: true, email: true, push: true },
     bill: { enabled: true, email: true, push: true },
@@ -714,16 +722,24 @@ const clearSelection = () => {
   selectedNotifications.value = []
 }
 
-const handleBatchMarkAsRead = () => {
-  batchMarkAsRead(selectedNotifications.value)
-  ElMessage.success(`已批量标为已读 ${selectedNotifications.value.length} 项`)
-  clearSelection()
+const handleBatchMarkAsRead = async () => {
+  try {
+    await batchMarkAsRead(selectedNotifications.value)
+    ElMessage.success(`已批量标为已读 ${selectedNotifications.value.length} 项`)
+    clearSelection()
+  } catch (err) {
+    ElMessage.error(`批量标为已读失败: ${err instanceof Error ? err.message : '未知错误'}`)
+  }
 }
 
-const handleBatchMarkAsUnread = () => {
-  batchMarkAsUnread(selectedNotifications.value)
-  ElMessage.success(`已批量标为未读 ${selectedNotifications.value.length} 项`)
-  clearSelection()
+const handleBatchMarkAsUnread = async () => {
+  try {
+    await batchMarkAsUnread(selectedNotifications.value)
+    ElMessage.success(`已批量标为未读 ${selectedNotifications.value.length} 项`)
+    clearSelection()
+  } catch (err) {
+    ElMessage.error(`批量标为未读失败: ${err instanceof Error ? err.message : '未知错误'}`)
+  }
 }
 
 const handleBatchDelete = async () => {
@@ -738,12 +754,14 @@ const handleBatchDelete = async () => {
       }
     )
     
-    batchDelete(selectedNotifications.value)
+    await batchDelete(selectedNotifications.value)
     
     ElMessage.success(`已批量删除 ${selectedNotifications.value.length} 条通知`)
     clearSelection()
-  } catch {
-    // 用户取消操作
+  } catch (err) {
+    if (err !== 'cancel') {
+      ElMessage.error(`批量删除失败: ${err instanceof Error ? err.message : '未知错误'}`)
+    }
   }
 }
 
@@ -765,7 +783,7 @@ const saveNotificationPreferences = () => {
       emailNotifications: notificationSettings.value.emailNotifications,
       smsNotifications: notificationSettings.value.smsNotifications,
       billReminder: notificationSettings.value.billReminder,
-      reminderTime: notificationSettings.value.reminderTime.toISOString()
+      reminderTime: notificationSettings.value.reminderTime
     }
     
     localStorage.setItem('notification-preferences', JSON.stringify(preferences))
@@ -791,7 +809,7 @@ const loadNotificationPreferences = () => {
       
       // 解析提醒时间
       if (preferences.reminderTime) {
-        notificationSettings.value.reminderTime = new Date(preferences.reminderTime)
+        notificationSettings.value.reminderTime = preferences.reminderTime
       }
     }
   } catch (error) {
@@ -813,7 +831,7 @@ const resetSettings = () => {
     notificationSettings.value.smsNotifications = false
     notificationSettings.value.systemNotifications = true
     notificationSettings.value.billReminder = true
-    notificationSettings.value.reminderTime = new Date(2023, 0, 1, 9, 0, 0)
+    notificationSettings.value.reminderTime = '09:00'
     notificationSettings.value.categories = {
       expense: { enabled: true, email: true, push: true },
       bill: { enabled: true, email: true, push: true },
@@ -848,7 +866,7 @@ const saveSettings = async () => {
       soundEnabled: notificationSettings.value.soundEnabled,
       vibrationEnabled: notificationSettings.value.vibrationEnabled,
       billReminder: notificationSettings.value.billReminder,
-      reminderTime: notificationSettings.value.reminderTime.toISOString(),
+      reminderTime: notificationSettings.value.reminderTime,
       categories: notificationSettings.value.categories,
       quietHours: notificationSettings.value.quietHours
     }
@@ -895,17 +913,23 @@ const handleMarkAllAsRead = async () => {
       type: 'warning'
     })
     
-    markAllAsRead()
+    await markAllAsRead()
     ElMessage.success('已将所有通知标为已读')
-  } catch {
-    // 用户取消操作
+  } catch (err) {
+    if (err !== 'cancel') {
+      ElMessage.error(`操作失败: ${err instanceof Error ? err.message : '未知错误'}`)
+    }
   }
 }
 
 // 单个操作方法
-const handleSingleMarkAsRead = (id: number) => {
-  markAsRead(id)
-  ElMessage.success('已标为已读')
+const handleSingleMarkAsRead = async (id: number) => {
+  try {
+    await markAsRead(id)
+    ElMessage.success('已标为已读')
+  } catch (err) {
+    ElMessage.error(`操作失败: ${err instanceof Error ? err.message : '未知错误'}`)
+  }
 }
 
 const handleSingleDelete = async (id: number) => {
@@ -916,31 +940,36 @@ const handleSingleDelete = async (id: number) => {
       type: 'warning'
     })
     
-    deleteNotification(id)
+    await deleteNotification(id)
     ElMessage.success('删除成功')
-  } catch {
-    // 用户取消操作
+  } catch (err) {
+    if (err !== 'cancel') {
+      ElMessage.error(`删除失败: ${err instanceof Error ? err.message : '未知错误'}`)
+    }
   }
 }
 
 // 处理通知操作 - 新增确认对话框功能
-const handleNotificationAction = (notification: Notification) => {
-  // 标记为已读
-  markAsRead(notification.id)
-  
-  // 检查是否需要确认对话框
-  // 对于需要用户确认的操作（如审批、审核等），显示确认对话框
-  const needsConfirmation = ['审核申请', '查看详情', '审批'].some(keyword => 
-    notification.actionText?.includes(keyword)
-  )
-  
-  if (needsConfirmation) {
-    // 显示确认对话框
-    pendingNotification.value = notification
-    confirmDialogVisible.value = true
-  } else {
-    // 直接执行跳转
-    executeNotificationAction(notification)
+const handleNotificationAction = async (notification: Notification) => {
+  try {
+    await markAsRead(notification.id)
+    
+    // 检查是否需要确认对话框
+    // 对于需要用户确认的操作（如审批、审核等），显示确认对话框
+    const needsConfirmation = ['审核申请', '查看详情', '审批'].some(keyword => 
+      notification.actionText?.includes(keyword)
+    )
+    
+    if (needsConfirmation) {
+      // 显示确认对话框
+      pendingNotification.value = notification
+      confirmDialogVisible.value = true
+    } else {
+      // 直接执行跳转
+      executeNotificationAction(notification)
+    }
+  } catch (err) {
+    ElMessage.error(`操作失败: ${err instanceof Error ? err.message : '未知错误'}`)
   }
 }
 
@@ -991,12 +1020,14 @@ const formatTime = (time: string) => {
 }
 
 // 组件挂载时的初始化逻辑
-onMounted(() => {
-  // 模拟加载数据
-  loading.value = true
-  setTimeout(() => {
-    loading.value = false
-  }, 500)
+onMounted(async () => {
+  try {
+    await loadNotifications()
+    await loadUnreadCount()
+  } catch (err) {
+    console.error('初始化加载失败:', err)
+    ElMessage.error(`加载数据失败: ${err instanceof Error ? err.message : '未知错误'}`)
+  }
   
   loadNotificationPreferences()
 })

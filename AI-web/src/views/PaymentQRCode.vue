@@ -62,7 +62,7 @@
           </div>
           
           <div class="qr-code-display">
-            <img :src="qr.qrCodeUrl" :alt="qr.name" class="qr-image" />
+            <img :src="getImageUrl(qr.qrCodeUrl)" :alt="qr.name" class="qr-image" />
           </div>
           
           <div class="qr-details">
@@ -351,8 +351,9 @@ interface ReminderSettings {
 // 响应式数据
 const qrCodes = ref<QRCode[]>([])
 const loading = ref(false)
-const filterStatus = ref('')
-const filterPlatform = ref('')
+const filterStatus = ref('all')
+const filterPlatform = ref('all')
+const filterType = ref('all') // 'all', 'uploaded', 'system'
 
 // 安全检测相关数据
 const securityCheckLoading = ref(false)
@@ -379,7 +380,7 @@ const loadStatistics = async () => {
 }
 
 const filteredQRCodes = computed(() => {
-  let filtered = qrCodes.value.filter(qr => qr.isUserUploaded === true)
+  let filtered = qrCodes.value
   
   // 状态筛选
   if (filterStatus.value !== 'all') {
@@ -389,6 +390,15 @@ const filteredQRCodes = computed(() => {
   // 平台筛选
   if (filterPlatform.value !== 'all') {
     filtered = filtered.filter(qr => qr.platform === filterPlatform.value)
+  }
+  
+  // 上传类型筛选
+  if (filterType.value !== 'all') {
+    if (filterType.value === 'uploaded') {
+      filtered = filtered.filter(qr => qr.isUserUploaded === true)
+    } else if (filterType.value === 'system') {
+      filtered = filtered.filter(qr => qr.isUserUploaded === false)
+    }
   }
   
   // 排序
@@ -507,6 +517,18 @@ const getQRPlatformText = (platform: 'alipay' | 'wechat' | 'unionpay'): string =
     unionpay: '银联支付'
   }
   return platformMap[platform] || platform
+}
+
+// 获取完整的图片URL
+const getImageUrl = (url?: string): string => {
+  if (!url) return ''
+  // 如果已经是完整URL，直接返回
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url
+  }
+  // 拼接后端服务器地址
+  const baseURL = 'http://10.111.53.9:4000'
+  return `${baseURL}${url}`
 }
 
 const openReminderDialog = (): void => {
@@ -682,7 +704,8 @@ const handleFileUpload = (file: File): boolean => {
   }
   
   uploadForm.file = file
-  return true
+  // 返回false阻止el-upload的自动上传，我们在handleUploadQRCode中手动上传
+  return false
 }
 
 const handleUploadQRCode = async (): Promise<void> => {

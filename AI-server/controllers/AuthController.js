@@ -249,33 +249,29 @@ class AuthController extends BaseController {
    * PUT /api/auth/change-password
    */
   async changePassword(req, res, next) {
+    const userId = req.user.id;
+    const { currentPassword, newPassword } = req.body;
+    
+    // 验证输入
     try {
-      const userId = req.user.id;
-      const { currentPassword, newPassword } = req.body;
-      
-      // 验证输入
-      try {
-        this.validateRequiredFields(req.body, ['currentPassword', 'newPassword']);
-      } catch (validationError) {
-        return this.sendError(res, validationError.message, 400);
-      }
+      this.validateRequiredFields(req.body, ['currentPassword', 'newPassword']);
+    } catch (validationError) {
+      return this.sendError(res, validationError.message, 400);
+    }
 
-      // 记录密码修改尝试
-      logger.audit(req, '用户密码修改', { 
-        userId,
-        timestamp: new Date().toISOString()
-      });
+    // 记录密码修改尝试
+    logger.audit(req, '用户密码修改', { 
+      userId,
+      timestamp: new Date().toISOString()
+    });
 
-      // 调用服务层修改密码
-      const success = await this.userService.changePassword(userId, {
+    // 调用服务层修改密码
+    try {
+      const result = await this.userService.changePassword(userId, {
         currentPassword,
         newPassword
       });
       
-      if (!success) {
-        return this.sendError(res, '当前密码错误', 400);
-      }
-
       logger.auth('密码修改成功', { userId });
       logger.audit(req, '用户密码修改成功', { 
         userId,
@@ -283,10 +279,16 @@ class AuthController extends BaseController {
       });
 
       return this.sendSuccess(res, null, '密码修改成功');
-
     } catch (error) {
-      logger.error('[AuthController] 密码修改失败', { error: error.message });
-      next(error);
+      logger.warn('[AuthController] 修改密码失败', { 
+        userId, 
+        error: error.message,
+        statusCode: error.statusCode 
+      });
+      
+      // 使用错误对象中指定的状态码
+      const statusCode = error.statusCode || 400;
+      return this.sendError(res, error.message, statusCode);
     }
   }
 
@@ -1339,7 +1341,7 @@ class AuthController extends BaseController {
           email: user.email,
           nickname: user.nickname,
           status: user.status,
-          twoFactorEnabled: user.two_factor_enabled,
+          enabled: user.two_factor_enabled,
           lockedUntil: user.locked_until
         },
         session: session ? {
@@ -1352,6 +1354,229 @@ class AuthController extends BaseController {
 
     } catch (error) {
       logger.error('[AuthController] 令牌验证失败', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * 生成TOTP两步验证密钥
+   * POST /api/auth/totp/generate
+   */
+  async generateTotpSecret(req, res, next) {
+    try {
+      const userId = req.user.id;
+      
+      logger.audit(req, '生成TOTP密钥', { 
+        userId,
+        timestamp: new Date().toISOString()
+      });
+
+      const result = await this.userService.generateTotpSecret(userId);
+      
+      if (!result.success) {
+        return this.sendError(res, result.message, 400);
+      }
+
+      logger.auth('TOTP密钥生成成功', { userId });
+
+      return this.sendSuccess(res, result.data, result.message);
+    } catch (error) {
+      logger.error('[AuthController] 生成TOTP密钥失败', { 
+        error: error.message,
+        userId: req.user?.id 
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * 启用TOTP两步验证
+   * POST /api/auth/totp/enable
+   */
+  async enableTotpAuth(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const { secret, code, backupCodes } = req.body;
+      
+      this.validateRequiredFields(req.body, ['secret', 'code', 'backupCodes']);
+
+      logger.audit(req, '启用TOTP两步验证', { 
+        userId,
+        timestamp: new Date().toISOString()
+      });
+
+      const result = await this.userService.enableTotpAuth(userId, {
+        secret,
+        code,
+        backupCodes
+      });
+      
+      if (!result.success) {
+        return this.sendError(res, result.message, 400);
+      }
+
+      logger.auth('TOTP两步验证启用成功', { userId });
+
+      return this.sendSuccess(res, result.data, result.message);
+    } catch (error) {
+      logger.error('[AuthController] 启用TOTP两步验证失败', { 
+        error: error.message,
+        userId: req.user?.id 
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * 禁用TOTP两步验证
+   * POST /api/auth/totp/disable
+   */
+  async disableTotpAuth(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const { code } = req.body;
+      
+      this.validateRequiredFields(req.body, ['code']);
+
+      logger.audit(req, '禁用TOTP两步验证', { 
+        userId,
+        timestamp: new Date().toISOString()
+      });
+
+      const result = await this.userService.disableTotpAuth(userId, { code });
+      
+      if (!result.success) {
+        return this.sendError(res, result.message, 400);
+      }
+
+      logger.auth('TOTP两步验证禁用成功', { userId });
+
+      return this.sendSuccess(res, result.data, result.message);
+    } catch (error) {
+      logger.error('[AuthController] 禁用TOTP两步验证失败', { 
+        error: error.message,
+        userId: req.user?.id 
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * 验证TOTP两步验证码
+   * POST /api/auth/totp/verify
+   */
+  async verifyTotpCode(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const { code, secret } = req.body;
+      
+      this.validateRequiredFields(req.body, ['code']);
+
+      logger.audit(req, '验证TOTP两步验证码', { 
+        userId,
+        timestamp: new Date().toISOString()
+      });
+
+      const result = await this.userService.verifyTotpCode(userId, code, secret);
+      
+      if (!result.success) {
+        return this.sendError(res, result.message, 400);
+      }
+
+      logger.auth('TOTP两步验证码验证成功', { userId });
+
+      return this.sendSuccess(res, result.data, result.message);
+    } catch (error) {
+      logger.error('[AuthController] 验证TOTP两步验证码失败', { 
+        error: error.message,
+        userId: req.user?.id 
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * 获取TOTP两步验证状态
+   * GET /api/auth/totp/status
+   */
+  async getTotpStatus(req, res, next) {
+    try {
+      const userId = req.user.id;
+      
+      logger.audit(req, '获取TOTP两步验证状态', { 
+        userId,
+        timestamp: new Date().toISOString()
+      });
+
+      const result = await this.userService.getTotpStatus(userId);
+      
+      if (!result.success) {
+        return this.sendError(res, result.message, 400);
+      }
+
+      return this.sendSuccess(res, result.data, result.message);
+    } catch (error) {
+      logger.error('[AuthController] 获取TOTP两步验证状态失败', { 
+        error: error.message,
+        userId: req.user?.id 
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * 重新生成备用码
+   * POST /api/auth/totp/regenerate-backup-codes
+   */
+  async regenerateBackupCodes(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const { code } = req.body;
+      
+      this.validateRequiredFields(req.body, ['code']);
+
+      logger.audit(req, '重新生成备用码', { 
+        userId,
+        timestamp: new Date().toISOString()
+      });
+
+      const result = await this.userService.regenerateBackupCodes(userId, { code });
+      
+      if (!result.success) {
+        return this.sendError(res, result.message, 400);
+      }
+
+      logger.auth('备用码重新生成成功', { userId });
+
+      return this.sendSuccess(res, result.data, result.message);
+    } catch (error) {
+      logger.error('[AuthController] 重新生成备用码失败', { 
+        error: error.message,
+        userId: req.user?.id 
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * 获取客户端IP地址
+   * GET /api/auth/client-ip
+   * 用于前端获取真实IP地址用于安全日志记录
+   */
+  async getClientIp(req, res, next) {
+    try {
+      const clientIp = req.ip || req.connection.remoteAddress || req.socket.remoteAddress;
+      
+      logger.audit(req, '获取客户端IP地址', { 
+        clientIp,
+        timestamp: new Date().toISOString()
+      });
+
+      return this.sendSuccess(res, { ip: clientIp }, '获取IP地址成功');
+    } catch (error) {
+      logger.error('[AuthController] 获取客户端IP地址失败', { 
+        error: error.message
+      });
       next(error);
     }
   }

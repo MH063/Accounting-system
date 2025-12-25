@@ -38,7 +38,8 @@ export interface HealthCheckResponse {
 export const checkSystemHealth = async (): Promise<HealthCheckResponse> => {
   try {
     // 调用真实的健康检查API
-    const response = await fetch('/system/health', {
+    const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://10.111.53.9:4000/api';
+    const response = await fetch(`${BASE_URL}/health`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

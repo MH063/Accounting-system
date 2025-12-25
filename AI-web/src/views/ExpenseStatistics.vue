@@ -431,10 +431,23 @@ const loadExpenseData = async () => {
   try {
     console.log('开始加载支出统计数据...')
     
+    // 根据selectedTimePeriod计算时间范围
+    const now = new Date()
+    const periodDays: Record<string, number> = {
+      '7d': 7,
+      '30d': 30,
+      '90d': 90,
+      '6m': 180,
+      '1y': 365
+    }
+    const days = periodDays[selectedTimePeriod.value] || 30
+    const startDate = new Date(now)
+    startDate.setDate(startDate.getDate() - days)
+    
     // 构建筛选参数
     const filter: ExpenseFilter = {
-      startDate: timeRange.value[0],
-      endDate: timeRange.value[1],
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: now.toISOString().split('T')[0],
       page: currentPage.value,
       pageSize: pageSize.value
     }
@@ -451,23 +464,25 @@ const loadExpenseData = async () => {
       console.log('支出统计数据加载成功:', response.data)
       
       // 使用真实数据更新统计
-      const stats = response.data.statistics || {}
-      const trendData = response.data.trendData || []
-      const categoryData = response.data.categoryData || []
-      const memberData = response.data.memberData || []
-      const timeData = response.data.timeData || []
-      const detailData = response.data.detailData || []
+      // 注意：后端返回的数据在data.statistics中，而不是直接在data中
+      const data = response.data.data || response.data;
+      const stats = data.statistics || {}
+      const trendData = data.trendData || []
+      const categoryData = data.categoryData || []
+      const memberData = data.memberData || []
+      const timeData = data.timeData || []
+      const detailData = data.detailData || []
       
       // 更新统计数据
-      statistics.totalExpense = stats.totalExpense || 0
-      statistics.dailyAverage = stats.dailyAverage || 0
-      statistics.categoryCount = stats.categoryCount || 0
-      statistics.maxExpense = stats.maxExpense || 0
-      statistics.maxExpenseCategory = stats.maxExpenseCategory || ''
+      statistics.value.totalExpense = stats.totalExpense || 0
+      statistics.value.dailyAverage = stats.dailyAverage || 0
+      statistics.value.categoryCount = stats.categoryCount || 0
+      statistics.value.maxExpense = stats.maxExpense || 0
+      statistics.value.maxExpenseCategory = stats.maxExpenseCategory || ''
       
       // 更新表格数据
       tableData.value = detailData
-      total.value = response.data.total || 0
+      total.value = data.total || 0
       
       // 更新图表数据
       if (trendData.length && trendChart.value) {
@@ -496,6 +511,69 @@ const loadExpenseData = async () => {
   }
 }
 
+// 根据特定时间范围加载图表数据（不影响主统计数据）
+const loadChartDataByTimeRange = async (timeRange: string) => {
+  try {
+    console.log('开始加载图表数据，时间范围:', timeRange)
+    
+    // 根据timeRange计算时间范围
+    const now = new Date()
+    const periodDays: Record<string, number> = {
+      '7d': 7,
+      '30d': 30,
+      '90d': 90,
+      '6m': 180,
+      '1y': 365
+    }
+    const days = periodDays[timeRange] || 30
+    const startDate = new Date(now)
+    startDate.setDate(startDate.getDate() - days)
+    
+    // 构建筛选参数
+    const filter: ExpenseFilter = {
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: now.toISOString().split('T')[0]
+    }
+    
+    // 调用真实API获取支出统计数据
+    const response = await expenseService.getExpenseStatistics(filter)
+    
+    if (response.success && response.data) {
+      console.log('图表数据加载成功:', response.data)
+      
+      // 使用真实数据更新图表
+      // 注意：后端返回的数据在data.statistics中，而不是直接在data中
+      const data = response.data.data || response.data;
+      const trendData = data.trendData || []
+      const categoryData = data.categoryData || []
+      const memberData = data.memberData || []
+      const timeData = data.timeData || []
+      
+      // 更新图表数据
+      if (trendData.length && trendChart.value) {
+        updateTrendChartWithRealData(trendData)
+      }
+      if (categoryData.length && categoryChart.value) {
+        updateCategoryChartWithRealData(categoryData)
+      }
+      if (memberData.length && memberChart.value) {
+        updateMemberChartWithRealData(memberData)
+      }
+      if (timeData.length && timeChart.value) {
+        updateTimeChartWithRealData(timeData)
+      }
+      
+      console.log('图表数据处理完成')
+    } else {
+      console.error('获取图表数据失败:', response.message)
+      ElMessage.error(response.message || '获取图表数据失败')
+    }
+  } catch (error) {
+    console.error('加载图表数据失败:', error)
+    ElMessage.error('加载图表数据失败')
+  }
+}
+
 // 移除模拟数据相关的函数，图表更新现在由loadExpenseData处理
 
 // 获取分类标签类型
@@ -519,26 +597,9 @@ const formatAmount = (amount: number) => {
 const updateTrendChart = () => {
   console.log('支出趋势分析时间筛选变化:', chartTimeRange.value)
   
-  // 同步更新selectedTimePeriod以保持一致性
-  selectedTimePeriod.value = chartTimeRange.value
-  
-  // 更新趋势图表
-  if (trendChart.value) {
-    updateTrendChartOnly()
-  }
-  
-  // 同步更新其他相关图表
-  if (categoryChart.value) {
-    updateCategoryChart()
-  }
-  
-  if (memberChart.value) {
-    updateMemberChart()
-  }
-  
-  if (timeChart.value) {
-    updateTimeChart()
-  }
+  // 重新加载数据以更新所有图表，但不改变selectedTimePeriod
+  // 创建一个新的加载函数，专门用于图表时间范围
+  loadChartDataByTimeRange(chartTimeRange.value)
   
   console.log('完成趋势分析模块图表更新')
 }
@@ -1052,6 +1113,9 @@ onMounted(() => {
   
   // 设置初始总数
   updateTotal()
+  
+  // 确保两个时间控件初始值一致
+  chartTimeRange.value = selectedTimePeriod.value
   
   loadExpenseData()
 })

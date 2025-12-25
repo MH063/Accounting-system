@@ -3,14 +3,24 @@
  * 提供安全问题的存储和验证功能
  */
 
+import request from '@/utils/request'
+
 // 安全问题配置接口
 export interface SecurityQuestionConfig {
-  question1: string;
-  answer1: string;
-  question2: string;
-  answer2: string;
-  question3: string;
-  answer3: string;
+  question1: string
+  answer1: string
+  question2: string
+  answer2: string
+  question3: string
+  answer3: string
+}
+
+// API响应接口
+export interface SecurityQuestionResponse {
+  hasSecurityQuestions: boolean
+  questions?: Array<{ question: string }>
+  isEnabled?: boolean
+  isVerified?: boolean
 }
 
 /**
@@ -24,69 +34,75 @@ export const getDefaultSecurityQuestionConfig = (): SecurityQuestionConfig => {
     answer2: '',
     question3: '',
     answer3: ''
-  };
-};
+  }
+}
 
 /**
- * 从localStorage获取安全问题配置
+ * 从后端获取安全问题配置（用于验证，不返回答案）
  * @param userId 用户ID
  */
-export const getSecurityQuestionConfig = (userId: string): SecurityQuestionConfig => {
+export const getSecurityQuestionConfig = async (userId: string): Promise<SecurityQuestionResponse> => {
   try {
-    const configStr = localStorage.getItem(`securityQuestions_${userId}`);
-    if (configStr) {
-      const config = JSON.parse(configStr);
-      // 出于安全考虑，不返回答案
-      return {
-        question1: config.question1 || '',
-        answer1: config.answer1 ? '******' : '', // 用占位符表示已设置答案
-        question2: config.question2 || '',
-        answer2: config.answer2 ? '******' : '',
-        question3: config.question3 || '',
-        answer3: config.answer3 ? '******' : ''
-      };
-    }
+    console.log('[SecurityQuestionService] 获取安全问题配置', { userId })
+    const response = await request<SecurityQuestionResponse>('/security-questions/config', {
+      method: 'GET'
+    })
+    console.log('[SecurityQuestionService] 获取安全问题配置成功', response.data)
+    return response.data
   } catch (error) {
-    console.warn('解析安全问题配置失败，使用默认配置:', error);
+    console.error('[SecurityQuestionService] 获取安全问题配置失败:', error)
+    throw error
   }
-  return getDefaultSecurityQuestionConfig();
-};
+}
 
 /**
  * 获取用于验证的安全问题配置（包含答案）
+ * 注意：此接口仅用于后端验证，前端不应直接调用
  * @param userId 用户ID
  */
-export const getSecurityQuestionConfigForVerification = (userId: string): SecurityQuestionConfig => {
+export const getSecurityQuestionConfigForVerification = async (userId: string): Promise<SecurityQuestionConfig> => {
   try {
-    const configStr = localStorage.getItem(`securityQuestions_${userId}`);
-    if (configStr) {
-      return JSON.parse(configStr);
-    }
+    console.log('[SecurityQuestionService] 获取安全问题配置用于验证', { userId })
+    const response = await request<SecurityQuestionConfig>('/security-questions/config-for-verification', {
+      method: 'POST'
+    })
+    console.log('[SecurityQuestionService] 获取安全问题配置用于验证成功', response.data)
+    return response.data
   } catch (error) {
-    console.warn('解析安全问题配置失败:', error);
+    console.error('[SecurityQuestionService] 获取安全问题配置用于验证失败:', error)
+    throw error
   }
-  return getDefaultSecurityQuestionConfig();
-};
+}
 
 /**
- * 保存安全问题配置到localStorage
+ * 保存安全问题配置到后端
  * @param userId 用户ID
  * @param config 安全问题配置
  */
-export const saveSecurityQuestionConfig = (userId: string, config: SecurityQuestionConfig): void => {
+export const saveSecurityQuestionConfig = async (
+  userId: string,
+  config: SecurityQuestionConfig
+): Promise<{ hasSecurityQuestions: boolean }> => {
   try {
-    // 出于安全考虑，对答案进行简单加密（实际应用中应使用更强的加密方式）
-    const encryptedConfig = {
-      ...config,
-      answer1: config.answer1 ? btoa(config.answer1.toLowerCase().trim()) : '',
-      answer2: config.answer2 ? btoa(config.answer2.toLowerCase().trim()) : '',
-      answer3: config.answer3 ? btoa(config.answer3.toLowerCase().trim()) : ''
-    };
-    localStorage.setItem(`securityQuestions_${userId}`, JSON.stringify(encryptedConfig));
+    console.log('[SecurityQuestionService] 保存安全问题配置', { userId, config })
+    const response = await request<{ hasSecurityQuestions: boolean }>('/security-questions/config', {
+      method: 'POST',
+      data: {
+        question1: config.question1,
+        answer1: config.answer1,
+        question2: config.question2,
+        answer2: config.answer2,
+        question3: config.question3,
+        answer3: config.answer3
+      }
+    })
+    console.log('[SecurityQuestionService] 保存安全问题配置成功', response.data)
+    return response.data
   } catch (error) {
-    console.error('保存安全问题配置失败:', error);
+    console.error('[SecurityQuestionService] 保存安全问题配置失败:', error)
+    throw error
   }
-};
+}
 
 /**
  * 验证安全问题答案
@@ -95,63 +111,117 @@ export const saveSecurityQuestionConfig = (userId: string, config: SecurityQuest
  * @param answer 用户提供的答案
  * @returns 是否验证成功
  */
-export const verifySecurityQuestionAnswer = (
+export const verifySecurityQuestionAnswer = async (
   userId: string,
   questionIndex: number,
   answer: string
-): boolean => {
+): Promise<boolean> => {
   try {
-    const config = getSecurityQuestionConfigForVerification(userId);
+    console.log('[SecurityQuestionService] 验证安全问题答案', { userId, questionIndex })
     
-    let storedAnswer = '';
+    const config = await getSecurityQuestionConfigForVerification(userId)
+    
+    let storedAnswer = ''
     switch (questionIndex) {
       case 1:
-        storedAnswer = config.answer1;
-        break;
+        storedAnswer = config.answer1
+        break
       case 2:
-        storedAnswer = config.answer2;
-        break;
+        storedAnswer = config.answer2
+        break
       case 3:
-        storedAnswer = config.answer3;
-        break;
+        storedAnswer = config.answer3
+        break
       default:
-        return false;
+        return false
     }
     
-    // 如果没有设置答案，则验证失败
     if (!storedAnswer) {
-      return false;
+      return false
     }
     
-    // 解密存储的答案并进行比较（忽略大小写和首尾空格）
-    const decryptedStoredAnswer = atob(storedAnswer).toLowerCase().trim();
-    const providedAnswer = answer.toLowerCase().trim();
+    const decryptedStoredAnswer = storedAnswer.toLowerCase().trim()
+    const providedAnswer = answer.toLowerCase().trim()
     
-    return decryptedStoredAnswer === providedAnswer;
+    const isMatch = decryptedStoredAnswer === providedAnswer
+    console.log('[SecurityQuestionService] 验证结果', { isMatch })
+    
+    return isMatch
   } catch (error) {
-    console.error('验证安全问题答案失败:', error);
-    return false;
+    console.error('[SecurityQuestionService] 验证安全问题答案失败:', error)
+    return false
   }
-};
+}
+
+/**
+ * 批量验证安全问题答案
+ * @param userId 用户ID
+ * @param answers 答案数组
+ * @returns 是否全部验证成功
+ */
+export const verifySecurityQuestionAnswers = async (
+  userId: string,
+  answers: string[]
+): Promise<boolean> => {
+  try {
+    console.log('[SecurityQuestionService] 批量验证安全问题答案', { userId, answerCount: answers.length })
+    
+    if (answers.length !== 3) {
+      console.warn('[SecurityQuestionService] 答案数量不正确', { expected: 3, actual: answers.length })
+      return false
+    }
+    
+    const response = await request<{ success: boolean; message: string }>('/security-questions/verify', {
+      method: 'POST',
+      data: {
+        answers: answers
+      }
+    })
+    
+    console.log('[SecurityQuestionService] 批量验证结果', response.data)
+    return response.data.success
+  } catch (error) {
+    console.error('[SecurityQuestionService] 批量验证安全问题答案失败:', error)
+    return false
+  }
+}
 
 /**
  * 检查用户是否已设置安全问题
  * @param userId 用户ID
  * @returns 是否已设置安全问题
  */
-export const hasSecurityQuestions = (userId: string): boolean => {
+export const hasSecurityQuestions = async (userId: string): Promise<boolean> => {
   try {
-    const config = getSecurityQuestionConfig(userId);
-    return !!(
-      config.question1 && config.answer1 &&
-      config.question2 && config.answer2 &&
-      config.question3 && config.answer3
-    );
+    console.log('[SecurityQuestionService] 检查安全问题设置状态', { userId })
+    const response = await request<{ hasSecurityQuestions: boolean }>('/security-questions/check', {
+      method: 'GET'
+    })
+    console.log('[SecurityQuestionService] 检查安全问题设置状态成功', response.data)
+    return response.data.hasSecurityQuestions
   } catch (error) {
-    console.error('检查安全问题设置状态失败:', error);
-    return false;
+    console.error('[SecurityQuestionService] 检查安全问题设置状态失败:', error)
+    return false
   }
-};
+}
+
+/**
+ * 删除用户安全问题配置
+ * @param userId 用户ID
+ */
+export const deleteSecurityQuestionConfig = async (userId: string): Promise<{ deleted: boolean }> => {
+  try {
+    console.log('[SecurityQuestionService] 删除安全问题配置', { userId })
+    const response = await request<{ deleted: boolean }>('/security-questions/config', {
+      method: 'DELETE'
+    })
+    console.log('[SecurityQuestionService] 删除安全问题配置成功', response.data)
+    return response.data
+  } catch (error) {
+    console.error('[SecurityQuestionService] 删除安全问题配置失败:', error)
+    throw error
+  }
+}
 
 export default {
   getDefaultSecurityQuestionConfig,
@@ -159,5 +229,7 @@ export default {
   getSecurityQuestionConfigForVerification,
   saveSecurityQuestionConfig,
   verifySecurityQuestionAnswer,
-  hasSecurityQuestions
-};
+  verifySecurityQuestionAnswers,
+  hasSecurityQuestions,
+  deleteSecurityQuestionConfig
+}

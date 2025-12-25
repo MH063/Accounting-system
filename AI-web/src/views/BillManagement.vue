@@ -637,7 +637,10 @@ const getTypeText = (type: Bill['type']): string => {
  * @param amount 金额
  * @returns 格式化后的货币字符串
  */
-const formatCurrency = (amount: number): string => {
+const formatCurrency = (amount: number | undefined | null): string => {
+  if (amount === undefined || amount === null || isNaN(amount)) {
+    return '¥0.00'
+  }
   return `¥${amount.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`
 }
 
@@ -680,25 +683,71 @@ const loadBillList = async () => {
       ...searchForm
     })
     
-    if (response.success) {
-      billList.value = response.data.list
-      pagination.total = response.data.total
+    console.log('[BillManagement] API响应数据:', response)
+    
+    // 处理后端直接返回数组的情况
+    if (Array.isArray(response)) {
+      // 映射后端字段到前端期望的字段
+      billList.value = response.map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        status: item.status,
+        totalAmount: parseFloat(item.amount) || 0,
+        paidAmount: 0, // 后端没有提供已付金额字段
+        billDate: item.date,
+        payerName: item.applicant,
+        type: 'expense', // 后端没有提供类型字段，使用默认值
+        description: item.description || ''
+      }))
+      pagination.total = response.length
       
-      // 更新统计信息
-      billStats.pending = response.data.stats?.pending || 0
-      billStats.paid = response.data.stats?.paid || 0
-      billStats.overdue = response.data.stats?.overdue || 0
-      billStats.totalAmount = response.data.stats?.totalAmount || 0
+      // 计算统计信息
+      billStats.pending = billList.value.filter(b => b.status === 'pending').length
+      billStats.paid = billList.value.filter(b => b.status === 'paid').length
+      billStats.overdue = billList.value.filter(b => b.status === 'overdue').length
+      billStats.totalAmount = billList.value.reduce((sum, b) => sum + (b.totalAmount || 0), 0)
       
       console.log('[BillManagement] 账单列表加载成功:', {
         page: pagination.page,
         size: pagination.size,
         total: pagination.total,
-        currentPageCount: response.data.list.length,
+        currentPageCount: response.length,
+        stats: billStats
+      })
+    } else if (response && response.success) {
+      // 处理标准格式 {success: true, data: {...}}
+      const dataList = response.data.list || response.data.bills || []
+      
+      // 映射后端字段到前端期望的字段
+      billList.value = dataList.map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        status: item.status,
+        totalAmount: parseFloat(item.amount) || parseFloat(item.totalAmount) || 0,
+        paidAmount: parseFloat(item.paidAmount) || 0,
+        billDate: item.date || item.billDate,
+        payerName: item.applicant || item.payerName,
+        type: item.type || 'expense',
+        description: item.description || ''
+      }))
+      
+      pagination.total = response.data.total || dataList.length
+      
+      // 更新统计信息
+      billStats.pending = response.data.stats?.pending || billList.value.filter(b => b.status === 'pending').length
+      billStats.paid = response.data.stats?.paid || billList.value.filter(b => b.status === 'paid').length
+      billStats.overdue = response.data.stats?.overdue || billList.value.filter(b => b.status === 'overdue').length
+      billStats.totalAmount = response.data.stats?.totalAmount || billList.value.reduce((sum, b) => sum + (b.totalAmount || 0), 0)
+      
+      console.log('[BillManagement] 账单列表加载成功:', {
+        page: pagination.page,
+        size: pagination.size,
+        total: pagination.total,
+        currentPageCount: billList.value.length,
         stats: billStats
       })
     } else {
-      throw new Error(response.message || '获取账单列表失败')
+      throw new Error((response && response.message) || '获取账单列表失败')
     }
     
   } catch (error) {

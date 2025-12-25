@@ -39,7 +39,7 @@ const authenticateToken = async (req, res, next) => {
   
   try {
     const payload = await verifyTokenWithBlacklist(token);
-    const user = { ...payload, id: payload.userId };
+    const user = { ...payload, id: payload.userId || payload.id };
     req.user = user;
     req.tokenInfo = {
       type: payload.type,

@@ -750,7 +750,7 @@ import { useRoute, useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import { 
   Document, ArrowLeft, Edit, Money, Download, MoreFilled, CopyDocument, Share,
-  Printer, Delete, User, Plus, List, Clock, View, Upload, Paperclip, DataAnalysis, ScaleToOriginal
+  Printer, Delete, User, Plus, List, Clock, View, Upload, Paperclip, DataAnalysis, ScaleToOriginal, TrendCharts
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { billService } from '@/services/billService'
@@ -1303,8 +1303,27 @@ const loadBillDetail = async () => {
     // 调用真实API获取账单详情
     const response = await billService.getBillDetail(billId)
     
-    if (response.success) {
-      billData.value = response.data
+    console.log('[BillDetail] API响应数据:', response)
+    
+    // 处理后端直接返回对象的情况
+    if (response && !response.success && !Array.isArray(response)) {
+      // 后端直接返回了账单对象，需要映射字段
+      billData.value = {
+        id: response.id,
+        title: response.title,
+        type: response.type || 'expense',
+        status: response.status,
+        totalAmount: parseFloat(response.amount) || 0,
+        paidAmount: parseFloat(response.paidAmount) || 0,
+        billDate: response.date || response.billDate || '',
+        dueDate: response.dueDate || '',
+        payerName: response.applicant || response.payerName || '',
+        description: response.description || '',
+        paymentRecords: [],
+        participants: [],
+        expenses: [],
+        history: []
+      }
       console.log('[BillDetail] 账单详情加载成功:', billData.value)
       
       // 更新图表
@@ -1314,10 +1333,40 @@ const loadBillDetail = async () => {
         }
       })
       
-      // 加载账单版本数据
-      await loadBillVersions()
+      // 加载账单版本数据（暂时注释，因为后端接口尚未实现）
+      // await loadBillVersions()
+    } else if (response && response.success) {
+      // 处理标准格式 {success: true, data: {...}}
+      const data = response.data
+      billData.value = {
+        id: data.id,
+        title: data.title,
+        type: data.type || 'expense',
+        status: data.status,
+        totalAmount: parseFloat(data.amount) || parseFloat(data.totalAmount) || 0,
+        paidAmount: parseFloat(data.paidAmount) || 0,
+        billDate: data.date || data.billDate || '',
+        dueDate: data.dueDate || '',
+        payerName: data.applicant || data.payerName || '',
+        description: data.description || '',
+        paymentRecords: data.paymentRecords || [],
+        participants: data.participants || [],
+        expenses: data.expenses || [],
+        history: data.history || []
+      }
+      console.log('[BillDetail] 账单详情加载成功:', billData.value)
+      
+      // 更新图表
+      nextTick(() => {
+        if (chartInstance && billData.value) {
+          updateChart()
+        }
+      })
+      
+      // 加载账单版本数据（暂时注释，因为后端接口尚未实现）
+      // await loadBillVersions()
     } else {
-      throw new Error(response.message || '获取账单详情失败')
+      throw new Error((response && response.message) || '获取账单详情失败')
     }
   } catch (error) {
     console.error('[BillDetail] 加载账单详情失败:', error)

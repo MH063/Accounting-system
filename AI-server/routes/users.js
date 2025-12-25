@@ -9,8 +9,42 @@ const { PermissionChecker } = require('../config/permissions');
 const { responseWrapper } = require('../middleware/response');
 const { UserManager } = require('../config/permissions');
 const { v4: uuidv4 } = require('uuid');
+const logger = require('../config/logger');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const sharp = require('sharp');
 
 const router = express.Router();
+
+const avatarDir = path.join(__dirname, '../uploads/avatars');
+if (!fs.existsSync(avatarDir)) {
+  fs.mkdirSync(avatarDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, avatarDir);
+  },
+  filename: (req, file, cb) => {
+    const userId = req.user?.id || 'unknown';
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `avatar_${userId}_${Date.now()}${ext}`);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('只支持 JPG、PNG、GIF 和 WebP 格式的图片'));
+    }
+  }
+});
 
 /**
  * GET /api/users
@@ -367,6 +401,147 @@ router.get('/stats/summary', authenticateToken, responseWrapper(async (req, res)
     res.status(500).json({
       success: false,
       message: '获取用户统计信息失败',
+      error: error.message
+    });
+  }
+}));
+
+/**
+ * POST /api/users/personal-info/sync
+ * 同步当前用户的个人信息
+ */
+router.post('/personal-info/sync', authenticateToken, responseWrapper(async (req, res) => {
+  try {
+    const { pool } = require('../config/database');
+    const userId = req.user.id;
+    
+    logger.info('[UsersRoute] 同步个人信息开始', { userId });
+    
+    const query = `
+      SELECT 
+        id,
+        username,
+        email,
+        nickname,
+        real_name,
+        phone,
+        gender,
+        birthday,
+        avatar_url,
+        email_verified,
+        phone_verified,
+        status,
+        created_at,
+        updated_at
+      FROM users
+      WHERE id = $1
+    `;
+    
+    const result = await pool.query(query, [userId]);
+    
+    if (result.rows.length === 0) {
+      logger.warn('[UsersRoute] 用户不存在', { userId });
+      return res.status(404).json({
+        success: false,
+        message: '用户不存在'
+      });
+    }
+    
+    const user = result.rows[0];
+    
+    logger.info('[UsersRoute] 同步个人信息成功', { 
+      userId,
+      username: user.username 
+    });
+    
+    res.json({
+      success: true,
+      message: '同步个人信息成功',
+      data: {
+        id: user.id,
+        name: user.real_name || user.nickname || user.username,
+        username: user.username,
+        email: user.email,
+        phone: user.phone,
+        gender: user.gender,
+        birthday: user.birthday,
+        avatar: user.avatar_url,
+        bio: '',
+        emailVerified: user.email_verified,
+        phoneVerified: user.phone_verified,
+        status: user.status,
+        createdAt: user.created_at,
+        updatedAt: user.updated_at
+      }
+    });
+  } catch (error) {
+    logger.error('[UsersRoute] 同步个人信息失败', { 
+      error: error.message,
+      userId: req.user?.id 
+    });
+    res.status(500).json({
+      success: false,
+      message: '同步个人信息失败',
+      error: error.message
+    });
+  }
+}));
+
+/**
+ * POST /api/users/avatar
+ * 上传用户头像
+ */
+router.post('/avatar', authenticateToken, upload.single('avatar'), responseWrapper(async (req, res) => {
+  try {
+    const { pool } = require('../config/database');
+    const userId = req.user.id;
+    
+    logger.info('[UsersRoute] 上传头像开始', { userId });
+    
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: '请选择要上传的头像图片'
+      });
+    }
+    
+    const optimizedFilename = `avatar_${userId}_${Date.now()}.webp`;
+    const optimizedPath = path.join(avatarDir, optimizedFilename);
+    
+    await sharp(req.file.path)
+      .resize(200, 200, { fit: 'cover', position: 'center' })
+      .webp({ quality: 80 })
+      .toFile(optimizedPath);
+    
+    fs.unlinkSync(req.file.path);
+    
+    const avatarUrl = `/uploads/avatars/${optimizedFilename}`;
+    
+    await pool.query(
+      `UPDATE users SET avatar_url = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+      [avatarUrl, userId]
+    );
+    
+    logger.info('[UsersRoute] 上传头像成功', { 
+      userId,
+      avatarUrl 
+    });
+    
+    res.json({
+      success: true,
+      message: '头像上传成功',
+      data: {
+        avatar: avatarUrl
+      }
+    });
+  } catch (error) {
+    logger.error('[UsersRoute] 上传头像失败', { 
+      error: error.message,
+      userId: req.user?.id 
+    });
+    res.status(500).json({
+      success: false,
+      message: '头像上传失败',
       error: error.message
     });
   }

@@ -277,7 +277,7 @@ const routes: Array<RouteRecordRaw> = [
           title: '趋势分析'
         }
       },
-      {
+            {
         path: 'budget',
         name: 'BudgetManagement',
         component: () => import('@/views/BudgetManagement.vue'),

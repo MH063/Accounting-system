@@ -1,4 +1,5 @@
 import { DeviceInfo, getKnownDevices, saveKnownDevices, generateDeviceFingerprint } from './accountSecurityService';
+import { getClientIpAddress as apiGetClientIpAddress } from './authService';
 
 // 登录设备限制配置
 export interface LoginDeviceLimitConfig {
@@ -329,18 +330,19 @@ export const cleanupExpiredSessions = (userId: string, maxAge: number = 7 * 24 *
 /**
  * 获取客户端IP地址
  */
-export const getClientIpAddress = (): string => {
-  // 在实际应用中，这里应该从服务器获取真实IP
-  // 尝试从常见的HTTP头中获取IP地址
-  
-  // 如果在Node.js环境中，可以通过环境变量获取
-  if (typeof process !== 'undefined' && process.env.CLIENT_IP) {
-    return process.env.CLIENT_IP;
+export const getClientIpAddress = async (): Promise<string> => {
+  try {
+    const response = await apiGetClientIpAddress();
+    
+    if (response.success && response.data?.ip) {
+      return response.data.ip;
+    }
+    
+    return '0.0.0.0';
+  } catch (error) {
+    console.error('获取客户端IP地址失败:', error);
+    return '0.0.0.0';
   }
-  
-  // 在浏览器环境中，通常需要服务器端通过HTTP头传递真实IP
-  // 这里返回一个占位符，实际应用中应该由服务器提供
-  return '0.0.0.0';
 };
 
 /**

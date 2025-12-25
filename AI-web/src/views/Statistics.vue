@@ -17,7 +17,7 @@
             </div>
             <div class="card-content">
               <h3>总支出</h3>
-              <p class="amount">¥0.00</p>
+              <p class="amount">¥{{ statistics.totalExpense?.toFixed(2) || '0.00' }}</p>
               <p class="subtitle">本月支出统计</p>
             </div>
           </div>
@@ -29,7 +29,7 @@
             </div>
             <div class="card-content">
               <h3>预算余额</h3>
-              <p class="amount">¥0.00</p>
+              <p class="amount">¥{{ statistics.budgetBalance?.toFixed(2) || '0.00' }}</p>
               <p class="subtitle">剩余预算金额</p>
             </div>
           </div>
@@ -41,7 +41,7 @@
             </div>
             <div class="card-content">
               <h3>支出趋势</h3>
-              <p class="amount">持平</p>
+              <p class="amount" :class="getTrendClass()">{{ getTrendText() }}</p>
               <p class="subtitle">相比上月</p>
             </div>
           </div>
@@ -53,7 +53,7 @@
             </div>
             <div class="card-content">
               <h3>活跃用户</h3>
-              <p class="amount">0</p>
+              <p class="amount">{{ statistics.activeUsers || 0 }}</p>
               <p class="subtitle">本月活跃用户</p>
             </div>
           </div>
@@ -113,6 +113,7 @@
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   ArrowRight,
@@ -123,8 +124,103 @@ import {
   PieChart
 } from '@element-plus/icons-vue'
 
+// 定义统计数据接口
+interface StatisticsData {
+  totalExpense?: number
+  budgetBalance?: number
+  expenseTrend?: number
+  activeUsers?: number
+}
+
 // 路由
 const router = useRouter()
+
+// 统计数据状态
+const statistics = ref<StatisticsData>({})
+
+// 获取趋势文本
+const getTrendText = () => {
+  const trend = statistics.value.expenseTrend
+  if (trend === undefined) return '持平'
+  if (trend > 0) return `+${trend}%`
+  if (trend < 0) return `${trend}%`
+  return '持平'
+}
+
+// 获取趋势样式类
+const getTrendClass = () => {
+  const trend = statistics.value.expenseTrend
+  if (trend === undefined) return ''
+  if (trend > 0) return 'trend-up'
+  if (trend < 0) return 'trend-down'
+  return ''
+}
+
+// 基础HTTP请求函数
+const request = async <T = unknown>(url: string, options: RequestInit = {}): Promise<any> => {
+  // 获取API基础URL，确保符合 rule #14 (不使用 localhost/127.0.0.1)
+    const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://10.111.53.9:4000/api'
+  
+  // 获取访问令牌
+  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('access_token') : null
+  
+  const config: RequestInit = {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token && { Authorization: `Bearer ${token}` }),
+      ...options.headers,
+    },
+    ...options,
+  }
+
+  try {
+    // 使用完整URL构建请求
+    const fullUrl = url.startsWith('http') ? url : `${BASE_URL}${url}`
+    console.log(`发送请求到: ${fullUrl}`, config);
+    
+    const response = await fetch(fullUrl, config)
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`API请求失败 (${response.status}):`, errorText);
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+    
+    const data = await response.json()
+    console.log(`请求成功:`, data);
+    return data
+  } catch (error) {
+    console.error('API请求失败:', error)
+    throw error
+  }
+}
+
+// 获取统计数据
+const fetchStatistics = async () => {
+  try {
+    console.log('获取统计数据')
+    // 调用后端API获取统计数据
+    const response = await request('/dashboard/statistics')
+    // 处理双层嵌套的数据结构
+    if (response.success && response.data) {
+      // 映射后端数据结构到前端期望的结构
+      statistics.value = {
+        totalExpense: response.data.expenseStats?.totalMonthlyExpense || 0,
+        budgetBalance: response.data.expenseStats?.budgetBalance || 0,
+        expenseTrend: response.data.expenseStats?.expenseTrend || 0,
+        activeUsers: response.data.userStats?.activeUsers || 0
+      }
+      console.log('统计数据更新成功:', statistics.value)
+    }
+  } catch (error) {
+    console.error('获取统计数据失败:', error)
+  }
+}
+
+// 页面挂载时获取数据
+onMounted(() => {
+  fetchStatistics()
+})
 
 const goToExpenseStatistics = () => {
   router.push('/dashboard/expense-statistics')
@@ -236,6 +332,14 @@ const goToBudgetManagement = () => {
   margin: 0;
   font-size: 12px;
   color: #c0c4cc;
+}
+
+.card-content .amount.trend-up {
+  color: #f56c6c;
+}
+
+.card-content .amount.trend-down {
+  color: #67c23a;
 }
 
 .module-navigation {

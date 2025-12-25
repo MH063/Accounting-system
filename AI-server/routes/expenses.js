@@ -17,6 +17,15 @@ router.get('/pending', (req, res, next) => {
   expenseController.getExpenseList(req, res, next);
 });
 
+// 更新费用接口 - PUT方法
+router.put('/:id', expenseController.updateExpense);
+
+// 发送提醒接口 - POST方法
+router.post('/:id/remind', expenseController.sendReminder);
+
+// 获取统计数据接口 - GET方法
+router.get('/statistics', expenseController.getStatistics);
+
 // 费用详情接口 - GET方法
 router.get('/:id', expenseController.getExpenseDetail);
 
@@ -24,7 +33,7 @@ router.get('/:id', expenseController.getExpenseDetail);
 router.post('/', expenseController.createExpense);
 
 // 审核费用接口 - PUT方法
-router.put('/:id/review', expenseController.reviewExpense);
+router.put('/:id/review', (req, res, next) => expenseController.reviewExpense(req, res, next));
 
 // 支付费用接口 - PUT方法
 router.put('/:id/pay', expenseController.payExpense);

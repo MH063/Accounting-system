@@ -403,12 +403,15 @@ class AuthStorageService {
       // 检查本地存储中是否有用户信息
       const userInfo = this.getUserInfo()
       if (!userInfo || !userInfo.id) {
+        console.log('认证检查: 用户信息缺失')
         return false
       }
       
       const isAuthenticated = localStorage.getItem(STORAGE_KEYS.IS_AUTHENTICATED) === 'true'
       const hasAccessToken = !!this.getAccessToken()
       const tokenNotExpired = !this.isTokenExpired()
+      
+      console.log('认证检查结果:', { isAuthenticated, hasAccessToken, tokenNotExpired })
       
       return isAuthenticated && hasAccessToken && tokenNotExpired
     } catch (error) {

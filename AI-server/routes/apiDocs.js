@@ -14,8 +14,15 @@ const {
 const { responseWrapper } = require('../middleware/response');
 const { authenticateJWT } = require('../config/permissions');
 const logger = require('../config/logger');
+const { swaggerMiddlewareOptions } = require('../middleware/swagger');
 
 const router = express.Router();
+
+/**
+ * 静态资源路由 - 提供Swagger UI的CSS、JS等静态文件
+ * 必须放在HTML页面路由之前
+ */
+router.use('/', swaggerUi.serve);
 
 /**
  * GET /api/docs
@@ -33,21 +40,11 @@ router.get('/', responseWrapper(async (req, res) => {
       });
     }
 
-    // 创建Swagger UI选项
-    const swaggerOptions = {
-      customCss: '.swagger-ui .topbar { display: none }',
-      customSiteTitle: '会计系统 API 文档',
-      swaggerOptions: {
-        persistAuthorization: true,
-        displayRequestDuration: true,
-        filter: true,
-        showExtensions: true,
-        showCommonExtensions: true
-      }
-    };
-
-    // 返回Swagger UI页面
-    swaggerUi.setup(swaggerSpec, swaggerOptions)(req, res);
+    // 覆盖全局JSON响应设置，确保返回HTML页面
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    
+    // 使用middleware中定义的Swagger UI选项
+    swaggerUi.setup(swaggerSpec, swaggerMiddlewareOptions)(req, res);
   } catch (error) {
     logger.error('Swagger UI路由错误:', error);
     return res.status(500).json({
@@ -57,6 +54,25 @@ router.get('/', responseWrapper(async (req, res) => {
     });
   }
 }));
+
+/**
+ * GET /api/docs/swagger-zh.js
+ * 提供Swagger UI中文翻译脚本
+ */
+router.get('/swagger-zh.js', (req, res) => {
+  const fs = require('fs');
+  const path = require('path');
+  const jsPath = path.join(__dirname, '../public/swagger-zh.js');
+  
+  try {
+    const jsContent = fs.readFileSync(jsPath, 'utf8');
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.send(jsContent);
+  } catch (error) {
+    logger.error('加载中文翻译脚本失败:', error);
+    res.status(404).send('Translation script not found');
+  }
+});
 
 /**
  * GET /api/docs.json

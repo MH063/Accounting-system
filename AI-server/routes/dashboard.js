@@ -61,6 +61,17 @@ router.get('/statistics', authenticateToken, async (req, res) => {
     const expenseStatsResult = await query(expenseStatsQuery);
     const expenseStats = expenseStatsResult.rows[0];
     
+    // 5. 上月费用统计（用于计算支出趋势）
+    const lastMonthExpenseQuery = `
+      SELECT 
+        COALESCE(SUM(amount), 0) as total_last_month_expense  -- 上月总费用
+      FROM expenses
+      WHERE expense_date >= date_trunc('month', CURRENT_DATE - interval '1 month')
+        AND expense_date < date_trunc('month', CURRENT_DATE)
+    `;
+    const lastMonthExpenseResult = await query(lastMonthExpenseQuery);
+    const totalLastMonthExpense = parseFloat(lastMonthExpenseResult.rows[0].total_last_month_expense);
+    
     // 5. 费用分摊统计
     const expenseSplitStatsQuery = `
       SELECT 
@@ -147,6 +158,13 @@ router.get('/statistics', authenticateToken, async (req, res) => {
     `;
     const recentMaintenanceResult = await query(recentMaintenanceQuery);
     
+    // 计算支出趋势（相比上月）
+    const totalMonthlyExpense = parseFloat(expenseStats.total_monthly_expense);
+    let expenseTrend = 0;
+    if (totalLastMonthExpense > 0) {
+      expenseTrend = parseFloat(((totalMonthlyExpense - totalLastMonthExpense) / totalLastMonthExpense * 100).toFixed(2));
+    }
+    
     // 构建返回数据
     const statisticsData = {
       // 用户统计
@@ -168,7 +186,8 @@ router.get('/statistics', authenticateToken, async (req, res) => {
       
       // 费用统计
       expenseStats: {
-        totalMonthlyExpense: parseFloat(expenseStats.total_monthly_expense),  // 本月总费用
+        totalMonthlyExpense: totalMonthlyExpense,  // 本月总费用
+        expenseTrend: expenseTrend,                // 支出趋势（相比上月，百分比）
         pendingExpenses: parseInt(expenseStats.pending_expenses),             // 待审批费用数
         approvedExpenses: parseInt(expenseStats.approved_expenses),           // 已审批费用数
         totalSplitAmount: parseFloat(expenseSplitStats.total_split_amount),   // 总分摊金额
@@ -177,7 +196,8 @@ router.get('/statistics', authenticateToken, async (req, res) => {
         paidPayments: parseInt(expenseSplitStats.paid_payments),              // 已支付数
         overduePayments: parseInt(expenseSplitStats.overdue_payments),        // 逾期支付数
         totalBudget: parseFloat(totalBudget.total_budget),                   // 总预算
-        totalUsedBudget: parseFloat(totalBudget.total_used_amount)            // 总已使用预算
+        totalUsedBudget: parseFloat(totalBudget.total_used_amount),            // 总已使用预算
+        budgetBalance: parseFloat(totalBudget.total_budget) - parseFloat(totalBudget.total_used_amount) // 预算余额
       },
       
       // 报修统计

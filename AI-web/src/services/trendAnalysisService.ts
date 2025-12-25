@@ -31,11 +31,16 @@ export const getTrendAnalysis = async (params: TrendAnalysisParams): Promise<Api
     })
     
     // 调用真实API获取趋势分析数据
-    const response = await request<TrendDataPoint[]>(`/analytics/trend?${queryParams.toString()}`)
+    const response = await request<ApiResponse<any>>(`/trend/analysis?${queryParams.toString()}`)
+    
+    // 正确处理响应数据
+    const data = response.data?.trendData || response.data || []
+    console.log('趋势分析API响应数据:', data)
     
     return {
-      success: true,
-      data: response
+      success: response.success,
+      data: Array.isArray(data) ? data : [],
+      message: response.message
     }
   } catch (error) {
     console.error('获取趋势分析数据失败:', error)
@@ -57,11 +62,13 @@ export const getPredictionData = async (days: number): Promise<ApiResponse<Trend
     console.log('获取预测数据:', days)
     
     // 调用真实API获取预测数据
-    const response = await request<TrendDataPoint[]>(`/analytics/prediction?days=${days}`)
+    const response = await request<ApiResponse<TrendDataPoint[]>>(`/trend/prediction?days=${days}`)
     
+    // 直接返回预测数据数组
     return {
-      success: true,
-      data: response
+      success: response.success,
+      data: response.data || [],
+      message: response.message
     }
   } catch (error) {
     console.error('获取预测数据失败:', error)

@@ -636,9 +636,10 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { 
   ArrowLeft, Money, List, Refresh, View, Check, Document, Tickets, Upload,
-  Search, TrendCharts, Warning, CreditCard, ChatLineRound, Postcard
+  Search, TrendCharts, Warning, CreditCard, ChatLineRound, Postcard, Download
 } from '@element-plus/icons-vue'
-import { confirmPayment as apiConfirmPayment, getQRCodes } from '@/services/paymentService'
+import { confirmPayment as apiConfirmPayment, getQRCodes, getConfirmStatistics } from '@/services/paymentService'
+import { request } from '@/utils/request'
 
 // 类型定义
 interface Payment {
@@ -686,11 +687,48 @@ const searchForm = reactive({
 
 // 统计数据
 const statistics = reactive({
-  pendingAmount: 1256.50,
-  paidAmount: 8560.30,
-  pendingCount: 3,
-  totalCount: 28
+  pendingAmount: 0,
+  paidAmount: 0,
+  pendingCount: 0,
+  totalCount: 0
 })
+
+// 加载统计数据
+const loadStatistics = async () => {
+  try {
+    console.log('加载统计数据')
+    
+    const params: Record<string, string> = {}
+    
+    if (searchForm.keyword) {
+      params.keyword = searchForm.keyword
+    }
+    if (searchForm.status) {
+      params.status = searchForm.status
+    }
+    if (searchForm.category) {
+      params.category = searchForm.category
+    }
+    if (searchForm.dateRange && searchForm.dateRange.length === 2) {
+      params.startDate = searchForm.dateRange[0]
+      params.endDate = searchForm.dateRange[1]
+    }
+    
+    const response = await getConfirmStatistics(params)
+    
+    if (response.success && response.data) {
+      console.log('统计数据加载成功:', response.data)
+      statistics.pendingAmount = response.data.pendingAmount || 0
+      statistics.paidAmount = response.data.paidAmount || 0
+      statistics.pendingCount = response.data.pendingCount || 0
+      statistics.totalCount = response.data.totalCount || 0
+    } else {
+      console.warn('统计数据接口返回失败:', response.message)
+    }
+  } catch (error: any) {
+    console.error('加载统计数据失败:', error)
+  }
+}
 
 // 表单引用
 const confirmFormRef = ref<FormInstance>()
@@ -771,6 +809,7 @@ const exceptionRules = reactive<FormRules>({
 // 生命周期
 onMounted(() => {
   loadPendingPayments()
+  loadStatistics()
 })
 
 // 方法
@@ -781,8 +820,7 @@ const loadPendingPayments = async () => {
     console.log('获取待确认支付列表')
     
     // 调用真实API获取待确认支付列表
-    const response = await request({
-      url: '/payments/pending-confirmation',
+    const response = await request('/payments/pending-confirmation', {
       method: 'GET'
     })
     
@@ -806,6 +844,8 @@ const handleSearch = () => {
   loading.value = true
   // 调用真实API搜索
   loadPendingPayments()
+  // 重新加载统计数据
+  loadStatistics()
 }
 
 const resetSearch = () => {
@@ -860,8 +900,7 @@ const batchConfirmPayment = async () => {
     
     // 调用真实API进行批量支付确认
     const paymentIds = selectedPayments.value.map(payment => payment.id)
-    const response = await request({
-      url: '/payments/batch-confirm',
+    const response = await request('/payments/batch-confirm', {
       method: 'POST',
       body: JSON.stringify({ paymentIds })
     })
@@ -890,8 +929,7 @@ const generateCaptcha = async () => {
     console.log('请求发送验证码')
     
     // 调用真实API发送验证码
-    const response = await request({
-      url: '/auth/send-captcha',
+    const response = await request('/auth/send-captcha', {
       method: 'POST'
     })
     
@@ -924,8 +962,7 @@ const sendSmsCode = async () => {
     console.log('请求发送短信验证码')
     
     // 调用真实API发送短信验证码
-    const response = await request({
-      url: '/auth/send-sms-code',
+    const response = await request('/auth/send-sms-code', {
       method: 'POST'
     })
     
@@ -1372,8 +1409,7 @@ const uploadAttachment = (payment?: Payment) => {
         }, 300)
         
         // 调用真实API上传文件
-        const response = await request({
-          url: '/payments/upload-attachments',
+        const response = await request('/payments/upload-attachments', {
           method: 'POST',
           data: formData,
           headers: {
@@ -1519,8 +1555,7 @@ const getAttachmentSize = async (url: string): Promise<number> => {
     console.log(`获取文件大小: ${url}`)
     
     // 调用真实API获取文件大小
-    const response = await request({
-      url: '/payments/file-size',
+    const response = await request('/payments/file-size', {
       method: 'POST',
       data: { url }
     })

@@ -242,15 +242,15 @@ class BaseRepository {
    */
   async update(id, data) {
     try {
-      const keys = Object.keys(data);
-      const values = Object.values(data);
+      const keys = Object.keys(data).filter(key => key !== 'updated_at');
+      const values = Object.values(data).filter((_, index) => !Object.keys(data).includes('updated_at') || Object.keys(data)[index] !== 'updated_at');
       
       if (keys.length === 0) {
         throw new Error('更新数据不能为空');
       }
 
       const setClause = keys.map((key, index) => `${key} = $${index + 1}`).join(', ');
-      values.push(id); // 添加ID到参数末尾
+      values.push(id);
       
       const returningClause = this.modelClass ? 'RETURNING *' : 'RETURNING id';
       

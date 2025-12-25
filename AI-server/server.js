@@ -104,9 +104,11 @@ app.use(createCorsMiddleware());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// 设置字符编码为UTF-8
+// 设置字符编码为UTF-8，仅对API请求设置JSON Content-Type
 app.use((req, res, next) => {
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  if (req.path.startsWith('/api/') && !req.path.startsWith('/api/docs')) {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  }
   next();
 });
 
@@ -115,6 +117,8 @@ app.use((req, res, next) => {
 app.use(express.static('public'));
 app.use(express.static(__dirname));
 app.use('/test-page', express.static(__dirname));
+// 配置uploads目录的静态文件访问
+app.use('/uploads', express.static('uploads'));
 
 // 信息泄露防护中间件 - 必须在静态文件服务之后，其他中间件之前
 app.use(infoLeakProtection()); // 防护响应信息泄露
@@ -197,6 +201,9 @@ app.use('/api/virus-scan', require('./routes/virusScan'));
 app.use('/api/cors', require('./routes/corsManagement'));
 app.use('/api/audit', require('./routes/audit'));
 
+// 版本管理路由
+app.use('/api/version', require('./routes/version'));
+
 // 费用摘要路由
 app.use('/api/expense-summary', require('./routes/expenseSummary'));
 
@@ -206,8 +213,35 @@ app.use('/api/expenses', require('./routes/expenses'));
 // 支付相关路由
 app.use('/api/payment', require('./routes/payment'));
 
+// 支付记录路由
+app.use('/api/payments', require('./routes/payments'));
+
 // 收款码相关路由
 app.use('/api/qr-codes', require('./routes/qrCodes'));
+
+// 联系人相关路由
+app.use('/api/contacts', require('./routes/contacts'));
+
+// 分类相关路由
+app.use('/api/categories', require('./routes/categories'));
+
+// 趋势分析路由
+app.use('/api/trend', require('./routes/trend'));
+
+// 预算管理路由
+app.use('/api/budget', require('./routes/budget'));
+
+// 账单相关路由（重定向到费用路由）
+app.use('/api/bills', require('./routes/bills'));
+
+// 账户管理路由
+app.use('/api/accounts', require('./routes/accounts'));
+
+// 通知管理路由
+app.use('/api/notifications', require('./routes/notifications'));
+
+// 安全问题路由
+app.use('/api/security-questions', require('./routes/securityQuestions'));
 
 // 服务器端口
 // 优先使用环境变量PORT（例如在Zeabur等平台上通常为3000）

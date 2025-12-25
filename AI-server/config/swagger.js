@@ -83,6 +83,11 @@ Authorization: Bearer <jwt_token>
     ],
     components: {
       securitySchemes: {
+        cookieAuth: {
+          type: 'apiKey',
+          in: 'cookie',
+          name: 'Authorization'
+        },
         bearerAuth: {
           type: 'http',
           scheme: 'bearer',

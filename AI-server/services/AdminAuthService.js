@@ -192,17 +192,26 @@ class AdminAuthService {
       const user = await this.userRepository.findById(userId);
       
       if (!user) {
-        throw new Error('用户不存在');
+        return {
+          success: false,
+          message: '用户不存在'
+        };
       }
 
       // 检查是否为管理员
       const isAdmin = user.username === 'admin' || user.email === 'admin@example.com' || user.role === 'admin';
       if (!isAdmin) {
-        throw new Error('权限不足');
+        return {
+          success: false,
+          message: '权限不足'
+        };
       }
 
       if (!user.isActive) {
-        throw new Error('账户未激活');
+        return {
+          success: false,
+          message: '账户未激活'
+        };
       }
 
       return {
@@ -220,7 +229,10 @@ class AdminAuthService {
         error: error.message,
         userId 
       });
-      throw error;
+      return {
+        success: false,
+        message: '获取管理员资料失败'
+      };
     }
   }
 

@@ -44,6 +44,7 @@ export const createAuthGuard = (router: Router): void => {
     try {
       // 检查本地认证状态
       const authState = authStorageService.getAuthState()
+      console.log('路由守卫检查认证状态:', authState)
       
       // 如果本地未认证，重定向到登录页
       if (!authState.isAuthenticated) {

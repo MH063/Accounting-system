@@ -65,26 +65,25 @@ const errorResponse = (res, message = '操作失败', statusCode = 400, error = 
 const responseWrapper = (handler) => {
   return async (req, res, next) => {
     try {
-      // 重写res.json方法，确保成功响应状态码为200
       const originalJson = res.json;
       res.json = function(data) {
-        // 如果响应包含success: true，确保状态码为200
         if (data && data.success === true && res.statusCode !== 200) {
           res.statusCode = 200;
         }
         return originalJson.call(this, data);
       };
       
-      // 检查处理函数的参数长度，决定是否传递next参数
       const handlerLength = handler.length;
       
-      // 调用原始处理函数，根据参数长度决定是否传递next
+      let result;
       if (handlerLength >= 3) {
-        // 如果处理函数接受3个参数或更多，传递req, res, next
-        await handler(req, res, next);
+        result = await handler(req, res, next);
       } else {
-        // 如果处理函数接受少于3个参数，只传递req, res
-        await handler(req, res);
+        result = await handler(req, res);
+      }
+      
+      if (result !== undefined && !res.headersSent) {
+        res.json(result);
       }
     } catch (error) {
       next(error);

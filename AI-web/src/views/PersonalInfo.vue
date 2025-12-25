@@ -619,14 +619,14 @@ const syncData = async (): Promise<void> => {
         realName: userData.name || '张三',
         gender: 'male',
         birthday: '1990-01-01',
-        phone: userData.email ? userData.email.replace(/@.*/, '') : '13800138000',
+        phone: userData.phone || '13800138000',
         email: userData.email || 'user@example.com',
         bio: '这是我的个人简介，喜欢技术和生活。'
       })
       
       // 设置验证状态
-      phoneVerified.value = true
-      emailVerified.value = false
+      phoneVerified.value = userData.phone_verified || false
+      emailVerified.value = userData.email_verified || false
       
       // 设置隐私设置
       Object.assign(privacySettings, {
@@ -709,15 +709,58 @@ const loadPersonalInfo = async (): Promise<void> => {
     
     // 如果API调用成功，使用返回的数据
     if (response.success && response.data) {
+      const userData = response.data as any // 使用any避免类型问题
       personalData = {
-        username: response.data.name || 'user123',
-        realName: response.data.name || '张三',
+        username: userData.name || 'user123',
+        realName: userData.name || '张三',
         gender: 'male',
         birthday: '1990-01-01',
-        phone: response.data.email ? response.data.email.replace(/@.*/, '') : '13800138000',
-        email: response.data.email || 'user@example.com',
+        phone: userData.phone || '13800138000',
+        email: userData.email || 'user@example.com',
         bio: '这是我的个人简介，喜欢技术和生活。'
       }
+      
+      // 设置头像URL
+      if (userData.avatar || userData.avatar_url) {
+        // 检查avatar_url是否已包含base64前缀，避免重复添加
+        const avatar = userData.avatar || userData.avatar_url
+        if (typeof avatar === 'string' && avatar.trim()) {
+          // 检查是否已包含完整的data:image前缀
+          if (avatar.startsWith('data:image')) {
+            avatarUrl.value = avatar
+          } 
+          // 检查是否只包含部分前缀（如 image/png;base64,）
+          else if (avatar.startsWith('image/')) {
+            // 补充data:前缀
+            avatarUrl.value = 'data:' + avatar
+          }
+          // HTTP/HTTPS URL
+          else if (avatar.startsWith('/') || avatar.startsWith('http')) {
+            avatarUrl.value = avatar
+          }
+          // 纯base64数据（不含任何前缀）
+          else if (/^[A-Za-z0-9+/=]+$/.test(avatar)) {
+            // 假设是PNG格式，添加完整前缀
+            avatarUrl.value = 'data:image/png;base64,' + avatar
+          }
+          // 其他情况使用默认头像
+          else {
+            console.warn('无法识别的头像格式:', avatar.substring(0, 50))
+            avatarUrl.value = 'https://picsum.photos/120/120'
+          }
+        } else {
+          avatarUrl.value = 'https://picsum.photos/120/120'
+        }
+      } else {
+        avatarUrl.value = 'https://picsum.photos/120/120'
+      }
+      
+      // 设置验证状态
+      phoneVerified.value = userData.phone_verified || false
+      emailVerified.value = userData.email_verified || false
+    } else {
+      // 使用默认头像
+      avatarUrl.value = 'https://picsum.photos/120/120'
     }
     
     if (dataEncryptionManager.isEncryptionEnabled()) {
@@ -765,8 +808,9 @@ const loadPersonalInfo = async (): Promise<void> => {
     Object.assign(originalPersonalForm, personalForm)
     
     // 设置验证状态
-    phoneVerified.value = true
-    emailVerified.value = false
+    const userData = response.data as any
+    phoneVerified.value = userData.phone_verified || false
+    emailVerified.value = userData.email_verified || false
     
     // 设置隐私设置
     Object.assign(privacySettings, {

@@ -54,6 +54,7 @@ export interface ExpenseRecord {
   phone: string
   department: string
   position: string
+  payer?: string // 添加payer字段，用于前端显示付款人
   attachments?: any[]
   status: string
   createdAt: string

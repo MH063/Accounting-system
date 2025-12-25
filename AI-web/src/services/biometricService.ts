@@ -107,7 +107,10 @@ export const registerBiometricCredential = async (type: BiometricType): Promise<
           name: userName,
           displayName: userName
         },
-        pubKeyCredParams: [{ alg: -7, type: 'public-key' }],
+        pubKeyCredParams: [
+          { alg: -7, type: 'public-key' },   // ES256
+          { alg: -257, type: 'public-key' }  // RS256
+        ],
         authenticatorSelection: {
           authenticatorAttachment: 'platform',
           userVerification: 'required',

@@ -21,7 +21,7 @@
           <el-card class="stat-card">
             <div class="stat-item">
               <div class="stat-label">总收入</div>
-              <div class="stat-value income">¥{{ statistics.totalIncome.toFixed(2) }}</div>
+              <div class="stat-value income">¥{{ (statistics.totalIncome || 0).toFixed(2) }}</div>
             </div>
           </el-card>
         </el-col>
@@ -29,7 +29,7 @@
           <el-card class="stat-card">
             <div class="stat-item">
               <div class="stat-label">总支出</div>
-              <div class="stat-value expense">¥{{ statistics.totalExpense.toFixed(2) }}</div>
+              <div class="stat-value expense">¥{{ (statistics.totalExpense || 0).toFixed(2) }}</div>
             </div>
           </el-card>
         </el-col>
@@ -37,7 +37,7 @@
           <el-card class="stat-card">
             <div class="stat-item">
               <div class="stat-label">交易笔数</div>
-              <div class="stat-value">{{ statistics.totalTransactions }}</div>
+              <div class="stat-value">{{ statistics.totalTransactions || 0 }}</div>
             </div>
           </el-card>
         </el-col>
@@ -46,7 +46,7 @@
             <div class="stat-item">
               <div class="stat-label">成功率</div>
               <div class="stat-value">
-                {{ statistics.successfulPayments > 0 ? ((statistics.successfulPayments / statistics.totalTransactions) * 100).toFixed(1) : 0 }}%
+                {{ (statistics.successfulPayments && statistics.totalTransactions) ? ((statistics.successfulPayments / statistics.totalTransactions) * 100).toFixed(1) : 0 }}%
               </div>
             </div>
           </el-card>
@@ -548,9 +548,14 @@ const handleSearch = async () => {
       pagination.total = response.data.total
       pagination.pages = response.data.pages
     }
-  } catch (error) {
-    ElMessage.error('获取支付记录失败')
+  } catch (error: any) {
+    const errorMsg = error.message || '获取支付记录失败'
+    ElMessage.error(errorMsg)
     console.error('获取支付记录失败:', error)
+    // 显示友好的错误提示
+    if (error.message && error.message.includes('服务器内部错误')) {
+      ElMessage.info('服务器正在维护中，请稍后再试')
+    }
   } finally {
     loading.value = false
   }
@@ -620,18 +625,18 @@ const handleRefund = async (record: PaymentRecord) => {
 
 const handleExport = async () => {
   try {
-    const response = await exportPaymentRecords(filterForm, 'excel')
-    if (response.success && response.data) {
-      // 创建下载链接
-      const link = document.createElement('a')
-      link.href = response.data.downloadUrl
-      link.download = `payment_records_${new Date().toISOString().split('T')[0]}.xlsx`
-      link.click()
-      ElMessage.success('导出成功')
-    }
-  } catch (error) {
-    ElMessage.error('导出失败')
+    await exportPaymentRecords(filterForm, 'excel')
+    ElMessage.success('导出成功，文件将自动下载')
+  } catch (error: any) {
+    const errorMsg = error.message || '导出失败'
+    ElMessage.error(errorMsg)
     console.error('导出失败:', error)
+    // 提供更具体的错误提示
+    if (error.message && error.message.includes('导出服务暂时不可用')) {
+      ElMessage.info('导出功能正在维护中，请稍后再试')
+    } else if (error.message && error.message.includes('没有符合条件的支付记录')) {
+      ElMessage.info('当前筛选条件下没有可导出的支付记录')
+    }
   }
 }
 
@@ -642,8 +647,14 @@ const loadStatistics = async () => {
     if (response.success && response.data) {
       statistics.value = response.data
     }
-  } catch (error) {
+  } catch (error: any) {
+    const errorMsg = error.message || '获取统计数据失败'
+    ElMessage.warning(errorMsg)
     console.error('获取统计数据失败:', error)
+    // 显示友好的错误提示
+    if (error.message && error.message.includes('接口不存在')) {
+      ElMessage.info('统计功能正在升级中，请稍后再试')
+    }
   }
 }
 

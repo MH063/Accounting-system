@@ -5,9 +5,9 @@
       <div class="header-left">
         <h1 class="page-title">
           <el-icon class="title-icon"><DocumentAdd /></el-icon>
-          创建账单
+          {{ isEditMode ? '编辑账单' : '创建账单' }}
         </h1>
-        <p class="page-subtitle">填写账单信息并分配给参与成员</p>
+        <p class="page-subtitle">{{ isEditMode ? '修改账单信息' : '填写账单信息并分配给参与成员' }}</p>
       </div>
       <div class="header-actions">
         <el-button 
@@ -801,22 +801,36 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { 
   DocumentAdd, ArrowLeft, InfoFilled, Document, User, Plus, Delete, 
   UserFilled, List, Money, Calendar, Timer, Setting, Clock
 } from '@element-plus/icons-vue'
+import { billService } from '@/services/billService'
+
+// 定义组件接收的props
+interface Props {
+  id?: string
+}
+
+// 接收路由传递的props
+const props = defineProps<Props>()
 
 // 响应式数据
 const router = useRouter()
+const route = useRoute()
 const billFormRef = ref()
 const submitLoading = ref(false)
 const splitMethod = ref('manual')
 const expenseSummaryType = ref('category')
 const showPreview = ref(false)
 const previewData = ref({})
+
+// 检查是否为编辑模式
+const isEditMode = computed(() => !!props.id || !!route.params.id)
+const billId = computed(() => props.id || route.params.id as string)
 
 // 账单表单数据
 const billForm = reactive({
@@ -1343,9 +1357,6 @@ const handleConfirmSubmit = async () => {
   submitLoading.value = true
   
   try {
-    // 模拟API调用
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    
     // 构建提交数据
     const submitData = {
       ...previewData.value,
@@ -1354,14 +1365,22 @@ const handleConfirmSubmit = async () => {
     
     console.log('提交账单数据:', submitData)
     
-    ElMessage.success('账单创建成功！')
+    if (isEditMode.value && billId.value) {
+      // 编辑模式：更新账单
+      await billService.updateBill(billId.value, submitData)
+      ElMessage.success('账单更新成功！')
+    } else {
+      // 创建模式：创建账单
+      await billService.createBill(submitData)
+      ElMessage.success('账单创建成功！')
+    }
     
     // 跳转到账单列表页
     router.push('/dashboard/bills')
     
   } catch (error) {
-    console.error('创建账单失败:', error)
-    ElMessage.error('创建账单失败，请重试')
+    console.error('提交账单失败:', error)
+    ElMessage.error('提交账单失败，请重试')
   } finally {
     submitLoading.value = false
   }
@@ -1554,6 +1573,50 @@ const calculateNextGeneration = () => {
 // 初始化时设置默认日期
 billForm.billDate = new Date().toISOString().split('T')[0]
 billForm.dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
+// 组件挂载时的逻辑
+onMounted(async () => {
+  // 如果是编辑模式，加载账单数据
+  if (isEditMode.value && billId.value) {
+    console.log('[BillCreate] 编辑模式，加载账单数据:', billId.value)
+    try {
+      const response = await billService.getBillDetail(billId.value)
+      console.log('[BillCreate] 获取账单详情成功:', response)
+      
+      // 处理后端返回的数据
+      let billData;
+      if (response && !response.success && !Array.isArray(response)) {
+        // 后端直接返回了账单对象
+        billData = response
+      } else if (response && response.success) {
+        // 标准格式 {success: true, data: {...}}
+        billData = response.data
+      } else {
+        throw new Error('获取账单详情失败')
+      }
+      
+      // 填充表单数据
+      billForm.title = billData.title || ''
+      billForm.type = billData.type || ''
+      billForm.description = billData.description || ''
+      billForm.billDate = billData.billDate || billData.date || ''
+      billForm.dueDate = billData.dueDate || ''
+      
+      // 填充参与者和费用数据（如果有的话）
+      if (billData.participants) {
+        billForm.participants = billData.participants
+      }
+      if (billData.expenses) {
+        billForm.expenses = billData.expenses
+      }
+      
+      console.log('[BillCreate] 表单数据填充完成:', billForm)
+    } catch (error) {
+      console.error('[BillCreate] 加载账单数据失败:', error)
+      ElMessage.error('加载账单数据失败: ' + (error instanceof Error ? error.message : '未知错误'))
+    }
+  }
+})
 </script>
 
 <style scoped>

@@ -24,7 +24,7 @@
           <el-button type="success">
             导入/导出
             <el-icon class="el-icon--right">
-              <arrow-down />
+              <ArrowDown />
             </el-icon>
           </el-button>
           <template #dropdown>
@@ -531,12 +531,12 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed, nextTick, onUnmounted } from 'vue'
-import { 
-  Plus, 
-  Search, 
-  Wallet, 
-  TrendCharts, 
-  Money, 
+import {
+  Plus,
+  Search,
+  Wallet,
+  TrendCharts,
+  Money,
   DataAnalysis,
   Edit,
   Delete,
@@ -544,6 +544,7 @@ import {
   Lightning,
   DataLine,
   ArrowLeft,
+  ArrowDown,
   PieChart,
   Download,
   Upload,
@@ -789,27 +790,33 @@ const checkBudgetAlertsGlobal = async () => {
     if (response.success && response.data) {
       console.log('全局预算预警检查结果:', response.data)
       
-      // 按使用率从高到低排序
-      const alerts = response.data.sort((a: any, b: any) => b.utilization - a.utilization)
+      // 获取预警列表并按使用率从高到低排序
+      const alerts = (response.data.alerts || []).sort((a: any, b: any) => b.utilization - a.utilization)
       
       // 显示预警信息
       alerts.forEach((alert: any) => {
         if (alert.utilization > 100) {
           // 超支预警
-          showBudgetAlert(`${alert.name}预算超支`, 
-            `您的${alert.name}预算已超支¥${alert.overspendAmount.toFixed(2)}，请尽快调整支出计划。`, 
+          showBudgetAlert(`${alert.budgetName}预算超支`, 
+            `您的${alert.budgetName}预算已超支，使用率${alert.utilization.toFixed(1)}%，请尽快调整支出计划。`, 
             'danger');
         } else if (alert.utilization > reminderSettings.threshold) {
           // 高使用率预警
-          showBudgetAlert(`${alert.name}预算使用率提醒`, 
-            `您的${alert.name}预算使用率已达${alert.utilization}%，请控制支出以免超支。`, 
+          showBudgetAlert(`${alert.budgetName}预算使用率提醒`, 
+            `您的${alert.budgetName}预算使用率已达${alert.utilization.toFixed(1)}%，请控制支出以免超支。`, 
             'warning');
         }
       })
       
       // 将预警信息推送到仪表盘
       if (alerts.length > 0) {
-        pushNotificationToDashboard(alerts)
+        const topAlert = alerts[0]
+        const priority = topAlert.utilization > 100 ? 'danger' : 'warning'
+        pushNotificationToDashboard(
+          '预算预警汇总',
+          `检测到${alerts.length}个预算需要关注，最高使用率为${topAlert.utilization.toFixed(1)}%`,
+          priority
+        )
       }
       
     } else {
@@ -1627,22 +1634,22 @@ const updateCategoryChart = async () => {
                   },
                   value: {
                     color: '#333',
-                fontSize: 16,
-                fontWeight: 'bold',
-                lineHeight: 30
+                    fontSize: 16,
+                    fontWeight: 'bold',
+                    lineHeight: 30
+                  }
+                }
               }
-            }
-          }
-        },
-        labelLine: {
-          show: false
-        },
-        data: categories.map((cat, index) => ({
-          name: getCategoryText(cat),
-          value: categoryData[cat].budget || 0,
-          itemStyle: { color: colors[index % colors.length] }
-        }))
-      },
+            },
+            labelLine: {
+              show: false
+            },
+            data: categories.map((cat, index) => ({
+              name: getCategoryText(cat),
+              value: categoryData[cat].budget || 0,
+              itemStyle: { color: colors[index % colors.length] }
+            }))
+          },
       {
         name: '实际支出',
         type: 'pie',
@@ -1756,6 +1763,12 @@ const updateCategoryChart = async () => {
   }
   
   categoryChart.setOption(option, { notMerge: true })
+    } else {
+      console.error('获取分类统计数据失败:', response.message)
+    }
+  } catch (error) {
+    console.error('加载分类统计图表数据失败:', error)
+  }
 }
 
 const handleExportImport = (command: string) => {

@@ -129,13 +129,28 @@ export interface TimeRange {
   type?: 'day' | 'week' | 'month' | 'year'
 }
 
+export interface ConfirmStatistics {
+  pendingAmount: number
+  paidAmount: number
+  pendingCount: number
+  totalCount: number
+}
+
 // 基础HTTP请求函数
 const request = async <T = unknown>(url: string, options: RequestInit = {}): Promise<ApiResponse<T>> => {
-  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('authToken') : null
+  // 获取API基础URL
+  const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://10.111.53.9:4000/api'
+  
+  // 修正：使用正确的令牌键名
+  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('access_token') : null
+  
+  // 检查是否为 FormData，如果是则不设置 Content-Type（让浏览器自动设置）
+  const isFormData = options.body instanceof FormData
   
   const config: RequestInit = {
     headers: {
-      'Content-Type': 'application/json',
+      // 只有在不是 FormData 时才设置 Content-Type
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(token && { Authorization: `Bearer ${token}` }),
       ...options.headers,
     },
@@ -143,13 +158,43 @@ const request = async <T = unknown>(url: string, options: RequestInit = {}): Pro
   }
 
   try {
-    const response = await fetch(`/api${url}`, config)
+    // 使用完整URL构建请求
+    const fullUrl = url.startsWith('http') ? url : `${BASE_URL}${url}`
+    console.log(`发送请求到: ${fullUrl}`, config);
+    
+    // 对于需要认证的API端点，检查令牌是否存在
+    const authRequiredPaths = ['/payments', '/qr-codes', '/members'];
+    const isAuthRequired = authRequiredPaths.some(path => fullUrl.includes(path));
+    
+    if (isAuthRequired && !token) {
+      console.error('认证失败: 访问需要认证的资源但未提供令牌');
+      throw new Error('请先登录后再执行此操作');
+    }
+    
+    const response = await fetch(fullUrl, config)
     
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`API请求失败 (${response.status}):`, errorText);
+      
+      // 特殊处理401错误
+      if (response.status === 401) {
+        throw new Error('身份验证已过期，请重新登录');
+      }
+      
+      // 特殊处理500错误
+      if (response.status === 500) {
+        throw new Error('服务器内部错误，请稍后重试')
+      }
+      // 特殊处理404错误
+      if (response.status === 404) {
+        throw new Error('请求的资源不存在')
+      }
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
     
     const data = await response.json() as ApiResponse<T>
+    console.log(`请求成功:`, data);
     return data
   } catch (error) {
     console.error('API请求失败:', error)
@@ -187,9 +232,13 @@ export const getPaymentRecords = async (filter: PaymentFilter = {}) => {
     }>(url)
     
     return response
-  } catch (error) {
+  } catch (error: any) {
     console.error('获取支付记录失败:', error)
-    throw new Error('获取支付记录失败')
+    if (error.message && error.message.includes('500')) {
+      throw new Error('服务器内部错误，请稍后重试')
+    } else {
+      throw new Error(error.message || '获取支付记录失败')
+    }
   }
 }
 
@@ -249,9 +298,43 @@ export const getPaymentStatistics = async (timeRange?: TimeRange) => {
     const response = await request<PaymentStatistics>(url)
     
     return response
-  } catch (error) {
+  } catch (error: any) {
     console.error('获取支付统计数据失败:', error)
-    throw new Error('获取支付统计数据失败')
+    if (error.message && error.message.includes('404')) {
+      throw new Error('支付统计数据接口不存在')
+    } else {
+      throw new Error(error.message || '获取支付统计数据失败')
+    }
+  }
+}
+
+/**
+ * 获取支付确认页面统计数据
+ * @param params 查询参数
+ * @returns 统计数据
+ */
+export const getConfirmStatistics = async (params: {
+  keyword?: string
+  status?: string
+  category?: string
+  startDate?: string
+  endDate?: string
+} = {}) => {
+  try {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        queryParams.append(key, value)
+      }
+    })
+    
+    const url = `/payments/confirm-statistics${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
+    const response = await request<ConfirmStatistics>(url)
+    
+    return response
+  } catch (error: any) {
+    console.error('获取支付确认统计数据失败:', error)
+    throw new Error(error.message || '获取支付确认统计数据失败')
   }
 }
 
@@ -321,24 +404,51 @@ export const exportPaymentRecords = async (filter: PaymentFilter, format: 'csv' 
       }
     })
     
-    // 调用真实API导出支付记录
-    const url = `/payments/export?${params.toString()}`
-    const response = await request<{ downloadUrl: string; recordCount: number; format: string }>(url)
+    // 获取认证令牌
+    const token = localStorage.getItem('access_token')
     
-    // 如果API返回了下载链接，自动触发下载
-    if (response.data.downloadUrl) {
-      const link = document.createElement('a')
-      link.href = response.data.downloadUrl
-      link.download = `支付记录_${new Date().toISOString().split('T')[0]}.${format === 'csv' ? 'csv' : 'xlsx'}`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
+    // 构建下载URL
+    // 获取并保存基础URL，确保符合 rule #14 (不使用 localhost/127.0.0.1)
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://10.111.53.9:4000/api'
+    const downloadUrl = `${baseUrl}/payments/download-export?${params.toString()}`
+    
+    // 使用fetch直接下载文件
+    const response = await fetch(downloadUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : ''
+      }
+    })
+    
+    if (!response.ok) {
+      throw new Error('导出文件失败')
     }
     
-    return response
-  } catch (error) {
+    // 获取文件blob
+    const blob = await response.blob()
+    
+    // 创建下载链接
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `支付记录_${new Date().toISOString().split('T')[0]}.${format === 'csv' ? 'csv' : 'xlsx'}`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    
+    return {
+      success: true,
+      data: {
+        downloadUrl: downloadUrl,
+        recordCount: 0,
+        format
+      },
+      message: '导出成功'
+    }
+  } catch (error: any) {
     console.error('导出支付记录失败:', error)
-    throw new Error('导出支付记录失败')
+    throw new Error(error.message || '导出支付记录失败')
   }
 }
 
@@ -685,32 +795,6 @@ export const getSecurityCheckHistory = async (days: number = 30) => {
 }
 
 /**
- * 快速支付处理
- * @param paymentData 快速支付数据
- * @returns 支付处理结果
- */
-export const processQuickPayment = async (paymentData: {
-  quickPayId: number
-  amount: number
-  type: string
-  description: string
-  orderId: string
-}) => {
-  try {
-    // 调用真实API处理快速支付
-    const response = await request<PaymentResponse>('/payments/quick-payment', {
-      method: 'POST',
-      body: JSON.stringify(paymentData)
-    })
-    
-    return response
-  } catch (error) {
-    console.error('快速支付处理失败:', error)
-    throw new Error('快速支付处理失败')
-  }
-}
-
-/**
  * 上传收款码图片
  * @param data 上传数据
  * @returns 上传结果
@@ -771,6 +855,15 @@ export const calculateSharing = async (sharingData: {
   }>
 }) => {
   try {
+    // 检查用户是否已认证
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('access_token') : null
+    if (!token) {
+      console.error('费用分摊计算失败: 用户未认证')
+      throw new Error('请先登录后再进行费用分摊计算')
+    }
+    
+    console.log('开始费用分摊计算，认证令牌存在')
+    
     // 调用真实API计算费用分摊
     const response = await request<{
       sharingResults: Array<{
@@ -786,13 +879,24 @@ export const calculateSharing = async (sharingData: {
       totalPending: number
     }>('/payments/calculate-sharing', {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify(sharingData)
     })
     
     return response
-  } catch (error) {
+  } catch (error: any) {
     console.error('费用分摊计算失败:', error)
-    throw new Error('费用分摊计算失败')
+    
+    // 提供更具体的错误信息
+    if (error.message && error.message.includes('401')) {
+      throw new Error('身份验证已过期，请重新登录')
+    } else if (error.message && error.message.includes('403')) {
+      throw new Error('您没有权限执行此操作')
+    } else {
+      throw new Error(error.message || '费用分摊计算失败，请稍后重试')
+    }
   }
 }
 

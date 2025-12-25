@@ -151,9 +151,48 @@ class VersionedRoutingMiddleware {
       const apiVersion = req.apiVersion;
       const originalPath = req.path;
       
+      // 不需要版本化的路由列表
+      const excludedPaths = [
+        '/api/notifications',
+        '/api/auth',
+        '/api/upload',
+        '/api/db',
+        '/api/health',
+        '/api/smart-reminders',
+        '/api/docs',
+        '/api/queues',
+        '/api/dashboard',
+        '/api/dorms',
+        '/api/member-stats',
+        '/api/member-activities',
+        '/api/members',
+        '/api/quick-stats',
+        '/api/expense-summary',
+        '/api/expenses',
+        '/api/payment',
+        '/api/payments',
+        '/api/qr-codes',
+        '/api/contacts',
+        '/api/categories',
+        '/api/trend',
+        '/api/budget',
+        '/api/bills',
+        '/api/virus-scan',
+        '/api/cors',
+        '/api/audit'
+      ];
+      
+      // 检查是否在排除列表中
+      const isExcluded = excludedPaths.some(excludedPath => originalPath.startsWith(excludedPath));
+      
       // 如果路径中已经包含版本信息，则直接通过
       const hasVersionInPath = this.extractVersionFromPath(originalPath);
       if (hasVersionInPath) {
+        return next();
+      }
+      
+      // 如果在排除列表中，则直接通过，不进行重定向
+      if (isExcluded) {
         return next();
       }
 

@@ -1,9 +1,13 @@
 /**
  * XSS防护中间件
  * 检测和清理潜在的跨站脚本攻击载荷
+ * 注意：Swagger UI 页面（/api/docs）需要返回完整的HTML，不进行XSS清理
  */
 
 const logger = require('../../config/logger');
+
+// 排除XSS清理的路径
+const EXCLUDED_PATHS = ['/api/docs', '/docs'];
 
 // 危险的HTML标签
 const DANGEROUS_TAGS = [
@@ -205,6 +209,16 @@ const sanitizeObject = (obj) => {
  */
 const xssProtectionMiddleware = (req, res, next) => {
   try {
+    // 检查路径是否需要排除XSS清理（Swagger UI页面）
+    const shouldExclude = EXCLUDED_PATHS.some(path => 
+      req.path === path || req.path.startsWith(path + '/')
+    );
+
+    // 如果是Swagger UI页面，跳过XSS清理
+    if (shouldExclude) {
+      return next();
+    }
+
     // 检查查询参数
     if (hasXssPayload(req.query, '', req)) {
       logger.security(req, 'XSS防护触发 - 查询参数', {

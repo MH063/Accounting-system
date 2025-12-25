@@ -65,8 +65,8 @@ router.get('/profile',
  */
 router.put('/profile', 
   authenticateToken, 
-  responseWrapper(asyncHandler(async (req, res) => {
-    return await authController.updateProfile(req, res);
+  responseWrapper(asyncHandler(async (req, res, next) => {
+    return await authController.updateProfile(req, res, next);
   }))
 );
 
@@ -416,6 +416,89 @@ router.delete('/account',
 router.post('/validate-token', 
   responseWrapper(asyncHandler(async (req, res, next) => {
     return await authController.validateToken(req, res, next);
+  }))
+);
+
+/**
+ * 重新生成备份验证码路由
+ * POST /api/auth/two-factor/backup-codes/regenerate
+ * 需要有效的JWT令牌才能访问
+ */
+router.post('/two-factor/backup-codes/regenerate', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res, next) => {
+    return await authController.regenerateBackupCodes(req, res, next);
+  }))
+);
+
+/**
+ * 获取客户端IP地址路由
+ * GET /api/auth/client-ip
+ * 用于前端获取真实IP地址用于安全日志记录
+ */
+router.get('/client-ip', 
+  responseWrapper(asyncHandler(async (req, res, next) => {
+    return await authController.getClientIp(req, res, next);
+  }))
+);
+
+/**
+ * 生成TOTP密钥路由
+ * POST /api/auth/totp/generate
+ * 需要有效的JWT令牌才能访问
+ */
+router.post('/totp/generate', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res, next) => {
+    return await authController.generateTotpSecret(req, res, next);
+  }))
+);
+
+/**
+ * 启用TOTP两步验证路由
+ * POST /api/auth/totp/enable
+ * 需要有效的JWT令牌才能访问
+ */
+router.post('/totp/enable', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res, next) => {
+    return await authController.enableTotpAuth(req, res, next);
+  }))
+);
+
+/**
+ * 禁用TOTP两步验证路由
+ * POST /api/auth/totp/disable
+ * 需要有效的JWT令牌才能访问
+ */
+router.post('/totp/disable', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res, next) => {
+    return await authController.disableTotpAuth(req, res, next);
+  }))
+);
+
+/**
+ * 验证TOTP两步验证码路由
+ * POST /api/auth/totp/verify
+ * 需要有效的JWT令牌才能访问
+ */
+router.post('/totp/verify', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res, next) => {
+    return await authController.verifyTotpCode(req, res, next);
+  }))
+);
+
+/**
+ * 获取TOTP状态路由
+ * GET /api/auth/totp/status
+ * 需要有效的JWT令牌才能访问
+ */
+router.get('/totp/status', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res, next) => {
+    return await authController.getTotpStatus(req, res, next);
   }))
 );
 

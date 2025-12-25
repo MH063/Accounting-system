@@ -307,7 +307,7 @@ import { ArrowLeft, Refresh, Check } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useRouter } from 'vue-router'
-import { dormService, CreateDormRequest } from '@/services/dormService'
+import dormService from '@/services/dormService'
 
 // 步骤控制
 const currentStep = ref(0)
@@ -429,12 +429,10 @@ const createDorm = async () => {
   creating.value = true
   
   try {
-    // 构造符合API要求的宿舍数据
-    const dormData: CreateDormRequest = {
+    const dormData = {
       dormName: basicInfo.name,
       address: basicInfo.address,
       capacity: basicInfo.maxMembers,
-      // 必填字段：宿舍编码
       dormCode: basicInfo.dormNumber,
       description: extendedInfo.description || undefined,
       type: extendedInfo.type || undefined,
@@ -454,8 +452,7 @@ const createDorm = async () => {
       adminId: extendedInfo.adminId
     };
     
-    // 调用真实API创建宿舍
-    const response = await dormService.createNewDorm(dormData);
+    const response = await dormService.createDorm(dormData);
     
     if (response.success) {
       ElMessage.success('宿舍创建成功！');

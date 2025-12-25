@@ -135,32 +135,6 @@
       </div>
     </div>
 
-    <!-- 快速支付区域 -->
-    <div class="quick-payment-section">
-      <h2>快速支付</h2>
-      <div class="quick-payment-cards">
-        <div class="quick-pay-card" v-for="quickPay in quickPayments" :key="quickPay.id">
-          <div class="card-header">
-            <h3>{{ quickPay.title }}</h3>
-            <span class="amount">¥{{ (quickPay.amount || 0).toFixed(2) }}</span>
-          </div>
-          <div class="card-body">
-            <p>{{ quickPay.description }}</p>
-            <div class="quick-actions">
-              <el-button 
-                type="primary" 
-                @click="processQuickPayment(quickPay)"
-                :loading="quickPay.processing"
-              >
-                立即支付
-              </el-button>
-              <el-button @click="viewPaymentDetail(quickPay)">详情</el-button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- 支付对话框 -->
     <el-dialog
       v-model="paymentDialogVisible"
@@ -249,91 +223,6 @@
       </template>
     </el-dialog>
 
-    <!-- 支付详情对话框 -->
-    <el-dialog
-      v-model="detailDialogVisible"
-      title="支付详情"
-      width="600px"
-      destroy-on-close
-    >
-      <div v-if="currentQuickPayment" class="payment-detail">
-        <el-descriptions :column="2" border>
-          <el-descriptions-item label="快速支付类型">
-            <el-tag :type="getQuickPayTagType(currentQuickPayment.id)">
-              {{ currentQuickPayment.title }}
-            </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="支付金额">
-            <span class="detail-amount">¥{{ currentQuickPayment.amount.toFixed(2) }}</span>
-          </el-descriptions-item>
-          <el-descriptions-item label="支付描述">
-            {{ currentQuickPayment.description }}
-          </el-descriptions-item>
-          <el-descriptions-item label="处理状态">
-            <el-tag :type="currentQuickPayment.processing ? 'warning' : 'info'">
-              {{ currentQuickPayment.processing ? '处理中' : '等待操作' }}
-            </el-tag>
-          </el-descriptions-item>
-        </el-descriptions>
-
-        <!-- 费用明细 -->
-        <div class="payment-breakdown">
-          <h4>费用明细</h4>
-          <div class="breakdown-content">
-            <div class="breakdown-item">
-              <span class="label">总费用</span>
-              <span class="value">¥{{ totalExpense.toFixed(2) }}</span>
-            </div>
-            <div class="breakdown-item">
-              <span class="label">待支付</span>
-              <span class="value">¥{{ totalPending.toFixed(2) }}</span>
-            </div>
-            <div class="breakdown-item" v-if="currentQuickPayment.id === 2">
-              <span class="label">代付金额</span>
-              <span class="value">¥{{ (totalPending * 0.5).toFixed(2) }}</span>
-            </div>
-            <div class="breakdown-item">
-              <span class="label">已支付</span>
-              <span class="value">¥{{ totalPaid.toFixed(2) }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 成员分摊详情 -->
-        <div class="sharing-breakdown">
-          <h4>成员分摊详情</h4>
-          <div class="member-list">
-            <div v-for="member in sharingResults" :key="member.name" class="member-item">
-              <div class="member-info">
-                <span class="member-name">{{ member.name }}</span>
-                <el-tag :type="getStatusType(member.status)" size="small">
-                  {{ getStatusText(member.status) }}
-                </el-tag>
-              </div>
-              <div class="member-amounts">
-                <span class="amount-item">应支付: ¥{{ member.shouldPay.toFixed(2) }}</span>
-                <span class="amount-item">已支付: ¥{{ member.paid.toFixed(2) }}</span>
-                <span class="amount-item pending">待支付: ¥{{ member.pending.toFixed(2) }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="detailDialogVisible = false">关闭</el-button>
-          <el-button 
-            type="primary" 
-            @click="processQuickPayment(currentQuickPayment!)"
-            :disabled="currentQuickPayment?.processing || totalPending === 0"
-            :loading="currentQuickPayment?.processing"
-          >
-            立即支付
-          </el-button>
-        </span>
-      </template>
-    </el-dialog>
-
     <!-- 添加费用对话框 -->
     <el-dialog
       v-model="expenseDialogVisible"
@@ -401,9 +290,15 @@ import {
 import { 
   confirmPayment as confirmPaymentApi,
   getQRCodes,
-  processQuickPayment as processQuickPaymentApi,
   calculateSharing as calculateSharingApi
 } from '../services/paymentService'
+import { 
+  deleteExpense as deleteExpenseApi, 
+  updateExpense as updateExpenseApi, 
+  createExpense as createExpenseApi,
+  getExpenseList
+} from '../services/expenseService'
+import { getMembers } from '../services/memberService'
 
 // 路由
 const router = useRouter()
@@ -414,9 +309,9 @@ const expenseDialogVisible = ref(false)
 const processing = ref(false)
 const saving = ref(false)
 const detailDialogVisible = ref(false)
-const currentQuickPayment = ref<QuickPayment | null>(null)
 const showQRCode = ref(false)
 const qrCodeUrl = ref('')
+const expenseFormRef = ref()
 
 // 当前选中的支付方式
 const selectedMethod = ref<PaymentMethod & { fee: string; description: string }>({
@@ -501,12 +396,34 @@ interface Member {
   email: string
 }
 
-const members = ref<Member[]>([
-  { name: '张三', phone: '138****1234', email: 'zhangsan@example.com' },
-  { name: '李四', phone: '139****5678', email: 'lisi@example.com' },
-  { name: '王五', phone: '136****9012', email: 'wangwu@example.com' },
-  { name: '赵六', phone: '135****3456', email: 'zhaoliu@example.com' }
-])
+// 成员列表 - 初始为空，将从后端API获取
+const members = ref<Member[]>([])
+
+/**
+ * 从后端获取成员列表
+ */
+const fetchMembers = async () => {
+  try {
+    const response = await getMembers({ limit: 100 }) // 获取足够多的成员
+    
+    if (response.success && response.data && response.data.members) {
+      // 将后端返回的数据转换为前端需要的格式
+      members.value = response.data.members.map(member => ({
+        name: member.name || member.nickname,
+        phone: member.phone || '未提供',
+        email: member.email || '未提供'
+      }))
+      
+      // 获取成员数据后重新计算分摊结果
+      await calculateSharing()
+    } else {
+      ElMessage.error(response.message || '获取成员列表失败')
+    }
+  } catch (error) {
+    console.error('获取成员列表失败:', error)
+    ElMessage.error('获取成员列表失败，请稍后重试')
+  }
+}
 
 // 费用列表
 interface Expense {
@@ -518,65 +435,35 @@ interface Expense {
   payer: string
 }
 
-const expenses = ref<Expense[]>([
-  {
-    id: 1,
-    name: '月度房租',
-    description: '2024年11月房租费用',
-    amount: 1600.00,
-    category: 'rent',
-    payer: '张三'
-  },
-  {
-    id: 2,
-    name: '水电费',
-    description: '10月份水电费',
-    amount: 280.50,
-    category: 'utilities',
-    payer: '李四'
-  },
-  {
-    id: 3,
-    name: '网费',
-    description: '月度宽带费用',
-    amount: 120.00,
-    category: 'internet',
-    payer: '王五'
-  }
-])
+// 费用列表 - 初始为空，将从后端API获取
+const expenses = ref<Expense[]>([])
 
-// 快速支付项目
-interface QuickPayment {
-  id: number
-  title: string
-  amount: number
-  description: string
-  processing: boolean
+/**
+ * 从后端获取费用列表
+ */
+const fetchExpenses = async () => {
+  try {
+    const response = await getExpenseList()
+    
+    if (response.success && response.data) {
+      // 将后端返回的数据转换为前端需要的格式
+      // 确保amount是数字类型，避免toFixed错误
+      expenses.value = response.data.map(item => ({
+        id: item.id,
+        name: item.title, // 后端返回的是title，前端需要的是name
+        description: item.description || '',
+        amount: typeof item.amount === 'string' ? parseFloat(item.amount) : item.amount,
+        category: item.category,
+        payer: item.payer || item.applicant // 如果没有payer字段，使用applicant
+      }))
+    } else {
+      ElMessage.error(response.message || '获取费用列表失败')
+    }
+  } catch (error) {
+    console.error('获取费用列表失败:', error)
+    ElMessage.error('获取费用列表失败，请稍后重试')
+  }
 }
-
-const quickPayments = ref<QuickPayment[]>([
-  {
-    id: 1,
-    title: '今日分摊',
-    amount: 0,
-    description: '今日需要分摊的费用',
-    processing: false
-  },
-  {
-    id: 2,
-    title: '代付服务',
-    amount: 0,
-    description: '为其他成员代付费用',
-    processing: false
-  },
-  {
-    id: 3,
-    title: '批量支付',
-    amount: 0,
-    description: '一次性支付多笔费用',
-    processing: false
-  }
-])
 
 // 支付表单
 interface PaymentForm {
@@ -676,6 +563,29 @@ const selectPaymentMethod = (method: PaymentMethod & { fee: string; description:
 
 const calculateSharing = async () => {
   try {
+    // 检查用户是否已认证
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('access_token') : null
+    if (!token) {
+      ElMessage.error('请先登录后再进行费用分摊计算')
+      // 跳转到登录页面
+      router.push('/login')
+      return
+    }
+    
+    // 检查是否有费用和成员数据
+    if (expenses.value.length === 0) {
+      ElMessage.warning('请先添加费用后再进行分摊计算')
+      return
+    }
+    
+    if (members.value.length === 0) {
+      ElMessage.warning('请先添加成员后再进行分摊计算')
+      return
+    }
+    
+    // 显示计算中状态
+    ElMessage.info('正在计算费用分摊...')
+    
     // 调用真实API计算费用分摊
     const response = await calculateSharingApi({
       expenses: expenses.value,
@@ -694,9 +604,24 @@ const calculateSharing = async () => {
     } else {
       ElMessage.error('费用分摊计算失败：' + (response.message || '请重试'))
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('费用分摊计算失败:', error)
-    ElMessage.error('费用分摊计算失败')
+    
+    // 提供更具体的错误信息
+    if (error.message && error.message.includes('身份验证')) {
+      ElMessage.error(error.message)
+      // 跳转到登录页面
+      setTimeout(() => {
+        router.push('/login')
+      }, 1500)
+    } else if (error.message && error.message.includes('请先登录')) {
+      ElMessage.error(error.message)
+      setTimeout(() => {
+        router.push('/login')
+      }, 1500)
+    } else {
+      ElMessage.error(error.message || '费用分摊计算失败，请稍后重试')
+    }
   }
 }
 
@@ -735,8 +660,11 @@ const exportSharing = () => {
     // 生成CSV格式数据
     const csvContent = generateCSV(exportData)
     
+    // 添加BOM标记解决Excel中文乱码问题
+    const csvWithBom = '\uFEFF' + csvContent
+    
     // 创建下载链接
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const blob = new Blob([csvWithBom], { type: 'text/csv;charset=utf-8;' })
     const link = document.createElement('a')
     
     if (link.download !== undefined) {
@@ -805,9 +733,27 @@ const editExpense = (expense: Expense) => {
   expenseDialogVisible.value = true
 }
 
-const deleteExpense = (expense: Expense) => {
-  expenses.value = expenses.value.filter(item => item.id !== expense.id)
-  ElMessage.success('费用删除成功')
+/**
+ * 删除费用项
+ * 调用后端API真实删除数据
+ */
+const deleteExpense = async (expense: Expense) => {
+  try {
+    // 调用后端API删除费用
+    const response = await deleteExpenseApi(expense.id)
+    
+    if (response.success) {
+      ElMessage.success('费用删除成功')
+      
+      // 重新获取费用列表
+      await fetchExpenses()
+    } else {
+      ElMessage.error(response.message || '删除费用失败')
+    }
+  } catch (error) {
+    console.error('删除费用失败:', error)
+    ElMessage.error('删除费用失败，请稍后重试')
+  }
 }
 
 const payForMember = (member: SharingResult) => {
@@ -871,96 +817,6 @@ const handlePaymentMethodChange = async (method: string) => {
   } catch (error) {
     console.error('获取收款码信息失败:', error)
   }
-}
-
-const processQuickPayment = async (quickPay: QuickPayment) => {
-  try {
-    quickPay.processing = true
-    
-    let amount = 0
-    let description = ''
-    let transactionType = ''
-    
-    switch (quickPay.id) {
-      case 1: // 今日分摊
-        amount = totalPending.value
-        description = '今日费用分摊支付'
-        transactionType = 'expense'
-        break
-      case 2: // 代付服务
-        amount = (totalPending.value || 0) * 0.5
-        description = '代付其他成员费用'
-        transactionType = 'expense'
-        break
-      case 3: // 批量支付
-        amount = totalExpense.value
-        description = '批量支付所有费用'
-        transactionType = 'expense'
-        break
-    }
-    
-    if (amount <= 0) {
-      ElMessage.warning('没有需要支付的金额')
-      return
-    }
-    
-    // 直接执行支付而不是显示支付对话框
-    const orderId = `QUICKPAY_${Date.now()}_${quickPay.id}`
-    
-    try {
-      // 调用真实支付API
-      const response = await processQuickPaymentApi({
-        quickPayId: quickPay.id,
-        amount: amount,
-        type: transactionType,
-        description: description,
-        orderId: orderId
-      })
-      
-      if (response.success && response.data) {
-        ElMessage.success(`${quickPay.title}支付成功！金额：¥${amount.toFixed(2)}`)
-        
-        // 更新支付状态
-        updatePaymentStatus(quickPay.id, transactionType, amount, description)
-      } else {
-        ElMessage.error(`${quickPay.title}支付失败：${response.message || '请重试'}`)
-      }
-    } catch (error) {
-      console.error('支付处理失败:', error)
-      ElMessage.error(`${quickPay.title}处理失败`)
-    }
-    
-  } catch (error) {
-    console.error('处理快速支付失败:', error)
-    ElMessage.error('处理快速支付失败')
-  } finally {
-    quickPay.processing = false
-  }
-}
-
-// 更新支付状态的辅助函数
-const updatePaymentStatus = (quickPayId: number, type: string, amount: number, description: string) => {
-  // 这里可以集成真实的支付记录保存逻辑
-  console.log('更新支付状态:', {
-    quickPayId,
-    type,
-    amount,
-    description,
-    timestamp: new Date().toISOString()
-  })
-  
-  // 更新本地数据状态
-  const quickPayment = quickPayments.value.find(qp => qp.id === quickPayId)
-  if (quickPayment) {
-    quickPayment.amount = Math.max(0, quickPayment.amount - amount)
-  }
-}
-
-
-
-const viewPaymentDetail = (quickPay: QuickPayment) => {
-  currentQuickPayment.value = quickPay
-  detailDialogVisible.value = true
 }
 
 const confirmPayment = async () => {
@@ -1032,44 +888,62 @@ const confirmPayment = async () => {
   }
 }
 
-const saveExpense = () => {
+/**
+ * 保存费用（新增或编辑）
+ * 调用后端API真实保存数据
+ */
+const saveExpense = async () => {
   try {
     saving.value = true
     
     if (expenseForm.id) {
-      // 编辑逻辑
-      const index = expenses.value.findIndex(exp => exp.id === expenseForm.id)
-      if (index !== -1) {
-        // 创建一个新的对象，确保类型匹配
-        const updatedExpense = {
-          id: expenseForm.id,
-          name: expenseForm.name,
-          description: expenseForm.description,
-          amount: expenseForm.amount,
-          category: expenseForm.category,
-          payer: expenseForm.payer
-        }
-        expenses.value[index] = updatedExpense
+      // 编辑逻辑 - 调用后端API更新费用
+      const updateData = {
+        title: expenseForm.name, // 后端期望的字段名是title
+        description: expenseForm.description,
+        amount: expenseForm.amount,
+        category: expenseForm.category
       }
-      ElMessage.success('费用更新成功')
+      
+      const response = await updateExpenseApi(expenseForm.id.toString(), updateData)
+      
+      if (response.success) {
+        ElMessage.success('费用更新成功')
+        
+        // 重新获取费用列表
+        await fetchExpenses()
+      } else {
+        ElMessage.error(response.message || '更新费用失败')
+        return
+      }
     } else {
-      // 新增逻辑
-      const newExpense = {
-        id: Date.now(),
-        name: expenseForm.name,
+      // 新增逻辑 - 调用后端API创建费用
+      const createData = {
+        title: expenseForm.name, // 后端期望的字段名是title
         description: expenseForm.description,
         amount: expenseForm.amount,
         category: expenseForm.category,
-        payer: expenseForm.payer
+        date: new Date().toISOString().split('T')[0] // 使用当前日期
       }
-      expenses.value.push(newExpense)
-      ElMessage.success('费用添加成功')
+      
+      const response = await createExpenseApi(createData)
+      
+      if (response.success) {
+        ElMessage.success('费用添加成功')
+        
+        // 重新获取费用列表
+        await fetchExpenses()
+      } else {
+        ElMessage.error(response.message || '添加费用失败')
+        return
+      }
     }
     
     expenseDialogVisible.value = false
     resetExpenseForm()
   } catch (error) {
-    ElMessage.error('保存失败')
+    console.error('保存费用失败:', error)
+    ElMessage.error('保存失败，请稍后重试')
   } finally {
     saving.value = false
   }
@@ -1113,15 +987,6 @@ const getStatusText = (status: string) => {
   return textMap[status] || '未知'
 }
 
-const getQuickPayTagType = (id: number) => {
-  const typeMap: Record<number, string> = {
-    1: 'success',    // 今日分摊
-    2: 'warning',    // 代付服务
-    3: 'primary'     // 批量支付
-  }
-  return typeMap[id] || 'info'
-}
-
 // 导航方法
 const openPaymentRecords = () => {
   router.push('/dashboard/payment-records')
@@ -1147,10 +1012,17 @@ const isPaymentMethodValid = ref(false)
 
 // 生命周期
 onMounted(() => {
-  // 初始化快速支付金额
-  quickPayments.value[0].amount = totalPending.value || 0
-  quickPayments.value[1].amount = (totalPending.value || 0) * 0.5
-  quickPayments.value[2].amount = totalExpense.value || 0
+  // 页面加载时检查用户认证状态
+  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('access_token') : null
+  if (!token) {
+    ElMessage.error('请先登录后再访问支付页面')
+    router.push('/login')
+    return
+  }
+  
+  // 页面加载时获取数据
+  fetchExpenses()
+  fetchMembers()
 })
 </script>
 
@@ -1189,8 +1061,7 @@ onMounted(() => {
 }
 
 .payment-methods-section,
-.cost-sharing-section,
-.quick-payment-section {
+.cost-sharing-section {
   background: white;
   margin-bottom: 20px;
   border-radius: 8px;
@@ -1198,8 +1069,7 @@ onMounted(() => {
 }
 
 .payment-methods-section h2,
-.cost-sharing-section h2,
-.quick-payment-section h2 {
+.cost-sharing-section h2 {
   margin: 0;
   padding: 20px;
   border-bottom: 1px solid #ebeef5;
@@ -1385,52 +1255,6 @@ onMounted(() => {
   font-size: 16px;
   font-weight: bold;
   color: #303133;
-}
-
-.quick-payment-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 20px;
-  padding: 20px;
-}
-
-.quick-pay-card {
-  border: 1px solid #ebeef5;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.card-header {
-  background: #f5f7fa;
-  padding: 15px 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.card-header h3 {
-  margin: 0;
-  color: #303133;
-}
-
-.amount {
-  font-size: 18px;
-  font-weight: bold;
-  color: #409eff;
-}
-
-.card-body {
-  padding: 20px;
-}
-
-.card-body p {
-  margin: 0 0 15px 0;
-  color: #606266;
-}
-
-.quick-actions {
-  display: flex;
-  gap: 10px;
 }
 
 .payment-amount {
