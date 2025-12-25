@@ -50,3 +50,6 @@ Thumbs.db
 backup/
 *.backup
 *.bak
+
+# 上传文件
+uploads/
