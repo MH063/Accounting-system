@@ -34,17 +34,19 @@ export const getDashboardStats = async (): Promise<ApiResponse<DashboardStats>> 
     // 调用真实API获取仪表盘统计数据
     const response = await request<any>('/dashboard/statistics')
     
-    // 处理双层嵌套的数据结构
+    // 处理双层嵌套的数据结构 (Rule 5)
     if (response.success && response.data) {
+      const actualData = response.data.data || response.data
+      
       // 从新的响应格式中提取需要的数据
       const statsData = {
-        dormitoryCount: response.data.dormStats?.totalDorms || 0,
-        memberCount: response.data.userStats?.totalUsers || 0,
-        monthlyExpense: response.data.expenseStats?.totalMonthlyExpense || 0,
-        totalBudget: response.data.expenseStats?.totalBudget || 0, // 从API获取总预算
-        pendingPayments: response.data.expenseStats?.pendingPayments || 0,
+        dormitoryCount: actualData.dormStats?.totalDorms || 0,
+        memberCount: actualData.userStats?.totalUsers || 0,
+        monthlyExpense: actualData.expenseStats?.totalMonthlyExpense || 0,
+        totalBudget: actualData.expenseStats?.totalBudget || 0, // 从API获取总预算
+        pendingPayments: actualData.expenseStats?.pendingPayments || 0,
         upcomingEvents: 0, // 新接口没有直接提供即将到来的事件数，暂时设为0
-        unreadNotifications: response.data.notificationStats?.unreadNotifications || 0
+        unreadNotifications: actualData.notificationStats?.unreadNotifications || 0
       }
       
       return {

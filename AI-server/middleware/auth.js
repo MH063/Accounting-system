@@ -6,12 +6,7 @@
  * - 令牌黑名单检查
  */
 
-const { 
-  verifyToken, 
-  verifyTokenWithBlacklist,
-  generateTokenPair,
-  getTokenExpiry 
-} = require('../config/jwtManager');
+const tokenService = require('../services/TokenService');
 const logger = require('../config/logger');
 
 /**
@@ -22,8 +17,7 @@ const logger = require('../config/logger');
  */
 const authenticateToken = async (req, res, next) => {
   // 从请求头获取令牌
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  const token = tokenService.extractTokenFromHeader(req);
   
   // 如果没有令牌，返回401未授权
   if (!token) {
@@ -33,46 +27,38 @@ const authenticateToken = async (req, res, next) => {
     });
     return res.status(401).json({
       success: false,
+      code: tokenService.errorCodes.NO_TOKEN,
       message: '访问令牌缺失，请先登录'
     });
   }
   
-  try {
-    const payload = await verifyTokenWithBlacklist(token);
-    const user = { ...payload, id: payload.userId || payload.id };
+  const result = await tokenService.verifyAccessToken(token);
+  
+  if (result.success) {
+    const user = result.data;
     req.user = user;
     req.tokenInfo = {
-      type: payload.type,
-      jti: payload.jti || payload.jwtid,
+      type: user.type,
+      jti: user.jti || user.jwtid,
       isRevoked: false
     };
     logger.security(req, 'JWT认证成功', { 
       userId: user.id,
-      tokenType: payload.type,
+      tokenType: user.type,
       timestamp: new Date().toISOString()
     });
     next();
-  } catch (err) {
-    let message = '令牌验证失败';
-    let statusCode = 403;
-    
-    if (err.name === 'TokenExpiredError') {
-      message = '令牌已过期';
-    } else if (err.name === 'JsonWebTokenError') {
-      message = '令牌格式错误';
-    } else if (err.message === '没有可用的JWT密钥') {
-      message = '服务器配置错误';
-      statusCode = 500;
-    }
-    
+  } else {
     logger.security(req, 'JWT认证失败', { 
-      reason: err.message,
+      reason: result.message,
+      errorCode: result.code,
       timestamp: new Date().toISOString()
     });
     
-    return res.status(statusCode).json({
+    return res.status(401).json({
       success: false,
-      message: message
+      code: result.code,
+      message: result.message
     });
   }
 };

@@ -210,8 +210,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, onUnmounted, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import authService from '@/services/authService'
 import authStorageService from '@/services/authStorageService'
@@ -222,6 +222,7 @@ import { request } from '@/utils/request'
 
 // 路由实例
 const router = useRouter()
+const route = useRoute()
 
 // 表单引用
 const loginFormRef = ref<FormInstance>()
@@ -232,6 +233,22 @@ const loading = ref(false)
 
 // 登录模式（传统登录 vs 短信登录）
 const activeLoginMode = ref('traditional')
+
+// 初始化
+onMounted(() => {
+  const authState = authStorageService.getAuthState()
+  const reason = route.query.reason as string
+
+  if (authState.isAuthenticated && !route.query.redirect && !reason) {
+    console.log('[Login] 用户已认证，自动跳转到仪表盘')
+    router.push('/dashboard')
+    return
+  }
+
+  if (!authState.isAuthenticated) {
+    authStorageService.clearAuthData()
+  }
+})
 
 // 传统登录表单数据
 const loginForm = reactive({
@@ -488,6 +505,7 @@ const handleSmsLogin = async (): Promise<void> => {
               // 保存会话信息
               if (actualData.session) {
                 localStorage.setItem('session_id', actualData.session.sessionId)
+                localStorage.setItem('sessionToken', actualData.session.sessionToken)
               }
             }
             

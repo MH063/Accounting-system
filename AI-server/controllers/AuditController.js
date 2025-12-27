@@ -16,10 +16,10 @@ class AuditController extends BaseController {
     // 审计日志文件路径
     this.auditLogDir = path.join(__dirname, '../logs/audit');
     this.logFiles = {
-      security: path.join(this.auditLogDir, 'security-audit.log'),
-      operation: path.join(this.auditLogDir, 'operation-audit.log'),
-      login: path.join(this.auditLogDir, 'login-audit.log'),
-      anomaly: path.join(this.auditLogDir, 'anomaly-audit.log')
+      security: path.join(__dirname, '../logs/security.log'),
+      operation: path.join(this.auditLogDir, 'operation.log'),
+      login: path.join(this.auditLogDir, 'login.log'),
+      anomaly: path.join(this.auditLogDir, 'anomaly.log')
     };
   }
 

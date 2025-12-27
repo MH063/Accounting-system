@@ -23,16 +23,31 @@ router.post('/:id/unlock',
       const { pool } = require('../config/database');
       const userId = parseInt(req.params.id);
       const currentUserId = req.user.id;
+      const currentUserRole = req.user.role;
       
       logger.info('[AccountsRoute] 解锁账户请求', { 
         userId, 
-        currentUserId 
+        currentUserId,
+        currentUserRole
       });
 
       if (!userId || isNaN(userId)) {
         return res.status(400).json({
           success: false,
           message: '无效的用户ID'
+        });
+      }
+
+      // 权限验证：仅限账户所有者或管理员
+      if (currentUserId !== userId && currentUserRole !== 'admin') {
+        logger.security(req, '越权解锁尝试', { 
+          targetUserId: userId, 
+          operatorId: currentUserId,
+          operatorRole: currentUserRole
+        });
+        return res.status(403).json({
+          success: false,
+          message: '权限不足：您只能解锁自己的账户或需要管理员权限'
         });
       }
 
@@ -56,7 +71,7 @@ router.post('/:id/unlock',
 
       const user = result.rows[0];
 
-      logger.info('[AccountsRoute] 账户解锁成功', { 
+      logger.audit(req, '账户解锁成功', { 
         userId, 
         username: user.username,
         operatorId: currentUserId 
@@ -96,11 +111,13 @@ router.post('/:id/lock',
       const { pool } = require('../config/database');
       const userId = parseInt(req.params.id);
       const currentUserId = req.user.id;
+      const currentUserRole = req.user.role;
       const { lockDuration = 30 } = req.body; // 锁定时长（分钟），默认30分钟
       
       logger.info('[AccountsRoute] 锁定账户请求', { 
         userId, 
         currentUserId,
+        currentUserRole,
         lockDuration 
       });
 
@@ -108,6 +125,19 @@ router.post('/:id/lock',
         return res.status(400).json({
           success: false,
           message: '无效的用户ID'
+        });
+      }
+
+      // 权限验证：仅限账户所有者或管理员
+      if (currentUserId !== userId && currentUserRole !== 'admin') {
+        logger.security(req, '越权锁定尝试', { 
+          targetUserId: userId, 
+          operatorId: currentUserId,
+          operatorRole: currentUserRole
+        });
+        return res.status(403).json({
+          success: false,
+          message: '权限不足：您只能锁定自己的账户或需要管理员权限'
         });
       }
 
@@ -133,7 +163,7 @@ router.post('/:id/lock',
 
       const user = result.rows[0];
 
-      logger.info('[AccountsRoute] 账户锁定成功', { 
+      logger.audit(req, '账户锁定成功', { 
         userId, 
         username: user.username,
         operatorId: currentUserId,

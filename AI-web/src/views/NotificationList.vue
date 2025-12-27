@@ -1007,8 +1007,10 @@ const goToDashboard = () => {
 }
 
 // 格式化时间
-const formatTime = (time: string) => {
+const formatTime = (time: string | number | undefined | null) => {
+  if (!time) return '-'
   const date = new Date(time)
+  if (isNaN(date.getTime())) return '-'
   const now = new Date()
   const diff = now.getTime() - date.getTime()
   const minutes = Math.floor(diff / 60000)

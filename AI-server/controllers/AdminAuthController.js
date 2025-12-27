@@ -8,6 +8,7 @@ const UserService = require('../services/UserService');
 const AdminAuthService = require('../services/AdminAuthService');
 const logger = require('../config/logger');
 const { generateTokenPair, refreshAccessToken, revokeTokenPair } = require('../config/jwtManager');
+const { logSecurityEvent, SECURITY_EVENTS } = require('../middleware/securityAudit');
 
 class AdminAuthController extends BaseController {
   constructor() {
@@ -57,6 +58,19 @@ class AdminAuthController extends BaseController {
           loginType: 'admin'
         });
         
+        // 记录安全审计事件
+        logSecurityEvent({
+          type: SECURITY_EVENTS.LOGIN_FAILURE,
+          userId: null,
+          sourceIp: req.ip,
+          userAgent: req.get('User-Agent'),
+          resource: '/api/admin/login',
+          action: 'admin_login',
+          outcome: 'failure',
+          severity: 'medium',
+          data: { username, reason: loginResult.message, loginType: 'admin' }
+        });
+        
         // 根据失败原因返回不同的状态码
         const statusCode = loginResult.message.includes('锁定') ? 423 : 
                           loginResult.message.includes('权限') ? 403 : 401;
@@ -73,6 +87,19 @@ class AdminAuthController extends BaseController {
         userId: user.id,
         role: user.role,
         timestamp: new Date().toISOString()
+      });
+
+      // 记录安全审计事件
+      logSecurityEvent({
+        type: SECURITY_EVENTS.LOGIN_SUCCESS,
+        userId: user.id,
+        sourceIp: req.ip,
+        userAgent: req.get('User-Agent'),
+        resource: '/api/admin/login',
+        action: 'admin_login',
+        outcome: 'success',
+        severity: 'low',
+        data: { username, role: user.role, loginType: 'admin' }
       });
 
       // 返回成功响应（包含双令牌和管理员信息）
@@ -118,9 +145,23 @@ class AdminAuthController extends BaseController {
         timestamp: new Date().toISOString()
       });
 
+      // 记录安全审计事件
+      logSecurityEvent({
+        type: SECURITY_EVENTS.LOGOUT,
+        userId: userId,
+        sourceIp: req.ip,
+        userAgent: req.get('User-Agent'),
+        resource: '/api/admin/logout',
+        action: 'admin_logout',
+        outcome: 'success',
+        severity: 'low',
+        data: { loginType: 'admin' }
+      });
+
       // 撤销令牌
-      if (refreshToken) {
-        await revokeTokenPair(userId, refreshToken);
+      const accessToken = req.headers.authorization ? req.headers.authorization.split(' ')[1] : null;
+      if (refreshToken || accessToken) {
+        await revokeTokenPair(accessToken, refreshToken, 'admin_logout');
       }
 
       logger.auth('管理员登出成功', { userId });

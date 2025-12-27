@@ -7,6 +7,7 @@ const BaseController = require('./BaseController');
 const UserService = require('../services/UserService');
 const logger = require('../config/logger');
 const { generateTokenPair, refreshAccessToken, revokeTokenPair } = require('../config/jwtManager');
+const { logSecurityEvent, SECURITY_EVENTS } = require('../middleware/securityAudit');
 
 class AuthController extends BaseController {
   constructor() {
@@ -56,6 +57,19 @@ class AuthController extends BaseController {
           reason: loginResult.message
         });
         
+        // 记录安全审计事件
+        logSecurityEvent({
+          type: SECURITY_EVENTS.LOGIN_FAILURE,
+          userId: null,
+          sourceIp: req.ip,
+          userAgent: req.get('User-Agent'),
+          resource: '/api/auth/login',
+          action: 'login',
+          outcome: 'failure',
+          severity: 'medium',
+          data: { username, reason: loginResult.message }
+        });
+        
         // 根据失败原因返回不同的状态码
         const statusCode = loginResult.message.includes('锁定') ? 423 : 401;
         return this.sendError(res, loginResult.message, statusCode);
@@ -68,6 +82,19 @@ class AuthController extends BaseController {
         username,
         userId: user.id,
         timestamp: new Date().toISOString()
+      });
+
+      // 记录安全审计事件
+      logSecurityEvent({
+        type: SECURITY_EVENTS.LOGIN_SUCCESS,
+        userId: user.id,
+        sourceIp: req.ip,
+        userAgent: req.get('User-Agent'),
+        resource: '/api/auth/login',
+        action: 'login',
+        outcome: 'success',
+        severity: 'low',
+        data: { username }
       });
 
       // 返回成功响应（包含双令牌和会话信息）
@@ -317,12 +344,13 @@ class AuthController extends BaseController {
           reason: result.message,
           userId: req.user?.id
         });
-        return this.sendError(res, result.message, 401);
+        const errorCode = result.message.includes('过期') ? 'TOKEN_EXPIRED' : 'INVALID_TOKEN';
+        return this.sendError(res, result.message, 401, errorCode);
       }
 
       const { accessToken, refreshToken: newRefreshToken } = result.data;
 
-      logger.auth('令牌刷新成功', { userId: req.user.id });
+      logger.auth('令牌刷新成功', { userId: req.user?.id });
 
       return this.sendSuccess(res, {
         accessToken,
@@ -331,17 +359,8 @@ class AuthController extends BaseController {
     } catch (error) {
       logger.error('[AuthController] 刷新令牌失败', { error: error.message });
       
-      // 处理刷新令牌相关的错误
-      if (error.message.includes('刷新令牌已被撤销') ||
-          error.message.includes('无效的刷新令牌') ||
-          error.message.includes('会话已过期') ||
-          error.message.includes('令牌已过期') ||
-          error.message.includes('无效的刷新令牌类型')) {
-        return this.sendError(res, error.message, 401);
-      }
-      
-      // 其他错误传递给全局错误处理中间件
-      next(error);
+      const errorCode = error.message.includes('过期') ? 'TOKEN_EXPIRED' : 'REFRESH_FAILED';
+      return this.sendError(res, error.message, 401, errorCode);
     }
   }
 
@@ -349,13 +368,13 @@ class AuthController extends BaseController {
    * 安全刷新令牌接口（实现刷新令牌轮换）
    * POST /api/auth/refresh-token
    */
-  async refreshSecureToken(req, res) {
+  async refreshSecureToken(req, res, next) {
     try {
       const { refreshToken } = req.body;
       
       // 验证输入
       if (!refreshToken) {
-        return this.sendError(res, '刷新令牌不能为空', 400);
+        return this.sendError(res, '刷新令牌不能为空', 400, 'REFRESH_TOKEN_REQUIRED');
       }
 
       // 记录安全令牌刷新尝试
@@ -370,20 +389,26 @@ class AuthController extends BaseController {
         
         // 验证令牌类型
         if (decoded.type !== 'refresh') {
-          return this.sendError(res, '无效的刷新令牌类型', 401);
+          return this.sendError(res, '无效的刷新令牌类型', 401, 'INVALID_TOKEN_TYPE');
         }
         
         logger.info('[AuthController] 刷新令牌验证通过', { userId: decoded.userId });
       } catch (tokenError) {
         logger.warn('[AuthController] 刷新令牌验证失败', { error: tokenError.message });
         
+        const statusCode = 401;
+        let errorCode = 'INVALID_TOKEN';
+        let message = '无效的刷新令牌';
+
         if (tokenError.message === '令牌已被撤销') {
-          return this.sendError(res, '刷新令牌已被撤销', 401);
-        } else if (tokenError.name === 'TokenExpiredError') {
-          return this.sendError(res, '刷新令牌已过期', 401);
-        } else {
-          return this.sendError(res, '无效的刷新令牌', 401);
+          errorCode = 'TOKEN_REVOKED';
+          message = '刷新令牌已被撤销';
+        } else if (tokenError.name === 'TokenExpiredError' || tokenError.message.includes('过期')) {
+          errorCode = 'TOKEN_EXPIRED';
+          message = '刷新令牌已过期';
         }
+        
+        return this.sendError(res, message, statusCode, errorCode);
       }
 
       // 调用服务层安全刷新令牌
@@ -392,35 +417,31 @@ class AuthController extends BaseController {
         userAgent: req.get('User-Agent')
       });
       
+      if (!result.success) {
+        const statusCode = result.message.includes('过期') ? 401 : 400;
+        const errorCode = result.message.includes('过期') ? 'TOKEN_EXPIRED' : 'INVALID_TOKEN';
+        return this.sendError(res, result.message, statusCode, errorCode);
+      }
+
       // 记录安全令牌刷新成功
       logger.auth('安全令牌刷新成功', { userId: result.data.userId });
 
-      return this.sendSuccess(res, {
-        accessToken: result.data.accessToken,
-        refreshToken: result.data.refreshToken,
-        expiresIn: result.data.expiresIn,
-        refreshExpiresIn: result.data.refreshExpiresIn
-      }, '令牌刷新成功');
+      return this.sendSuccess(res, result.data, '令牌刷新成功');
     } catch (error) {
       logger.error('[AuthController] 安全刷新令牌失败', { error: error.message });
       
-      // 根据错误类型返回合适的状态码
-      const errorMessage = error.message;
-      if (errorMessage.includes('无效的刷新令牌') || 
-          errorMessage.includes('会话已过期') ||
-          errorMessage.includes('用户不存在') ||
-          // 处理可能的编码问题
-          errorMessage.includes('鏃犳晥鐨勫埛鏂颁护鐗?') ||
-          errorMessage.includes('浼氳瘽宸茶繃鏈?')) {
-        return this.sendError(res, errorMessage, 401);
+      // 特殊处理并发刷新错误
+      if (error.code === 'CONCURRENT_REFRESH') {
+        return this.sendError(res, error.message, 409, 'CONCURRENT_REFRESH', error.data);
       }
       
-      return this.sendError(res, '服务器内部错误', 500);
+      const errorCode = error.message.includes('过期') ? 'TOKEN_EXPIRED' : 'REFRESH_FAILED';
+      return this.sendError(res, error.message, 401, errorCode);
     }
   }
 
   /**
-   * 用户登出
+   * 退出登录
    * POST /api/auth/logout
    */
   async logout(req, res, next) {
@@ -1295,7 +1316,8 @@ class AuthController extends BaseController {
    */
   async validateToken(req, res, next) {
     try {
-      const { sessionToken } = req.body;
+      // 兼容 body 和 query 传参
+      const sessionToken = req.body.sessionToken || req.query.sessionToken;
       
       // 记录令牌验证尝试
       logger.audit(req, '令牌验证尝试', { 
@@ -1353,6 +1375,12 @@ class AuthController extends BaseController {
       }, '令牌验证成功');
 
     } catch (error) {
+      // 如果是业务逻辑抛出的“令牌无效或已过期”错误，返回 401 而非 500
+      if (error.message === '令牌无效或已过期') {
+        logger.warn('[AuthController] 令牌验证未通过', { error: error.message });
+        return this.sendError(res, error.message, 401);
+      }
+      
       logger.error('[AuthController] 令牌验证失败', { error: error.message });
       next(error);
     }
@@ -1563,13 +1591,38 @@ class AuthController extends BaseController {
    * GET /api/auth/client-ip
    * 用于前端获取真实IP地址用于安全日志记录
    */
+  /**
+   * 获取客户端IP地址
+   * GET /api/auth/client-ip
+   */
   async getClientIp(req, res, next) {
     try {
-      const clientIp = req.ip || req.connection.remoteAddress || req.socket.remoteAddress;
+      // 优先获取 x-forwarded-for，然后是 req.ip，最后是各种 remoteAddress
+      let clientIp = req.headers['x-forwarded-for'] || 
+                     req.headers['x-real-ip'] || 
+                     req.ip || 
+                     req.connection?.remoteAddress || 
+                     req.socket?.remoteAddress;
       
+      // 如果 x-forwarded-for 包含多个 IP（由逗号分隔），取第一个
+      if (clientIp && typeof clientIp === 'string' && clientIp.includes(',')) {
+        clientIp = clientIp.split(',')[0].trim();
+      }
+      
+      // 处理 IPv6 映射的 IPv4 地址 (如 ::ffff:127.0.0.1)
+      if (clientIp && typeof clientIp === 'string' && clientIp.startsWith('::ffff:')) {
+        clientIp = clientIp.substring(7);
+      }
+
+      // 确保如果是本地回环地址，统一显示
+      if (clientIp === '::1' || clientIp === 'localhost') {
+        clientIp = '127.0.0.1';
+      }
+
       logger.audit(req, '获取客户端IP地址', { 
         clientIp,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        userAgent: req.get('User-Agent')
       });
 
       return this.sendSuccess(res, { ip: clientIp }, '获取IP地址成功');

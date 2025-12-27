@@ -13,6 +13,14 @@ class UserModel {
     this.phone = data.phone || '';
     this.avatarUrl = data.avatar_url || '';
     
+    // 安全提醒和保护设置
+    this.login_protection_enabled = data.login_protection_enabled !== undefined ? data.login_protection_enabled : false;
+    this.email_alerts_enabled = data.email_alerts_enabled !== undefined ? data.email_alerts_enabled : false;
+    this.sms_alerts_enabled = data.sms_alerts_enabled !== undefined ? data.sms_alerts_enabled : false;
+    this.session_timeout_minutes = data.session_timeout_minutes || 30;
+    this.session_timeout_warning_minutes = data.session_timeout_warning_minutes || 5;
+    this.biometric_enabled = data.biometric_enabled !== undefined ? data.biometric_enabled : false;
+    
     // 账户状态
     this.status = data.status || 'active';
     this.emailVerified = data.email_verified !== undefined ? data.email_verified : false;
@@ -105,6 +113,12 @@ class UserModel {
       status: this.status,
       email_verified: this.emailVerified,
       phone_verified: this.phoneVerified,
+      login_protection_enabled: this.login_protection_enabled,
+      email_alerts_enabled: this.email_alerts_enabled,
+      sms_alerts_enabled: this.sms_alerts_enabled,
+      session_timeout_minutes: this.session_timeout_minutes,
+      session_timeout_warning_minutes: this.session_timeout_warning_minutes,
+      biometric_enabled: this.biometric_enabled,
       last_login_at: this.lastLoginAt,
       last_login_ip: this.lastLoginIp,
       password_changed_at: this.passwordChangedAt,
@@ -147,6 +161,12 @@ class UserModel {
       status: dbRecord.status || 'active',
       email_verified: dbRecord.email_verified || false,
       phone_verified: dbRecord.phone_verified || false,
+      login_protection_enabled: dbRecord.login_protection_enabled,
+      email_alerts_enabled: dbRecord.email_alerts_enabled,
+      sms_alerts_enabled: dbRecord.sms_alerts_enabled,
+      session_timeout_minutes: dbRecord.session_timeout_minutes,
+      session_timeout_warning_minutes: dbRecord.session_timeout_warning_minutes,
+      biometric_enabled: dbRecord.biometric_enabled,
       last_login_at: dbRecord.last_login_at,
       last_login_ip: dbRecord.last_login_ip,
       password_changed_at: dbRecord.password_changed_at,
@@ -175,6 +195,12 @@ class UserModel {
       status: this.status,
       email_verified: this.emailVerified,
       phone_verified: this.phoneVerified,
+      login_protection_enabled: this.login_protection_enabled,
+      email_alerts_enabled: this.email_alerts_enabled,
+      sms_alerts_enabled: this.sms_alerts_enabled,
+      session_timeout_minutes: this.session_timeout_minutes,
+      session_timeout_warning_minutes: this.session_timeout_warning_minutes,
+      biometric_enabled: this.biometric_enabled,
       last_login_at: this.lastLoginAt,
       created_at: this.createdAt,
       updated_at: this.updatedAt,

@@ -38,9 +38,9 @@ export const logSecurityAssessment = (assessment: Omit<SecurityAssessmentHistory
     // 添加新的评估记录
     assessments.push(assessmentEntry);
 
-    // 只保留最近的100条记录
-    if (assessments.length > 100) {
-      assessments = assessments.slice(-100);
+    // 只保留最近的10条记录
+    if (assessments.length > 10) {
+      assessments = assessments.slice(-10);
     }
 
     // 保存评估历史
@@ -56,7 +56,7 @@ export const logSecurityAssessment = (assessment: Omit<SecurityAssessmentHistory
  * @param limit 返回条数限制
  * @returns 安全评估历史列表
  */
-export const getSecurityAssessmentHistory = (userId: string, limit: number = 20): SecurityAssessmentHistory[] => {
+export const getSecurityAssessmentHistory = (userId: string, limit: number = 10): SecurityAssessmentHistory[] => {
   try {
     const assessmentsStr = localStorage.getItem('security_assessment_history');
     if (!assessmentsStr) {

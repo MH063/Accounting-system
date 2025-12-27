@@ -22,6 +22,7 @@ export interface ResponseInterceptor {
 
 // 默认配置
 const defaultConfig: RequestConfig = {
+  method: 'GET',
   timeout: 30000, // 30秒超时
   retry: 3, // 重试3次
   retryDelay: 1000, // 重试延迟1秒
@@ -66,14 +67,154 @@ const getRefreshToken = (): string | null => {
   return localStorage.getItem('refresh_token')
 }
 
+// 多标签页同步机制
+const authChannel = typeof window !== 'undefined' ? new BroadcastChannel('auth_channel') : null
+
+/**
+ * 发送令牌更新消息给其他标签页
+ */
+const notifyTokenUpdate = (accessToken: string, refreshToken?: string) => {
+  if (authChannel) {
+    authChannel.postMessage({
+      type: 'TOKEN_UPDATE',
+      accessToken,
+      refreshToken
+    })
+  }
+}
+
+/**
+ * 监听其他标签页的令牌更新消息
+ */
+if (authChannel) {
+  authChannel.onmessage = (event) => {
+    if (event.data.type === 'TOKEN_UPDATE') {
+      const { accessToken, refreshToken } = event.data
+      console.log('接收到其他标签页的令牌更新消息')
+      // 更新本地存储，但不再次通知，避免无限循环
+      localStorage.setItem('access_token', accessToken)
+      if (refreshToken) {
+        localStorage.setItem('refresh_token', refreshToken)
+      }
+      // 更新过期时间
+      try {
+        const payload = JSON.parse(atob(accessToken.split('.')[1]))
+        if (payload && typeof payload.exp === 'number') {
+          localStorage.setItem('token_expires', (payload.exp * 1000).toString())
+        }
+      } catch (e) {
+        console.warn('同步解析令牌过期时间失败:', e)
+      }
+    } else if (event.data.type === 'LOGOUT') {
+      console.log('接收到其他标签页的登出消息')
+      clearAuthToken()
+      window.location.href = '/login'
+    }
+  }
+}
+
 /**
  * 保存认证令牌
  */
 const saveAuthToken = (accessToken: string, refreshToken?: string): void => {
   localStorage.setItem('access_token', accessToken)
+  
+  // 解析并保存过期时间
+  try {
+    const payload = JSON.parse(atob(accessToken.split('.')[1]))
+    if (payload && typeof payload.exp === 'number') {
+      localStorage.setItem('token_expires', (payload.exp * 1000).toString())
+    } else {
+      console.warn('令牌负载中缺少有效过期时间:', payload)
+    }
+  } catch (e) {
+    console.warn('解析令牌过期时间失败:', e)
+  }
+
   if (refreshToken) {
     localStorage.setItem('refresh_token', refreshToken)
+    try {
+      const payload = JSON.parse(atob(refreshToken.split('.')[1]))
+      if (payload && typeof payload.exp === 'number') {
+        localStorage.setItem('refresh_token_expires', (payload.exp * 1000).toString())
+      }
+    } catch (e) {
+      console.warn('解析刷新令牌过期时间失败:', e)
+    }
   }
+
+  // 通知其他标签页
+  notifyTokenUpdate(accessToken, refreshToken)
+}
+
+// 时间同步状态
+let serverTimeOffset = 0 // 服务器时间 - 客户端时间
+
+/**
+ * 同步服务器时间
+ */
+const syncServerTime = async () => {
+  try {
+    const startTime = Date.now()
+    const response = await fetch(`${BASE_URL}/system/time`)
+    const endTime = Date.now()
+    
+    if (response.ok) {
+      const result = await response.json()
+      if (result.success && result.data.timestamp) {
+        // 计算往返延迟的一半作为网络传输补偿
+        const latency = (endTime - startTime) / 2
+        const serverTimestamp = result.data.timestamp
+        serverTimeOffset = serverTimestamp - (endTime - latency)
+        console.log(`服务器时间同步成功，偏移量: ${serverTimeOffset}ms`)
+      }
+    }
+  } catch (error) {
+    console.warn('服务器时间同步失败:', error)
+  }
+}
+
+/**
+ * 获取当前的服务器校准时间
+ */
+export const getServerTime = (): number => {
+  return Date.now() + serverTimeOffset
+}
+
+// 初始同步
+syncServerTime()
+// 每30分钟自动校准一次
+setInterval(syncServerTime, 30 * 60 * 1000)
+
+/**
+ * 检查令牌是否即将过期（提前5分钟，基于校准后的时间）
+ */
+export const isTokenExpiringSoon = (): boolean => {
+  const expires = localStorage.getItem('token_expires')
+  if (!expires || expires === 'NaN') return false
+  
+  const expiryTime = parseInt(expires)
+  if (isNaN(expiryTime)) return false
+  
+  const currentServerTime = getServerTime()
+  const fiveMinutes = 5 * 60 * 1000
+  
+  // 使用校准后的服务器时间进行判断
+  return expiryTime - currentServerTime < fiveMinutes
+}
+
+/**
+ * 获取令牌剩余秒数（基于校准后的时间）
+ */
+export const getTokenRemainingTime = (): number => {
+  const expires = localStorage.getItem('token_expires')
+  if (!expires || expires === 'NaN') return 0
+  
+  const expiryTime = parseInt(expires)
+  if (isNaN(expiryTime)) return 0
+  
+  const currentServerTime = getServerTime()
+  return Math.max(0, Math.floor((expiryTime - currentServerTime) / 1000))
 }
 
 /**
@@ -82,6 +223,46 @@ const saveAuthToken = (accessToken: string, refreshToken?: string): void => {
 const clearAuthToken = (): void => {
   localStorage.removeItem('access_token')
   localStorage.removeItem('refresh_token')
+}
+
+/**
+ * 清除所有认证信息并跳转到登录页
+ */
+const clearAuthAndRedirect = (): void => {
+  console.log('清除所有认证信息并跳转到登录页...')
+  
+  // 清除所有认证相关的本地存储项
+  const keysToRemove = [
+    'access_token',
+    'refresh_token',
+    'token_expires',
+    'refresh_token_expires',
+    'isAuthenticated',
+    'user_info',
+    'userId',
+    'username',
+    'email',
+    'nickname',
+    'avatar_url',
+    'status',
+    'sessionId',
+    'sessionToken',
+    'sessionExpires',
+    'userRole',
+    'userPermissions'
+  ]
+  
+  keysToRemove.forEach(key => {
+    localStorage.removeItem(key)
+  })
+  
+  // 清除sessionStorage中的信息
+  sessionStorage.clear()
+  
+  // 跳转到登录页
+  if (typeof window !== 'undefined') {
+    window.location.href = '/login?reason=token_expired'
+  }
 }
 
 /**
@@ -106,8 +287,15 @@ const isTokenExpiredError = (error: any): boolean => {
         'expired_token',
         '授权过期',
         'authorization expired',
-        'invalid token'
+        'invalid token',
+        '身份验证已过期'
       ]
+      
+      // 检查是否包含特定的错误代码
+      if (errorData && (errorData.code === 'TOKEN_EXPIRED' || errorData.errorCode === 'TOKEN_EXPIRED')) {
+        console.log('检测到标准化令牌过期错误代码: TOKEN_EXPIRED')
+        return true
+      }
       
       // 检查errorData中的各个字段
       let errorText = ''
@@ -147,20 +335,317 @@ const isTokenExpiredError = (error: any): boolean => {
   return false
 }
 
+// 令牌刷新锁与排队机制
+let isRefreshing = false
+let requestsQueue: Array<(token: string) => void> = []
+
+/**
+ * 检查是否正在刷新令牌
+ */
+export const getIsRefreshing = (): boolean => isRefreshing
+
+/**
+ * 完成刷新流程，处理等待队列
+ */
+const finishRefresh = (token: string = '') => {
+  isRefreshing = false
+  if (requestsQueue.length > 0) {
+    console.log(`处理刷新等待队列，长度: ${requestsQueue.length}`)
+    requestsQueue.forEach(callback => callback(token))
+    requestsQueue = []
+  }
+}
+
+/**
+ * 等待刷新完成
+ * 如果当前正在刷新或有全局锁，则等待完成；否则立即返回
+ */
+export const waitForRefresh = async (): Promise<void> => {
+  if (isRefreshing) {
+    return new Promise((resolve) => {
+      requestsQueue.push(() => resolve())
+    })
+  }
+
+  const { isLocked: hasGlobalLock, lockData } = checkGlobalRefreshLock()
+  if (hasGlobalLock && lockData) {
+    console.log('waitForRefresh: 检测到全局刷新锁，开始等待同步...')
+    const elapsed = Date.now() - lockData.timestamp
+    if (elapsed < GLOBAL_REFRESH_LOCK_TIMEOUT) {
+      isRefreshing = true
+      return new Promise((resolve) => {
+        const timeout = setTimeout(() => {
+          console.warn('waitForRefresh: 等待全局刷新锁超时')
+          isRefreshing = false
+          resolve()
+        }, Math.max(500, GLOBAL_REFRESH_LOCK_TIMEOUT - elapsed))
+
+        const handleMessage = (event: MessageEvent) => {
+          if (event.data.type === 'TOKEN_UPDATE') {
+            clearTimeout(timeout)
+            if (authChannel) {
+              authChannel.removeEventListener('message', handleMessage as any)
+            }
+            isRefreshing = false
+            resolve()
+          }
+        }
+
+        if (authChannel) {
+          authChannel.addEventListener('message', handleMessage as any)
+        } else {
+          const checkInterval = setInterval(() => {
+            const { isLocked } = checkGlobalRefreshLock()
+            if (!isLocked) {
+              clearInterval(checkInterval)
+              clearTimeout(timeout)
+              isRefreshing = false
+              resolve()
+            }
+          }, 200)
+        }
+      })
+    }
+  }
+
+  return Promise.resolve()
+}
+
+// 跨标签页刷新锁键名
+const GLOBAL_REFRESH_LOCK_KEY = 'auth_refresh_lock'
+const GLOBAL_REFRESH_LOCK_TIMEOUT = 60000 // 60秒超时，防止死锁（需小于后端宽限期）
+const STALE_LOCK_THRESHOLD = 10000 // 10秒认为锁已过期
+
+/**
+ * 页面初始化时清理过期的全局刷新锁
+ * 解决页面刷新后锁状态不一致的问题
+ */
+const initializeAuthState = (): void => {
+  const lock = localStorage.getItem(GLOBAL_REFRESH_LOCK_KEY)
+  if (lock) {
+    try {
+      const { timestamp } = JSON.parse(lock)
+      const elapsed = Date.now() - timestamp
+      if (elapsed > STALE_LOCK_THRESHOLD) {
+        console.log('检测到过期的全局刷新锁，清理中...', `经过时间: ${elapsed}ms`)
+        localStorage.removeItem(GLOBAL_REFRESH_LOCK_KEY)
+      } else if (elapsed > GLOBAL_REFRESH_LOCK_TIMEOUT) {
+        console.log('检测到超时的全局刷新锁，清理中...', `经过时间: ${elapsed}ms`)
+        localStorage.removeItem(GLOBAL_REFRESH_LOCK_KEY)
+      } else {
+        console.log('存在活跃的全局刷新锁，可能其他标签页正在刷新令牌')
+      }
+    } catch (e) {
+      console.warn('解析全局刷新锁失败，清理中...')
+      localStorage.removeItem(GLOBAL_REFRESH_LOCK_KEY)
+    }
+  }
+
+  const tokenExpires = localStorage.getItem('token_expires')
+  if (tokenExpires) {
+    const expiryTime = parseInt(tokenExpires)
+    const remaining = expiryTime - Date.now()
+    if (remaining < 0) {
+      console.log('检测到已过期的访问令牌，尝试刷新...')
+      refreshAccessToken().catch(() => {})
+    } else if (remaining < 5 * 60 * 1000) {
+      console.log('访问令牌即将过期，延迟后刷新...')
+      setTimeout(() => {
+        refreshAccessToken().catch(() => {})
+      }, 1000)
+    }
+  }
+}
+
+/**
+ * 检查全局刷新锁
+ */
+const checkGlobalRefreshLock = (): { isLocked: boolean; lockData: any } => {
+  const lock = localStorage.getItem(GLOBAL_REFRESH_LOCK_KEY)
+  if (!lock) return { isLocked: false, lockData: null }
+
+  try {
+    const lockData = JSON.parse(lock)
+    const elapsed = Date.now() - lockData.timestamp
+
+    if (elapsed > GLOBAL_REFRESH_LOCK_TIMEOUT) {
+      console.log(`全局刷新锁已超时 ${elapsed}ms，清理并视为未锁定`)
+      localStorage.removeItem(GLOBAL_REFRESH_LOCK_KEY)
+      return { isLocked: false, lockData: null }
+    }
+
+    return { isLocked: true, lockData }
+  } catch (e) {
+    localStorage.removeItem(GLOBAL_REFRESH_LOCK_KEY)
+    return { isLocked: false, lockData: null }
+  }
+}
+
+/**
+ * 设置全局刷新锁
+ */
+const setGlobalRefreshLock = (): string | null => {
+  const { isLocked, lockData } = checkGlobalRefreshLock()
+  if (isLocked) {
+    const elapsed = Date.now() - lockData.timestamp
+    if (elapsed < GLOBAL_REFRESH_LOCK_TIMEOUT) {
+      console.log('全局刷新锁已被其他标签页持有，跳过设置')
+      return null
+    }
+  }
+
+  const tabId = Math.random().toString(36).substring(2, 15)
+  localStorage.setItem(GLOBAL_REFRESH_LOCK_KEY, JSON.stringify({
+    timestamp: Date.now(),
+    tabId
+  }))
+  return tabId
+}
+
+/**
+ * 清除全局刷新锁
+ */
+const clearGlobalRefreshLock = (): void => {
+  localStorage.removeItem(GLOBAL_REFRESH_LOCK_KEY)
+}
+
+// 监听 storage 事件，同步标签页之间的状态
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.key === GLOBAL_REFRESH_LOCK_KEY) {
+      console.log('检测到全局刷新锁变化:', event.newValue)
+      const { isLocked } = checkGlobalRefreshLock()
+      if (!isLocked && isRefreshing) {
+        console.log('其他标签页释放了刷新锁，但本页仍在刷新中，继续等待...')
+      }
+    }
+
+    if (event.key === 'access_token' && event.newValue) {
+      console.log('检测到访问令牌更新')
+    }
+  })
+}
+
+// 页面初始化时执行状态检查
+initializeAuthState()
+
 /**
  * 刷新访问令牌
  */
-const refreshAccessToken = async (): Promise<boolean> => {
+export const refreshAccessToken = async (): Promise<boolean> => {
+  const refreshToken = getRefreshToken()
+  if (!refreshToken) {
+    console.error('刷新令牌不存在')
+    return false
+  }
+
+  if (isRefreshing) {
+    console.log('本标签页正在刷新中，加入等待队列')
+    return new Promise((resolve) => {
+      requestsQueue.push((token: string) => {
+        resolve(!!token)
+      })
+    })
+  }
+
+  const { isLocked: hasGlobalLock, lockData } = checkGlobalRefreshLock()
+
+  if (hasGlobalLock && lockData) {
+    console.log('检测到其他标签页正在刷新，本页等待同步消息...')
+    isRefreshing = true
+
+    return new Promise((resolve) => {
+      const startTime = Date.now()
+      const pollInterval = 500
+      const maxWaitTime = GLOBAL_REFRESH_LOCK_TIMEOUT
+
+      const checkAndResolve = (accessToken: string | null): boolean => {
+        if (accessToken) {
+          finishRefresh(accessToken)
+          return true
+        }
+        return false
+      }
+
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data.type === 'TOKEN_UPDATE') {
+          const { accessToken } = event.data
+          console.log('收到跨标签页令牌更新消息，结束等待')
+          clearTimeout(timeout)
+          if (authChannel) {
+            authChannel.removeEventListener('message', handleMessage as any)
+          }
+          finishRefresh(accessToken)
+          resolve(true)
+        }
+      }
+
+      const timeout = setTimeout(() => {
+        console.warn('等待其他标签页刷新令牌超时')
+        if (authChannel) {
+          authChannel.removeEventListener('message', handleMessage as any)
+        }
+
+        const currentLock = localStorage.getItem(GLOBAL_REFRESH_LOCK_KEY)
+        if (currentLock) {
+          try {
+            const lockDataInner = JSON.parse(currentLock)
+            if (lockDataInner.tabId) {
+              isRefreshing = false
+              return resolve(refreshAccessToken())
+            }
+          } catch (e) {}
+        }
+
+        const latestAccessToken = getAuthToken()
+        if (checkAndResolve(latestAccessToken)) {
+          resolve(true)
+        } else {
+          isRefreshing = false
+          resolve(false)
+        }
+      }, Math.max(1000, maxWaitTime - (Date.now() - startTime)))
+
+      if (authChannel) {
+        authChannel.addEventListener('message', handleMessage as any)
+      } else {
+        const checkInterval = setInterval(() => {
+          const elapsed = Date.now() - startTime
+          if (elapsed >= maxWaitTime) {
+            clearInterval(checkInterval)
+            return
+          }
+
+          const currentLock = localStorage.getItem(GLOBAL_REFRESH_LOCK_KEY)
+          if (!currentLock) {
+            clearInterval(checkInterval)
+            clearTimeout(timeout)
+
+            const latestAccessToken = getAuthToken()
+            if (checkAndResolve(latestAccessToken)) {
+              resolve(true)
+            } else {
+              isRefreshing = false
+              resolve(refreshAccessToken())
+            }
+          }
+        }, pollInterval)
+      }
+    })
+  }
+
+  isRefreshing = true
+  const myTabId = setGlobalRefreshLock()
+
+  if (!myTabId) {
+    console.log('获取全局锁失败，进入等待模式')
+    isRefreshing = false
+    return refreshAccessToken()
+  }
+
+  console.log('开始刷新访问令牌 (持有全局锁)...')
+
   try {
-    const refreshToken = getRefreshToken()
-    if (!refreshToken) {
-      console.error('刷新令牌不存在')
-      return false
-    }
-    
-    console.log('调用刷新令牌接口')
-    
-    // 使用封装的request函数调用刷新令牌接口，避免循环依赖
     const response = await fetch(`${BASE_URL}/auth/refresh-token`, {
       method: 'POST',
       headers: {
@@ -169,33 +654,63 @@ const refreshAccessToken = async (): Promise<boolean> => {
       credentials: 'include',
       body: JSON.stringify({ refreshToken })
     })
-    
-    console.log('刷新令牌接口响应状态:', response.status)
-    
-    if (response.ok) {
-      const data = await response.json()
-      console.log('刷新令牌接口响应数据:', data)
-      
-      if (data.success && data.data) {
-        // 保存新的令牌
-        saveAuthToken(data.data.accessToken, data.data.refreshToken || refreshToken)
-        console.log('令牌刷新成功')
-        return true
-      } else {
-        console.error('刷新令牌接口返回失败:', data.message)
-      }
-    } else {
+
+    if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
+
+      if (response.status === 409 || errorData.code === 'CONCURRENT_REFRESH') {
+        console.log('检测到后端返回并发刷新冲突(409)，处理中...')
+
+        await new Promise(resolve => setTimeout(resolve, 300))
+
+        const latestAccessToken = getAuthToken()
+        if (latestAccessToken) {
+          console.log('使用本地最新的令牌')
+          finishRefresh(latestAccessToken)
+          clearGlobalRefreshLock()
+          return true
+        }
+
+        if (errorData.data && errorData.data.accessToken) {
+          console.log('使用后端返回的最新令牌')
+          const { accessToken, refreshToken: newRefreshToken } = errorData.data
+          saveAuthToken(accessToken, newRefreshToken || refreshToken)
+          finishRefresh(accessToken)
+          clearGlobalRefreshLock()
+          return true
+        }
+
+        console.warn('并发刷新冲突但无有效令牌，返回失败')
+        finishRefresh('')
+        clearGlobalRefreshLock()
+        return false
+      }
+
       console.error('刷新令牌接口请求失败:', response.status, errorData)
+      throw new Error('刷新令牌请求失败')
     }
+
+    const data = await response.json()
+    if (data.success && data.data) {
+      const { accessToken, refreshToken: newRefreshToken } = data.data
+      saveAuthToken(accessToken, newRefreshToken || refreshToken)
+      console.log('令牌刷新成功')
+
+      finishRefresh(accessToken)
+      clearGlobalRefreshLock()
+      return true
+    }
+
+    throw new Error(data.message || '刷新令牌失败')
   } catch (error) {
-    console.error('刷新令牌请求失败:', error)
+    console.error('刷新访问令牌出错:', error)
+    finishRefresh('')
+    clearAuthToken()
+    clearGlobalRefreshLock()
+    return false
+  } finally {
+    isRefreshing = false
   }
-  
-  // 刷新失败，清除令牌
-  clearAuthToken()
-  console.log('刷新令牌失败，已清除令牌')
-  return false
 }
 
 /**
@@ -295,22 +810,36 @@ export async function request<T = any>(
       // 构建完整URL
       const fullUrl = url.startsWith('http') ? url : `${BASE_URL}${url}`
       
-      // 添加认证令牌
-      const token = getAuthToken()
-      if (token) {
-        mergedConfig.headers = {
-          ...mergedConfig.headers,
-          'Authorization': `Bearer ${token}`
-        }
-      } else {
-        // 对于登录和注册等不需要认证的接口，不显示警告
-        const noAuthEndpoints = ['/auth/login', '/auth/register', '/auth/reset-password']
-        const isNoAuthEndpoint = noAuthEndpoints.some(endpoint => url.includes(endpoint))
-        
-        if (!isNoAuthEndpoint) {
-          console.warn('警告: 请求未携带认证令牌', fullUrl)
-        }
+  // 令牌预检测：如果即将过期且不是刷新令牌请求，则先刷新
+  if (!isRefreshTokenRequest && isTokenExpiringSoon()) {
+    console.log('检测到令牌即将过期，执行预刷新...')
+    const refreshSuccess = await refreshAccessToken()
+    if (!refreshSuccess) {
+      console.warn('预刷新令牌失败，尝试继续请求或跳转登录')
+      // 如果刷新失败且没有访问令牌，可能需要跳转
+      if (!getAuthToken()) {
+        clearAuthAndRedirect()
+        return null as unknown as T
       }
+    }
+  }
+  
+  // 添加认证令牌
+  const token = getAuthToken()
+  if (token) {
+    mergedConfig.headers = {
+      ...mergedConfig.headers,
+      'Authorization': `Bearer ${token}`
+    }
+  } else {
+    // 对于登录和注册等不需要认证的接口，不显示警告
+    const noAuthEndpoints = ['/auth/login', '/auth/register', '/auth/reset-password', '/auth/refresh-token', '/auth/refresh']
+    const isNoAuthEndpoint = noAuthEndpoints.some(endpoint => url.includes(endpoint))
+    
+    if (!isNoAuthEndpoint) {
+      console.warn('警告: 请求未携带认证令牌', fullUrl)
+    }
+  }
       
       // 处理请求体
       if ((mergedConfig as any).data && !mergedConfig.body) {
@@ -351,14 +880,15 @@ export async function request<T = any>(
         
         // 特殊处理401错误
         if (processedResponse.status === 401) {
-          const noAuthEndpoints = ['/auth/login', '/auth/register', '/auth/reset-password']
+          const noAuthEndpoints = ['/auth/login', '/auth/register', '/auth/reset-password', '/auth/refresh-token', '/auth/refresh']
           const isNoAuthEndpoint = noAuthEndpoints.some(endpoint => url.includes(endpoint))
           
           if (isNoAuthEndpoint) {
-            console.log('登录/注册接口401错误，保持原始错误信息:', errorMessage)
+            console.log('[request] 非认证接口401错误，保持原始错误信息:', errorMessage)
           } else {
-            console.log('检测到401未授权错误，可能需要重新登录')
-            errorMessage = '身份验证已过期，请重新登录'
+            console.log('[request] 检测到401未授权错误，清除认证信息并跳转到登录页')
+            clearAuthAndRedirect()
+            return
           }
         }
         
@@ -416,6 +946,9 @@ export async function request<T = any>(
           continue // 重试请求
         } else {
           console.log('刷新令牌失败，无法重试请求')
+          // 清除认证信息并跳转到登录页
+          clearAuthAndRedirect()
+          return
         }
       }
       

@@ -1112,9 +1112,15 @@ const formatCurrency = (amount: number) => {
  * @param date 日期
  * @returns 格式化后的日期字符串
  */
-const formatDate = (date: string | Date | undefined) => {
+const formatDate = (date: string | Date | number | undefined | null): string => {
   if (!date) return '-'
-  return new Date(date).toLocaleDateString('zh-CN')
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return '-'
+  return d.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  })
 }
 
 /**
@@ -1122,9 +1128,18 @@ const formatDate = (date: string | Date | undefined) => {
  * @param dateTime 日期时间
  * @returns 格式化后的日期时间字符串
  */
-const formatDateTime = (dateTime: string | Date | undefined) => {
+const formatDateTime = (dateTime: string | Date | number | undefined | null): string => {
   if (!dateTime) return '-'
-  return new Date(dateTime).toLocaleString('zh-CN')
+  const d = new Date(dateTime)
+  if (isNaN(d.getTime())) return '-'
+  return d.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
 }
 
 /**

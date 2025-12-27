@@ -467,9 +467,13 @@ export class DormService {
       const response = await request<any>(`/dorms/${dormId}/invite-records`, {
         params
       })
+      
+      // 处理后端返回的双层嵌套结构 (Rule 5)
+      const actualData = response.data?.data || response.data
+      
       return {
         success: response.success,
-        data: response.data,
+        data: actualData,
         message: response.message || '获取邀请记录成功'
       }
     } catch (error) {
@@ -492,9 +496,13 @@ export class DormService {
         method: 'POST',
         data: { action }
       })
+      
+      // 处理后端返回的双层嵌套结构 (Rule 5)
+      const actualData = (response as any).data?.data || (response as any).data || response.success
+      
       return {
         success: response.success,
-        data: response.success,
+        data: actualData,
         message: response.message || '处理邀请成功'
       }
     } catch (error) {
@@ -517,9 +525,13 @@ export class DormService {
         method: 'POST',
         data: { reason }
       })
+      
+      // 处理后端返回的双层嵌套结构 (Rule 5)
+      const actualData = (response as any).data?.data || (response as any).data || response.success
+      
       return {
         success: response.success,
-        data: response.success,
+        data: actualData,
         message: response.message || '移除成员成功'
       }
     } catch (error) {
@@ -542,9 +554,13 @@ export class DormService {
         method: 'PUT',
         data: { role }
       })
+      
+      // 处理后端返回的双层嵌套结构 (Rule 5)
+      const actualData = (response as any).data?.data || (response as any).data || response.success
+      
       return {
         success: response.success,
-        data: response.success,
+        data: actualData,
         message: response.message || '更新成员角色成功'
       }
     } catch (error) {
@@ -566,9 +582,13 @@ export class DormService {
       const response = await request<any>(`/dorms/${dormId}/activity-logs`, {
         params
       })
+      
+      // 处理后端返回的双层嵌套结构 (Rule 5)
+      const actualData = response.data?.data || response.data
+      
       return {
         success: response.success,
-        data: response.data,
+        data: actualData,
         message: response.message || '获取活动日志成功'
       }
     } catch (error) {
@@ -590,9 +610,13 @@ export class DormService {
       const response = await request<any>(`/dorms/${dormId}/statistics`, {
         params: { period }
       })
+      
+      // 处理后端返回的双层嵌套结构 (Rule 5)
+      const actualData = response.data?.data || response.data
+      
       return {
         success: response.success,
-        data: response.data,
+        data: actualData,
         message: response.message || '获取统计信息成功'
       }
     } catch (error) {
@@ -615,9 +639,13 @@ export class DormService {
         method: 'POST',
         data: { reason }
       })
+      
+      // 处理后端返回的双层嵌套结构 (Rule 5)
+      const actualData = (response as any).data?.data || (response as any).data || response.success
+      
       return {
         success: response.success,
-        data: response.success,
+        data: actualData,
         message: response.message || '申请管理员成功'
       }
     } catch (error) {
@@ -640,9 +668,13 @@ export class DormService {
         method: 'POST',
         data: { newAdminId, reason }
       })
+      
+      // 处理后端返回的双层嵌套结构 (Rule 5)
+      const actualData = (response as any).data?.data || (response as any).data || response.success
+      
       return {
         success: response.success,
-        data: response.success,
+        data: actualData,
         message: response.message || '转移管理员权限成功'
       }
     } catch (error) {
@@ -664,9 +696,13 @@ export class DormService {
       const response = await request<any>(`/dorms/${dormId}/announcements`, {
         params
       })
+      
+      // 处理后端返回的双层嵌套结构 (Rule 5)
+      const actualData = response.data?.data || response.data
+      
       return {
         success: response.success,
-        data: response.data,
+        data: actualData,
         message: response.message || '获取寝室公告成功'
       }
     } catch (error) {
@@ -695,9 +731,14 @@ export class DormService {
         method: 'POST',
         data: announcement
       })
+      
+      // 处理后端返回的双层嵌套结构 (Rule 5)
+      const actualData = response.data?.data || response.data
+      const id = actualData?.id || actualData
+      
       return {
         success: response.success,
-        data: response.data.id,
+        data: id,
         message: response.message || '创建公告成功'
       }
     } catch (error) {
@@ -726,9 +767,13 @@ export class DormService {
         method: 'PUT',
         data: announcement
       })
+      
+      // 处理后端返回的双层嵌套结构 (Rule 5)
+      const actualData = (response as any).data?.data || (response as any).data || response.success
+      
       return {
         success: response.success,
-        data: response.success,
+        data: actualData,
         message: response.message || '更新公告成功'
       }
     } catch (error) {
@@ -750,9 +795,13 @@ export class DormService {
       const response = await request<{ success: boolean }>(`/dorms/${dormId}/announcements/${announcementId}`, {
         method: 'DELETE'
       })
+      
+      // 处理后端返回的双层嵌套结构 (Rule 5)
+      const actualData = (response as any).data?.data || (response as any).data || response.success
+      
       return {
         success: response.success,
-        data: response.success,
+        data: actualData,
         message: response.message || '删除公告成功'
       }
     } catch (error) {
@@ -779,9 +828,12 @@ export class DormService {
         params
       })
       
+      // 处理后端返回的双层嵌套结构 (Rule 5)
+      const actualData = response.data?.data || response.data
+      
       return {
         success: response.success,
-        data: response.data,
+        data: actualData,
         message: response.message || '获取寝室历史记录成功',
         code: 200
       }
@@ -962,9 +1014,12 @@ export class DormService {
         method: 'POST'
       })
       
+      // 处理后端返回的双层嵌套结构 (Rule 5)
+      const actualData = response.data?.data || response.data || response.success
+      
       return {
         success: response.success,
-        data: response.success,
+        data: actualData,
         message: response.message || '开始解散流程成功',
         code: 200
       }
@@ -991,9 +1046,12 @@ export class DormService {
         method: 'POST'
       })
       
+      // 处理后端返回的双层嵌套结构 (Rule 5)
+      const actualData = response.data?.data || response.data || response.success
+      
       return {
         success: response.success,
-        data: response.success,
+        data: actualData,
         message: response.message || '确认解散成功',
         code: 200
       }
@@ -1020,9 +1078,12 @@ export class DormService {
         method: 'POST'
       })
       
+      // 处理后端返回的双层嵌套结构 (Rule 5)
+      const actualData = response.data?.data || response.data || response.success
+      
       return {
         success: response.success,
-        data: response.success,
+        data: actualData,
         message: response.message || '取消解散成功',
         code: 200
       }

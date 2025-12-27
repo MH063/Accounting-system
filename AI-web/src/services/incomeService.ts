@@ -67,11 +67,18 @@ export const getIncomeStatistics = async (filter: IncomeFilter): Promise<ApiResp
     if (filter.pageSize) params.append('pageSize', filter.pageSize.toString())
     
     const queryString = params.toString() ? `?${params.toString()}` : ''
-    const response = await request<IncomeRecord[]>(`/income/statistics${queryString}`)    
-    return {
-      success: true,
-      data: response
+    const response = await request<ApiResponse<IncomeRecord[]>>(`/income/statistics${queryString}`)
+    
+    // 处理双层嵌套结构 (Rule 5)
+    if (response && response.success) {
+      const actualData = (response.data as any)?.data || response.data
+      return {
+        ...response,
+        data: actualData
+      }
     }
+    
+    return response
   } catch (error) {
     console.error('获取收入统计数据失败:', error)
     return {
@@ -87,8 +94,11 @@ export const getIncomeStatistics = async (filter: IncomeFilter): Promise<ApiResp
  */
 export const getIncomeTrend = async (timeRange: string): Promise<IncomeTrendItem[]> => {
   try {
-    const response = await request<IncomeTrendItem[]>(`/income/trend?timeRange=${encodeURIComponent(timeRange)}`)
-    return response
+    const response = await request<ApiResponse<IncomeTrendItem[]>>(`/income/trend?timeRange=${encodeURIComponent(timeRange)}`)
+    
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = (response.data as any)?.data || response.data
+    return actualData || []
   } catch (error) {
     console.error('获取收入趋势数据失败:', error)
     return []

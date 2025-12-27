@@ -1,5 +1,7 @@
 import { DeviceInfo, getKnownDevices, saveKnownDevices, generateDeviceFingerprint } from './accountSecurityService';
 import { getClientIpAddress as apiGetClientIpAddress } from './authService';
+import { request } from '@/utils/request';
+import type { ApiResponse } from '@/types';
 
 // 登录设备限制配置
 export interface LoginDeviceLimitConfig {
@@ -10,14 +12,71 @@ export interface LoginDeviceLimitConfig {
 
 // 当前登录设备会话信息
 export interface ActiveDeviceSession {
-  id: string; // 设备ID
-  userId: string; // 用户ID
-  loginTime: number; // 登录时间
-  lastActiveTime: number; // 最后活跃时间
+  id: string | number; // 设备ID
+  userId?: string | number; // 用户ID
+  loginTime?: number | string; // 登录时间
+  lastActiveTime?: number | string; // 最后活跃时间
   userAgent: string; // 用户代理
   ipAddress: string; // IP地址
   isActive: boolean; // 是否活跃
+  deviceInfo?: any; // 设备详细信息
+  isCurrent?: boolean; // 是否为当前设备
+  createdAt?: string; // 创建时间
+  expiresAt?: string; // 过期时间
 }
+
+/**
+ * 获取后端所有的活跃设备会话
+ */
+export const getBackendDeviceSessionsAPI = async (): Promise<ApiResponse<{ sessions: ActiveDeviceSession[], count: number }>> => {
+  try {
+    return await request<{ sessions: ActiveDeviceSession[], count: number }>('/device-sessions', {
+      method: 'GET'
+    });
+  } catch (error) {
+    console.error('获取后端设备会话失败:', error);
+    return {
+      success: false,
+      message: '获取后端设备会话失败',
+      data: { sessions: [], count: 0 }
+    };
+  }
+};
+
+/**
+ * 撤销指定的后端设备会话
+ * @param sessionId 会话ID
+ */
+export const revokeBackendDeviceSessionAPI = async (sessionId: string | number): Promise<ApiResponse<null>> => {
+  try {
+    return await request<null>(`/device-sessions/${sessionId}`, {
+      method: 'DELETE'
+    });
+  } catch (error) {
+    console.error('撤销后端设备会话失败:', error);
+    return {
+      success: false,
+      message: '撤销后端设备会话失败'
+    };
+  }
+};
+
+/**
+ * 撤销除当前会话外的所有后端设备会话
+ */
+export const revokeOtherBackendDeviceSessionsAPI = async (): Promise<ApiResponse<{ revokedCount: number }>> => {
+  try {
+    return await request<{ revokedCount: number }>('/device-sessions/other', {
+      method: 'DELETE'
+    });
+  } catch (error) {
+    console.error('撤销其他后端设备会话失败:', error);
+    return {
+      success: false,
+      message: '撤销其他后端设备会话失败'
+    };
+  }
+};
 
 // 默认登录设备限制配置
 export const getDefaultLoginDeviceLimitConfig = (): LoginDeviceLimitConfig => {
@@ -148,26 +207,30 @@ export const recordNewDeviceSession = (
   // 如果启用了设备限制并且超过最大设备数量
   if (config.enabled && config.autoLogout) {
     const activeSessions = sessions.filter(s => s.isActive);
+    // 将同一IP地址的算作一个设备
+    const activeIps = new Set(activeSessions.map(s => s.ipAddress));
     
-    if (activeSessions.length > config.maxDevices) {
-      // 按登录时间排序，最早的在前
-      const sortedSessions = [...activeSessions].sort((a, b) => a.loginTime - b.loginTime);
-      
-      // 标记最早的设备为非活跃（真实登出）
-      const sessionToLogout = sortedSessions[0];
-      if (sessionToLogout) {
-        sessionToLogout.isActive = false;
-        
-        // 更新sessions数组中的对应项
-        const indexToLogout = sessions.findIndex(s => s.id === sessionToLogout.id);
-        if (indexToLogout >= 0) {
-          sessions[indexToLogout] = sessionToLogout;
+    if (activeIps.size > config.maxDevices) {
+      // 获取所有活跃IP，并按该IP下最早的登录时间排序
+      const ipLoginTimes: Record<string, number> = {};
+      activeSessions.forEach(s => {
+        if (!ipLoginTimes[s.ipAddress] || (typeof s.loginTime === 'number' && s.loginTime < ipLoginTimes[s.ipAddress])) {
+          ipLoginTimes[s.ipAddress] = typeof s.loginTime === 'number' ? s.loginTime : Date.now();
         }
+      });
+      
+      const sortedIps = Array.from(activeIps).sort((a, b) => ipLoginTimes[a] - ipLoginTimes[b]);
+      
+      // 标记最早IP下的所有会话为非活跃
+      const ipToLogout = sortedIps[0];
+      if (ipToLogout) {
+        sessions.forEach(s => {
+          if (s.ipAddress === ipToLogout) {
+            s.isActive = false;
+          }
+        });
         
-        console.log(`设备 ${sessionToLogout.id} 已自动登出，因为超过最大设备数量限制`);
-        
-        // 在实际应用中，这里应该调用后端API通知服务器登出该设备
-        // 例如：await api.logoutDevice(userId, sessionToLogout.id);
+        console.log(`IP ${ipToLogout} 下的所有设备已自动登出，因为超过最大设备数量限制`);
       }
     }
   }
@@ -275,23 +338,28 @@ export const isDeviceAllowedToLogin = (
   const activeSessions = sessions.filter(session => session.isActive);
   const deviceId = generateDeviceFingerprint(userAgent, ipAddress);
   
-  // 检查当前设备是否已有活跃会话
-  const existingSession = activeSessions.find(session => session.id === deviceId);
+  // 检查当前设备或当前IP是否已有活跃会话
+  const existingSession = activeSessions.find(session => 
+    session.id === deviceId || session.ipAddress === ipAddress
+  );
   if (existingSession) {
     return { allowed: true };
   }
   
+  // 将同一IP地址的算作一个设备
+  const activeIps = new Set(activeSessions.map(s => s.ipAddress));
+  
   // 检查是否超过最大设备数量
-  if (activeSessions.length >= config.maxDevices) {
+  if (activeIps.size >= config.maxDevices) {
     if (config.autoLogout) {
       return { 
         allowed: true, 
-        message: `已超过最大设备数量限制(${config.maxDevices}台)，最早的设备将被自动登出` 
+        message: `已超过最大设备数量限制(${config.maxDevices}个IP地址)，最早的IP设备将被自动登出` 
       };
     } else {
       return { 
         allowed: false, 
-        message: `已超过最大设备数量限制(${config.maxDevices}台)，请先登出其他设备` 
+        message: `已超过最大设备数量限制(${config.maxDevices}个IP地址)，请先登出其他设备的IP` 
       };
     }
   }
@@ -300,12 +368,14 @@ export const isDeviceAllowedToLogin = (
 };
 
 /**
- * 获取活跃设备数量
+ * 获取活跃设备数量（以唯一IP计算）
  * @param userId 用户ID
  */
 export const getActiveDeviceCount = (userId: string): number => {
   const sessions = getActiveDeviceSessions(userId);
-  return sessions.filter(session => session.isActive).length;
+  const activeSessions = sessions.filter(session => session.isActive);
+  const activeIps = new Set(activeSessions.map(s => s.ipAddress));
+  return activeIps.size;
 };
 
 /**
@@ -370,35 +440,41 @@ export const isSessionValid = (userId: string, sessionId: string): boolean => {
 };
 
 /**
- * 强制登出最早的设备以确保不超过限制
+ * 强制登出最早的设备以确保不超过限制（以唯一IP计算）
  * @param userId 用户ID
  * @param maxDevices 最大设备数量
  */
 export const enforceDeviceLimit = (userId: string, maxDevices: number): void => {
   const sessions = getActiveDeviceSessions(userId);
   const activeSessions = sessions.filter(session => session.isActive);
+  const activeIps = new Set(activeSessions.map(s => s.ipAddress));
   
-  // 如果活跃设备数量超过限制
-  if (activeSessions.length > maxDevices) {
-    // 按登录时间排序，最早的在前
-    const sortedSessions = [...activeSessions].sort((a, b) => a.loginTime - b.loginTime);
+  // 如果活跃IP数量超过限制
+  if (activeIps.size > maxDevices) {
+    // 获取所有活跃IP，并按该IP下最早的登录时间排序
+    const ipLoginTimes: Record<string, number> = {};
+    activeSessions.forEach(s => {
+      if (!ipLoginTimes[s.ipAddress] || (typeof s.loginTime === 'number' && s.loginTime < ipLoginTimes[s.ipAddress])) {
+        ipLoginTimes[s.ipAddress] = typeof s.loginTime === 'number' ? s.loginTime : Date.now();
+      }
+    });
     
-    // 计算需要登出的设备数量
-    const excessCount = activeSessions.length - maxDevices;
+    const sortedIps = Array.from(activeIps).sort((a, b) => ipLoginTimes[a] - ipLoginTimes[b]);
     
-    // 登出最早的设备
+    // 计算需要登出的IP数量
+    const excessCount = activeIps.size - maxDevices;
+    
+    // 登出最早的IP及其下的所有会话
     for (let i = 0; i < excessCount; i++) {
-      const sessionToLogout = sortedSessions[i];
-      if (sessionToLogout) {
-        sessionToLogout.isActive = false;
+      const ipToLogout = sortedIps[i];
+      if (ipToLogout) {
+        sessions.forEach(s => {
+          if (s.ipAddress === ipToLogout) {
+            s.isActive = false;
+          }
+        });
         
-        // 更新sessions数组中的对应项
-        const indexToLogout = sessions.findIndex(s => s.id === sessionToLogout.id);
-        if (indexToLogout >= 0) {
-          sessions[indexToLogout] = sessionToLogout;
-        }
-        
-        console.log(`设备 ${sessionToLogout.id} 已被强制登出，因为超过最大设备数量限制`);
+        console.log(`IP ${ipToLogout} 下的所有设备已被强制登出，因为超过最大设备数量限制`);
       }
     }
     

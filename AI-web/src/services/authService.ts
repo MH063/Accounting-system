@@ -81,18 +81,34 @@ export const register = async (registerData: RegisterRequest): Promise<ApiRespon
     
     // 注册成功后保存令牌到本地存储
     if (response.success && response.data) {
-      // 正确处理双层嵌套结构: {success: true, data: {data: {user, token}, message}}
-      const actualData = response.data.data || response.data;
+      // 处理双层嵌套结构 (Rule 5)
+      const actualData = (response.data as any).data || response.data;
       
       if (actualData.token) {
         localStorage.setItem('access_token', actualData.token)
         localStorage.setItem('refresh_token', actualData.refreshToken)
-        localStorage.setItem('token_expires', (Date.now() + 24 * 60 * 60 * 1000).toString()) // 默认24小时
+        
+        // 尝试解析令牌过期时间，否则默认24小时
+        let tokenExpires = Date.now() + 24 * 60 * 60 * 1000
+        try {
+          const payload = JSON.parse(atob(actualData.token.split('.')[1]))
+          if (payload && typeof payload.exp === 'number') {
+            tokenExpires = payload.exp * 1000
+          }
+        } catch (e) {
+          console.warn('解析注册令牌过期时间失败:', e)
+        }
+        
+        localStorage.setItem('token_expires', tokenExpires.toString())
         localStorage.setItem('user_info', JSON.stringify(actualData.user))
       }
+      
+      // 返回处理后的数据以符合接口期望
+      return {
+        ...response,
+        data: actualData
+      };
     }
-    
-    return response
   } catch (error) {
     console.error('注册失败:', error)
     return {
@@ -220,8 +236,8 @@ export const login = async (loginData: LoginRequest): Promise<ApiResponse<LoginR
     
     // 登录成功后保存令牌到本地存储
     if (response.success && response.data) {
-      // 正确处理双层嵌套结构 response.data.data.xxx
-      const actualData = response.data.data || response.data;
+      // 处理双层嵌套结构 (Rule 5)
+      const actualData = (response.data as any).data || response.data;
       
       // 使用身份验证存储服务保存完整的认证信息
       authStorageService.saveAuthData({
@@ -231,9 +247,15 @@ export const login = async (loginData: LoginRequest): Promise<ApiResponse<LoginR
       })
       
       console.log('登录成功，已保存认证信息')
+      
+      // 返回处理后的数据以符合接口期望
+      return {
+        ...response,
+        data: actualData
+      };
     }
     
-    return response
+    return response;
   } catch (error) {
     console.error('登录失败:', error)
     
@@ -269,11 +291,8 @@ export const validateAccessToken = async (sessionToken: string): Promise<ApiResp
     
     // 验证成功后更新本地存储的认证信息
     if (response.success && response.data) {
-      // 正确处理双层嵌套结构 response.data.data.xxx
-      let actualData = response.data;
-      if (response.data.data) {
-        actualData = response.data.data;
-      }
+      // 处理双层嵌套结构 (Rule 5)
+      const actualData = (response.data as any).data || response.data;
       
       // 确保actualData存在并且包含必要的属性
       if (actualData && typeof actualData === 'object') {
@@ -295,15 +314,19 @@ export const validateAccessToken = async (sessionToken: string): Promise<ApiResp
         if (session) {
           authStorageService.saveSessionInfo({
             sessionId: session.sessionId,
-            sessionToken: sessionToken,
+            sessionToken: session.sessionToken || sessionToken,
             expiresAt: session.expiresAt
           })
         }
         
         console.log('令牌验证成功，已更新认证信息')
-      } else {
-        console.warn('令牌验证响应数据结构异常:', actualData);
       }
+
+      // 返回处理后的数据以符合接口期望
+      return {
+        ...response,
+        data: actualData
+      };
     }
     
     return response
@@ -386,12 +409,18 @@ export const getCurrentAuthUser = async (): Promise<ApiResponse<AuthUser>> => {
     // 调用真实API获取当前用户信息
     const response = await request<ApiResponse<AuthUser>>('/auth/me')
     
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = (response.data as any)?.data || response.data;
+    
     // 更新本地存储的用户信息
-    if (response.success && response.data) {
-      localStorage.setItem('user_info', JSON.stringify(response.data))
+    if (response.success && actualData) {
+      localStorage.setItem('user_info', JSON.stringify(actualData))
     }
     
-    return response
+    return {
+      ...response,
+      data: actualData
+    }
   } catch (error) {
     console.error('获取用户信息失败:', error)
     return {
@@ -430,15 +459,20 @@ export const refreshToken = async (refreshTokenData?: RefreshTokenRequest): Prom
       body: JSON.stringify({ refreshToken: token })
     })
     
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = (response.data as any)?.data || response.data;
+    
     // 更新本地存储的令牌信息
-    if (response.success && response.data) {
-      const responseData = response.data;
-      localStorage.setItem('access_token', responseData.accessToken)
-      localStorage.setItem('refresh_token', responseData.refreshToken)
-      localStorage.setItem('token_expires', (Date.now() + responseData.expiresIn * 1000).toString())
+    if (response.success && actualData) {
+      localStorage.setItem('access_token', actualData.accessToken)
+      localStorage.setItem('refresh_token', actualData.refreshToken)
+      localStorage.setItem('token_expires', (Date.now() + actualData.expiresIn * 1000).toString())
     }
     
-    return response
+    return {
+      ...response,
+      data: actualData
+    }
   } catch (error) {
     console.error('刷新令牌失败:', error)
     return {
@@ -465,7 +499,13 @@ export const resetPassword = async (resetData: ResetPasswordRequest): Promise<Ap
       body: JSON.stringify(resetData)
     })
     
-    return response
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = (response.data as any)?.data || response.data;
+    
+    return {
+      ...response,
+      data: actualData
+    }
   } catch (error) {
     console.error('重置密码失败:', error)
     return {
@@ -483,14 +523,30 @@ export const resetPassword = async (resetData: ResetPasswordRequest): Promise<Ap
  * @returns 修改结果的API响应
  */
 export const changePassword = async (changeData: ChangePasswordRequest): Promise<ApiResponse<null>> => {
-  console.log('修改密码')
-  
-  const response = await request<ApiResponse<null>>('/auth/change-password', {
-    method: 'POST',
-    body: JSON.stringify(changeData)
-  })
-  
-  return response
+  try {
+    console.log('修改密码')
+    
+    const response = await request<ApiResponse<null>>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(changeData)
+    })
+    
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = (response.data as any)?.data || response.data;
+    
+    return {
+      ...response,
+      data: actualData
+    }
+  } catch (error) {
+    console.error('修改密码失败:', error)
+    return {
+      success: false,
+      data: null,
+      message: '修改密码失败',
+      code: 400
+    }
+  }
 }
 
 /**
@@ -1100,7 +1156,13 @@ export const getClientIpAddress = async (): Promise<ApiResponse<{ ip: string }>>
     
     console.log('获取客户端IP地址API返回响应:', response)
     
-    return response
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = (response.data as any)?.data || response.data;
+    
+    return {
+      ...response,
+      data: actualData
+    }
   } catch (error) {
     console.error('获取客户端IP地址失败:', error)
     return {

@@ -3,7 +3,7 @@
  * 提供安全问题的存储和验证功能
  */
 
-import request from '@/utils/request'
+import { request as requestFn } from '@/utils/request'
 
 // 安全问题配置接口
 export interface SecurityQuestionConfig {
@@ -44,7 +44,7 @@ export const getDefaultSecurityQuestionConfig = (): SecurityQuestionConfig => {
 export const getSecurityQuestionConfig = async (userId: string): Promise<SecurityQuestionResponse> => {
   try {
     console.log('[SecurityQuestionService] 获取安全问题配置', { userId })
-    const response = await request<SecurityQuestionResponse>('/security-questions/config', {
+    const response = await requestFn<SecurityQuestionResponse>('/security-questions/config', {
       method: 'GET'
     })
     console.log('[SecurityQuestionService] 获取安全问题配置成功', response.data)
@@ -63,7 +63,7 @@ export const getSecurityQuestionConfig = async (userId: string): Promise<Securit
 export const getSecurityQuestionConfigForVerification = async (userId: string): Promise<SecurityQuestionConfig> => {
   try {
     console.log('[SecurityQuestionService] 获取安全问题配置用于验证', { userId })
-    const response = await request<SecurityQuestionConfig>('/security-questions/config-for-verification', {
+    const response = await requestFn<SecurityQuestionConfig>('/security-questions/config-for-verification', {
       method: 'POST'
     })
     console.log('[SecurityQuestionService] 获取安全问题配置用于验证成功', response.data)
@@ -85,7 +85,7 @@ export const saveSecurityQuestionConfig = async (
 ): Promise<{ hasSecurityQuestions: boolean }> => {
   try {
     console.log('[SecurityQuestionService] 保存安全问题配置', { userId, config })
-    const response = await request<{ hasSecurityQuestions: boolean }>('/security-questions/config', {
+    const response = await requestFn<{ hasSecurityQuestions: boolean }>('/security-questions/config', {
       method: 'POST',
       data: {
         question1: config.question1,
@@ -171,7 +171,7 @@ export const verifySecurityQuestionAnswers = async (
       return false
     }
     
-    const response = await request<{ success: boolean; message: string }>('/security-questions/verify', {
+    const response = await requestFn<{ success: boolean; message: string }>('/security-questions/verify', {
       method: 'POST',
       data: {
         answers: answers
@@ -194,7 +194,7 @@ export const verifySecurityQuestionAnswers = async (
 export const hasSecurityQuestions = async (userId: string): Promise<boolean> => {
   try {
     console.log('[SecurityQuestionService] 检查安全问题设置状态', { userId })
-    const response = await request<{ hasSecurityQuestions: boolean }>('/security-questions/check', {
+    const response = await requestFn<{ hasSecurityQuestions: boolean }>('/security-questions/check', {
       method: 'GET'
     })
     console.log('[SecurityQuestionService] 检查安全问题设置状态成功', response.data)
@@ -212,7 +212,7 @@ export const hasSecurityQuestions = async (userId: string): Promise<boolean> => 
 export const deleteSecurityQuestionConfig = async (userId: string): Promise<{ deleted: boolean }> => {
   try {
     console.log('[SecurityQuestionService] 删除安全问题配置', { userId })
-    const response = await request<{ deleted: boolean }>('/security-questions/config', {
+    const response = await requestFn<{ deleted: boolean }>('/security-questions/config', {
       method: 'DELETE'
     })
     console.log('[SecurityQuestionService] 删除安全问题配置成功', response.data)

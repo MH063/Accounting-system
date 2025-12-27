@@ -108,7 +108,10 @@ class AuthStorageService {
       // 设置认证状态
       localStorage.setItem(STORAGE_KEYS.IS_AUTHENTICATED, 'true')
       
-      console.log('身份验证信息已保存到本地存储')
+      // 仅在开发环境下打印日志
+      if (process.env.NODE_ENV === 'development') {
+        console.log('身份验证信息已保存到本地存储')
+      }
     } catch (error) {
       console.error('保存身份验证信息失败:', error)
       throw new Error('保存身份验证信息失败')
@@ -159,7 +162,10 @@ class AuthStorageService {
         localStorage.setItem(STORAGE_KEYS.USER_PERMISSIONS, JSON.stringify(userInfo.permissions))
       }
       
-      console.log('用户信息已保存:', userInfo)
+      // 仅在开发环境下打印日志
+      if (process.env.NODE_ENV === 'development') {
+        console.log('用户信息已保存')
+      }
     } catch (error) {
       console.error('保存用户信息失败:', error)
       throw new Error('保存用户信息失败')
@@ -172,25 +178,62 @@ class AuthStorageService {
    */
   saveTokenInfo(tokens: any): void {
     try {
-      const tokenInfo: StoredTokenInfo = {
-        accessToken: tokens.accessToken || '',
-        refreshToken: tokens.refreshToken || '',
-        expiresIn: tokens.expiresIn || 3600,
-        refreshExpiresIn: tokens.refreshExpiresIn || 86400
+      if (!tokens) {
+        console.warn('没有可用的令牌信息，跳过保存')
+        return
       }
+
+      // 获取访问令牌过期时间（秒）
+      let expiresIn = 3600 // 默认1小时
+      if (typeof tokens.expiresIn === 'number') {
+        expiresIn = tokens.expiresIn
+      } else if (tokens.expiresIn && typeof tokens.expiresIn === 'object') {
+        // 处理对象格式 { access: number, refresh: number }
+        expiresIn = typeof tokens.expiresIn.access === 'number' ? tokens.expiresIn.access : 3600
+      }
+
+      // 获取刷新令牌过期时间（秒）
+      let refreshExpiresIn = 86400 // 默认24小时
+      if (typeof tokens.refreshExpiresIn === 'number') {
+        refreshExpiresIn = tokens.refreshExpiresIn
+      } else if (tokens.expiresIn && typeof tokens.expiresIn === 'object') {
+        refreshExpiresIn = typeof tokens.expiresIn.refresh === 'number' ? tokens.expiresIn.refresh : 86400
+      }
+
+      const accessToken = tokens.accessToken || ''
+      const refreshToken = tokens.refreshToken || ''
       
       const now = Date.now()
+      let tokenExpires = now + expiresIn * 1000
+
+      // 尝试从 JWT 负载中解析更准确的过期时间
+      try {
+        if (accessToken) {
+          const payload = JSON.parse(atob(accessToken.split('.')[1]))
+          if (payload && typeof payload.exp === 'number') {
+            tokenExpires = payload.exp * 1000
+          }
+        }
+      } catch (e) {
+        console.warn('解析访问令牌过期时间失败，使用 expiresIn:', e)
+      }
       
       // 保存令牌信息到本地存储
-      localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, tokenInfo.accessToken)
-      localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, tokenInfo.refreshToken)
-      localStorage.setItem(STORAGE_KEYS.TOKEN_EXPIRES, (now + tokenInfo.expiresIn * 1000).toString())
-      localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN_EXPIRES, (now + tokenInfo.refreshExpiresIn * 1000).toString())
+      localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken)
+      localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken)
+      localStorage.setItem(STORAGE_KEYS.TOKEN_EXPIRES, tokenExpires.toString())
+      localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN_EXPIRES, (now + refreshExpiresIn * 1000).toString())
       
-      console.log('令牌信息已保存')
+      // 仅在开发环境下打印日志
+      if (process.env.NODE_ENV === 'development') {
+        console.log('令牌信息已保存', {
+          expiresIn,
+          tokenExpires: new Date(tokenExpires).toLocaleString()
+        })
+      }
     } catch (error) {
       console.error('保存令牌信息失败:', error)
-      throw new Error('保存令牌信息失败')
+      // 不抛出错误
     }
   }
 
@@ -200,6 +243,12 @@ class AuthStorageService {
    */
   saveSessionInfo(session: any): void {
     try {
+      // 如果没有会话信息，则不保存或清除旧会话
+      if (!session) {
+        console.warn('没有可用的会话信息，跳过保存')
+        return
+      }
+
       const sessionInfo: StoredSessionInfo = {
         sessionId: session.sessionId?.toString() || '',
         sessionToken: session.sessionToken || '',
@@ -211,10 +260,13 @@ class AuthStorageService {
       localStorage.setItem(STORAGE_KEYS.SESSION_TOKEN, sessionInfo.sessionToken)
       localStorage.setItem(STORAGE_KEYS.SESSION_EXPIRES, sessionInfo.expiresAt)
       
-      console.log('会话信息已保存')
+      // 仅在开发环境下打印日志
+      if (process.env.NODE_ENV === 'development') {
+        console.log('会话信息已保存')
+      }
     } catch (error) {
       console.error('保存会话信息失败:', error)
-      throw new Error('保存会话信息失败')
+      // 不抛出错误，以免阻塞整个登录流程
     }
   }
 
@@ -287,11 +339,17 @@ class AuthStorageService {
       
       if (!accessToken || !refreshToken) return null
       
+      const parseExpiry = (val: string | null) => {
+        if (!val || val === 'NaN') return 0
+        const parsed = parseInt(val)
+        return isNaN(parsed) ? 0 : Math.max(0, parsed - Date.now())
+      }
+      
       return {
         accessToken,
         refreshToken,
-        expiresIn: tokenExpires ? parseInt(tokenExpires) - Date.now() : 0,
-        refreshExpiresIn: refreshTokenExpires ? parseInt(refreshTokenExpires) - Date.now() : 0
+        expiresIn: parseExpiry(tokenExpires),
+        refreshExpiresIn: parseExpiry(refreshTokenExpires)
       }
     } catch (error) {
       console.error('获取令牌信息失败:', error)
@@ -362,9 +420,11 @@ class AuthStorageService {
   isTokenExpired(): boolean {
     try {
       const tokenExpires = localStorage.getItem(STORAGE_KEYS.TOKEN_EXPIRES)
-      if (!tokenExpires) return true
+      if (!tokenExpires || tokenExpires === 'NaN') return true
       
       const expiresTime = parseInt(tokenExpires)
+      if (isNaN(expiresTime)) return true
+      
       const currentTime = Date.now()
       
       // 提前5分钟过期，避免令牌在请求过程中失效
@@ -403,15 +463,12 @@ class AuthStorageService {
       // 检查本地存储中是否有用户信息
       const userInfo = this.getUserInfo()
       if (!userInfo || !userInfo.id) {
-        console.log('认证检查: 用户信息缺失')
         return false
       }
       
       const isAuthenticated = localStorage.getItem(STORAGE_KEYS.IS_AUTHENTICATED) === 'true'
       const hasAccessToken = !!this.getAccessToken()
       const tokenNotExpired = !this.isTokenExpired()
-      
-      console.log('认证检查结果:', { isAuthenticated, hasAccessToken, tokenNotExpired })
       
       return isAuthenticated && hasAccessToken && tokenNotExpired
     } catch (error) {
@@ -465,7 +522,10 @@ class AuthStorageService {
         localStorage.removeItem(key)
       })
       
-      console.log('身份验证信息已清除')
+      // 仅在开发环境下打印日志
+      if (process.env.NODE_ENV === 'development') {
+        console.log('身份验证信息已清除')
+      }
     } catch (error) {
       console.error('清除身份验证信息失败:', error)
     }
@@ -477,6 +537,11 @@ class AuthStorageService {
    */
   updateUserInfo(updates: Partial<StoredUserInfo>): void {
     try {
+      // 如果未登录，不执行更新
+      if (!this.isAuthenticated()) {
+        return
+      }
+
       const currentInfo = this.getUserInfo()
       if (!currentInfo) return
       
@@ -489,7 +554,10 @@ class AuthStorageService {
       const updatedInfo = { ...currentInfo, ...updates }
       this.saveUserInfo(updatedInfo)
       
-      console.log('用户信息已更新:', updatedInfo)
+      // 仅在开发环境下打印详细日志，或者在生产环境下移除日志
+      if (process.env.NODE_ENV === 'development') {
+        console.log('用户信息已更新')
+      }
     } catch (error) {
       console.error('更新用户信息失败:', error)
       throw new Error('更新用户信息失败')

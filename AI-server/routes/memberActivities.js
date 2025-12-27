@@ -268,7 +268,16 @@ router.get('/', authenticateToken, responseWrapper(async (req, res) => {
     const total = parseInt(countResult.rows[0].total);
     
     logger.info('[MemberActivities] 成员活动信息获取成功');
-    
+
+    // 处理时间字段，确保序列化正确
+    const processTimestamp = (timestamp) => {
+      if (!timestamp) return new Date().toISOString()
+      if (typeof timestamp === 'object' && timestamp.toISOString) {
+        return timestamp.toISOString()
+      }
+      return timestamp.toString()
+    }
+
     return res.json({
       success: true,
       message: '成员活动信息获取成功',
@@ -276,7 +285,7 @@ router.get('/', authenticateToken, responseWrapper(async (req, res) => {
         activities: activities.map(activity => ({
           activityType: activity.activity_type,          // 活动类型：expense/payment/maintenance/member_change
           activityId: parseInt(activity.activity_id),   // 活动ID
-          activityTime: activity.activity_time,         // 活动时间
+          activityTime: processTimestamp(activity.activity_time),  // 活动时间
           activityTitle: activity.activity_title,       // 活动标题
           detail: activity.detail,                      // 活动详情
           amount: activity.amount ? parseFloat(activity.amount) : null,  // 涉及金额

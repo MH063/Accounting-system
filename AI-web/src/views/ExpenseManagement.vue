@@ -1006,8 +1006,15 @@ const handleExportCommand = (command: 'csv' | 'xlsx') => {
   exportExpenses(command)
 }
 
-const formatDate = (dateString: string): string => {
-  return new Date(dateString).toLocaleDateString('zh-CN')
+const formatDate = (dateString: string | number | undefined | null): string => {
+  if (!dateString) return '-'
+  const date = new Date(dateString)
+  if (isNaN(date.getTime())) return '-'
+  return date.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  })
 }
 
 const getStatusType = (status: 'pending' | 'approved' | 'rejected' | string) => {

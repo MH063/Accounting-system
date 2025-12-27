@@ -20,8 +20,8 @@ const JWT_CONFIG = {
   rotationInterval: parseInt(getSecureEnv('JWT_ROTATION_INTERVAL')) || 30 * 24 * 60 * 60 * 1000,
   
   // 令牌过期时间配置
-  accessTokenExpiresIn: getSecureEnv('JWT_ACCESS_EXPIRES_IN') || '15m', // Access token: 15分钟
-  refreshTokenExpiresIn: getSecureEnv('JWT_REFRESH_EXPIRES_IN') || '7d', // Refresh token: 7天
+  accessTokenExpiresIn: getSecureEnv('JWT_ACCESS_EXPIRES_IN') || '60m', // Access token: 60分钟
+  refreshTokenExpiresIn: getSecureEnv('JWT_REFRESH_EXPIRES_IN') || '7d', // Refresh token: 7天 (从30天缩短)
   
   // 密钥文件存储路径
   keyFilePath: getSecureEnv('JWT_KEY_FILE') || path.join(__dirname, '../data/jwt-keys.json'),
@@ -303,6 +303,27 @@ function generateToken(payload, options = {}) {
 }
 
 /**
+ * 将时间字符串转换为秒数
+ * @param {string|number} timeStr - 时间字符串 (如 '30m', '24h', '7d') 或秒数
+ * @returns {number} 秒数
+ */
+function parseTimeToSeconds(timeStr) {
+  if (typeof timeStr === 'number') return timeStr;
+  if (!timeStr || typeof timeStr !== 'string') return 3600; // 默认1小时
+
+  const unit = timeStr.slice(-1).toLowerCase();
+  const value = parseInt(timeStr.slice(0, -1));
+
+  switch (unit) {
+    case 's': return value;
+    case 'm': return value * 60;
+    case 'h': return value * 3600;
+    case 'd': return value * 86400;
+    default: return parseInt(timeStr) || 3600;
+  }
+}
+
+/**
  * 生成双令牌对（Access Token + Refresh Token）
  */
 function generateTokenPair(userId, userInfo = {}) {
@@ -358,18 +379,23 @@ function generateTokenPair(userId, userInfo = {}) {
     refreshTokenOptions
   );
 
+  const accessSeconds = parseTimeToSeconds(JWT_CONFIG.accessTokenExpiresIn);
+  const refreshSeconds = parseTimeToSeconds(JWT_CONFIG.refreshTokenExpiresIn);
+
   logger.info('[JWT] 双令牌生成成功', { 
     userId, 
-    accessExpiry: accessTokenOptions.expiresIn,
-    refreshExpiry: refreshTokenOptions.expiresIn 
+    accessExpiry: JWT_CONFIG.accessTokenExpiresIn,
+    refreshExpiry: JWT_CONFIG.refreshTokenExpiresIn,
+    accessSeconds,
+    refreshSeconds
   });
 
   return {
     accessToken,
     refreshToken,
     expiresIn: {
-      access: JWT_CONFIG.accessTokenExpiresIn,
-      refresh: JWT_CONFIG.refreshTokenExpiresIn
+      access: accessSeconds,
+      refresh: refreshSeconds
     },
     tokenPairId: refreshPayload.tokenPairId
   };
@@ -378,7 +404,7 @@ function generateTokenPair(userId, userInfo = {}) {
 /**
  * 刷新访问令牌
  */
-function refreshAccessToken(refreshToken, userInfo = {}) {
+async function refreshAccessToken(refreshToken, userInfo = {}) {
   try {
     // 验证刷新令牌
     const decoded = verifyToken(refreshToken);
@@ -387,32 +413,41 @@ function refreshAccessToken(refreshToken, userInfo = {}) {
       throw new Error('无效的刷新令牌类型');
     }
 
+    const userId = decoded.userId;
+
     // 检查令牌是否在黑名单中
     if (JWT_CONFIG.blacklistEnabled && JWT_CONFIG.blacklistCheck) {
-      if (tokenBlacklist.isTokenRevoked(refreshToken)) {
+      const isRevoked = await tokenBlacklist.isTokenRevoked(refreshToken);
+      if (isRevoked) {
+        logger.warn('[JWT] 检测到尝试使用已撤销的刷新令牌', { userId });
         throw new Error('刷新令牌已被撤销');
       }
     }
-
-    // 生成新的访问令牌
-    const newAccessToken = generateToken({
-      userId: decoded.userId,
-      type: 'access',
-      role: userInfo.role || decoded.role,
-      permissions: userInfo.permissions || decoded.permissions,
-      ...userInfo
-    }, {
-      expiresIn: JWT_CONFIG.accessTokenExpiresIn
-    });
-
-    logger.info('[JWT] 访问令牌刷新成功', { 
-      userId: decoded.userId,
+    
+    // 记录安全审计：令牌刷新
+    logger.info('[JWT] 执行令牌刷新', { 
+      userId,
       oldTokenPairId: decoded.tokenPairId 
     });
 
+    // 撤销旧的刷新令牌（实现令牌轮换）
+    if (JWT_CONFIG.blacklistEnabled) {
+      const expiry = getTokenExpiry(refreshToken);
+      const expiresIn = Math.max(1, Math.floor(expiry - Date.now() / 1000));
+      tokenBlacklist.revokeToken(refreshToken, 'token_rotated', expiresIn);
+    }
+
+    // 生成新的令牌对
+    const tokenPair = generateTokenPair(userId, {
+      ...userInfo,
+      role: userInfo.role || decoded.role,
+      permissions: userInfo.permissions || decoded.permissions
+    });
+
     return {
-      accessToken: newAccessToken,
-      expiresIn: JWT_CONFIG.accessTokenExpiresIn
+      accessToken: tokenPair.accessToken,
+      refreshToken: tokenPair.refreshToken,
+      expiresIn: tokenPair.expiresIn
     };
   } catch (error) {
     logger.error('[JWT] 刷新访问令牌失败', { error: error.message });
@@ -423,7 +458,7 @@ function refreshAccessToken(refreshToken, userInfo = {}) {
 /**
  * 撤销令牌对
  */
-function revokeTokenPair(accessToken, refreshToken, reason = 'logout') {
+async function revokeTokenPair(accessToken, refreshToken, reason = 'logout') {
   const results = {
     accessToken: false,
     refreshToken: false
@@ -434,7 +469,7 @@ function revokeTokenPair(accessToken, refreshToken, reason = 'logout') {
     if (accessToken) {
       const accessExpiry = getTokenExpiry(accessToken);
       const expiresIn = Math.max(1, Math.floor(accessExpiry - Date.now() / 1000));
-      results.accessToken = tokenBlacklist.revokeToken(
+      results.accessToken = await tokenBlacklist.revokeToken(
         accessToken, 
         reason, 
         expiresIn
@@ -449,7 +484,7 @@ function revokeTokenPair(accessToken, refreshToken, reason = 'logout') {
     if (refreshToken) {
       const refreshExpiry = getTokenExpiry(refreshToken);
       const expiresIn = Math.max(1, Math.floor(refreshExpiry - Date.now() / 1000));
-      results.refreshToken = tokenBlacklist.revokeToken(
+      results.refreshToken = await tokenBlacklist.revokeToken(
         refreshToken, 
         reason, 
         expiresIn

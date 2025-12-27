@@ -259,7 +259,7 @@
         <el-form-item label="支付人" prop="payer">
           <el-select v-model="expenseForm.payer" placeholder="选择支付人">
             <el-option 
-              v-for="member in members" 
+              v-for="member in members.filter(m => m.name)" 
               :key="member.name"
               :label="member.name"
               :value="member.name"
@@ -404,17 +404,17 @@ const members = ref<Member[]>([])
  */
 const fetchMembers = async () => {
   try {
-    const response = await getMembers({ limit: 100 }) // 获取足够多的成员
+    const response = await getMembers({ limit: 100 })
     
     if (response.success && response.data && response.data.members) {
-      // 将后端返回的数据转换为前端需要的格式
-      members.value = response.data.members.map(member => ({
-        name: member.name || member.nickname,
-        phone: member.phone || '未提供',
-        email: member.email || '未提供'
-      }))
+      members.value = response.data.members
+        .map(member => ({
+          name: member.name || member.nickname || '',
+          phone: member.phone || '未提供',
+          email: member.email || '未提供'
+        }))
+        .filter(member => member.name)
       
-      // 获取成员数据后重新计算分摊结果
       await calculateSharing()
     } else {
       ElMessage.error(response.message || '获取成员列表失败')
@@ -455,8 +455,11 @@ const fetchExpenses = async () => {
         amount: typeof item.amount === 'string' ? parseFloat(item.amount) : item.amount,
         category: item.category,
         payer: item.payer || item.applicant // 如果没有payer字段，使用applicant
-      }))
-    } else {
+    }))
+    
+    // 获取费用数据后重新计算分摊结果
+    await calculateSharing()
+  } else {
       ElMessage.error(response.message || '获取费用列表失败')
     }
   } catch (error) {
@@ -506,7 +509,7 @@ const expenseRules = {
   payer: [{ required: true, message: '请选择支付人', trigger: 'change' }]
 }
 
-// 计算属性
+// 状态变量 - 改为 ref 以支持 API 更新
 interface SharingResult {
   name: string
   shouldPay: number
@@ -515,43 +518,11 @@ interface SharingResult {
   status: 'pending' | 'completed'
 }
 
-const sharingResults = computed(() => {
-  const results: SharingResult[] = []
-  const perPerson = totalExpense.value / members.value.length
-  
-  for (const member of members.value) {
-    const memberExpenses = expenses.value.filter(expense => expense.payer === member.name)
-    const shouldPay = perPerson
-    const paid = memberExpenses.reduce((sum, exp) => sum + exp.amount, 0)
-    const pending = shouldPay - paid
-    
-    results.push({
-      name: member.name,
-      shouldPay,
-      paid,
-      pending: pending > 0 ? pending : 0,
-      status: pending > 0 ? 'pending' : 'completed'
-    })
-  }
-  
-  return results
-})
-
-const totalExpense = computed(() => {
-  return expenses.value.reduce((sum, expense) => sum + expense.amount, 0)
-})
-
-const perPersonShare = computed(() => {
-  return totalExpense.value / members.value.length
-})
-
-const totalPaid = computed(() => {
-  return sharingResults.value.reduce((sum, result) => sum + result.paid, 0)
-})
-
-const totalPending = computed(() => {
-  return sharingResults.value.reduce((sum, result) => sum + result.pending, 0)
-})
+const sharingResults = ref<SharingResult[]>([])
+const totalExpense = ref(0)
+const perPersonShare = ref(0)
+const totalPaid = ref(0)
+const totalPending = ref(0)
 
 // 方法
 const selectPaymentMethod = (method: PaymentMethod & { fee: string; description: string }) => {

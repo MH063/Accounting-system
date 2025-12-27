@@ -1,17 +1,77 @@
 <template>
   <div id="app">
     <MaintenanceNotice />
-    <router-view />
+    <LoadingOverlay v-if="isInitializing" message="正在验证身份..." />
+    <router-view v-else />
+    <AutoLogoutWarning 
+      :show="showWarning.value"
+      :remaining-seconds="computedRemainingSeconds"
+      @keep-alive="keepSessionAlive"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-// 应用主组件
+import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import MaintenanceNotice from './components/MaintenanceNotice.vue'
+import LoadingOverlay from './components/LoadingOverlay.vue'
+import AutoLogoutWarning from './components/AutoLogoutWarning.vue'
+import authStorageService from '@/services/authStorageService'
+import { useAutoLogout } from '@/composables/useAutoLogout'
+
+const router = useRouter()
+const isInitializing = ref(true)
+
+const {
+  showWarning,
+  remainingSeconds,
+  initialize: initAutoLogout,
+  keepSessionAlive
+} = useAutoLogout()
+
+const computedRemainingSeconds = computed(() => {
+  const seconds = remainingSeconds.value
+  return typeof seconds === 'number' && !isNaN(seconds) ? seconds : 120
+})
+
+onMounted(async () => {
+  try {
+    const authState = authStorageService.getAuthState()
+    
+    const currentPath = window.location.pathname
+    const requiresAuth = currentPath.startsWith('/dashboard') || 
+                        currentPath.startsWith('/admin') ||
+                        !currentPath.startsWith('/login') &&
+                        !currentPath.startsWith('/register') &&
+                        !currentPath.startsWith('/reset-password') &&
+                        currentPath !== '/'
+
+    if (requiresAuth && !authState.isAuthenticated) {
+      const redirectUrl = encodeURIComponent(currentPath)
+      window.location.href = `/login?redirect=${redirectUrl}&reason=not_authenticated`
+      return
+    }
+
+    if (authState.isAuthenticated) {
+      if (authStorageService.isTokenExpired() || authStorageService.isSessionExpired()) {
+        authStorageService.clearAuthData()
+        window.location.href = '/login?reason=session_expired'
+        return
+      }
+      
+      initAutoLogout(router)
+      console.log('[App] 自动登出已初始化，showWarning:', showWarning.value)
+    }
+  } catch (error) {
+    console.error('[App] 初始化验证失败:', error)
+  } finally {
+    isInitializing.value = false
+  }
+})
 </script>
 
 <style>
-/* 全局样式重置 */
 * {
   margin: 0;
   padding: 0;
@@ -33,7 +93,6 @@ html, body {
   width: 100%;
 }
 
-/* Element Plus 样式覆盖 */
 .el-button {
   font-weight: normal;
 }

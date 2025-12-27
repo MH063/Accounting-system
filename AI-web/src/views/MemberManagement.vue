@@ -773,12 +773,16 @@ const refreshActivities = () => {
  */
 const loadDormOptions = async () => {
   try {
-    const response = await dormService.getDormitories()
+    // 使用 getDormitoryList 替代 getDormitories，并设置一个较大的 limit 以获取所有宿舍
+    const response = await dormService.getDormitoryList({ limit: 100 })
     if (response.success && response.data) {
-      dormOptions.value = response.data.map(dorm => ({
+      // 处理后端返回的分页结构：records
+      const records = response.data.records || []
+      dormOptions.value = records.map((dorm: any) => ({
         id: dorm.id,
-        name: `${dorm.building}${dorm.roomNumber}`
+        name: `${dorm.building || ''}${dorm.roomNumber || ''}`
       }))
+      console.log('加载宿舍选项成功:', dormOptions.value.length, '个')
     }
   } catch (error) {
     console.error('加载宿舍选项失败:', error)
@@ -787,17 +791,80 @@ const loadDormOptions = async () => {
 }
 
 /**
- * 格式化日期
+ * 格式化日期 - 增强版
  */
-const formatDate = (dateString: string) => {
-  const date = new Date(dateString)
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+const formatDate = (timestamp: string | number | undefined | null | object) => {
+  try {
+    // 处理 null、undefined 和空字符串
+    if (timestamp === undefined || timestamp === null || timestamp === '') {
+      return '-'
+    }
+
+    // 处理数字时间戳
+    if (typeof timestamp === 'number') {
+      const date = new Date(timestamp)
+      if (isNaN(date.getTime())) {
+        return '-'
+      }
+      return date.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    }
+
+    // 处理字符串时间（ISO格式、时间戳字符串等）
+    if (typeof timestamp === 'string') {
+      const date = new Date(timestamp)
+      if (isNaN(date.getTime())) {
+        console.warn('[formatDate] 无法解析时间字符串:', timestamp)
+        return '-'
+      }
+      return date.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    }
+
+    // 处理 Date 对象
+    if (timestamp instanceof Date) {
+      return timestamp.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    }
+
+    // 处理有 toISOString 方法的对象（如 PostgreSQL 时间戳对象）
+    if (typeof timestamp === 'object' && timestamp.toISOString) {
+      const date = new Date(timestamp.toISOString())
+      if (isNaN(date.getTime())) {
+        return '-'
+      }
+      return date.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    }
+
+    // 其他情况
+    console.warn('[formatDate] 未知时间格式:', typeof timestamp, timestamp)
+    return '-'
+
+  } catch (error) {
+    console.error('[formatDate] 格式化时间时发生错误:', error, timestamp)
+    return '-'
+  }
 }
 
 /**

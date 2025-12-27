@@ -545,6 +545,7 @@ const initMainChart = async () => {
       axisLabel: {
         formatter: (value: string) => {
           const date = new Date(value)
+          if (isNaN(date.getTime())) return value
           return `${date.getMonth() + 1}/${date.getDate()}`
         }
       }
@@ -698,6 +699,7 @@ const initComparisonChart = async () => {
       axisLabel: {
         formatter: (value: string) => {
           const date = new Date(value)
+          if (isNaN(date.getTime())) return value
           return `${date.getMonth() + 1}/${date.getDate()}`
         }
       }
@@ -817,6 +819,7 @@ const initPredictionChart = async () => {
         axisLabel: {
           formatter: (value: string) => {
             const date = new Date(value);
+            if (isNaN(date.getTime())) return value;
             return `${date.getMonth() + 1}/${date.getDate()}`;
           }
         }

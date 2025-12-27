@@ -6,6 +6,7 @@
 const crypto = require('crypto');
 const { logger } = require('../config/logger');
 const { LogMasking, DataMasking } = require('../utils/encryption');
+const { pool } = require('../config/database');
 
 // 审计日志存储
 const auditLogs = [];
@@ -82,7 +83,7 @@ function initializeComplianceRules() {
     description: '审计跟踪完整性检查',
     check: (event) => {
       // 检查审计日志的完整性
-      const hasRequiredFields = event.timestamp && event.type && event.userId && event.sourceIp;
+      const hasRequiredFields = !!(event.timestamp && event.type && event.userId && event.sourceIp);
       return {
         compliant: hasRequiredFields,
         message: hasRequiredFields ? '审计日志字段完整' : '审计日志字段缺失'
@@ -92,14 +93,24 @@ function initializeComplianceRules() {
 }
 
 /**
+ * 严重程度级别映射
+ */
+const SEVERITY_LEVELS = {
+  'low': 0,
+  'medium': 1,
+  'high': 2,
+  'critical': 3
+};
+
+/**
  * 默认威胁检测模式
  */
 function initializeThreatDetectionPatterns() {
   THREAT_DETECTION_PATTERNS.set('brute_force', {
     name: '暴力破解攻击',
     patterns: [
-      /failed_login_\d+/i,
-      /authentication_failure/i
+      /\bfailed_login_\d+\b/i,
+      /\bauthentication_failure\b/i
     ],
     threshold: 5, // 5次失败尝试
     timeWindow: 300000, // 5分钟
@@ -110,9 +121,9 @@ function initializeThreatDetectionPatterns() {
   THREAT_DETECTION_PATTERNS.set('sql_injection', {
     name: 'SQL注入攻击',
     patterns: [
-      /(union|select|insert|update|delete|drop|create|alter|exec|execute)/i,
-      /('|(\\x27)|;|(\\x3B)|\\x00|0x00|%00|\\'|'|(\\x22))/,
-      /(\\b(or|and)\\b.*=\\b)|(\\b(or|and)\\b.*\\b)\\b/i
+      /\b(union|select|insert|update|delete|drop|create|alter|exec|execute)\b/i,
+      /('|\b0x[0-9a-fA-F]+\b|--|\/\*|\*\/)/i,
+      /(\bOR\b\s+.+=\s*.+|\bAND\b\s+.+=\s*.+)/i
     ],
     severity: 'critical',
     action: 'immediate_alert'
@@ -180,7 +191,8 @@ function logSecurityEvent(event) {
       type: event.type,
       userId: event.userId || null,
       sessionId: event.sessionId || null,
-      sourceIp: DataMasking.maskIPAddress(event.sourceIp || 'unknown'),
+      sourceIp: event.sourceIp || 'unknown', // 内部使用原始 IP
+      maskedIp: DataMasking.maskIPAddress(event.sourceIp || 'unknown'), // 增加一个脱敏后的 IP 用于日志显示
       userAgent: event.userAgent || '',
       resource: event.resource || '',
       action: event.action || '',
@@ -204,7 +216,20 @@ function logSecurityEvent(event) {
     const threats = detectThreats(auditEvent);
     if (threats.length > 0) {
       auditEvent.threats = threats;
-      auditEvent.severity = Math.max(...threats.map(t => t.severity));
+      
+      // 找到最高严重级别
+      let maxLevel = SEVERITY_LEVELS[auditEvent.severity] || 0;
+      let maxSeverity = auditEvent.severity;
+      
+      threats.forEach(t => {
+        const level = SEVERITY_LEVELS[t.severity] || 0;
+        if (level > maxLevel) {
+          maxLevel = level;
+          maxSeverity = t.severity;
+        }
+      });
+      
+      auditEvent.severity = maxSeverity;
     }
 
     // 存储审计日志（限制存储数量）
@@ -213,13 +238,69 @@ function logSecurityEvent(event) {
       auditLogs.shift(); // 移除最旧的记录
     }
 
+    // 异步持久化到数据库
+    const persistToDb = async (event) => {
+      try {
+        // 如果没有 userId，由于数据库约束，我们尝试寻找一个默认值或记录为系统操作(0)
+        // 注意：数据库 user_id 是 bigint NOT NULL
+        const userId = event.userId || 0;
+        
+        // 确保 operation 字段有值
+        const operation = event.type || event.operation || event.action || 'unknown';
+
+        const query = `
+          INSERT INTO security_verification_logs 
+          (user_id, operation, verification_type, success, reason, ip_address, user_agent, device_info, created_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        `;
+        
+        // 确保 ip_address 是有效的。如果 'unknown' 则传 null
+        const validIp = (event.sourceIp && event.sourceIp !== 'unknown' && !event.sourceIp.includes('*')) 
+          ? event.sourceIp 
+          : null;
+
+        const params = [
+          userId,
+          operation,
+          'security_event_log',
+          event.outcome === 'success',
+          event.action || null,
+          validIp,
+          event.userAgent,
+          JSON.stringify({
+            id: event.id,
+            resource: event.resource,
+            severity: event.severity,
+            data: event.data,
+            threats: event.threats,
+            complianceResults: event.complianceResults,
+            hash: event.hash
+          }),
+          event.timestamp
+        ];
+        await pool.query(query, params);
+        console.log(`[SECURITY_AUDIT] 成功持久化安全事件: ${operation}, userId: ${userId}`);
+      } catch (dbError) {
+        logger.error('[SECURITY_AUDIT] 持久化安全事件到数据库失败:', dbError.message);
+        console.error('[SECURITY_AUDIT] 持久化失败详情:', {
+          userId: event.userId,
+          type: event.type,
+          ip: event.sourceIp,
+          error: dbError.message
+        });
+      }
+    };
+
+    persistToDb(auditEvent);
+
     // 根据严重级别记录日志
+    const displayIp = auditEvent.maskedIp;
     if (auditEvent.severity === 'critical' || auditEvent.severity === 'high') {
-      logger.error(`[SECURITY_AUDIT] 严重安全事件: ${auditEvent.type}`, auditEvent);
+      logger.error(`[SECURITY_AUDIT] 严重安全事件: ${auditEvent.type} from ${displayIp}`, auditEvent);
     } else if (auditEvent.severity === 'medium') {
-      logger.warn(`[SECURITY_AUDIT] 安全警告: ${auditEvent.type}`, auditEvent);
+      logger.warn(`[SECURITY_AUDIT] 安全警告: ${auditEvent.type} from ${displayIp}`, auditEvent);
     } else {
-      logger.info(`[SECURITY_AUDIT] 安全事件: ${auditEvent.type}`, auditEvent);
+      logger.info(`[SECURITY_AUDIT] 安全事件: ${auditEvent.type} from ${displayIp}`, auditEvent);
     }
 
     // 触发安全响应

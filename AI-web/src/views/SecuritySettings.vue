@@ -296,12 +296,83 @@
               </div>
             </div>
             
+            <!-- 会话令牌状态 -->
+            <div class="setting-item">
+              <span class="setting-label">当前会话状态</span>
+              <div class="setting-control">
+                <div class="token-status-info">
+                  <span class="setting-desc">会话剩余有效期：</span>
+                  <el-tag :type="tokenStatusType" size="small" effect="plain" class="remaining-time-tag">
+                    {{ formattedRemainingTime }}
+                  </el-tag>
+                  <span v-if="tokenReminderMessage" :class="['token-reminder', tokenStatusType]">
+                    {{ tokenReminderMessage }}
+                  </span>
+                </div>
+                <el-button 
+                  type="primary" 
+                  size="default" 
+                  link 
+                  @click="manualRefreshToken" 
+                  :loading="refreshingToken"
+                >
+                  手动刷新
+                </el-button>
+              </div>
+            </div>
+            
+            <!-- 客户端安全检测 -->
+            <div class="setting-item">
+              <span class="setting-label">客户端检测</span>
+              <div class="setting-control">
+                <div class="client-security-info">
+                  <div class="client-info-grid">
+                    <div class="info-cell">
+                      <span class="info-label">浏览器:</span>
+                      <span class="info-value">{{ clientInfo.browser }}</span>
+                    </div>
+                    <div class="info-cell">
+                      <span class="info-label">操作系统:</span>
+                      <span class="info-value">{{ clientInfo.os }}</span>
+                    </div>
+                    <div class="info-cell">
+                      <span class="info-label">IP 地址:</span>
+                      <span class="info-value">{{ clientInfo.ip }}</span>
+                    </div>
+                    <div class="info-cell">
+                      <span class="info-label">语言/时区:</span>
+                      <span class="info-value">{{ clientInfo.language }} / {{ clientInfo.timezone }}</span>
+                    </div>
+                    <div class="info-cell">
+                      <span class="info-label">安全环境:</span>
+                      <el-tag :type="clientInfo.isSecure ? 'success' : 'danger'" size="small">
+                        {{ clientInfo.isSecure ? '加密连接 (HTTPS)' : '非加密连接' }}
+                      </el-tag>
+                    </div>
+                  </div>
+                  
+                  <!-- 安全提醒列表 -->
+                  <div class="security-reminders-list" v-if="securityReminders.length > 0">
+                    <div 
+                      v-for="(reminder, index) in securityReminders" 
+                      :key="index" 
+                      :class="['security-reminder-item', reminder.type]"
+                    >
+                      <el-icon><component :is="reminder.icon" /></el-icon>
+                      <span class="reminder-text">{{ reminder.message }}</span>
+                    </div>
+                  </div>
+                </div>
+                <el-button size="default" @click="initializeClientInfo">重新检测</el-button>
+              </div>
+            </div>
+
             <!-- 会话管理 -->
             <div class="setting-item">
               <span class="setting-label">自动登出</span>
               <div class="setting-control">
                 <span class="setting-desc">无操作{{ sessionTimeout }}分钟后自动登出</span>
-                <el-button @click="showSessionTimeoutDialog = true" size="default">设置</el-button>
+                <el-button @click="openSessionTimeoutDialog" size="default">设置</el-button>
               </div>
             </div>
           </div>
@@ -435,7 +506,7 @@
             </div>
             <div class="requirement-item" :class="{ 'met': calculatedStrength.requirements.special }">
               <span class="requirement-icon">{{ calculatedStrength.requirements.special ? '✓' : '○' }}</span>
-              <span class="requirement-text">特殊字符（: 、 \ . ， ？ 《 》 < > / = + - * ~ @ # $ % ^ & ( ) ——）</span>
+              <span class="requirement-text">特殊字符（中文：，。！？、；：「」『』（）【】《》〈〉——…·· 英文：!@#$%^&*()_+-=[]{}|;:'",.&lt;&gt;?/`~）</span>
             </div>
             <div class="requirement-item" :class="{ 'met': calculatedStrength.requirements.noConsecutive }">
               <span class="requirement-icon">{{ calculatedStrength.requirements.noConsecutive ? '✓' : '○' }}</span>
@@ -504,10 +575,20 @@
       <div class="device-list">
         <div class="device-item" v-for="device in loginDevices" :key="device.id">
           <div class="device-info">
-            <div class="device-name">{{ device.name }}</div>
+            <div class="device-name">
+              {{ device.name }}
+              <el-tag v-if="device.sessionCount > 1" size="small" type="info" class="session-count-tag">
+                {{ device.sessionCount }} 个会话
+              </el-tag>
+            </div>
             <div class="device-time">最后登录: {{ device.lastLogin }}</div>
             <div class="device-location">位置: {{ device.location }}</div>
             <div class="device-ip" v-if="device.ip">IP: {{ device.ip }}</div>
+            <div class="device-conflict-warning" v-if="device.hasIpConflict">
+              <el-tag type="warning" size="small" effect="dark">
+                <el-icon><Warning /></el-icon> IP 冲突：其他用户正使用此 IP
+              </el-tag>
+            </div>
             <div class="device-status" :class="device.current ? 'current' : 'other'">
               {{ device.current ? '当前设备' : '其他设备' }}
             </div>
@@ -517,7 +598,7 @@
               v-if="!device.current" 
               type="danger" 
               size="small" 
-              @click="removeDevice(device.id)"
+              @click="removeDevice(device)"
             >
               移除
             </el-button>
@@ -547,7 +628,7 @@
               placeholder="设备名/IP/位置" 
               size="small" 
               clearable
-              @keyup.enter="filterLoginHistory"
+              @keydown.enter.prevent="filterLoginHistory"
             />
           </el-form-item>
           <el-form-item label="时间范围">
@@ -574,13 +655,19 @@
           <el-button v-if="hasLoginHistoryFilters || hasLoginHistorySort" @click="clearAllLoginHistoryFilters" size="small" type="warning">清除筛选和排序</el-button>
         </div>
         <div class="login-history-stats">
-          <span>总计 {{ filteredLoginHistory.length }} 条记录</span>
+          <span>总计 {{ loginHistoryPagination.total }} 条记录</span>
           <span v-if="hasLoginHistoryFilters" class="active-filter">已筛选</span>
           <span v-if="hasLoginHistorySort" class="active-filter">已排序</span>
         </div>
       </div>
       <div class="login-history-table">
-        <el-table :data="filteredLoginHistory" style="width: 100%" max-height="400" @sort-change="(sort: { prop: string; order: string }) => handleLoginHistorySort(sort)">
+        <el-table 
+          v-loading="loginHistoryLoading"
+          :data="loginHistory" 
+          style="width: 100%" 
+          max-height="400" 
+          @sort-change="(sort: { prop: string; order: string }) => handleLoginHistorySort(sort)"
+        >
           <el-table-column prop="time" label="登录时间" width="180" sortable>
             <template #default="scope">
               <span class="login-time">{{ scope.row.time }}</span>
@@ -607,6 +694,19 @@
             </template>
           </el-table-column>
         </el-table>
+        
+        <div class="pagination-container" style="margin-top: 20px; display: flex; justify-content: flex-end;">
+          <el-pagination
+            v-model:current-page="loginHistoryPagination.currentPage"
+            v-model:page-size="loginHistoryPagination.pageSize"
+            :total="loginHistoryPagination.total"
+            :page-sizes="[10, 20, 50, 100]"
+            layout="total, sizes, prev, pager, next, jumper"
+            @size-change="fetchLoginHistoryData"
+            @current-change="handleLoginHistoryPageChange"
+            small
+          />
+        </div>
       </div>
     </el-dialog>
     
@@ -693,7 +793,14 @@
                 {{ getDeviceDisplayName(scope.row.userAgent) }}
               </template>
             </el-table-column>
-            <el-table-column prop="ipAddress" label="IP地址" width="120" />
+            <el-table-column prop="ipAddress" label="IP地址" width="120">
+              <template #default="scope">
+                {{ scope.row.ipAddress }}
+                <el-tooltip v-if="scope.row.hasIpConflict" content="检测到其他用户正在使用此 IP 登录" placement="top">
+                  <el-icon class="conflict-icon" color="#E6A23C"><WarningFilled /></el-icon>
+                </el-tooltip>
+              </template>
+            </el-table-column>
             <el-table-column prop="loginTime" label="登录时间" width="160">
               <template #default="scope">
                 {{ formatDateTime(scope.row.loginTime) }}
@@ -802,7 +909,7 @@
               placeholder="设备名/IP/位置/浏览器" 
               size="small" 
               clearable
-              @keyup.enter="filterDetailedLoginHistory"
+              @keydown.enter.prevent="filterDetailedLoginHistory"
             />
           </el-form-item>
           <el-form-item label="时间范围">
@@ -836,13 +943,19 @@
           <el-button v-if="hasDetailedLoginHistoryFilters || hasDetailedLoginHistorySort" @click="clearAllDetailedLoginHistoryFilters" size="small" type="warning">清除筛选和排序</el-button>
         </div>
         <div class="detailed-login-stats">
-          <span>总计 {{ filteredDetailedLoginHistory.length }} 条详细记录</span>
+          <span>总计 {{ detailedLoginHistoryPagination.total }} 条详细记录</span>
           <span v-if="hasDetailedLoginHistoryFilters" class="active-filter">已筛选</span>
           <span v-if="hasDetailedLoginHistorySort" class="active-filter">已排序</span>
         </div>
       </div>
       <div class="detailed-login-history-table">
-        <el-table :data="filteredDetailedLoginHistory" style="width: 100%" max-height="400" @sort-change="(sort: { prop: string; order: string }) => handleDetailedLoginHistorySort(sort)">
+        <el-table 
+          v-loading="detailedLoginHistoryLoading"
+          :data="detailedLoginHistory" 
+          style="width: 100%" 
+          max-height="400" 
+          @sort-change="(sort: { prop: string; order: string }) => handleDetailedLoginHistorySort(sort)"
+        >
           <el-table-column prop="time" label="登录时间" width="180" sortable>
             <template #default="scope">
               <span class="login-time">{{ scope.row.time }}</span>
@@ -881,6 +994,19 @@
             </template>
           </el-table-column>
         </el-table>
+        
+        <div class="pagination-container" style="margin-top: 20px; display: flex; justify-content: flex-end;">
+          <el-pagination
+            v-model:current-page="detailedLoginHistoryPagination.currentPage"
+            v-model:page-size="detailedLoginHistoryPagination.pageSize"
+            :total="detailedLoginHistoryPagination.total"
+            :page-sizes="[10, 20, 50, 100]"
+            layout="total, sizes, prev, pager, next, jumper"
+            @size-change="fetchDetailedLoginHistoryData"
+            @current-change="handleDetailedLoginHistoryPageChange"
+            small
+          />
+        </div>
       </div>
     </el-dialog>
     
@@ -927,7 +1053,6 @@
       v-model="showSessionTimeoutDialog"
       title="会话超时设置"
       width="500px"
-      @close="cancelSessionTimeout"
     >
       <el-form :model="sessionTimeoutForm" label-width="120px">
         <el-form-item label="超时时长">
@@ -957,6 +1082,38 @@
         </span>
       </template>
     </el-dialog>
+    
+    <!-- 无操作警告对话框 (会话安全提醒) -->
+    <transition name="security-fade">
+      <div v-if="showInactivityWarning" class="security-modal-overlay">
+        <div class="security-modal-container">
+          <div class="security-modal-content" role="dialog" aria-modal="true" aria-labelledby="security-modal-title">
+            <div class="security-modal-header">
+              <el-icon class="security-shield-icon" aria-hidden="true"><Checked /></el-icon>
+              <h3 id="security-modal-title">会话安全提醒</h3>
+            </div>
+            <div class="security-modal-body">
+              <div class="inactivity-warning-content">
+                <el-icon class="warning-icon"><Warning /></el-icon>
+                <p>检测到您的账号长时间处于空闲状态</p>
+                <p>系统将在 <span class="countdown-time">{{ remainingTime }}</span> 秒后自动登出</p>
+                <div class="security-divider"></div>
+                <p class="activity-hint">为了您的账号安全，请通过以下方式继续使用：</p>
+                <div class="activity-methods">
+                  <span><el-icon><Mouse /></el-icon> 移动鼠标</span>
+                  <span><el-icon><Operation /></el-icon> 按任意键</span>
+                </div>
+              </div>
+            </div>
+            <div class="security-modal-footer">
+              <el-button type="primary" class="security-confirm-btn" @click="handleUserActivity">
+                保持会话活跃
+              </el-button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
     
     <!-- 风险详情对话框 -->
     <el-dialog
@@ -992,7 +1149,7 @@
         <el-table :data="securityAssessmentHistory" style="width: 100%" max-height="400">
           <el-table-column prop="timestamp" label="评估时间" width="180">
             <template #default="scope">
-              <span>{{ new Date(scope.row.timestamp).toLocaleString() }}</span>
+              <span>{{ formatDateTime(scope.row.timestamp) }}</span>
             </template>
           </el-table-column>
           <el-table-column prop="overallScore" label="评分" width="80" sortable>
@@ -1141,11 +1298,15 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
+import { Warning, WarningFilled, Checked, Mouse, Operation } from '@element-plus/icons-vue'
+import { useAutoLogout, type AutoLogoutConfig } from '@/composables/useAutoLogout'
 import QRCode from 'qrcode'
 import dataEncryptionManager from '@/services/dataEncryptionManager'
 import { changePassword as changeUserPassword, generateTotpSecret, verifyTotpCode, enableTotpAuth, disableTotpAuth, checkTotpStatus, regenerateBackupCodes as apiRegenerateBackupCodes } from '@/services/authService'
 import { validateUserToken } from '@/utils/tokenValidator'
+import { hasSpecialChars, hasDangerousSqlChars, hasDangerousXssChars, getSpecialChars } from '@/utils/specialCharDetector'
 import { 
   checkBiometricSupport,
   enableBiometric,
@@ -1172,6 +1333,9 @@ import {
   cleanupExpiredSessions,
   getUserAgent,
   getClientIpAddress,
+  getBackendDeviceSessionsAPI,
+  revokeBackendDeviceSessionAPI,
+  revokeOtherBackendDeviceSessionsAPI,
   type ActiveDeviceSession
 } from '@/services/loginDeviceLimitService'
 import { 
@@ -1183,12 +1347,16 @@ import {
   logSecurityOperation,
   exportSecurityOperationLogs
 } from '@/services/securityOperationLogService'
+import { updateSecuritySettings, getSecuritySettings } from '@/services/securityService'
 import { 
   performSecurityAssessment 
 } from '@/services/securityAssessmentService'
 import { 
-  getSecurityAssessmentHistory
+  getSecurityAssessmentHistory,
+  logSecurityAssessment
 } from '@/services/securityAssessmentHistoryService'
+import { getAccountStatusAPI } from '@/services/accountUnlockService'
+import { getTokenRemainingTime } from '@/utils/request'
 
 // 占位函数：发送短信验证码
 const sendSmsCode = async (data: { phone: string; type: string }): Promise<void> => {
@@ -1203,6 +1371,8 @@ const sendEmailVerificationCode = async (data: { email: string; type: string }):
   // TODO: 对接真实API
   return Promise.resolve()
 }
+
+const router = useRouter()
 
 // 当前激活的标签页
 const activeTab = ref('account')
@@ -1220,88 +1390,284 @@ const loginRateLimit = ref(false)
 const dataEncryptionEnabled = ref(false) // 默认不启用数据加密
 const securityScore = ref(0)
 const securityRiskLevel = ref('')
+
+// 令牌与会话状态
+const tokenRemainingSeconds = ref(getTokenRemainingTime())
+let tokenTimer: any = null
+
+const formattedRemainingTime = computed(() => {
+  if (tokenRemainingSeconds.value === null || tokenRemainingSeconds.value === undefined || isNaN(tokenRemainingSeconds.value)) {
+    return '0分00秒'
+  }
+  const minutes = Math.floor(tokenRemainingSeconds.value / 60)
+  const seconds = tokenRemainingSeconds.value % 60
+  return `${minutes}分${seconds.toString().padStart(2, '0')}秒`
+})
+
+const tokenStatusType = computed(() => {
+  if (tokenRemainingSeconds.value > 15 * 60) return 'success' // 大于15分钟
+  if (tokenRemainingSeconds.value > 5 * 60) return 'warning'  // 大于5分钟
+  return 'danger'                                           // 小于5分钟
+})
+
+const tokenReminderMessage = computed(() => {
+  if (tokenRemainingSeconds.value <= 0) return '令牌已过期，请重新登录'
+  if (tokenRemainingSeconds.value <= 5 * 60) return '令牌即将过期，建议立即刷新'
+  if (tokenRemainingSeconds.value <= 15 * 60) return '令牌剩余时间较短，建议刷新'
+  return ''
+})
+
+const startTokenTimer = () => {
+  stopTokenTimer()
+  tokenTimer = setInterval(() => {
+    tokenRemainingSeconds.value = getTokenRemainingTime()
+  }, 1000)
+}
+
+const stopTokenTimer = () => {
+  if (tokenTimer) {
+    clearInterval(tokenTimer)
+    tokenTimer = null
+  }
+}
+
+// 刷新令牌操作
+const refreshingToken = ref(false)
+const manualRefreshToken = async () => {
+  if (refreshingToken.value) return
+  
+  refreshingToken.value = true
+  try {
+    const { refreshAccessToken } = await import('@/utils/request')
+    // 使用统一的刷新令牌函数，它带有并发锁和广播同步功能
+    const success = await refreshAccessToken()
+    
+    if (success) {
+      ElMessage.success('令牌刷新成功')
+      tokenRemainingSeconds.value = getTokenRemainingTime()
+    } else {
+      ElMessage.error('令牌刷新失败，请重新登录')
+    }
+  } catch (error: any) {
+    console.error('手动刷新令牌失败:', error)
+    const errorMsg = error.message || '刷新失败，请稍后重试'
+    ElMessage.error(errorMsg)
+  } finally {
+    refreshingToken.value = false
+  }
+}
 const biometricAvailable = ref(false)
 const accountLocked = ref(false)
 const remainingLockTime = ref(0)
 const lockReason = ref('')
 
+// 客户端信息
+const clientInfo = reactive({
+  browser: '正在检测...',
+  os: '正在检测...',
+  ip: '正在检测...',
+  language: '正在检测...',
+  timezone: '正在检测...',
+  isSecure: true,
+  lastCheck: new Date().toLocaleString()
+})
+
+// 解析 User Agent 获取浏览器和操作系统
+const parseUserAgent = () => {
+  const ua = navigator.userAgent
+  let browser = '未知浏览器'
+  let os = '未知操作系统'
+
+  // 检测浏览器
+  if (ua.indexOf('Chrome') > -1) {
+    if (ua.indexOf('Edg') > -1) browser = 'Microsoft Edge'
+    else browser = 'Google Chrome'
+  }
+  else if (ua.indexOf('Firefox') > -1) browser = 'Mozilla Firefox'
+  else if (ua.indexOf('Safari') > -1) browser = 'Apple Safari'
+  else if (ua.indexOf('MSIE') > -1 || ua.indexOf('Trident/') > -1) browser = 'Internet Explorer'
+
+  // 检测操作系统
+  if (ua.indexOf('Win') > -1) os = 'Windows'
+  else if (ua.indexOf('Mac') > -1) os = 'macOS'
+  else if (ua.indexOf('Linux') > -1) os = 'Linux'
+  else if (ua.indexOf('Android') > -1) os = 'Android'
+  else if (ua.indexOf('like Mac') > -1) os = 'iOS'
+
+  clientInfo.browser = browser
+  clientInfo.os = os
+  clientInfo.isSecure = window.isSecureContext
+  clientInfo.language = navigator.language
+  clientInfo.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+}
+
+// 安全提醒
+const securityReminders = computed(() => {
+  const reminders = []
+  
+  // 1. 安全连接检查
+  if (!clientInfo.isSecure) {
+    reminders.push({
+      type: 'danger',
+      icon: 'Warning',
+      message: '当前连接不安全：您正在通过非加密连接访问，建议使用 HTTPS 以保护数据安全。'
+    })
+  }
+  
+  // 2. 浏览器兼容性/安全性检查
+  const ua = navigator.userAgent
+  if (ua.indexOf('MSIE') > -1 || ua.indexOf('Trident/') > -1) {
+    reminders.push({
+      type: 'warning',
+      icon: 'CircleCloseFilled',
+      message: '浏览器版本过旧：检测到您正在使用 Internet Explorer，为了更好的安全性和体验，建议更换为现代浏览器（如 Chrome、Edge 或 Firefox）。'
+    })
+  }
+  
+  // 3. 地理位置/时区不一致检查 (启发式)
+  const isChineseLanguage = clientInfo.language.toLowerCase().startsWith('zh')
+  const isChineseTimezone = clientInfo.timezone.includes('Shanghai') || 
+                            clientInfo.timezone.includes('Hong_Kong') || 
+                            clientInfo.timezone.includes('Taipei') ||
+                            clientInfo.timezone.includes('Urumqi')
+  if (isChineseLanguage && !isChineseTimezone && !clientInfo.timezone.includes('UTC')) {
+    reminders.push({
+      type: 'info',
+      icon: 'Location',
+      message: '时区偏移提醒：您的浏览器语言为中文，但当前时区设置为 ' + clientInfo.timezone + '，请确保这符合您的预期。'
+    })
+  }
+  
+  return reminders
+})
+
+// 初始化客户端信息
+const initializeClientInfo = async () => {
+  parseUserAgent()
+  try {
+    const { getClientIpAddress } = await import('@/services/authService')
+    const response = await getClientIpAddress()
+    if (response.success && response.data) {
+      clientInfo.ip = response.data.ip || '未知IP'
+      // 同时更新用于日志记录的变量
+      clientIpAddress.value = clientInfo.ip
+    }
+  } catch (error) {
+    console.error('获取客户端IP失败:', error)
+    clientInfo.ip = '获取失败'
+    clientIpAddress.value = '获取失败'
+  }
+}
+
 // 初始化数据加密状态
-const initializeDataEncryptionStatus = (): void => {
+const initializeDataEncryptionStatus = async (): Promise<void> => {
   try {
     // 获取当前用户ID
-    const userId = localStorage.getItem('userId') || 'default_user'
+    const userId = currentUserId.value
     
-    // 检查是否启用了数据加密，如果没有设置则默认启用
-    const encryptionEnabled = localStorage.getItem(`dataEncryptionEnabled_${userId}`) === 'true' || 
-                          localStorage.getItem(`dataEncryptionEnabled_${userId}`) === null;
+    // 检查是否已有加密状态
+    const storedStatus = localStorage.getItem(`dataEncryptionEnabled_${userId}`)
     
-    // 如果是第一次运行或者没有明确禁用，则默认启用
-    if (localStorage.getItem(`dataEncryptionEnabled_${userId}`) === null) {
-      dataEncryptionEnabled.value = true;
-      // 保存默认启用状态到localStorage
-      localStorage.setItem(`dataEncryptionEnabled_${userId}`, 'true');
+    // 如果没有设置过，则默认启用数据加密
+    if (storedStatus === null) {
+      console.log('[DataEncryption] 首次访问，默认启用数据加密')
       
-      // 启用数据加密管理器
-      dataEncryptionManager.enableEncryption();
+      // 设置为启用状态
+      dataEncryptionEnabled.value = true
+      localStorage.setItem(`dataEncryptionEnabled_${userId}`, 'true')
       
-      // 如果还没有主密钥，则生成一个
-      let masterKey = localStorage.getItem('master_encryption_key');
-      if (!masterKey) {
-        masterKey = 'user_master_key_' + userId + '_' + Date.now();
-        localStorage.setItem('master_encryption_key', masterKey);
-      }
-      dataEncryptionManager.setMasterKey(masterKey);
-    } else {
-      dataEncryptionEnabled.value = encryptionEnabled;
-      
-      // 如果启用了加密，初始化数据加密管理器
-      if (encryptionEnabled) {
-        dataEncryptionManager.enableEncryption();
+      // 调用后端API初始化加密服务
+      try {
+        const { initializeKeyManagement, getKeyStatus } = await import('@/services/keyManagementService')
+        const { initializeEncryption } = await import('@/services/dataEncryptionService')
         
-        // 加载主密钥
-        const masterKey = localStorage.getItem('master_encryption_key');
+        // 初始化密钥管理（如果还没有密钥会自动生成）
+        await initializeKeyManagement()
+        
+        // 初始化数据加密服务
+        await initializeEncryption()
+        
+        // 启用数据加密管理器
+        dataEncryptionManager.enableEncryption()
+        
+        console.log('[DataEncryption] 数据加密已自动启用')
+      } catch (apiError) {
+        console.error('[DataEncryption] 自动启用失败:', apiError)
+      }
+    } else {
+      // 根据存储的状态恢复
+      dataEncryptionEnabled.value = storedStatus === 'true'
+      
+      // 如果已启用，启用数据加密管理器
+      if (dataEncryptionEnabled.value) {
+        dataEncryptionManager.enableEncryption()
+        
+        // 检查是否有主密钥
+        const masterKey = localStorage.getItem('master_encryption_key')
         if (masterKey) {
-          dataEncryptionManager.setMasterKey(masterKey);
+          dataEncryptionManager.setMasterKey(masterKey)
         }
       }
     }
+    
+    console.log('[DataEncryption] 加密状态:', dataEncryptionEnabled.value)
   } catch (error) {
-    console.error('初始化数据加密状态失败:', error);
-    // 出错时默认启用数据加密
-    dataEncryptionEnabled.value = true;
+    console.error('初始化数据加密状态失败:', error)
   }
 }
 
 // 初始化登录保护和异常登录提醒状态
-const initializeLoginProtectionStatus = (): void => {
+const initializeLoginProtectionStatus = async (): Promise<void> => {
   try {
-    // 检查是否设置了登录保护，如果没有设置则默认启用
+    // 优先从后端获取
+    const response = await getSecuritySettings();
+    
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = response.data?.data || response.data;
+    
+    if (response.success && actualData) {
+      console.log('从后端获取安全设置成功:', actualData);
+      loginProtection.value = !!actualData.login_protection_enabled;
+      abnormalLoginAlert.value = !!actualData.email_alerts_enabled;
+      
+      // 同步会话超时设置
+      if (actualData.session_timeout_minutes !== undefined) {
+        originalSessionTimeoutSettings.timeout = actualData.session_timeout_minutes;
+        sessionTimeoutForm.timeout = actualData.session_timeout_minutes;
+      }
+      if (actualData.session_timeout_warning_minutes !== undefined) {
+        originalSessionTimeoutSettings.warningTime = actualData.session_timeout_warning_minutes;
+        sessionTimeoutForm.warningTime = actualData.session_timeout_warning_minutes;
+      }
+      
+      // 重置定时器
+      resetInactivityTimer();
+      
+      // 同步到 localStorage
+      localStorage.setItem('loginProtectionEnabled', String(loginProtection.value));
+      localStorage.setItem('abnormalLoginAlert', String(abnormalLoginAlert.value));
+      return;
+    }
+    
+    // 如果后端获取失败，则回退到 localStorage
     const loginProtectionSetting = localStorage.getItem('loginProtectionEnabled');
     const abnormalLoginAlertSetting = localStorage.getItem('abnormalLoginAlert');
     
-    // 如果是第一次运行或者没有明确设置，则默认启用
     if (loginProtectionSetting === null) {
       loginProtection.value = true;
-      // 保存默认启用状态到localStorage
       localStorage.setItem('loginProtectionEnabled', 'true');
     } else {
       loginProtection.value = loginProtectionSetting === 'true';
     }
     
-    // 异常登录提醒默认始终启用，如果未设置则默认启用
     if (abnormalLoginAlertSetting === null) {
       abnormalLoginAlert.value = true;
-      // 保存默认启用状态到localStorage
       localStorage.setItem('abnormalLoginAlert', 'true');
     } else {
       abnormalLoginAlert.value = abnormalLoginAlertSetting === 'true';
     }
-    
-    // 注意：不要强制设置为true，应尊重用户的选择
-    // 只有在初始化时（localStorage中没有设置）才使用默认值
   } catch (error) {
     console.error('初始化登录保护状态失败:', error);
-    // 出错时默认启用登录保护和异常登录提醒
     loginProtection.value = true;
     abnormalLoginAlert.value = true;
   }
@@ -1312,6 +1678,16 @@ const loginHistoryFilter = reactive({
   keyword: '',
   dateRange: []
 })
+
+// 登录历史分页
+const loginHistoryPagination = reactive({
+  currentPage: 1,
+  pageSize: 10,
+  total: 0
+})
+
+const loginHistoryLoading = ref(false)
+const loginHistoryAutoRefreshTimer = ref<number | null>(null)
 
 // 登录历史排序
 const loginHistorySort = reactive({
@@ -1325,6 +1701,16 @@ const detailedLoginHistoryFilter = reactive({
   dateRange: [],
   status: ''
 })
+
+// 详细登录历史分页
+const detailedLoginHistoryPagination = reactive({
+  currentPage: 1,
+  pageSize: 10,
+  total: 0
+})
+
+const detailedLoginHistoryLoading = ref(false)
+const detailedLoginHistoryAutoRefreshTimer = ref<number | null>(null)
 
 // 详细登录历史排序
 const detailedLoginHistorySort = reactive({
@@ -1363,6 +1749,23 @@ const showPasswordDialog = ref(false)
 const showPhoneDialog = ref(false)
 const showEmailDialog = ref(false)
 const showDeviceDialog = ref(false)
+const deviceMonitorTimer = ref<number | null>(null)
+
+// 监听设备管理对话框状态，开启/关闭实时监控
+watch(showDeviceDialog, (val) => {
+  if (val) {
+    // 开启实时监控，每30秒刷新一次设备列表
+    deviceMonitorTimer.value = window.setInterval(() => {
+      refreshDeviceList()
+    }, 30000)
+  } else {
+    // 关闭实时监控
+    if (deviceMonitorTimer.value) {
+      clearInterval(deviceMonitorTimer.value)
+      deviceMonitorTimer.value = null
+    }
+  }
+})
 const showLoginHistory = ref(false)
 const showSecurityLog = ref(false)
 const showBackupCodesDialog = ref(false)
@@ -1462,7 +1865,7 @@ const activeDeviceCount = ref(0)
 const currentDeviceId = ref('')
 
 // 当前用户ID
-const currentUserId = ref('default_user') // 实际应用中应从用户信息获取
+const currentUserId = ref(localStorage.getItem('userId') || 'default_user') // 从本地存储获取用户ID
 
 const securityQuestionForm = reactive({
   question1: '',
@@ -1544,14 +1947,29 @@ const maskedEmail = computed(() => {
   return emailVerified.value ? 'user@***.com' : ''
 })
 
+// 特殊字符定义（支持中英文输入状态下的所有常用特殊符号）
+const SPECIAL_CHARS = {
+  // 中文标点符号
+  chinese: '，。！？、；：「」『』（）【】《》〈〉——…··',
+  // 英文标点符号
+  english: '!@#$%^&*()_+-=[]{}|;:\'",.<>?/`~',
+  // 组合正则表达式
+  get regex() {
+    return new RegExp(`[${this.chinese}${this.english}]`)
+  }
+}
+
 // 计算密码强度
-const calculatePasswordStrength = (password: string): { level: string; score: number; requirements: Record<string, boolean> } => {
+const calculatePasswordStrength = (password: string): { level: string; score: number; requirements: Record<string, boolean>, specialChars: string[] } => {
+  const specialCharsRegex = SPECIAL_CHARS.regex
+  const detectedSpecialChars = getSpecialChars(password)
+  
   const requirements = {
     minLength: password.length >= 8,  // 至少8个字符
     lowercase: /[a-z]/.test(password),  // 小写字母
     uppercase: /[A-Z]/.test(password),  // 大写字母
     number: /\d/.test(password),       // 数字
-    special: /[^A-Za-z0-9]/.test(password),  // 特殊字符
+    special: detectedSpecialChars.length > 0,  // 特殊字符（支持中英文）
     noConsecutive: !/(.)\1{2,}/.test(password)  // 不超过两个连续相同字符
   };
   
@@ -1572,7 +1990,7 @@ const calculatePasswordStrength = (password: string): { level: string; score: nu
     score = 1;
   }
   
-  return { level, score, requirements };
+  return { level, score, requirements, specialChars: detectedSpecialChars };
 }
 
 const calculatedStrength = computed(() => {
@@ -1613,6 +2031,292 @@ const sessionTimeout = computed(() => {
   return originalSessionTimeoutSettings.timeout
 })
 
+// 使用全局自动登出 Composable
+const {
+  config: autoLogoutConfig,
+  showWarning: globalShowWarning,
+  remainingSeconds: globalRemainingSeconds,
+  updateConfig: updateAutoLogoutConfig,
+  getConfig: getAutoLogoutConfig,
+  activate: activateAutoLogout
+} = useAutoLogout()
+
+// 从全局配置初始化表单
+const initializeFromGlobalConfig = () => {
+  const config = getAutoLogoutConfig()
+  sessionTimeoutForm.timeout = config.timeoutMinutes
+  sessionTimeoutForm.warningTime = config.warningMinutes
+  originalSessionTimeoutSettings.timeout = config.timeoutMinutes
+  originalSessionTimeoutSettings.warningTime = config.warningMinutes
+}
+
+// 无操作自动登出功能
+const inactivityTimer = ref<number | null>(null)
+const warningTimer = ref<number | null>(null)
+const heartbeatTimer = ref<number | null>(null) // 心跳检测定时器
+const showInactivityWarning = ref(false)
+
+// 监听弹窗显示状态，锁定/解锁背景滚动
+watch(showInactivityWarning, (newVal) => {
+  if (newVal) {
+    document.body.style.overflow = 'hidden'
+  } else {
+    document.body.style.overflow = ''
+  }
+})
+
+const remainingTime = ref(0)
+const isOnline = ref(navigator.onLine) // 网络连接状态
+let lastActivityTime = Date.now()
+
+/**
+ * 记录用户活动日志 (调试用)
+ * @param action 操作类型
+ */
+const logActivity = (action: string): void => {
+  const now = new Date().toLocaleTimeString()
+  console.log(`[用户活动] ${now} - ${action}`)
+}
+
+/**
+ * 重置非活动计时器
+ * 实现自动延长机制：任何活动都会重置计时器
+ */
+const resetInactivityTimer = (): void => {
+  const now = Date.now()
+  const timeSinceLastActivity = now - lastActivityTime
+  
+  // 更新最后活动时间
+  lastActivityTime = now
+  
+  // 清除现有的定时器
+  if (inactivityTimer.value) {
+    clearTimeout(inactivityTimer.value)
+    inactivityTimer.value = null
+  }
+  if (warningTimer.value) {
+    clearTimeout(warningTimer.value)
+    warningTimer.value = null
+  }
+  
+  // 如果警告对话框正在显示且有新活动，则关闭它 (自动重置机制)
+  if (showInactivityWarning.value) {
+    showInactivityWarning.value = false
+    logActivity('在警告期间恢复活动，已重置计时器')
+  }
+  
+  // 如果会话超时设置已启用
+  if (originalSessionTimeoutSettings.timeout > 0) {
+    const timeoutMs = originalSessionTimeoutSettings.timeout * 60 * 1000
+    const warningMs = originalSessionTimeoutSettings.warningTime * 60 * 1000
+    
+    // 设置警告定时器
+    if (warningMs > 0 && warningMs < timeoutMs) {
+      warningTimer.value = window.setTimeout(() => {
+        // 二次确认：确保在设定时间内确实没有活动
+        const currentTime = Date.now()
+        const idleTime = currentTime - lastActivityTime
+        const warningThreshold = timeoutMs - warningMs
+        
+        // 如果实际空闲时间确实达到了警告阈值（考虑微小误差）
+        if (idleTime >= warningThreshold - 100) {
+          showInactivityWarning.value = true
+          remainingTime.value = Math.floor(warningMs / 1000)
+          startWarningCountdown()
+          logActivity('空闲时间达标，触发登出提醒')
+        } else {
+          // 如果由于某种原因计时器到期但已有新活动，重新设置
+          resetInactivityTimer()
+        }
+      }, timeoutMs - warningMs)
+    }
+    
+    // 设置登出定时器
+    inactivityTimer.value = window.setTimeout(() => {
+      // 最终确认：确保在设定时间内确实没有活动
+      const currentTime = Date.now()
+      const idleTime = currentTime - lastActivityTime
+      
+      if (idleTime >= timeoutMs - 100) {
+        performAutoLogout()
+      } else {
+        // 补偿机制：如果由于标签页休眠导致计时不准，重新设置
+        resetInactivityTimer()
+      }
+    }, timeoutMs)
+  }
+}
+
+/**
+ * 心跳检测机制
+ * 每隔10秒检查一次最后活动时间，防止标签页休眠导致的计时器暂停
+ */
+const startHeartbeatCheck = (): void => {
+  if (heartbeatTimer.value) clearInterval(heartbeatTimer.value)
+  
+  heartbeatTimer.value = window.setInterval(() => {
+    if (originalSessionTimeoutSettings.timeout <= 0) return
+    
+    const now = Date.now()
+    const idleTime = now - lastActivityTime
+    const timeoutMs = originalSessionTimeoutSettings.timeout * 60 * 1000
+    const warningMs = originalSessionTimeoutSettings.warningTime * 60 * 1000
+    const warningThreshold = timeoutMs - warningMs
+    
+    // 如果已经超过超时时间，立即执行登出
+    if (idleTime >= timeoutMs) {
+      logActivity('心跳检测发现已超时，执行强制登出')
+      performAutoLogout()
+      return
+    }
+    
+    // 如果已经进入警告时间段但对话框未显示，则补发显示
+    if (warningMs > 0 && idleTime >= warningThreshold && !showInactivityWarning.value) {
+      logActivity('心跳检测补发现提醒对话框')
+      showInactivityWarning.value = true
+      remainingTime.value = Math.floor((timeoutMs - idleTime) / 1000)
+      startWarningCountdown()
+    }
+  }, 10000) // 每10秒检查一次
+}
+
+/**
+ * 处理页面可见性变化
+ */
+const handleVisibilityChange = (): void => {
+  if (document.visibilityState === 'visible') {
+    logActivity('页面恢复可见，执行同步检查')
+    // 页面切回时立即进行一次心跳检查
+    const now = Date.now()
+    const idleTime = now - lastActivityTime
+    const timeoutMs = originalSessionTimeoutSettings.timeout * 60 * 1000
+    
+    if (idleTime >= timeoutMs) {
+      performAutoLogout()
+    } else {
+      // 如果没超时，视为一次活动，重置计时器
+      resetInactivityTimer()
+    }
+  } else {
+    logActivity('页面切换至后台')
+  }
+}
+
+/**
+ * 处理网络连接变化
+ */
+const handleNetworkChange = (): void => {
+  isOnline.value = navigator.onLine
+  if (isOnline.value) {
+    logActivity('网络已连接')
+    resetInactivityTimer()
+  } else {
+    logActivity('网络已断开')
+    ElMessage.warning('网络连接已断开，自动登出计时器已暂停')
+  }
+}
+
+const startWarningCountdown = (): void => {
+  const countdownInterval = setInterval(() => {
+    // 如果在倒计时期间发生了活动（showInactivityWarning 被设为 false），清除倒计时
+    if (!showInactivityWarning.value) {
+      clearInterval(countdownInterval)
+      return
+    }
+    
+    remainingTime.value--
+    if (remainingTime.value <= 0) {
+      clearInterval(countdownInterval)
+      // performAutoLogout 会被 inactivityTimer 触发，这里不需要重复调用
+    }
+  }, 1000)
+}
+
+const performAutoLogout = (): void => {
+  // 清除所有定时器
+  if (inactivityTimer.value) {
+    clearTimeout(inactivityTimer.value)
+    inactivityTimer.value = null
+  }
+  if (warningTimer.value) {
+    clearTimeout(warningTimer.value)
+    warningTimer.value = null
+  }
+  if (heartbeatTimer.value) {
+    clearInterval(heartbeatTimer.value)
+    heartbeatTimer.value = null
+  }
+  
+  // 隐藏警告对话框
+  showInactivityWarning.value = false
+  
+  // 记录安全日志
+  logSecurityOperation({
+    userId: currentUserId.value,
+    operation: 'auto_logout',
+    description: '无操作自动登出 (智能机制)',
+    ip: clientIpAddress.value || '127.0.0.1',
+    userAgent: navigator.userAgent,
+    status: 'success'
+  })
+  
+  // 清除本地存储的认证信息
+  localStorage.removeItem('access_token')
+  localStorage.removeItem('refresh_token')
+  localStorage.removeItem('token_expires')
+  localStorage.removeItem('isAuthenticated')
+  localStorage.removeItem('user_info')
+  localStorage.removeItem('session_id')
+  localStorage.removeItem('sessionToken')
+  
+  // 跳转到登录页面
+  ElMessage.warning('由于长时间无操作，您已自动登出')
+  router.push('/login?reason=inactivity')
+}
+
+// 用户活动事件处理
+const handleUserActivity = (): void => {
+  // 如果网络在线，则重置计时器
+  if (isOnline.value) {
+    resetInactivityTimer()
+  }
+}
+
+// 绑定用户活动事件监听
+const bindActivityListeners = (): void => {
+  if (typeof window !== 'undefined') {
+    // 用户活动监听
+    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart', 'mousedown', 'wheel']
+    events.forEach(event => window.addEventListener(event, handleUserActivity))
+    
+    // 页面状态监听
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('online', handleNetworkChange)
+    window.addEventListener('offline', handleNetworkChange)
+    
+    // 启动心跳
+    startHeartbeatCheck()
+    
+    logActivity('已启动智能自动登出监听机制')
+  }
+}
+
+// 解绑用户活动事件监听
+const unbindActivityListeners = (): void => {
+  if (typeof window !== 'undefined') {
+    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart', 'mousedown', 'wheel']
+    events.forEach(event => window.removeEventListener(event, handleUserActivity))
+    
+    document.removeEventListener('visibilitychange', handleVisibilityChange)
+    window.removeEventListener('online', handleNetworkChange)
+    window.removeEventListener('offline', handleNetworkChange)
+    
+    if (heartbeatTimer.value) clearInterval(heartbeatTimer.value)
+    
+    logActivity('已停止智能自动登出监听机制')
+  }
+}
+
 // 登录频率限制状态
 const rateLimitStatus = computed(() => {
   if (!loginRateLimit.value) {
@@ -1620,8 +2324,8 @@ const rateLimitStatus = computed(() => {
   }
   
   // 获取当前账户的登录尝试记录
-  const accountId = 'default_user' // 实际应用中应从用户信息获取
-  const attempts = getLoginAttempts(accountId)
+  const userId = currentUserId.value
+  const attempts = getLoginAttempts(userId)
   const config = getSecurityConfig()
   
   if (config.rateLimit.enabled) {
@@ -1667,28 +2371,148 @@ interface SecurityLog {
 const securityLogs = ref<SecurityLog[]>([])
 
 // 初始化安全日志
-const initializeSecurityLogs = (): void => {
+const initializeSecurityLogs = async (): Promise<void> => {
   try {
-    const userId = localStorage.getItem('userId') || 'default_user'
-    const logs = getSecurityOperationLogs(userId, 50)
+    const userId = currentUserId.value
+    const response = await getSecurityOperationLogs({ userId, limit: 50 })
+    
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = response.data?.data || response.data
+    const logs = actualData?.logs || []
     
     // 转换日志格式以适应现有UI
-    securityLogs.value = logs.map(log => ({
-      id: log.id,
-      time: new Date(log.timestamp).toLocaleString(),
-      action: log.description,
-      ip: log.ip
-    }))
+    if (Array.isArray(logs)) {
+      securityLogs.value = logs.map((log: any) => ({
+        id: log.id,
+        time: formatDateTime(log.timestamp),
+        action: log.description || log.action || '安全操作',
+        ip: log.sourceIp || log.ip || '未知'
+      }))
+    }
   } catch (error) {
     console.error('初始化安全日志失败:', error)
+  }
+}
+
+// 获取登录历史数据
+const fetchLoginHistoryData = async (): Promise<void> => {
+  loginHistoryLoading.value = true
+  try {
+    const userId = currentUserId.value
+    const response = await getSecurityOperationLogs({
+      userId,
+      type: 'login_success', // 仅获取登录成功的日志
+      limit: loginHistoryPagination.pageSize,
+      offset: (loginHistoryPagination.currentPage - 1) * loginHistoryPagination.pageSize,
+      startDate: loginHistoryFilter.dateRange && loginHistoryFilter.dateRange.length === 2 ? loginHistoryFilter.dateRange[0] : undefined,
+      endDate: loginHistoryFilter.dateRange && loginHistoryFilter.dateRange.length === 2 ? loginHistoryFilter.dateRange[1] : undefined
+    })
+    
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = response.data?.data || response.data
+    
+    if (response.success && actualData) {
+      const logs = actualData.logs || []
+      // 转换后端数据格式以适应前端 UI
+      loginHistory.value = logs.map((log: any) => ({
+        id: log.id,
+        time: formatDateTime(log.timestamp),
+        device: getDeviceDisplayName(log.userAgent),
+        ip: log.sourceIp,
+        location: log.resource || '未知',
+        status: log.outcome === 'success' ? '成功' : '失败'
+      }))
+      loginHistoryPagination.total = actualData.total || 0
+    } else {
+      ElMessage.error(response.message || '获取登录历史失败')
+    }
+  } catch (error) {
+    console.error('获取登录历史失败:', error)
+    ElMessage.error('获取登录历史异常，请稍后重试')
+  } finally {
+    loginHistoryLoading.value = false
+  }
+}
+
+// 获取详细登录历史数据
+const fetchDetailedLoginHistoryData = async (): Promise<void> => {
+  detailedLoginHistoryLoading.value = true
+  try {
+    const userId = currentUserId.value
+    const response = await getSecurityOperationLogs({
+      userId,
+      type: 'login_success',
+      limit: detailedLoginHistoryPagination.pageSize,
+      offset: (detailedLoginHistoryPagination.currentPage - 1) * detailedLoginHistoryPagination.pageSize,
+      startDate: detailedLoginHistoryFilter.dateRange && detailedLoginHistoryFilter.dateRange.length === 2 ? detailedLoginHistoryFilter.dateRange[0] : undefined,
+      endDate: detailedLoginHistoryFilter.dateRange && detailedLoginHistoryFilter.dateRange.length === 2 ? detailedLoginHistoryFilter.dateRange[1] : undefined
+    })
+    
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = response.data?.data || response.data
+    
+    if (response.success && actualData) {
+      const logs = actualData.logs || []
+      detailedLoginHistory.value = logs.map((log: any) => ({
+        id: log.id,
+        time: formatDateTime(log.timestamp),
+        device: getDeviceDisplayName(log.userAgent),
+        browser: log.userAgent.split(' ')[0] || '未知',
+        ip: log.sourceIp,
+        location: log.resource || '未知',
+        status: log.outcome === 'success' ? '成功' : '失败'
+      }))
+      detailedLoginHistoryPagination.total = actualData.total || 0
+    } else {
+      ElMessage.error(response.message || '获取详细登录历史失败')
+    }
+  } catch (error) {
+    console.error('获取详细登录历史失败:', error)
+    ElMessage.error('获取详细登录历史异常，请稍后重试')
+  } finally {
+    detailedLoginHistoryLoading.value = false
+  }
+}
+
+// 处理登录历史页码变化
+const handleLoginHistoryPageChange = (page: number): void => {
+  loginHistoryPagination.currentPage = page
+  fetchLoginHistoryData()
+}
+
+// 处理详细登录历史页码变化
+const handleDetailedLoginHistoryPageChange = (page: number): void => {
+  detailedLoginHistoryPagination.currentPage = page
+  fetchDetailedLoginHistoryData()
+}
+
+// 启动登录历史自动刷新
+const startLoginHistoryAutoRefresh = (): void => {
+  stopLoginHistoryAutoRefresh()
+  // 每5分钟刷新一次 (300000ms)
+  loginHistoryAutoRefreshTimer.value = window.setInterval(() => {
+    if (showLoginHistory.value) {
+      fetchLoginHistoryData()
+    }
+    if (showDetailedLoginHistory.value) {
+      fetchDetailedLoginHistoryData()
+    }
+  }, 300000)
+}
+
+// 停止登录历史自动刷新
+const stopLoginHistoryAutoRefresh = (): void => {
+  if (loginHistoryAutoRefreshTimer.value) {
+    clearInterval(loginHistoryAutoRefreshTimer.value)
+    loginHistoryAutoRefreshTimer.value = null
   }
 }
 
 // 初始化安全评估历史记录
 const initializeSecurityAssessmentHistory = (): void => {
   try {
-    const userId = localStorage.getItem('userId') || 'default_user'
-    const history = getSecurityAssessmentHistory(userId, 20)
+    const userId = currentUserId.value
+    const history = getSecurityAssessmentHistory(userId, 10)
     
     // 转换历史记录格式以适应现有UI
     securityAssessmentHistory.value = history.map(record => ({
@@ -1763,43 +2587,64 @@ const getLowScoreFactors = (factors: { name: string; score: number; description:
   return factors.filter(factor => factor.score < 80)
 }
 
-// 执行安全评估
-const performSecurityCheck = async (): Promise<void> => {  try {
+// 执行安全评估（调用后端真实API）
+const performSecurityCheck = async (): Promise<void> => {
+  try {
     ElMessage.info('正在进行安全检查...')
     
-    // 获取当前用户ID
-    const userId = localStorage.getItem('userId') || 'default_user'
+    // 调用后端真实API
+    const { performSecurityCheck: backendCheck, getRiskLevelType } = await import('@/services/backendSecurityCheckService')
+    const result = await backendCheck()
     
-    // 执行安全评估
-    const assessment = performSecurityAssessment(userId)
-    
-    // 更新安全评分和风险等级
-    securityScore.value = assessment.overallScore
-    securityRiskLevel.value = assessment.riskLevel === 'high' ? '高风险' : 
-                            assessment.riskLevel === 'medium' ? '中风险' : '低风险'
-    
-    // 更新安全风险详情，只显示异常项目（评分低于80的因素）
-    securityRisks.value = assessment.factors
-      .filter(factor => factor.score < 80)
-      .map(factor => ({
-        title: factor.name,
-        description: factor.description,
-        solution: factor.recommendation
-      }))    
-    // 根据评估结果给出不同的提示
-    if (assessment.riskLevel === 'high') {
-      ElMessage.error(`安全检查完成，您的账户存在高风险，评分为 ${assessment.overallScore} 分，请立即处理安全隐患`)
-    } else if (assessment.riskLevel === 'medium') {
-      ElMessage.warning(`安全检查完成，您的账户存在中等风险，评分为 ${assessment.overallScore} 分，建议加强安全措施`)
-    } else {
-      ElMessage.success(`安全检查完成，您的账户很安全，评分为 ${assessment.overallScore} 分`)
+    if (!result.success) {
+      throw new Error(result.error || '安全检查失败')
     }
     
+    const data = result.data!
+    
+    // 更新安全评分和风险等级
+    securityScore.value = data.overallScore
+    securityRiskLevel.value = data.riskLabel
+    
+    // 更新安全风险详情
+    securityRisks.value = (data.factors || [])
+      .filter(f => f.score < 80)
+      .map(f => ({
+        title: f.name,
+        description: f.basis || f.description,
+        solution: f.recommendation
+      }))
+    
+    // 根据评估结果给出不同的提示
+    if (data.riskLevel === 'high') {
+      ElMessage.error(`安全检查完成，您的账户存在高风险，评分为 ${data.overallScore} 分，请立即处理安全隐患`)
+    } else if (data.riskLevel === 'medium') {
+      ElMessage.warning(`安全检查完成，您的账户存在中等风险，评分为 ${data.overallScore} 分，建议加强安全措施`)
+    } else {
+      ElMessage.success(`安全检查完成，您的账户很安全，评分为 ${data.overallScore} 分`)
+    }
+    
+    // 记录安全评估历史
+    logSecurityAssessment({
+      userId: currentUserId.value,
+      overallScore: data.overallScore,
+      riskLevel: data.riskLevel as 'low' | 'medium' | 'high',
+      factors: (data.factors || []).map(f => ({
+        name: f.name,
+        score: f.score,
+        description: f.basis || f.description
+      }))
+    })
+    
+    // 重新加载评估历史
+    initializeSecurityAssessmentHistory()
+    
     // 记录安全操作日志
+    const userId = currentUserId.value
     logSecurityOperation({
       userId,
       operation: 'perform_security_check',
-      description: `执行安全检查，评分: ${assessment.overallScore}，风险等级: ${assessment.riskLevel}`,
+      description: `执行安全检查，评分: ${data.overallScore}，风险等级: ${data.riskLevel}`,
       ip: clientIpAddress.value,
       userAgent: navigator.userAgent,
       status: 'success'
@@ -1808,13 +2653,12 @@ const performSecurityCheck = async (): Promise<void> => {  try {
     // 重新加载安全日志
     initializeSecurityLogs();
     
-    // 根据项目规范，安全检查按钮仅触发检查任务启动，不应直接展示安全风险详情窗口
-    // 详情查看应通过独立入口或后续操作实现，确保功能触发与结果展示分离
-  } catch (error) {    console.error('安全检查失败:', error)
-    ElMessage.error('安全检查失败，请稍后重试')
+  } catch (error: any) {
+    console.error('安全检查失败:', error)
+    ElMessage.error(error.message || '安全检查失败，请稍后重试')
     
     // 记录安全操作日志
-    const userId = localStorage.getItem('userId') || 'default_user';
+    const userId = currentUserId.value;
     logSecurityOperation({
       userId,
       operation: 'perform_security_check_failed',
@@ -1875,7 +2719,7 @@ const changePassword = async (): Promise<void> => {
     passwordForm.confirmPassword = ''
     
     // 记录安全操作日志
-    const userId = localStorage.getItem('userId') || 'default_user'
+    const userId = currentUserId.value
     logSecurityOperation({
       userId,
       operation: 'change_password',
@@ -1892,7 +2736,7 @@ const changePassword = async (): Promise<void> => {
     ElMessage.error('密码修改失败，请检查当前密码是否正确')
     
     // 记录安全操作日志
-    const userId = localStorage.getItem('userId') || 'default_user'
+    const userId = currentUserId.value
     logSecurityOperation({
       userId,
       operation: 'change_password_failed',
@@ -2005,7 +2849,7 @@ const toggleTwoFactor = async (value: boolean): Promise<void> => {
       ElMessage.success('两步验证已关闭')
           
           // 记录安全操作日志
-          const userId = localStorage.getItem('userId') || 'default_user'
+          const userId = currentUserId.value
           logSecurityOperation({
             userId,
             operation: 'disable_two_factor',
@@ -2064,7 +2908,7 @@ const verifyTwoFactorCode = async (): Promise<void> => {
       ElMessage.success('验证通过')
       
       // 记录安全操作日志
-      const userId = localStorage.getItem('userId') || 'default_user';
+      const userId = currentUserId.value;
       logSecurityOperation({
         userId,
         operation: 'verify_two_factor_code_success',
@@ -2080,7 +2924,7 @@ const verifyTwoFactorCode = async (): Promise<void> => {
       ElMessage.error(response.message || '验证码错误，请重新输入')
       
       // 记录安全操作日志
-      const userId = localStorage.getItem('userId') || 'default_user';
+      const userId = currentUserId.value;
       logSecurityOperation({
         userId,
         operation: 'verify_two_factor_code_failed',
@@ -2098,7 +2942,7 @@ const verifyTwoFactorCode = async (): Promise<void> => {
     ElMessage.error('验证失败，请稍后重试')
     
     // 记录安全操作日志
-    const userId = localStorage.getItem('userId') || 'default_user';
+    const userId = currentUserId.value;
     logSecurityOperation({
       userId,
       operation: 'verify_two_factor_code_error',
@@ -2136,7 +2980,7 @@ const completeTwoFactorSetup = async (): Promise<void> => {
       ElMessage.success('两步验证已成功启用')
       
       // 记录安全操作日志
-      const userId = localStorage.getItem('userId') || 'default_user'
+      const userId = currentUserId.value
       logSecurityOperation({
         userId,
         operation: 'enable_two_factor',
@@ -2187,7 +3031,7 @@ const cancelTwoFactorSetup = async (): Promise<void> => {
   }
   
   // 记录安全操作日志
-  const userId = localStorage.getItem('userId') || 'default_user';
+  const userId = currentUserId.value;
   logSecurityOperation({
     userId,
     operation: 'cancel_two_factor_setup',
@@ -2231,7 +3075,7 @@ const handleTwoFactorDialogClose = async (): Promise<void> => {
   twoFactorStep.value = 0
   
   // 记录安全操作日志
-  const userId = localStorage.getItem('userId') || 'default_user';
+  const userId = currentUserId.value;
   logSecurityOperation({
     userId,
     operation: 'handle_two_factor_dialog_close',
@@ -2255,7 +3099,7 @@ const copyAllNewBackupCodes = async (): Promise<void> => {
     ElMessage.success('所有备用验证码已复制到剪贴板')
     
     // 记录安全操作日志
-    const userId = localStorage.getItem('userId') || 'default_user';
+    const userId = currentUserId.value;
     logSecurityOperation({
       userId,
       operation: 'copy_all_backup_codes',
@@ -2292,7 +3136,7 @@ const downloadNewBackupCodes = (): void => {
     ElMessage.success('备用验证码已下载')
     
     // 记录安全操作日志
-    const userId = localStorage.getItem('userId') || 'default_user';
+    const userId = currentUserId.value;
     logSecurityOperation({
       userId,
       operation: 'download_backup_codes',
@@ -2313,7 +3157,7 @@ const copySecretKey = async (): Promise<void> => {
     ElMessage.success('密钥已复制到剪贴板')
     
     // 记录安全操作日志
-    const userId = localStorage.getItem('userId') || 'default_user';
+    const userId = currentUserId.value;
     logSecurityOperation({
       userId,
       operation: 'copy_secret_key',
@@ -2336,7 +3180,7 @@ const copySecretKey = async (): Promise<void> => {
     ElMessage.success('密钥已复制到剪贴板')
     
     // 记录安全操作日志
-    const userId = localStorage.getItem('userId') || 'default_user';
+    const userId = currentUserId.value;
     logSecurityOperation({
       userId,
       operation: 'copy_secret_key_fallback',
@@ -2351,54 +3195,97 @@ const copySecretKey = async (): Promise<void> => {
   }
 }
 
-const toggleLoginProtection = (value: boolean): void => {
-  if (value) {
-    ElMessage.success('登录保护已开启')
-  } else {
-    ElMessage.warning('登录保护已关闭')
+const toggleLoginProtection = async (value: boolean): Promise<void> => {
+  try {
+    // 调用后端 API 更新设置
+    const response = await updateSecuritySettings({
+      login_protection_enabled: value
+    });
+
+    if (response.success) {
+      if (value) {
+        ElMessage.success('登录保护已开启');
+      } else {
+        ElMessage.warning('登录保护已关闭');
+      }
+      
+      // 保存登录保护设置到localStorage
+      localStorage.setItem('loginProtectionEnabled', value.toString());
+
+      // 记录安全操作日志
+      const userId = currentUserId.value;
+      await logSecurityOperation({
+        userId,
+        operation: 'toggle_login_protection',
+        description: value ? '启用登录保护' : '禁用登录保护',
+        ip: '127.0.0.1', // 实际应用中应获取真实IP
+        userAgent: navigator.userAgent,
+        status: 'success'
+      });
+
+      // 重新加载安全日志
+      await initializeSecurityLogs();
+      
+      // 触发安全检查以更新分数
+      await performSecurityCheck();
+    } else {
+      ElMessage.error('更新安全设置失败');
+      // 恢复开关状态
+      loginProtection.value = !value;
+    }
+  } catch (error) {
+    console.error('切换登录保护失败:', error);
+    ElMessage.error('操作失败，请重试');
+    // 恢复开关状态
+    loginProtection.value = !value;
   }
-  
-  // 保存登录保护设置到localStorage
-  localStorage.setItem('loginProtectionEnabled', value.toString());
-  
-  // 记录安全操作日志
-  const userId = localStorage.getItem('userId') || 'default_user';
-  logSecurityOperation({
-    userId,
-    operation: 'toggle_login_protection',
-    description: value ? '启用登录保护' : '禁用登录保护',
-    ip: '127.0.0.1', // 实际应用中应获取真实IP
-    userAgent: navigator.userAgent,
-    status: 'success'
-  });
-  
-  // 重新加载安全日志
-  initializeSecurityLogs();
 }
 
-const toggleAbnormalLoginAlert = (value: boolean): void => {
-  if (value) {
-    ElMessage.success('异常登录提醒已开启')
-  } else {
-    ElMessage.warning('异常登录提醒已关闭')
+const toggleAbnormalLoginAlert = async (value: boolean): Promise<void> => {
+  try {
+    // 调用后端 API 更新设置
+    const response = await updateSecuritySettings({
+      email_alerts_enabled: value,
+      sms_alerts_enabled: value
+    });
+
+    if (response.success) {
+      if (value) {
+        ElMessage.success('异常登录提醒已开启');
+      } else {
+        ElMessage.warning('异常登录提醒已关闭');
+      }
+      
+      // 保存异常登录提醒设置到localStorage
+      localStorage.setItem('abnormalLoginAlert', value.toString());
+
+      // 记录安全操作日志
+      const userId = currentUserId.value;
+      await logSecurityOperation({
+        userId,
+        operation: 'toggle_abnormal_login_alert',
+        description: value ? '启用异常登录提醒' : '禁用异常登录提醒',
+        ip: '127.0.0.1', // 实际应用中应获取真实IP
+        userAgent: navigator.userAgent,
+        status: 'success'
+      });
+
+      // 重新加载安全日志
+      await initializeSecurityLogs();
+      
+      // 触发安全检查以更新分数
+      await performSecurityCheck();
+    } else {
+      ElMessage.error('更新提醒设置失败');
+      // 恢复开关状态
+      abnormalLoginAlert.value = !value;
+    }
+  } catch (error) {
+    console.error('切换异常登录提醒失败:', error);
+    ElMessage.error('操作失败，请重试');
+    // 恢复开关状态
+    abnormalLoginAlert.value = !value;
   }
-  
-  // 保存异常登录提醒设置到localStorage
-  localStorage.setItem('abnormalLoginAlert', value.toString());
-  
-  // 记录安全操作日志
-  const userId = localStorage.getItem('userId') || 'default_user';
-  logSecurityOperation({
-    userId,
-    operation: 'toggle_abnormal_login_alert',
-    description: value ? '启用异常登录提醒' : '禁用异常登录提醒',
-    ip: '127.0.0.1', // 实际应用中应获取真实IP
-    userAgent: navigator.userAgent,
-    status: 'success'
-  });
-  
-  // 重新加载安全日志
-  initializeSecurityLogs();
 }
 
 const toggleLoginRateLimit = async (value: boolean): Promise<void> => {
@@ -2419,7 +3306,7 @@ const toggleLoginRateLimit = async (value: boolean): Promise<void> => {
       ElMessage.success('登录频率限制已启用')
       
       // 记录安全操作日志
-      const userId = localStorage.getItem('userId') || 'default_user';
+      const userId = currentUserId.value;
       logSecurityOperation({
         userId,
         operation: 'enable_login_rate_limit',
@@ -2435,7 +3322,7 @@ const toggleLoginRateLimit = async (value: boolean): Promise<void> => {
       ElMessage.warning('登录频率限制已禁用')
       
       // 记录安全操作日志
-      const userId = localStorage.getItem('userId') || 'default_user';
+      const userId = currentUserId.value;
       logSecurityOperation({
         userId,
         operation: 'disable_login_rate_limit',
@@ -2461,7 +3348,7 @@ const toggleLoginRateLimit = async (value: boolean): Promise<void> => {
 const toggleDataEncryption = async (value: boolean): Promise<void> => {
   try {
     // 获取当前用户ID
-    const userId = localStorage.getItem('userId') || 'default_user';
+    const userId = currentUserId.value;
     
     if (value) {
       // 启用数据加密 - 默认状态，无需确认
@@ -2473,20 +3360,24 @@ const toggleDataEncryption = async (value: boolean): Promise<void> => {
       });
       
       try {
-        // 实际应用中，这里应该调用后端API来启用数据加密
-        // 模拟API调用
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // 初始化密钥管理服务
+        const { initializeKeyManagement, generateMasterKey, registerHardwareBinding, getKeyStatus } = await import('@/services/keyManagementService')
+        const { initializeEncryption } = await import('@/services/dataEncryptionService')
+        
+        // 初始化密钥管理（包含密钥生成和硬件绑定）
+        await initializeKeyManagement()
+        
+        // 初始化数据加密服务
+        await initializeEncryption()
+        
+        // 获取密钥状态
+        const status = await getKeyStatus()
         
         // 保存加密状态到localStorage
         localStorage.setItem(`dataEncryptionEnabled_${userId}`, 'true');
         
         // 启用数据加密管理器
         dataEncryptionManager.enableEncryption();
-        
-        // 生成并保存主密钥（实际应用中应在后端生成并安全存储）
-        const masterKey = 'user_master_key_' + userId + '_' + Date.now();
-        localStorage.setItem('master_encryption_key', masterKey);
-        dataEncryptionManager.setMasterKey(masterKey);
         
         // 更新本地状态
         dataEncryptionEnabled.value = true;
@@ -2498,7 +3389,7 @@ const toggleDataEncryption = async (value: boolean): Promise<void> => {
           userId,
           operation: 'enable_data_encryption',
           description: '启用数据加密',
-          ip: '127.0.0.1', // 实际应用中应获取真实IP
+          ip: clientIpAddress.value || '127.0.0.1',
           userAgent: navigator.userAgent,
           status: 'success'
         });
@@ -2532,10 +3423,10 @@ const toggleDataEncryption = async (value: boolean): Promise<void> => {
         });
         
         try {
-          // 移除模拟延迟 - 现在使用真实API调用
-          
           // 删除加密状态
           localStorage.removeItem(`dataEncryptionEnabled_${userId}`);
+          localStorage.removeItem('master_key_id');
+          localStorage.removeItem('master_key_version');
           
           // 禁用数据加密管理器
           dataEncryptionManager.disableEncryption();
@@ -2604,7 +3495,7 @@ const sendPhoneCode = async (): Promise<void> => {
   }
   
   // 记录安全操作日志
-  const userId = localStorage.getItem('userId') || 'default_user';
+  const userId = currentUserId.value;
   logSecurityOperation({
     userId,
     operation: 'send_phone_code',
@@ -2641,7 +3532,7 @@ const sendEmailCode = async (): Promise<void> => {
   }
   
   // 记录安全操作日志
-  const userId = localStorage.getItem('userId') || 'default_user';
+  const userId = currentUserId.value;
   logSecurityOperation({
     userId,
     operation: 'send_email_code',
@@ -2672,7 +3563,7 @@ const bindPhone = async (): Promise<void> => {
   showPhoneDialog.value = false
   
   // 记录安全操作日志
-  const userId = localStorage.getItem('userId') || 'default_user';
+  const userId = currentUserId.value;
   logSecurityOperation({
     userId,
     operation: 'bind_phone',
@@ -2703,7 +3594,7 @@ const bindEmail = async (): Promise<void> => {
   showEmailDialog.value = false
   
   // 记录安全操作日志
-  const userId = localStorage.getItem('userId') || 'default_user';
+  const userId = currentUserId.value;
   logSecurityOperation({
     userId,
     operation: 'bind_email',
@@ -2750,7 +3641,7 @@ const exportLoginHistory = (): void => {
     ElMessage.success('登录历史已导出');
 
     // 记录安全操作日志
-    const userId = localStorage.getItem('userId') || 'default_user';
+    const userId = currentUserId.value;
     logSecurityOperation({
       userId,
       operation: 'export_login_history',
@@ -2777,7 +3668,7 @@ const clearLoginHistory = (): void => {
     ElMessage.success('登录历史已清空')
     
     // 记录安全操作日志
-    const userId = localStorage.getItem('userId') || 'default_user';
+    const userId = currentUserId.value;
     logSecurityOperation({
       userId,
       operation: 'clear_login_history',
@@ -2807,7 +3698,7 @@ const deleteLoginRecord = (recordId: number): void => {
     ElMessage.success('登录记录已删除')
     
     // 记录安全操作日志
-    const userId = localStorage.getItem('userId') || 'default_user';
+    const userId = currentUserId.value;
     logSecurityOperation({
       userId,
       operation: 'delete_login_record',
@@ -2859,7 +3750,7 @@ const exportDetailedLoginHistory = (): void => {
     ElMessage.success('详细登录历史已导出');
 
     // 记录安全操作日志
-    const userId = localStorage.getItem('userId') || 'default_user';
+    const userId = currentUserId.value;
     logSecurityOperation({
       userId,
       operation: 'export_detailed_login_history',
@@ -2886,7 +3777,7 @@ const clearDetailedLoginHistory = (): void => {
     ElMessage.success('详细登录历史已清空')
     
     // 记录安全操作日志
-    const userId = localStorage.getItem('userId') || 'default_user';
+    const userId = currentUserId.value;
     logSecurityOperation({
       userId,
       operation: 'clear_detailed_login_history',
@@ -2916,7 +3807,7 @@ const deleteDetailedLoginRecord = (recordId: number): void => {
     ElMessage.success('详细登录记录已删除')
     
     // 记录安全操作日志
-    const userId = localStorage.getItem('userId') || 'default_user';
+    const userId = currentUserId.value;
     logSecurityOperation({
       userId,
       operation: 'delete_detailed_login_record',
@@ -2937,71 +3828,29 @@ const currentDeviceCount = computed(() => {
   return loginDevices.value.filter(device => device.current).length
 })
 
-const filteredLoginHistory = computed(() => {
-  let filtered = [...loginHistory.value]
-  
-  // 关键词筛选
-  if (loginHistoryFilter.keyword) {
-    const keyword = loginHistoryFilter.keyword.toLowerCase()
-    filtered = filtered.filter(record => 
-      record.device.toLowerCase().includes(keyword) ||
-      record.ip.toLowerCase().includes(keyword) ||
-      record.location.toLowerCase().includes(keyword)
-    )
-  }
-  
-  // 日期范围筛选
-  if (loginHistoryFilter.dateRange && loginHistoryFilter.dateRange.length === 2) {
-    const startDate = loginHistoryFilter.dateRange[0] as unknown as string
-    const endDate = loginHistoryFilter.dateRange[1] as unknown as string
-    if (startDate && endDate) {
-      filtered = filtered.filter(record => {
-        const recordDate = record.time.split(' ')[0] // 提取日期部分
-        if (recordDate) {
-          return recordDate >= startDate && recordDate <= endDate
-        }
-        return false
-      })
-    }
-  }
-  
-  // 排序
-  if (loginHistorySort.prop && loginHistorySort.order) {
-    filtered.sort((a, b) => {
-      const prop = loginHistorySort.prop as keyof typeof a
-      const order = loginHistorySort.order === 'ascending' ? 1 : -1
-      
-      // 处理时间字段的特殊排序
-      if (prop === 'time') {
-        return (new Date(a[prop]).getTime() - new Date(b[prop]).getTime()) * order
-      }
-      
-      // 处理字符串字段的排序
-      if (typeof a[prop] === 'string' && typeof b[prop] === 'string') {
-        return a[prop].localeCompare(b[prop]) * order
-      }
-      
-      // 默认排序
-      return 0
-    })
-  }
-  
-  return filtered
-})
-
+/**
+ * 筛选登录历史
+ * 重新加载第一页数据
+ */
 const filterLoginHistory = (): void => {
-  // 筛选逻辑已在computed属性中实现
-  ElMessage.info('筛选条件已应用')
+  loginHistoryPagination.currentPage = 1
+  fetchLoginHistoryData()
+  ElMessage.success('筛选条件已应用')
 }
 
+/**
+ * 重置登录历史筛选
+ * 清空筛选条件并重新加载
+ */
 const resetLoginHistoryFilter = (): void => {
   loginHistoryFilter.keyword = ''
   loginHistoryFilter.dateRange = []
+  loginHistoryPagination.currentPage = 1
+  fetchLoginHistoryData()
 }
 
 const hasLoginHistoryFilters = computed(() => {
-  return loginHistoryFilter.keyword !== '' || 
-         (loginHistoryFilter.dateRange && loginHistoryFilter.dateRange.length > 0)
+  return loginHistoryFilter.keyword !== '' || (loginHistoryFilter.dateRange && loginHistoryFilter.dateRange.length > 0)
 })
 
 const hasLoginHistorySort = computed(() => {
@@ -3015,84 +3864,24 @@ const clearAllLoginHistoryFilters = (): void => {
   ElMessage.info('已清除所有筛选和排序')
 }
 
-const handleLoginHistorySort = (sort: { prop: string; order: string }): void => {
-  loginHistorySort.prop = sort.prop
-  loginHistorySort.order = sort.order
-}
-
-const filteredDetailedLoginHistory = computed(() => {
-  let filtered = [...detailedLoginHistory.value]
-  
-  // 关键词筛选
-  if (detailedLoginHistoryFilter.keyword) {
-    const keyword = detailedLoginHistoryFilter.keyword.toLowerCase()
-    filtered = filtered.filter(record => 
-      record.device.toLowerCase().includes(keyword) ||
-      record.ip.toLowerCase().includes(keyword) ||
-      record.location.toLowerCase().includes(keyword) ||
-      record.browser.toLowerCase().includes(keyword)
-    )
-  }
-  
-  // 日期范围筛选
-  if (detailedLoginHistoryFilter.dateRange && detailedLoginHistoryFilter.dateRange.length === 2) {
-    const startDate = detailedLoginHistoryFilter.dateRange[0] as unknown as string
-    const endDate = detailedLoginHistoryFilter.dateRange[1] as unknown as string
-    if (startDate && endDate) {
-      filtered = filtered.filter(record => {
-        const recordDate = record.time.split(' ')[0] // 提取日期部分
-        if (recordDate) {
-          return recordDate >= startDate && recordDate <= endDate
-        }
-        return false
-      })
-    }
-  }
-  
-  // 状态筛选
-  if (detailedLoginHistoryFilter.status) {
-    filtered = filtered.filter(record => record.status === detailedLoginHistoryFilter.status)
-  }
-  
-  // 排序
-  if (detailedLoginHistorySort.prop && detailedLoginHistorySort.order) {
-    filtered.sort((a, b) => {
-      const prop = detailedLoginHistorySort.prop as keyof typeof a
-      const order = detailedLoginHistorySort.order === 'ascending' ? 1 : -1
-      
-      // 处理时间字段的特殊排序
-      if (prop === 'time') {
-        return (new Date(a[prop]).getTime() - new Date(b[prop]).getTime()) * order
-      }
-      
-      // 处理字符串字段的排序
-      if (typeof a[prop] === 'string' && typeof b[prop] === 'string') {
-        return a[prop].localeCompare(b[prop]) * order
-      }
-      
-      // 默认排序
-      return 0
-    })
-  }
-  
-  return filtered
-})
-
+// 详细登录历史筛选
 const filterDetailedLoginHistory = (): void => {
-  // 筛选逻辑已在computed属性中实现
-  ElMessage.info('筛选条件已应用')
+  detailedLoginHistoryPagination.currentPage = 1
+  fetchDetailedLoginHistoryData()
+  ElMessage.success('筛选条件已应用')
 }
 
+// 重置详细登录历史筛选
 const resetDetailedLoginHistoryFilter = (): void => {
   detailedLoginHistoryFilter.keyword = ''
   detailedLoginHistoryFilter.dateRange = []
   detailedLoginHistoryFilter.status = ''
+  detailedLoginHistoryPagination.currentPage = 1
+  fetchDetailedLoginHistoryData()
 }
 
 const hasDetailedLoginHistoryFilters = computed(() => {
-  return detailedLoginHistoryFilter.keyword !== '' || 
-         (detailedLoginHistoryFilter.dateRange && detailedLoginHistoryFilter.dateRange.length > 0) ||
-         detailedLoginHistoryFilter.status !== ''
+  return detailedLoginHistoryFilter.keyword !== '' || (detailedLoginHistoryFilter.dateRange && detailedLoginHistoryFilter.dateRange.length > 0) || detailedLoginHistoryFilter.status !== ''
 })
 
 const hasDetailedLoginHistorySort = computed(() => {
@@ -3111,78 +3900,146 @@ const handleDetailedLoginHistorySort = (sort: { prop: string; order: string }): 
   detailedLoginHistorySort.order = sort.order
 }
 
-const refreshDeviceList = (): void => {
-  // 模拟刷新设备列表
-  ElMessage.info('设备列表已刷新')
-  
-  // 记录安全操作日志
-  const userId = localStorage.getItem('userId') || 'default_user';
-  logSecurityOperation({
-    userId,
-    operation: 'refresh_device_list',
-    description: '刷新设备列表',
-    ip: '127.0.0.1', // 实际应用中应获取真实IP
-    userAgent: navigator.userAgent,
-    status: 'success'
-  });
-  
-  // 重新加载安全日志
-  initializeSecurityLogs();
+const handleLoginHistorySort = (sort: { prop: string; order: string }): void => {
+  loginHistorySort.prop = sort.prop
+  loginHistorySort.order = sort.order
 }
 
-const removeAllDevices = (): void => {
-  ElMessageBox.confirm('确定要移除所有非当前设备吗？', '提示', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning'
-  }).then(() => {
-    // 只移除非当前设备
-    loginDevices.value = loginDevices.value.filter(device => device.current)
-    ElMessage.success('非当前设备已移除')
+const refreshDeviceList = async (): Promise<void> => {
+  try {
+    const loading = ElLoading.service({
+      lock: true,
+      text: '正在刷新设备列表...',
+      background: 'rgba(0, 0, 0, 0.7)'
+    });
+    
+    await loadCurrentDeviceSessions();
+    
+    loading.close();
+    ElMessage.success('设备列表已刷新');
     
     // 记录安全操作日志
-    const userId = localStorage.getItem('userId') || 'default_user';
+    const userId = currentUserId.value;
     logSecurityOperation({
       userId,
-      operation: 'remove_all_devices',
-      description: '移除所有非当前设备',
-      ip: '127.0.0.1', // 实际应用中应获取真实IP
+      operation: 'refresh_device_list',
+      description: '刷新设备列表',
+      ip: clientIpAddress.value || '127.0.0.1',
       userAgent: navigator.userAgent,
       status: 'success'
     });
     
     // 重新加载安全日志
     initializeSecurityLogs();
+  } catch (error) {
+    console.error('刷新设备列表失败:', error);
+    ElMessage.error('刷新设备列表失败');
+  }
+}
+
+const removeAllDevices = (): void => {
+  ElMessageBox.confirm('确定要注销除当前设备外的所有设备吗？', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(async () => {
+    try {
+      const loading = ElLoading.service({
+        lock: true,
+        text: '正在注销设备...',
+        background: 'rgba(0, 0, 0, 0.7)'
+      });
+      
+      const response = await revokeOtherBackendDeviceSessionsAPI();
+      
+      if (response.success) {
+        // 同时清理本地
+        const userId = currentUserId.value;
+        logoutAllDevices(userId);
+        
+        await loadCurrentDeviceSessions();
+        loading.close();
+        ElMessage.success('其他设备已成功注销');
+        
+        // 记录安全操作日志
+        logSecurityOperation({
+          userId,
+          operation: 'remove_all_devices',
+          description: '注销所有非当前设备',
+          ip: clientIpAddress.value || '127.0.0.1',
+          userAgent: navigator.userAgent,
+          status: 'success'
+        });
+        
+        // 重新加载安全日志
+        initializeSecurityLogs();
+      } else {
+        loading.close();
+        ElMessage.error('注销设备失败: ' + (response.message || '未知错误'));
+      }
+    } catch (error) {
+      console.error('注销设备失败:', error);
+      ElMessage.error('注销设备失败');
+    }
   }).catch(() => {
     // 取消操作
   })
 }
 
-const removeDevice = (deviceId: number): void => {
-  ElMessageBox.confirm('确定要移除该设备吗？', '提示', {
+const removeDevice = (device: any): void => {
+  const deviceId = typeof device === 'object' ? device.id : device;
+  const sessionsToRemove = device.sessions || [{ id: deviceId }];
+  
+  ElMessageBox.confirm('确定要注销该设备吗？', '提示', {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
     type: 'warning'
-  }).then(() => {
-    const index = loginDevices.value.findIndex(device => device.id === deviceId)
-    if (index > -1) {
-      loginDevices.value.splice(index, 1)
+  }).then(async () => {
+    try {
+      const loading = ElLoading.service({
+        lock: true,
+        text: '正在注销设备...',
+        background: 'rgba(0, 0, 0, 0.7)'
+      });
+      
+      const userId = currentUserId.value;
+      let anySuccess = false;
+      
+      // 遍历并注销该设备下的所有会话
+      for (const session of sessionsToRemove) {
+        const response = await revokeBackendDeviceSessionAPI(session.id);
+        if (response.success) {
+          anySuccess = true;
+          // 同时清理本地
+          logoutDevice(userId, String(session.id));
+        }
+      }
+      
+      if (anySuccess) {
+        await loadCurrentDeviceSessions();
+        loading.close();
+        ElMessage.success('设备已成功注销');
+        
+        // 记录安全操作日志
+        logSecurityOperation({
+          userId,
+          operation: 'remove_device',
+          description: `注销设备 IP: ${device.ip || deviceId}`,
+          ip: clientIpAddress.value || '127.0.0.1',
+          userAgent: navigator.userAgent,
+          status: 'success'
+        });
+        
+        // 重新加载安全日志
+        initializeSecurityLogs();
+      } else {
+        loading.close();
+        ElMessage.error('注销设备失败');
+      }
+    } catch (error) {
+      console.error('注销设备失败:', error);
+      ElMessage.error('注销设备失败');
     }
-    ElMessage.success('设备移除成功')
-    
-    // 记录安全操作日志
-    const userId = localStorage.getItem('userId') || 'default_user';
-    logSecurityOperation({
-      userId,
-      operation: 'remove_device',
-      description: `移除设备 ID: ${deviceId}`,
-      ip: '127.0.0.1', // 实际应用中应获取真实IP
-      userAgent: navigator.userAgent,
-      status: 'success'
-    });
-    
-    // 重新加载安全日志
-    initializeSecurityLogs();
   }).catch(() => {
     // 取消操作
   })
@@ -3194,7 +4051,7 @@ const copyBackupCode = async (code: string): Promise<void> => {
     ElMessage.success('验证码已复制到剪贴板')
     
     // 记录安全操作日志
-    const userId = localStorage.getItem('userId') || 'default_user';
+    const userId = currentUserId.value;
     logSecurityOperation({
       userId,
       operation: 'copy_backup_code',
@@ -3217,7 +4074,7 @@ const copyBackupCode = async (code: string): Promise<void> => {
     ElMessage.success('验证码已复制到剪贴板')
     
     // 记录安全操作日志
-    const userId = localStorage.getItem('userId') || 'default_user';
+    const userId = currentUserId.value;
     logSecurityOperation({
       userId,
       operation: 'copy_backup_code_fallback',
@@ -3254,7 +4111,7 @@ const regenerateBackupCodes = async (): Promise<void> => {
       ElMessage.success('备用验证码已重新生成')
       
       // 记录安全操作日志
-      const userId = localStorage.getItem('userId') || 'default_user';
+      const userId = currentUserId.value;
       logSecurityOperation({
         userId,
         operation: 'regenerate_backup_codes',
@@ -3275,7 +4132,7 @@ const regenerateBackupCodes = async (): Promise<void> => {
       ElMessage.error('重新生成失败，请稍后重试')
       
       // 记录安全操作日志
-      const userId = localStorage.getItem('userId') || 'default_user';
+      const userId = currentUserId.value;
       logSecurityOperation({
         userId,
         operation: 'regenerate_backup_codes_failed',
@@ -3300,8 +4157,8 @@ const saveLoginLimit = async (): Promise<void> => {
       console.log('令牌验证失败')
       return
     }
-    // 获取当前用户ID（实际应用中应从用户信息获取）
-    const userId = 'current_user_id';
+    // 获取当前用户ID
+    const userId = currentUserId.value
     
     // 保存登录限制配置
     const config = {
@@ -3428,7 +4285,7 @@ const saveLockoutSettings = async (): Promise<void> => {
     checkAccountLockStatus()
     
     // 记录安全操作日志
-    const userId = localStorage.getItem('userId') || 'default_user';
+    const userId = currentUserId.value;
     logSecurityOperation({
       userId,
       operation: 'save_lockout_settings',
@@ -3453,7 +4310,7 @@ const cancelLockoutSettings = (): void => {
   ElMessage.info('已取消修改')
   
   // 记录安全操作日志
-  const userId = localStorage.getItem('userId') || 'default_user';
+  const userId = currentUserId.value;
   logSecurityOperation({
     userId,
     operation: 'cancel_lockout_settings',
@@ -3467,6 +4324,12 @@ const cancelLockoutSettings = (): void => {
   initializeSecurityLogs();
 }
 
+// 打开会话超时设置
+const openSessionTimeoutDialog = (): void => {
+  initializeFromGlobalConfig()
+  showSessionTimeoutDialog.value = true
+}
+
 // 取消会话超时设置
 const cancelSessionTimeout = (): void => {
   // 恢复原始设置
@@ -3475,7 +4338,7 @@ const cancelSessionTimeout = (): void => {
   ElMessage.info('已取消修改')
   
   // 记录安全操作日志
-  const userId = localStorage.getItem('userId') || 'default_user';
+  const userId = currentUserId.value;
   logSecurityOperation({
     userId,
     operation: 'cancel_session_timeout',
@@ -3496,53 +4359,72 @@ const saveSessionTimeout = async (): Promise<void> => {
     console.log('令牌验证失败')
     return
   }
-  // 保存会话超时设置
-  ElMessage.success(`会话超时设置已保存：超时时长 ${sessionTimeoutForm.timeout} 分钟，提醒时间 ${sessionTimeoutForm.warningTime} 分钟`)
-  showSessionTimeoutDialog.value = false
-  
-  // 更新原始设置为当前设置
-  Object.assign(originalSessionTimeoutSettings, sessionTimeoutForm)
-  
-  // 实际应用中，这里应该调用后端API来保存会话超时设置
-  // 例如：
-  // api.updateSessionTimeoutSetting({
-  //   timeout: sessionTimeoutForm.timeout,
-  //   warningTime: sessionTimeoutForm.warningTime
-  // })
-  //   .then(() => {
-  //     ElMessage.success('会话超时设置已保存')
-  //   })
-  //   .catch(error => {
-  //     ElMessage.error('保存失败，请稍后重试')
-  //   })
-  
-  // 记录安全操作日志
-  const userId = localStorage.getItem('userId') || 'default_user';
-  logSecurityOperation({
-    userId,
-    operation: 'save_session_timeout',
-    description: `保存会话超时设置：超时时长 ${sessionTimeoutForm.timeout} 分钟，提醒时间 ${sessionTimeoutForm.warningTime} 分钟`,
-    ip: '127.0.0.1', // 实际应用中应获取真实IP
-    userAgent: navigator.userAgent,
-    status: 'success'
-  });
-  
-  // 重新加载安全日志
-  initializeSecurityLogs();
+
+  try {
+    const loading = ElLoading.service({
+      lock: true,
+      text: '正在保存设置...',
+      background: 'rgba(0, 0, 0, 0.7)'
+    })
+
+    const response = await updateSecuritySettings({
+      session_timeout_minutes: sessionTimeoutForm.timeout,
+      session_timeout_warning_minutes: sessionTimeoutForm.warningTime
+    })
+
+    loading.close()
+
+    if (response.success) {
+      ElMessage.success(`会话超时设置已保存：超时时长 ${sessionTimeoutForm.timeout} 分钟，提醒时间 ${sessionTimeoutForm.warningTime} 分钟`)
+      showSessionTimeoutDialog.value = false
+      
+      // 更新原始设置为当前设置
+      Object.assign(originalSessionTimeoutSettings, sessionTimeoutForm)
+      
+      // 更新全局自动登出配置
+      updateAutoLogoutConfig({
+        enabled: true,
+        timeoutMinutes: sessionTimeoutForm.timeout,
+        warningMinutes: sessionTimeoutForm.warningTime
+      })
+      
+      // 激活全局自动登出机制
+      activateAutoLogout()
+
+      // 记录安全操作日志
+      const userId = currentUserId.value;
+      logSecurityOperation({
+        userId,
+        operation: 'UPDATE',
+        description: `保存会话超时设置：超时时长 ${sessionTimeoutForm.timeout} 分钟，提醒时间 ${sessionTimeoutForm.warningTime} 分钟`,
+        ip: '127.0.0.1', // 实际应用中应获取真实IP
+        userAgent: navigator.userAgent,
+        status: 'success',
+        action: 'UPDATE_SESSION_TIMEOUT'
+      });
+      
+      // 重新加载安全日志
+      initializeSecurityLogs();
+    } else {
+      ElMessage.error(response.message || '保存失败，请稍后重试')
+    }
+  } catch (error) {
+    console.error('保存会话超时设置失败:', error)
+    ElMessage.error('保存失败，请稍后重试')
+  }
 }
 
 const resetRateLimitCounter = (): void => {
   try {
     // 获取当前用户ID
-    const accountId = localStorage.getItem('userId') || 'default_user'
+    const userId = currentUserId.value
     
     // 重置失败尝试计数器
-    resetFailedAttempts(accountId)
+    resetFailedAttempts(userId)
     
     ElMessage.success('频率限制计数器已重置')
     
     // 记录安全操作日志
-    const userId = localStorage.getItem('userId') || 'default_user';
     logSecurityOperation({
       userId,
       operation: 'reset_rate_limit_counter',
@@ -3565,37 +4447,54 @@ const manuallyLockAccount = async (): Promise<void> => {
     lockOperationLoading.value = true
     
     // 获取当前用户ID
-    const accountId = localStorage.getItem('userId') || 'default_user'
+    const userId = currentUserId.value
     
     // 获取锁定时长配置
     const config = getSecurityConfig()
     const lockoutDuration = config.lockout.lockoutDuration
     
     // 手动锁定账户，使用配置的锁定时长
-    serviceManuallyLockAccount(accountId, lockoutDuration)
-    
-    // 更新本地状态
-    accountLocked.value = true
-    remainingLockTime.value = lockoutDuration * 60 // 转换为秒
-    
-    ElMessage.success(`账户已手动锁定，锁定时长${lockoutDuration}分钟`)
-    
-    // 开始倒计时
-    startLockCountdown()
-    
-    // 记录安全操作日志
-    const userId = localStorage.getItem('userId') || 'default_user';
-    logSecurityOperation({
-      userId,
-      operation: 'manually_lock_account',
-      description: `手动锁定账户，锁定时长${lockoutDuration}分钟`,
-      ip: '127.0.0.1', // 实际应用中应获取真实IP
-      userAgent: navigator.userAgent,
-      status: 'success'
-    });
-    
-    // 重新加载安全日志
-    initializeSecurityLogs();
+    try {
+      const { lockAccountAPI } = await import('@/services/accountUnlockService')
+      const response = await lockAccountAPI(userId, lockoutDuration)
+      
+      if (!response.success) {
+        throw new Error(response.message || '调用锁定接口失败')
+      }
+      
+      // 同时更新本地状态作为备份
+      serviceManuallyLockAccount(userId, lockoutDuration)
+      
+      // 更新本地状态
+      accountLocked.value = true
+      remainingLockTime.value = lockoutDuration * 60 // 转换为秒
+      
+      ElMessage.success(`账户已手动锁定，锁定时长${lockoutDuration}分钟`)
+      
+      // 开始倒计时
+      startLockCountdown()
+      
+      // 记录安全操作日志
+      logSecurityOperation({
+        userId,
+        operation: 'manually_lock_account',
+        description: `手动锁定账户，锁定时长${lockoutDuration}分钟`,
+        ip: '127.0.0.1', // 实际应用中应获取真实IP
+        userAgent: navigator.userAgent,
+        status: 'success'
+      });
+      
+      // 重新加载安全日志
+      initializeSecurityLogs();
+    } catch (apiError) {
+      console.error('调用锁定API失败:', apiError)
+      // 如果API失败，我们仍然允许本地锁定作为一种安全降级措施
+      serviceManuallyLockAccount(userId, lockoutDuration)
+      accountLocked.value = true
+      remainingLockTime.value = lockoutDuration * 60
+      ElMessage.warning(`本地锁定成功，但云端同步失败: ${apiError instanceof Error ? apiError.message : '未知错误'}`)
+      startLockCountdown()
+    }
   } catch (error) {
     console.error('手动锁定账户失败:', error)
     ElMessage.error('锁定失败，请稍后重试')
@@ -3626,18 +4525,41 @@ const startLockCountdown = (): void => {
 
 const exportSecurityLog = (): void => {
   try {
-    const userId = localStorage.getItem('userId') || 'default_user'
-    const blob = exportSecurityOperationLogs(userId)
+    const userId = currentUserId.value
+    const logData = exportSecurityOperationLogs(userId)
+    
+    // 确保数据存在且为字符串
+    if (!logData) {
+      ElMessage.error('没有可导出的日志数据')
+      return
+    }
+    
+    // 确保是字符串格式
+    const csvContent = typeof logData === 'string' ? logData : JSON.stringify(logData)
+    
+    // 创建Blob对象
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    
+    // 检查Blob是否创建成功
+    if (!blob || blob.size === 0) {
+      ElMessage.error('生成文件失败')
+      return
+    }
     
     // 创建下载链接
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
     link.download = `security-log-${new Date().toISOString().split('T')[0]}.csv`
+    link.style.display = 'none'
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
+    
+    // 延迟释放URL
+    setTimeout(() => {
+      window.URL.revokeObjectURL(url)
+    }, 100)
     
     ElMessage.success('安全日志导出成功')
   } catch (error) {
@@ -3667,7 +4589,7 @@ const toggleBiometric = async (type: BiometricType, enabled: boolean): Promise<v
         }
         
         // 记录安全操作日志
-        const userId = localStorage.getItem('userId') || 'default_user';
+        const userId = currentUserId.value;
         logSecurityOperation({
           userId,
           operation: 'enable_biometric',
@@ -3702,7 +4624,7 @@ const toggleBiometric = async (type: BiometricType, enabled: boolean): Promise<v
         }
         
         // 记录安全操作日志
-        const userId = localStorage.getItem('userId') || 'default_user';
+        const userId = currentUserId.value;
         logSecurityOperation({
           userId,
           operation: 'disable_biometric',
@@ -3744,19 +4666,19 @@ const unlockCurrentUserAccount = async (): Promise<void> => {
     unlockLoading.value = true
     
     // 获取当前用户ID
-    const accountId = localStorage.getItem('userId') || 'default_user'
+    const userId = currentUserId.value
     
     // 解锁账户
     try {
       const { unlockAccountAPI } = await import('@/services/accountUnlockService')
-      const response = await unlockAccountAPI(accountId)
+      const response = await unlockAccountAPI(userId)
       
       if (!response.success) {
         throw new Error(response.message || '解锁账户失败')
       }
       
       // 调用本地解锁函数更新UI状态
-      unlockAccount(accountId)
+      unlockAccount(userId)
     } catch (error) {
       console.error('解锁账户失败:', error)
       ElMessage.error('解锁账户失败: ' + (error as Error).message)
@@ -3770,7 +4692,6 @@ const unlockCurrentUserAccount = async (): Promise<void> => {
     ElMessage.success('账户已解锁')
     
     // 记录安全操作日志
-    const userId = localStorage.getItem('userId') || 'default_user';
     logSecurityOperation({
       userId,
       operation: 'unlock_account',
@@ -3792,7 +4713,9 @@ const unlockCurrentUserAccount = async (): Promise<void> => {
 
 // 格式化剩余时间
 const formatRemainingTime = (seconds: number): string => {
-  if (seconds <= 0) return '0秒'
+  if (seconds === null || seconds === undefined || isNaN(seconds) || seconds <= 0) {
+    return '0秒'
+  }
   
   const minutes = Math.floor(seconds / 60)
   const remainingSeconds = seconds % 60
@@ -3804,17 +4727,69 @@ const formatRemainingTime = (seconds: number): string => {
   }
 }
 
+// 同步账户锁定状态与后端
+const syncAccountLockStatusWithBackend = async (): Promise<void> => {
+  try {
+    const userId = currentUserId.value
+    console.log(`[SecuritySettings] 开始同步账户锁定状态, userId: ${userId}`)
+    const response = await getAccountStatusAPI(userId)
+    
+    // 处理双层嵌套结构: response.data.data.status 或 response.data.status
+    if (response.success && response.data) {
+      const actualData = response.data.data || response.data
+      
+      if (actualData && actualData.status) {
+        const serverStatus = actualData.status
+        console.log('[SecuritySettings] 获取到服务器状态:', serverStatus)
+        
+        // 如果服务器说没锁定，但本地有锁定记录，则清除本地锁定记录
+        if (!serverStatus.isLocked) {
+          const manualLockStr = localStorage.getItem(`manualLock_${userId}`)
+          const attempts = getLoginAttempts(userId)
+          const localLockStatus = getAccountLockStatus(userId, getSecurityConfig())
+          
+          if (manualLockStr || (attempts && attempts.length > 0) || localLockStatus.isLocked) {
+            console.log('[SecuritySettings] 检测到服务器已解锁，正在清除本地锁定状态...')
+            localStorage.removeItem(`manualLock_${userId}`)
+            unlockAccount(userId) // 清除本地 manualLock
+            resetFailedAttempts(userId) // 重置本地失败计数
+            
+            accountLocked.value = false
+            remainingLockTime.value = 0
+            lockReason.value = '账户正常'
+            console.log('[SecuritySettings] 本地锁定状态已清除')
+          }
+        } else {
+          // 服务器说锁定了，更新本地状态
+          accountLocked.value = true
+          remainingLockTime.value = serverStatus.remainingTime || 0
+          
+          // 更新锁定原因
+          if (serverStatus.failedLoginAttempts >= lockoutSettings.maxFailedAttempts) {
+            lockReason.value = `连续${serverStatus.failedLoginAttempts}次登录失败`
+          } else {
+            lockReason.value = '安全策略锁定'
+          }
+          console.log(`[SecuritySettings] 服务器状态为已锁定, 剩余时间: ${remainingLockTime.value}s`)
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[SecuritySettings] 同步账户锁定状态失败:', error)
+  }
+}
+
 // 检查账户锁定状态
 const checkAccountLockStatus = (): void => {
   try {
     // 获取当前用户ID
-    const accountId = localStorage.getItem('userId') || 'default_user'
+    const userId = currentUserId.value
     
     // 获取安全配置
     const config = getSecurityConfig()
     
-    // 获取账户锁定状态
-    const lockStatus = getAccountLockStatus(accountId, config)
+    // 获取账户锁定状态 (从本地存储)
+    const lockStatus = getAccountLockStatus(userId, config)
     
     // 更新本地状态
     accountLocked.value = lockStatus.isLocked
@@ -3823,12 +4798,12 @@ const checkAccountLockStatus = (): void => {
     // 更新锁定原因
     if (lockStatus.isLocked) {
       // 检查是否是手动锁定
-      const manualLockStr = localStorage.getItem(`manualLock_${accountId}`)
+      const manualLockStr = localStorage.getItem(`manualLock_${userId}`)
       if (manualLockStr) {
         lockReason.value = '管理员手动锁定'
       } else {
         // 检查是否是失败尝试过多导致的锁定
-        const attempts = getLoginAttempts(accountId)
+        const attempts = getLoginAttempts(userId)
         if (config.lockout.maxFailedAttempts > 0) {
           const recentAttempts = [...attempts].reverse()
           let consecutiveFailures = 0
@@ -3895,10 +4870,18 @@ const initializeSecurityConfig = (): void => {
 const startLockStatusCheck = (): void => {
   // 立即检查一次
   checkAccountLockStatus()
+  // 立即与后端同步一次
+  syncAccountLockStatusWithBackend()
   
-  // 每秒检查一次锁定状态
+  // 每秒检查一次本地锁定状态（用于更新倒计时）
   lockStatusTimer.value = window.setInterval(() => {
     checkAccountLockStatus()
+    
+    // 每30秒与后端同步一次状态
+    const seconds = Math.floor(Date.now() / 1000)
+    if (seconds % 30 === 0) {
+      syncAccountLockStatusWithBackend()
+    }
   }, 1000) as unknown as number
 }
 
@@ -3912,6 +4895,9 @@ const stopLockStatusCheck = (): void => {
 
 // 生命周期
 onMounted(async () => {
+  // 开始令牌计时器
+  startTokenTimer()
+  
   // 模拟加载数据
   console.log('安全设置页面加载完成')
   
@@ -3927,18 +4913,12 @@ onMounted(async () => {
     console.error('令牌验证异常:', error)
   }
   
-  // 获取客户端IP地址
-  try {
-    const ip = await getClientIpAddress()
-    clientIpAddress.value = ip
-    console.log('客户端IP地址:', ip)
-  } catch (error) {
-    console.error('获取客户端IP地址失败:', error)
-  }
+  // 初始化客户端检测信息
+  await initializeClientInfo()
   
   // 记录页面访问日志
-  const userId = localStorage.getItem('userId') || 'default_user';
-  logSecurityOperation({
+  const userId = currentUserId.value;
+  await logSecurityOperation({
     userId,
     operation: 'page_view',
     description: '访问安全设置页面',
@@ -3948,7 +4928,7 @@ onMounted(async () => {
   });
   
   // 初始化生物识别支持
-  initializeBiometricSupport()
+  await initializeBiometricSupport()
   // 初始化安全配置
   initializeSecurityConfig()
   // 启动锁定状态检查
@@ -3956,15 +4936,22 @@ onMounted(async () => {
   // 初始化登录设备限制配置
   initializeLoginDeviceLimitConfig()
   // 加载当前设备会话
-  loadCurrentDeviceSessions()
-  // 初始化数据加密状态
-  initializeDataEncryptionStatus()
+  await loadCurrentDeviceSessions()
+  // 初始化数据加密状态（自动启用）
+  await initializeDataEncryptionStatus()
   // 初始化登录保护和异常登录提醒状态
-  initializeLoginProtectionStatus()
+  await initializeLoginProtectionStatus()
   // 初始化安全日志
-  initializeSecurityLogs()
+  await initializeSecurityLogs()
   // 初始化安全评估历史记录
   initializeSecurityAssessmentHistory()
+  
+  // 启动登录历史自动刷新
+  startLoginHistoryAutoRefresh()
+  
+  // 启动无操作自动登出功能
+  resetInactivityTimer()
+  bindActivityListeners()
 })
 
 // 初始化登录设备限制配置
@@ -3984,44 +4971,196 @@ const initializeLoginDeviceLimitConfig = (): void => {
 }
 
 // 加载当前设备会话
-const loadCurrentDeviceSessions = (): void => {
+const loadCurrentDeviceSessions = async (): Promise<void> => {
   try {
-    // 获取当前用户ID（实际应用中应从用户信息获取）
+    // 获取当前用户ID
     const userId = currentUserId.value;
     
-    // 清理过期会话
-    cleanupExpiredSessions(userId);
+    console.log('开始加载设备会话，用户ID:', userId);
     
-    // 获取当前设备信息
-    const userAgent = getUserAgent();
-    const ipAddress = getClientIpAddress();
+    // 优先从后端获取
+    const response = await getBackendDeviceSessionsAPI();
     
-    // 记录当前设备会话（如果不存在）
-    const currentSession = recordNewDeviceSession(userId, userAgent, ipAddress);
-    currentDeviceId.value = currentSession.id;
+    // 处理双层嵌套结构: response.data.data.sessions 或 response.data.sessions (Rule 5)
+    const actualData = response.data?.data || response.data;
     
-    // 获取所有设备会话
-    const sessions = getActiveDeviceSessions(userId);
-    currentDeviceSessions.value = [...sessions];
-    
-    // 计算活跃设备数量
-    activeDeviceCount.value = sessions.filter(session => session.isActive).length;
+    if (response.success && actualData && actualData.sessions) {
+      console.log('从后端加载设备会话成功:', actualData.sessions);
+      
+      // 转换后端数据格式以匹配前端显示需求
+      const sessions = actualData.sessions.map((session: any) => {
+        // 提取时间值并转换为时间戳
+        const getTimestamp = (value: any): number => {
+          if (!value) return Date.now()
+          if (typeof value === 'number') return value
+          if (typeof value === 'string') return new Date(value).getTime()
+          if (value instanceof Date) return value.getTime()
+          if (value.getTime) return value.getTime()
+          return Date.now()
+        }
+        
+        return {
+          id: String(session.id),
+          userId: session.userId || userId,
+          loginTime: getTimestamp(session.loginTime || session.createdAt),
+          lastActiveTime: getTimestamp(session.lastActiveTime || session.lastAccessedAt),
+          userAgent: session.userAgent || 'Unknown Agent',
+          ipAddress: session.ipAddress || '0.0.0.0',
+          isActive: session.status === 'active' || (session as any).isActive === true,
+          deviceInfo: session.deviceInfo || {},
+          isCurrent: session.isCurrent || false,
+          hasIpConflict: session.hasIpConflict || false,
+          deviceId: session.deviceId
+        }
+      });
+      
+      currentDeviceSessions.value = sessions;
+      activeDeviceCount.value = actualData.count || sessions.length;
+      
+      // 同步更新 loginDevices 以兼容不同的对话框，并按 IP 归类设备
+      const devicesByIp: Record<string, any> = {};
+      sessions.forEach(s => {
+        const ip = s.ipAddress || '0.0.0.0';
+        if (!devicesByIp[ip]) {
+          devicesByIp[ip] = {
+            id: s.id, // 使用最新会话的 ID 作为设备 ID
+            name: getDeviceDisplayName(s.userAgent),
+            lastLogin: formatDateTime(s.loginTime as number),
+            location: (s.deviceInfo as any)?.location || '未知地点',
+            ip: ip,
+            current: s.isCurrent,
+            hasIpConflict: s.hasIpConflict,
+            sessionCount: 1,
+            sessions: [s]
+          };
+        } else {
+          devicesByIp[ip].sessionCount++;
+          devicesByIp[ip].sessions.push(s);
+          // 如果组内有任何一个是当前设备，则标记为当前设备
+          if (s.isCurrent) devicesByIp[ip].current = true;
+          // 如果组内有任何一个有冲突，则标记为有冲突
+          if (s.hasIpConflict) devicesByIp[ip].hasIpConflict = true;
+          // 更新最后登录时间为最新的
+          const currentLastLogin = new Date(devicesByIp[ip].lastLogin).getTime();
+          const sessionLogin = new Date(s.loginTime).getTime();
+          if (sessionLogin > currentLastLogin) {
+            devicesByIp[ip].lastLogin = formatDateTime(s.loginTime as number);
+          }
+        }
+      });
+      
+      loginDevices.value = Object.values(devicesByIp);
+      
+      // 寻找当前设备ID
+      const current = sessions.find(s => s.isCurrent);
+      if (current) {
+        currentDeviceId.value = String(current.id);
+      }
+    } else {
+      console.warn('后端获取设备会话失败或为空，尝试本地存储:', response.message);
+      // 后端失败时退回到本地存储（保持向后兼容）
+      cleanupExpiredSessions(userId);
+      const userAgent = getUserAgent();
+      const ipAddress = getClientIpAddress();
+      const currentSession = recordNewDeviceSession(userId, userAgent, ipAddress);
+      currentDeviceId.value = currentSession.id;
+      const sessions = getActiveDeviceSessions(userId);
+      currentDeviceSessions.value = [...sessions];
+      activeDeviceCount.value = sessions.filter(session => session.isActive).length;
+      
+      // 同步更新 loginDevices
+      loginDevices.value = sessions.map(s => ({
+        id: s.id,
+        name: getDeviceDisplayName(s.userAgent),
+        lastLogin: formatDateTime(s.loginTime as number),
+        location: '未知地点',
+        ip: s.ipAddress,
+        current: String(s.id) === currentDeviceId.value
+      }));
+    }
   } catch (error) {
-    console.error('加载当前设备会话失败:', error);
+    console.error('加载当前设备会话异常:', error);
   }
 }
 
-// 格式化日期时间
-const formatDateTime = (timestamp: number): string => {
-  const date = new Date(timestamp);
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  });
+// 格式化日期时间 - 增强版
+const formatDateTime = (timestamp: number | string | undefined | null): string => {
+  try {
+    // 处理 null、undefined 和空字符串
+    if (timestamp === undefined || timestamp === null || timestamp === '') {
+      return '-'
+    }
+    
+    // 处理数字时间戳
+    if (typeof timestamp === 'number') {
+      const date = new Date(timestamp)
+      if (isNaN(date.getTime())) {
+        return '-'
+      }
+      return date.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      })
+    }
+    
+    // 处理字符串时间（ISO格式、时间戳字符串等）
+    if (typeof timestamp === 'string') {
+      // 尝试解析字符串时间
+      const date = new Date(timestamp)
+      if (isNaN(date.getTime())) {
+        console.warn('[formatDateTime] 无法解析时间字符串:', timestamp)
+        return '-'
+      }
+      return date.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      })
+    }
+    
+    // 处理对象时间（如 Date 对象）
+    if (typeof timestamp === 'object' && timestamp instanceof Date) {
+      return timestamp.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      })
+    }
+    
+    // 处理有 toISOString 方法的对象（如 PostgreSQL 时间戳对象）
+    if (typeof timestamp === 'object' && timestamp.toISOString) {
+      const date = new Date(timestamp.toISOString())
+      if (isNaN(date.getTime())) {
+        return '-'
+      }
+      return date.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      })
+    }
+    
+    // 其他情况
+    console.warn('[formatDateTime] 未知时间格式:', typeof timestamp, timestamp)
+    return '-'
+    
+  } catch (error) {
+    console.error('[formatDateTime] 格式化时间时发生错误:', error, timestamp)
+    return '-'
+  }
 }
 
 // 获取设备显示名称
@@ -4065,25 +5204,31 @@ const handleLogoutDevice = (deviceId: string): void => {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
     type: 'warning'
-  }).then(() => {
+  }).then(async () => {
     try {
-      // 获取当前用户ID（实际应用中应从用户信息获取）
-      const userId = 'current_user_id';
+      // 获取当前用户ID
+      const userId = currentUserId.value
       
-      // 登出指定设备
-      const success = logoutDevice(userId, deviceId);
+      console.log('开始注销设备:', deviceId);
       
-      if (success) {
-        ElMessage.success('设备已登出');
+      // 优先调用后端API
+      const response = await revokeBackendDeviceSessionAPI(deviceId);
+      
+      if (response.success) {
+        ElMessage.success('设备已成功注销');
+        
+        // 同时清理本地（如果存在）
+        logoutDevice(userId, deviceId);
+        
         // 重新加载设备列表
-        loadCurrentDeviceSessions();
+        await loadCurrentDeviceSessions();
         
         // 记录安全操作日志
         logSecurityOperation({
           userId,
           operation: 'logout_device',
-          description: '登出指定设备',
-          ip: '127.0.0.1', // 实际应用中应获取真实IP
+          description: `注销设备: ${deviceId}`,
+          ip: clientIpAddress.value || '127.0.0.1',
           userAgent: navigator.userAgent,
           status: 'success'
         });
@@ -4091,11 +5236,29 @@ const handleLogoutDevice = (deviceId: string): void => {
         // 重新加载安全日志
         initializeSecurityLogs();
       } else {
-        ElMessage.error('登出设备失败');
+        // 如果后端 API 不存在或失败，尝试本地操作
+        console.warn('后端注销失败，尝试本地注销:', response.message);
+        const success = logoutDevice(userId, deviceId);
+        
+        if (success) {
+          ElMessage.success('设备已从本地注销');
+          await loadCurrentDeviceSessions();
+          
+          logSecurityOperation({
+            userId,
+            operation: 'logout_device',
+            description: `本地注销设备: ${deviceId}`,
+            ip: clientIpAddress.value || '127.0.0.1',
+            userAgent: navigator.userAgent,
+            status: 'success'
+          });
+        } else {
+          ElMessage.error('注销设备失败: ' + (response.message || '未知错误'));
+        }
       }
     } catch (error) {
-      console.error('登出设备失败:', error);
-      ElMessage.error('登出设备失败');
+      console.error('注销设备失败:', error);
+      ElMessage.error('注销设备失败');
     }
   }).catch(() => {
     // 取消操作
@@ -4104,46 +5267,86 @@ const handleLogoutDevice = (deviceId: string): void => {
 
 // 处理登出所有设备
 const handleLogoutAllDevices = (): void => {
-  ElMessageBox.confirm('确定要登出所有设备吗？此操作将使您在所有设备上都需要重新登录。', '警告', {
+  ElMessageBox.confirm('确定要注销其他所有设备吗？此操作将使您在其他设备上都需要重新登录。', '警告', {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
     type: 'warning'
-  }).then(() => {
+  }).then(async () => {
     try {
-      // 获取当前用户ID（实际应用中应从用户信息获取）
-      const userId = 'current_user_id';
+      // 获取当前用户ID
+      const userId = currentUserId.value
       
-      // 登出所有设备
-      logoutAllDevices(userId);
+      console.log('开始注销所有其他设备');
       
-      ElMessage.success('所有设备已登出');
-      // 重新加载设备列表
-      loadCurrentDeviceSessions();
+      // 调用后端API撤销其他会话
+      const response = await revokeOtherBackendDeviceSessionsAPI();
       
-      // 记录安全操作日志
-      logSecurityOperation({
-        userId,
-        operation: 'logout_all_devices',
-        description: '登出所有设备',
-        ip: '127.0.0.1', // 实际应用中应获取真实IP
-        userAgent: navigator.userAgent,
-        status: 'success'
-      });
-      
-      // 重新加载安全日志
-      initializeSecurityLogs();
+      if (response.success) {
+        ElMessage.success('其他设备已成功注销');
+        
+        // 同时清理本地
+        logoutAllDevices(userId);
+        
+        // 重新加载设备列表
+        await loadCurrentDeviceSessions();
+        
+        // 记录安全操作日志
+        logSecurityOperation({
+          userId,
+          operation: 'logout_all_devices',
+          description: '注销除当前设备外的所有设备',
+          ip: clientIpAddress.value || '127.0.0.1',
+          userAgent: navigator.userAgent,
+          status: 'success'
+        });
+        
+        // 重新加载安全日志
+        initializeSecurityLogs();
+      } else {
+        console.warn('后端注销所有设备失败，尝试本地注销:', response.message);
+        logoutAllDevices(userId);
+        ElMessage.success('所有其他设备已从本地注销');
+        await loadCurrentDeviceSessions();
+      }
     } catch (error) {
-      console.error('登出所有设备失败:', error);
-      ElMessage.error('登出所有设备失败');
+      console.error('注销所有设备失败:', error);
+      ElMessage.error('注销所有设备失败');
     }
   }).catch(() => {
     // 取消操作
   });
 }
 
+// 监听登录历史对话框状态
+watch(showLoginHistory, (val) => {
+  if (val) {
+    fetchLoginHistoryData()
+  }
+})
+
+// 监听详细登录历史对话框状态
+watch(showDetailedLoginHistory, (val) => {
+  if (val) {
+    fetchDetailedLoginHistoryData()
+  }
+})
+
 // 组件卸载时清理定时器
 onUnmounted(() => {
+  stopTokenTimer()
   stopLockStatusCheck()
+  stopLoginHistoryAutoRefresh()
+  // 清理无操作登出定时器和事件监听
+  if (inactivityTimer.value) {
+    clearTimeout(inactivityTimer.value)
+  }
+  if (warningTimer.value) {
+    clearTimeout(warningTimer.value)
+  }
+  if (heartbeatTimer.value) {
+    clearInterval(heartbeatTimer.value)
+  }
+  unbindActivityListeners()
 })
 </script>
 
@@ -4227,8 +5430,21 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   margin-left: 24px;
+}
+
+.token-status-info {
+  display: flex;
+  align-items: center;
+  margin-right: 15px;
+}
+
+.remaining-time-tag {
+  font-family: monospace;
+  font-weight: bold;
+  min-width: 80px;
+  text-align: center;
 }
 
 .setting-desc {
@@ -4291,6 +5507,21 @@ onUnmounted(() => {
 
 .device-item:last-child {
   border-bottom: none;
+}
+
+.session-count-tag {
+  margin-left: 8px;
+  font-weight: normal;
+}
+
+.device-conflict-warning {
+  margin-top: 4px;
+}
+
+.conflict-icon {
+  margin-left: 4px;
+  vertical-align: middle;
+  cursor: help;
 }
 
 .device-info {
@@ -5005,6 +6236,178 @@ onUnmounted(() => {
   flex: 1;
 }
 
+/* 会话安全提醒弹窗增强样式 */
+.security-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.6);
+  z-index: 9999;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  backdrop-filter: blur(4px);
+  pointer-events: auto;
+}
+
+.security-modal-container {
+  width: 90%;
+  max-width: 420px;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  animation: modal-zoom-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.security-modal-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.security-modal-header {
+  padding: 24px 24px 16px;
+  text-align: center;
+  border-bottom: 1px solid #f0f2f5;
+}
+
+.security-shield-icon {
+  font-size: 48px;
+  color: #67c23a;
+  margin-bottom: 12px;
+}
+
+.security-modal-header h3 {
+  margin: 0;
+  font-size: 20px;
+  color: #303133;
+  font-weight: 600;
+}
+
+.security-modal-body {
+  padding: 32px 24px;
+}
+
+.inactivity-warning-content {
+  text-align: center;
+}
+
+.inactivity-warning-content .warning-icon {
+  font-size: 42px;
+  color: #e6a23c;
+  margin-bottom: 20px;
+}
+
+.inactivity-warning-content p {
+  margin: 10px 0;
+  color: #303133;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.inactivity-warning-content .countdown-time {
+  color: #f56c6c;
+  font-weight: 700;
+  font-size: 24px;
+  margin: 0 6px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+.security-divider {
+  height: 1px;
+  background: linear-gradient(to right, transparent, #dcdfe6, transparent);
+  margin: 24px 0;
+}
+
+.activity-hint {
+  color: #909399 !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+}
+
+.activity-methods {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-top: 16px;
+}
+
+.activity-methods span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #606266;
+  background-color: #f4f4f5;
+  padding: 6px 12px;
+  border-radius: 20px;
+}
+
+.security-modal-footer {
+  padding: 16px 24px 24px;
+  text-align: center;
+}
+
+.security-confirm-btn {
+  width: 100%;
+  height: 44px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 8px;
+  letter-spacing: 1px;
+  transition: all 0.2s;
+}
+
+.security-confirm-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.4);
+}
+
+/* 动画效果 */
+@keyframes modal-zoom-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.security-fade-enter-active,
+.security-fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.security-fade-enter-from,
+.security-fade-leave-to {
+  opacity: 0;
+}
+
+/* 无操作警告对话框 (旧样式清理) */
+.inactivity-warning-content {
+  text-align: center;
+  padding: 0;
+}
+
+/* 响应式布局增强 */
+@media (max-width: 480px) {
+  .security-modal-container {
+    width: 95%;
+    max-width: none;
+    margin: 0 10px;
+  }
+  
+  .activity-methods {
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+}
+
 /* 响应式布局 */
 @media (max-width: 768px) {
   .security-settings {
@@ -5135,4 +6538,75 @@ onUnmounted(() => {
   .factor-item {
     font-size: 11px;
     padding: 1px 4px;
-  }}</style>
+  }
+}
+
+/* 客户端安全检测样式 */
+.client-security-info {
+  width: 100%;
+}
+
+.client-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.info-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.info-label {
+  color: #909399;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.info-value {
+  color: #303133;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.security-reminders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.security-reminder-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.security-reminder-item.danger {
+  background-color: #fef0f0;
+  color: #f56c6c;
+  border-left: 4px solid #f56c6c;
+}
+
+.security-reminder-item.warning {
+  background-color: #fdf6ec;
+  color: #e6a23c;
+  border-left: 4px solid #e6a23c;
+}
+
+.security-reminder-item.info {
+  background-color: #f0f9eb;
+  color: #67c23a;
+  border-left: 4px solid #67c23a;
+}
+
+.reminder-text {
+  flex: 1;
+}
+</style>

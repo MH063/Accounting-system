@@ -715,8 +715,9 @@ const loadBillList = async () => {
         stats: billStats
       })
     } else if (response && response.success) {
-      // 处理标准格式 {success: true, data: {...}}
-      const dataList = response.data.list || response.data.bills || []
+      // 处理标准格式 {success: true, data: { data: {...} }} 或 {success: true, data: {...}} (Rule 5)
+      const actualData = response.data?.data || response.data
+      const dataList = actualData?.list || actualData?.bills || (Array.isArray(actualData) ? actualData : [])
       
       // 映射后端字段到前端期望的字段
       billList.value = dataList.map((item: any) => ({
@@ -731,13 +732,13 @@ const loadBillList = async () => {
         description: item.description || ''
       }))
       
-      pagination.total = response.data.total || dataList.length
+      pagination.total = actualData?.total || dataList.length
       
       // 更新统计信息
-      billStats.pending = response.data.stats?.pending || billList.value.filter(b => b.status === 'pending').length
-      billStats.paid = response.data.stats?.paid || billList.value.filter(b => b.status === 'paid').length
-      billStats.overdue = response.data.stats?.overdue || billList.value.filter(b => b.status === 'overdue').length
-      billStats.totalAmount = response.data.stats?.totalAmount || billList.value.reduce((sum, b) => sum + (b.totalAmount || 0), 0)
+      billStats.pending = actualData?.stats?.pending || billList.value.filter(b => b.status === 'pending').length
+      billStats.paid = actualData?.stats?.paid || billList.value.filter(b => b.status === 'paid').length
+      billStats.overdue = actualData?.stats?.overdue || billList.value.filter(b => b.status === 'overdue').length
+      billStats.totalAmount = actualData?.stats?.totalAmount || billList.value.reduce((sum, b) => sum + (b.totalAmount || 0), 0)
       
       console.log('[BillManagement] 账单列表加载成功:', {
         page: pagination.page,

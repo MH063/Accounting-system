@@ -1903,12 +1903,27 @@ const formatCurrency = (amount: number | string | undefined): string => {
 
 const formatDate = (dateString?: string): string => {
   if (!dateString) return '-'
-  return new Date(dateString).toLocaleDateString('zh-CN')
+  const d = new Date(dateString)
+  if (isNaN(d.getTime())) return '-'
+  return d.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  })
 }
 
 const formatDateTime = (dateString?: string): string => {
   if (!dateString) return '-'
-  return new Date(dateString).toLocaleString('zh-CN')
+  const d = new Date(dateString)
+  if (isNaN(d.getTime())) return '-'
+  return d.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
 }
 
 const truncateText = (text: string, length: number): string => {

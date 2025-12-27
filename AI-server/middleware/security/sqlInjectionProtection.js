@@ -38,6 +38,18 @@ const sqlInjectionProtection = () => {
    * @returns {boolean} 是否存在风险
    */
   const checkValue = (value, fieldName = '') => {
+    // 跳过对某些字段的严格检查（这些字段通常是安全的用户输入）
+    const SKIP_STRICT_CHECK_FIELDS = [
+      'userAgent', 'user_agent', 'User-Agent', 
+      'description', 'message', 'content', 'notes',
+      'password', 'newPassword', 'currentPassword', 'confirmPassword',
+      'answer', 'securityAnswer',
+      'secret', 'backupCode', 'backupCodes'
+    ];
+    if (fieldName && SKIP_STRICT_CHECK_FIELDS.some(field => fieldName.includes(field))) {
+      return false;
+    }
+    
     if (typeof value === 'string') {
       // 转换为小写进行检查
       const lowerValue = value.toLowerCase();

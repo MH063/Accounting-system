@@ -143,29 +143,28 @@ export const registerBiometricCredential = async (type: BiometricType): Promise<
   } catch (error: any) {
     console.error('生物识别注册错误:', error);
     
-    // 处理特定错误
-    if (error.name === 'NotAllowedError') {
-      return {
-        success: false,
-        type,
-        message: '用户拒绝了生物识别请求',
-        errorCode: 'USER_DENIED'
-      };
-    } else if (error.name === 'InvalidStateError') {
-      return {
-        success: false,
-        type,
-        message: '生物识别设备已被注册',
-        errorCode: 'ALREADY_REGISTERED'
-      };
-    } else {
-      return {
-        success: false,
-        type,
-        message: `生物识别注册失败: ${error.message || '未知错误'}`,
-        errorCode: 'UNKNOWN_ERROR'
-      };
-    }
+    // 处理 WebAuthn 标准错误
+    const errorMap: Record<string, { message: string, code: string }> = {
+      'NotAllowedError': { message: '操作被取消或权限不足，请确保已授予生物识别权限', code: 'USER_DENIED' },
+      'InvalidStateError': { message: '该设备已注册生物识别凭证，无需重复注册', code: 'ALREADY_REGISTERED' },
+      'SecurityError': { message: '安全原因导致操作失败，请确保使用 HTTPS 连接且域名匹配', code: 'SECURITY_ERROR' },
+      'NotSupportedError': { message: '当前浏览器或设备不支持此生物识别操作', code: 'NOT_SUPPORTED' },
+      'ConstraintError': { message: '操作因约束检查失败而被阻止', code: 'CONSTRAINT_ERROR' },
+      'AbortError': { message: '操作已被取消', code: 'ABORTED' },
+      'TimeoutError': { message: '操作超时，请重试', code: 'TIMEOUT' }
+    };
+
+    const errorInfo = errorMap[error.name] || { 
+      message: `生物识别注册失败: ${error.message || '未知错误'}`,
+      code: 'UNKNOWN_ERROR' 
+    };
+
+    return {
+      success: false,
+      type,
+      message: errorInfo.message,
+      errorCode: errorInfo.code
+    };
   }
 };
 
@@ -204,14 +203,12 @@ export const authenticateWithBiometric = async (type: BiometricType): Promise<Bi
     const assertion = await navigator.credentials.get({
       publicKey: {
         challenge,
-        allowCredentials: [
-          {
-            id: base64ToArrayBuffer(credentialId),
-            type: 'public-key'
-          }
-        ],
+        timeout: 60000,
         userVerification: 'required',
-        timeout: 60000
+        allowCredentials: [{
+          id: strToBin(credentialId),
+          type: 'public-key'
+        }]
       }
     }) as PublicKeyCredential;
     
@@ -232,31 +229,38 @@ export const authenticateWithBiometric = async (type: BiometricType): Promise<Bi
   } catch (error: any) {
     console.error('生物识别验证错误:', error);
     
-    // 处理特定错误
-    if (error.name === 'NotAllowedError') {
-      return {
-        success: false,
-        type,
-        message: '用户拒绝了生物识别请求',
-        errorCode: 'USER_DENIED'
-      };
-    } else if (error.name === 'SecurityError') {
-      return {
-        success: false,
-        type,
-        message: '生物识别验证不匹配',
-        errorCode: 'INVALID_CREDENTIAL'
-      };
-    } else {
-      return {
-        success: false,
-        type,
-        message: `生物识别验证失败: ${error.message || '未知错误'}`,
-        errorCode: 'UNKNOWN_ERROR'
-      };
-    }
+    const errorMap: Record<string, { message: string, code: string }> = {
+      'NotAllowedError': { message: '验证被取消或超时，请重试', code: 'USER_DENIED' },
+      'SecurityError': { message: '安全校验失败，请检查网络环境', code: 'SECURITY_ERROR' },
+      'AbortError': { message: '操作已被取消', code: 'ABORTED' },
+      'TimeoutError': { message: '验证超时，请重新尝试', code: 'TIMEOUT' }
+    };
+
+    const errorInfo = errorMap[error.name] || { 
+      message: `生物识别验证失败: ${error.message || '未知错误'}`,
+      code: 'UNKNOWN_ERROR' 
+    };
+
+    return {
+      success: false,
+      type,
+      message: errorInfo.message,
+      errorCode: errorInfo.code
+    };
   }
 };
+
+/**
+ * 辅助函数：将字符串转换为 ArrayBuffer
+ */
+function strToBin(str: string): Uint8Array {
+  const binaryString = window.atob(str.replace(/-/g, '+').replace(/_/g, '/'));
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
 
 /**
  * 启用生物识别功能

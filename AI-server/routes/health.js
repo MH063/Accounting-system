@@ -7,11 +7,20 @@ const logger = require('../config/logger');
 const healthCheckHandler = async (req, res) => {
   try {
     const result = await healthCheck();
-    res.status(result.status === 'healthy' ? 200 : 503).json(result);
+    // 关键位置打印日志方便控制台查看日志调试
+    console.log('[HEALTH] 健康检查结果:', result);
+    
+    // 按照规则 #5 和项目约定，包装响应数据结构
+    res.status(result.status === 'healthy' ? 200 : 503).json({
+      success: true,
+      data: result,
+      message: '系统健康检查完成'
+    });
   } catch (error) {
     logger.error('[HEALTH] 健康检查失败', { error: error.message });
+    console.error('[HEALTH] 健康检查异常:', error);
     res.status(503).json({
-      status: 'unhealthy',
+      success: false,
       message: '健康检查失败',
       error: error.message
     });

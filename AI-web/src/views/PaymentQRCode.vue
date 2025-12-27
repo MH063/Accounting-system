@@ -115,7 +115,7 @@
     <!-- 安全检测对话框 -->
     <el-dialog 
       v-model="securityDialogVisible" 
-      :title="`安全检测报告 (${securityCheckResult?.lastCheckTime ? new Date(securityCheckResult.lastCheckTime).toLocaleString() : ''})`" 
+      :title="`安全检测报告 (${securityCheckResult?.lastCheckTime ? formatLocalDate(securityCheckResult.lastCheckTime) : ''})`" 
       width="700px"
       :loading="securityCheckLoading"
     >
@@ -177,7 +177,7 @@
               :key="history.id" 
               class="history-item"
             >
-              <div class="history-time">{{ new Date(history.checkTime).toLocaleDateString() }}</div>
+              <div class="history-time">{{ formatLocalDate(history.checkTime) }}</div>
               <div class="history-status" :class="history.status">
                 <el-icon><Check v-if="history.status === 'success'" /><Warning v-else-if="history.status === 'warning'" /><Close v-else /></el-icon>
                 {{ history.issueCount === 0 ? '正常' : `发现 ${history.issueCount} 个问题` }}
@@ -296,6 +296,8 @@ import {
   getSecurityCheckHistory,
   type SecurityCheckResult
 } from '../services/paymentService'
+
+import { formatLocalDate } from '@/utils/timeUtils'
 
 // 收款码接口定义
 interface QRCode {
@@ -467,16 +469,23 @@ const reminderForm = ref<ReminderSettings>({
 // 加载提醒设置
 const loadReminderSettings = async () => {
   try {
-    // 这里应该调用获取提醒设置的API
-    // const response = await getReminderSettingsApi()
-    // if (response.success && response.data) {
-    //   reminderForm.value = response.data
-    // }
+    // 调用获取提醒设置的API
+    const { getReminderSettings: getReminderSettingsApi } = await import('../services/paymentService')
+    const response = await getReminderSettingsApi()
     
-    // 暂时使用默认值，等待后端API实现
-    console.log('提醒设置功能待后端API实现')
+    if (response.success && response.data) {
+      // 处理双层嵌套结构 (Rule 5)
+      const actualData = (response.data as any)?.data || response.data
+      reminderForm.value = {
+        enabled: actualData.enabled ?? false,
+        methods: actualData.methods ?? [],
+        intervalMinutes: actualData.intervalMinutes ?? 30
+      }
+      console.log('提醒设置加载成功:', reminderForm.value)
+    }
   } catch (error) {
     console.error('加载提醒设置失败:', error)
+    ElMessage.error('加载提醒设置失败')
   }
 }
 
@@ -755,9 +764,9 @@ const handleUploadQRCode = async (): Promise<void> => {
 // 生命周期
 onMounted(async () => {
   await getQRCodesList()
-  await loadStatistics()
-  await loadSecurityData()
   await loadReminderSettings()
+  // 暂时不加载安全检测数据，改为手动触发或按需加载
+  // await loadSecurityData()
 })
 </script>
 

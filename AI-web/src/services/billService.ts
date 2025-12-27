@@ -75,8 +75,16 @@ export const getBillList = async (filter: BillFilter = {}): Promise<any> => {
       }
     }>(url)
     
-    // 根据后端返回的数据结构 {success: true, data: {...}} 返回整个响应对象
-    return response.data
+    // 处理双层嵌套结构 (Rule 5)
+    if (response && response.success) {
+      const actualData = (response.data as any)?.data || response.data
+      return {
+        ...response,
+        data: actualData
+      }
+    }
+    
+    return response
   } catch (error) {
     console.error('[BillService] 获取账单列表失败:', error)
     throw new Error('获取账单列表失败')
@@ -95,8 +103,16 @@ export const getBillDetail = async (id: string): Promise<any> => {
       data: Bill
     }>(`/bills/${id}`)
     
-    // 根据后端返回的数据结构 {success: true, data: {...}} 返回整个响应对象
-    return response.data
+    // 处理双层嵌套结构 (Rule 5)
+    if (response && response.success) {
+      const actualData = (response.data as any)?.data || response.data
+      return {
+        ...response,
+        data: actualData
+      }
+    }
+    
+    return response
   } catch (error) {
     console.error('[BillService] 获取账单详情失败:', error)
     throw new Error('获取账单详情失败')
@@ -118,8 +134,16 @@ export const createBill = async (billData: Omit<Bill, 'id' | 'createdAt' | 'upda
       body: JSON.stringify(billData)
     })
     
-    // 根据后端返回的数据结构 {success: true, data: {...}} 返回整个响应对象
-    return response.data
+    // 处理双层嵌套结构 (Rule 5)
+    if (response && response.success) {
+      const actualData = (response.data as any)?.data || response.data
+      return {
+        ...response,
+        data: actualData
+      }
+    }
+    
+    return response
   } catch (error) {
     console.error('[BillService] 创建账单失败:', error)
     throw new Error('创建账单失败')
@@ -142,8 +166,16 @@ export const updateBill = async (id: string, billData: Partial<Bill>): Promise<a
       body: JSON.stringify(billData)
     })
     
-    // 根据后端返回的数据结构 {success: true, data: {...}} 返回整个响应对象
-    return response.data
+    // 处理双层嵌套结构 (Rule 5)
+    if (response && response.success) {
+      const actualData = (response.data as any)?.data || response.data
+      return {
+        ...response,
+        data: actualData
+      }
+    }
+    
+    return response
   } catch (error) {
     console.error('[BillService] 更新账单失败:', error)
     throw new Error('更新账单失败')

@@ -3,9 +3,8 @@
  * 用于验证管理员身份和权限
  */
 
-const jwt = require('jsonwebtoken');
+const tokenService = require('../services/TokenService');
 const logger = require('../config/logger');
-const { verifyToken, getTokenFromHeader } = require('../config/jwtManager');
 
 /**
  * 管理员认证中间件 - 验证管理员身份
@@ -13,7 +12,7 @@ const { verifyToken, getTokenFromHeader } = require('../config/jwtManager');
 const adminAuthMiddleware = async (req, res, next) => {
   try {
     // 从请求头获取令牌
-    const token = getTokenFromHeader(req);
+    const token = tokenService.extractTokenFromHeader(req);
     
     if (!token) {
       logger.security(req, '管理员认证失败', { 
@@ -23,25 +22,26 @@ const adminAuthMiddleware = async (req, res, next) => {
       return res.status(401).json({
         success: false,
         message: '缺少认证令牌',
-        code: 'NO_TOKEN'
+        code: tokenService.errorCodes.NO_TOKEN
       });
     }
 
     // 验证令牌
-    const decoded = await verifyToken(token);
+    const result = await tokenService.verifyAccessToken(token);
     
-    if (!decoded) {
+    if (!result.success) {
       logger.security(req, '管理员认证失败', { 
-        reason: '无效的认证令牌',
+        reason: result.message,
         timestamp: new Date().toISOString()
       });
       return res.status(401).json({
         success: false,
-        message: '无效的认证令牌',
-        code: 'INVALID_TOKEN'
+        message: result.message,
+        code: result.code
       });
     }
 
+    const decoded = result.data;
     // 验证用户是否为管理员
     if (!decoded.role || !decoded.role.includes('admin')) {
       logger.security(req, '管理员认证失败', { 
@@ -60,54 +60,29 @@ const adminAuthMiddleware = async (req, res, next) => {
     // 验证用户状态
     if (decoded.status !== 'active') {
       logger.security(req, '管理员认证失败', { 
-        reason: '管理员账户状态异常',
+        reason: '账户状态异常',
         userId: decoded.userId,
         status: decoded.status,
         timestamp: new Date().toISOString()
       });
       return res.status(403).json({
         success: false,
-        message: '管理员账户状态异常',
-        code: 'ACCOUNT_INACTIVE'
+        message: '账户已被禁用或状态异常',
+        code: 'ACCOUNT_DISABLED'
       });
     }
 
-    // 将用户信息添加到请求对象
-    req.user = {
-      id: decoded.userId,
-      username: decoded.username,
-      email: decoded.email,
-      role: decoded.role,
-      permissions: decoded.permissions || [],
-      adminLevel: decoded.adminLevel || 'admin'
-    };
-
-    logger.info('[AdminAuthMiddleware] 管理员认证成功', { 
-      userId: decoded.userId,
-      username: decoded.username,
-      role: decoded.role
-    });
+    // 将解码后的用户信息保存到请求对象中
+    req.admin = decoded;
+    req.user = decoded; // 兼容普通用户认证逻辑
 
     next();
-
   } catch (error) {
-    logger.error('[AdminAuthMiddleware] 管理员认证处理失败', { 
-      error: error.message,
-      stack: error.stack
-    });
-    
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        success: false,
-        message: '认证令牌已过期',
-        code: 'TOKEN_EXPIRED'
-      });
-    }
-    
-    return res.status(401).json({
+    logger.error('管理员认证中间件错误:', error);
+    return res.status(500).json({
       success: false,
-      message: '认证失败',
-      code: 'AUTH_FAILED'
+      message: '服务器认证过程出错',
+      code: 'AUTH_SERVER_ERROR'
     });
   }
 };

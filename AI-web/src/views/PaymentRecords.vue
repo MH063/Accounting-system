@@ -481,8 +481,18 @@ const detailDialog = reactive({
 })
 
 // 方法定义
-const formatDateTime = (dateString: string) => {
-  return new Date(dateString).toLocaleString('zh-CN')
+const formatDateTime = (dateString: string | number | undefined | null): string => {
+  if (!dateString) return '-'
+  const date = new Date(dateString)
+  if (isNaN(date.getTime())) return '-'
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
 }
 
 const getStatusType = (status: string) => {

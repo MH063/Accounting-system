@@ -118,6 +118,16 @@ export const getExpenseStatistics = async (filter: ExpenseFilter): Promise<Expen
   
   const queryString = params.toString() ? `?${params.toString()}` : '';
   const response = await request.get(`/expenses/statistics${queryString}`);
+  
+  // 处理双层嵌套结构 (Rule 5)
+  if (response && response.success) {
+    const actualData = (response.data as any)?.data || response.data
+    return {
+      ...response,
+      data: actualData
+    }
+  }
+  
   return response;
 }
 
@@ -126,6 +136,16 @@ export const getExpenseStatistics = async (filter: ExpenseFilter): Promise<Expen
  */
 export const deleteExpense = async (id: number): Promise<any> => {
   const response = await request.del(`/expenses/${id}`);
+  
+  // 处理双层嵌套结构 (Rule 5)
+  if (response && response.success) {
+    const actualData = (response.data as any)?.data || response.data
+    return {
+      ...response,
+      data: actualData
+    }
+  }
+  
   return response;
 }
 
@@ -134,7 +154,10 @@ export const deleteExpense = async (id: number): Promise<any> => {
  */
 export const getExpenseTrend = async (timeRange: string): Promise<ExpenseTrendItem[]> => {
   const response = await request.get(`/expenses/trend?timeRange=${encodeURIComponent(timeRange)}`);
-  return response.data;
+  
+  // 处理双层嵌套结构 (Rule 5)
+  const actualData = response.data?.data || response.data
+  return actualData;
 }
 
 /**
@@ -142,7 +165,10 @@ export const getExpenseTrend = async (timeRange: string): Promise<ExpenseTrendIt
  */
 export const getExpenseCategories = async (timeRange: string): Promise<ExpenseCategoryItem[]> => {
   const response = await request.get(`/expenses/categories?timeRange=${encodeURIComponent(timeRange)}`);
-  return response.data;
+  
+  // 处理双层嵌套结构 (Rule 5)
+  const actualData = response.data?.data || response.data
+  return actualData;
 }
 
 /**
@@ -150,7 +176,10 @@ export const getExpenseCategories = async (timeRange: string): Promise<ExpenseCa
  */
 export const getExpenseMembers = async (timeRange: string): Promise<ExpenseMemberItem[]> => {
   const response = await request.get(`/expenses/members?timeRange=${encodeURIComponent(timeRange)}`);
-  return response.data;
+  
+  // 处理双层嵌套结构 (Rule 5)
+  const actualData = response.data?.data || response.data
+  return actualData;
 }
 
 /**
@@ -158,7 +187,10 @@ export const getExpenseMembers = async (timeRange: string): Promise<ExpenseMembe
  */
 export const getExpenseTimeDistribution = async (granularity: string, timeRange: string): Promise<ExpenseTimeItem[]> => {
   const response = await request.get(`/expenses/time-distribution?granularity=${encodeURIComponent(granularity)}&timeRange=${encodeURIComponent(timeRange)}`);
-  return response.data;
+  
+  // 处理双层嵌套结构 (Rule 5)
+  const actualData = response.data?.data || response.data
+  return actualData;
 }
 
 /**
@@ -167,6 +199,16 @@ export const getExpenseTimeDistribution = async (granularity: string, timeRange:
 export const getExpenseById = async (id: string): Promise<ApiResponse<ExpenseRecord>> => {
   try {
     const response = await request.get<ApiResponse<ExpenseRecord>>(`/expenses/${id}`);
+    
+    // 处理双层嵌套结构 (Rule 5)
+    if (response && response.success) {
+      const actualData = (response.data as any)?.data || response.data
+      return {
+        ...response,
+        data: actualData
+      }
+    }
+    
     return response;
   } catch (error) {
     console.error('获取支出记录详情失败:', error);
@@ -184,6 +226,16 @@ export const getExpenseById = async (id: string): Promise<ApiResponse<ExpenseRec
 export const updateExpense = async (id: string, data: Partial<ExpenseRecord>): Promise<ApiResponse<ExpenseRecord>> => {
   try {
     const response = await request.put<ApiResponse<ExpenseRecord>>(`/expenses/${id}`, data);
+    
+    // 处理双层嵌套结构 (Rule 5)
+    if (response && response.success) {
+      const actualData = (response.data as any)?.data || response.data
+      return {
+        ...response,
+        data: actualData
+      }
+    }
+    
     return response;
   } catch (error) {
     console.error('更新支出记录失败:', error);
@@ -201,6 +253,16 @@ export const updateExpense = async (id: string, data: Partial<ExpenseRecord>): P
 export const createExpense = async (data: Partial<ExpenseRecord>): Promise<ApiResponse<ExpenseRecord>> => {
   try {
     const response = await request.post<ApiResponse<ExpenseRecord>>('/expenses', data);
+    
+    // 处理双层嵌套结构 (Rule 5)
+    if (response && response.success) {
+      const actualData = (response.data as any)?.data || response.data
+      return {
+        ...response,
+        data: actualData
+      }
+    }
+    
     return response;
   } catch (error) {
     console.error('创建费用失败:', error);
@@ -218,6 +280,16 @@ export const createExpense = async (data: Partial<ExpenseRecord>): Promise<ApiRe
 export const saveDraft = async (data: Partial<ExpenseRecord>): Promise<ApiResponse<ExpenseRecord>> => {
   try {
     const response = await request.post<ApiResponse<ExpenseRecord>>('/expenses/draft', data);
+    
+    // 处理双层嵌套结构 (Rule 5)
+    if (response && response.success) {
+      const actualData = (response.data as any)?.data || response.data
+      return {
+        ...response,
+        data: actualData
+      }
+    }
+    
     return response;
   } catch (error) {
     console.error('保存草稿失败:', error);
@@ -235,6 +307,16 @@ export const saveDraft = async (data: Partial<ExpenseRecord>): Promise<ApiRespon
 export const reviewExpense = async (id: string, data: { status: string; comment?: string }): Promise<ApiResponse<any>> => {
   try {
     const response = await request.put<ApiResponse<any>>(`/expenses/${id}/review`, data);
+    
+    // 处理双层嵌套结构 (Rule 5)
+    if (response && response.success) {
+      const actualData = (response.data as any)?.data || response.data
+      return {
+        ...response,
+        data: actualData
+      }
+    }
+    
     return response;
   } catch (error) {
     console.error('审核费用失败:', error);

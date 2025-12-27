@@ -1497,8 +1497,11 @@ const formatCurrency = (amount: number): string => {
   return `¥${amount.toFixed(2)}`
 }
 
-const formatDate = (dateString: string): string => {
-  return new Date(dateString).toLocaleDateString('zh-CN')
+const formatDate = (dateString: string | number | undefined | null): string => {
+  if (!dateString) return '-'
+  const date = new Date(dateString)
+  if (isNaN(date.getTime())) return '-'
+  return date.toLocaleDateString('zh-CN')
 }
 
 const getStatusType = (status: string) => {

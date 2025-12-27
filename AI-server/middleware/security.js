@@ -152,23 +152,40 @@ const securityHeaders = () => {
  */
 const sqlInjectionProtection = () => {
   const dangerousPatterns = [
-    /('|(\\x27)|;|(\\x3B)|\\x00|0x00|%00|\\'|'|(\\x22))/,
-    /(union|select|insert|update|delete|drop|create|alter|exec|execute|script)/i,
-    /(\\b(or|and)\\b.*=\\b)|(\\b(or|and)\\b.*\\b)\\b/i
-  ];
+      // 依然拦截空字节
+      /(\x00|0x00|%00)/,
+      // 使用 \b 确保只匹配完整的 SQL 关键字，避免误伤如 "username", "password", "user_id" 等
+      /\b(union|select|insert|update|delete|drop|create|alter|exec|execute|script|truncate|grant|revoke|use|declare|begin|open|fetch|close|deallocate)\b/i,
+      // 只有当 or/and 后面跟着等号或明显的 SQL 结构时才拦截
+      /\b(or|and)\b\s+[\w\.]+\s*=\s*[\w\.]+/i,
+      /\b(or|and)\b\s+[\w\.]+\s+is\s+(not\s+)?null/i,
+      // 拦截分号后跟 SQL 关键字
+      /;\s*\b(union|select|insert|update|delete|drop|create|alter|exec|execute|script|truncate|grant|revoke|use|declare|begin|open|fetch|close|deallocate)\b/i
+    ];
   
   return (req, res, next) => {
-    const checkValue = (value) => {
+    const checkValue = (value, key = '') => {
+      // 跳过对某些已知包含特殊字符的字段的严格检查
+      const skipFields = ['useragent', 'userAgent', 'description', 'message', 'error', 'stack', 'operation', 'action', 'type', 'outcome', 'details'];
+      if (key && skipFields.some(field => key.toLowerCase().includes(field.toLowerCase()))) {
+        // 对于这些字段，只进行基本的危险字符检查（如空字节）
+        if (typeof value === 'string' && /(\x00|0x00|%00)/.test(value)) {
+          logger.warn(`[SECURITY] 敏感字段检测到空字节: IP=${req.ip}, 路径=${req.path}, 键=${key}`);
+          return true;
+        }
+        return false;
+      }
+
       if (typeof value === 'string') {
         for (const pattern of dangerousPatterns) {
           if (pattern.test(value)) {
-            logger.warn(`[SECURITY] SQL注入防护触发: IP=${req.ip}, 路径=${req.path}, 可疑值=${value.substring(0, 100)}`);
+            logger.warn(`[SECURITY] SQL注入防护触发: IP=${req.ip}, 路径=${req.path}, 键=${key}, 可疑值=${value.substring(0, 100)}`);
             return true;
           }
         }
       } else if (typeof value === 'object' && value !== null) {
-        for (const key in value) {
-          if (checkValue(value[key])) {
+        for (const k in value) {
+          if (checkValue(value[k], k)) {
             return true;
           }
         }

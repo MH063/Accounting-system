@@ -148,13 +148,13 @@ const request = async <T = unknown>(url: string, options: RequestInit = {}): Pro
   const isFormData = options.body instanceof FormData
   
   const config: RequestInit = {
+    ...options,
     headers: {
       // 只有在不是 FormData 时才设置 Content-Type
       ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(token && { Authorization: `Bearer ${token}` }),
       ...options.headers,
     },
-    ...options,
   }
 
   try {
@@ -179,7 +179,10 @@ const request = async <T = unknown>(url: string, options: RequestInit = {}): Pro
       
       // 特殊处理401错误
       if (response.status === 401) {
-        throw new Error('身份验证已过期，请重新登录');
+        console.log('[paymentService] 检测到401错误，清除认证信息并跳转到登录页')
+        authStorageService.clearAuthData()
+        window.location.href = '/login?reason=token_expired'
+        return
       }
       
       // 特殊处理500错误
@@ -771,6 +774,34 @@ export const saveReminderSettings = async (settings: {
 }
 
 /**
+ * 获取提醒设置
+ * @returns 提醒设置
+ */
+export const getReminderSettings = async () => {
+  try {
+    // 调用真实API获取提醒设置
+    const response = await request<{
+      enabled: boolean;
+      methods: string[];
+      intervalMinutes: number;
+    }>('/payments/reminder-settings');
+    
+    return response;
+  } catch (error) {
+    console.error('获取提醒设置失败:', error);
+    return {
+      success: false,
+      data: {
+        enabled: false,
+        methods: ['email', 'sms'],
+        intervalMinutes: 60
+      },
+      message: '获取提醒设置失败'
+    };
+  }
+}
+
+/**
  * 获取安全检测历史记录
  * @param days 天数，默认30天
  * @returns 历史记录列表
@@ -889,9 +920,11 @@ export const calculateSharing = async (sharingData: {
   } catch (error: any) {
     console.error('费用分摊计算失败:', error)
     
-    // 提供更具体的错误信息
     if (error.message && error.message.includes('401')) {
-      throw new Error('身份验证已过期，请重新登录')
+      console.log('[paymentService] 检测到401错误，清除认证信息并跳转到登录页')
+      authStorageService.clearAuthData()
+      window.location.href = '/login?reason=token_expired'
+      return
     } else if (error.message && error.message.includes('403')) {
       throw new Error('您没有权限执行此操作')
     } else {

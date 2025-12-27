@@ -1,102 +1,112 @@
+import { request } from '@/utils/request';
+import type { ApiResponse } from '@/types';
+
 /**
  * 安全操作日志服务
- * 负责记录和管理用户的安全相关操作日志
+ * 负责从后端获取和管理用户的安全相关操作日志
  */
 
 export interface SecurityOperationLog {
   id: string;
   userId: string;
-  operation: string;
-  description: string;
-  ip: string;
+  type: string;
+  timestamp: string;
+  sourceIp: string;
   userAgent: string;
-  timestamp: number;
-  status: 'success' | 'failed';
-  details?: Record<string, any>;
+  resource: string;
+  action: string;
+  outcome: string;
+  severity: string;
+  data?: any;
+}
+
+export interface SecurityLogsResponse {
+  logs: SecurityOperationLog[];
+  total: number;
+  hasMore: boolean;
 }
 
 /**
- * 记录安全操作日志
- * @param log 日志条目
- */
-export const logSecurityOperation = (log: Omit<SecurityOperationLog, 'id' | 'timestamp'>): void => {
-  try {
-    const logEntry: SecurityOperationLog = {
-      ...log,
-      id: generateId(),
-      timestamp: Date.now()
-    };
-
-    // 获取现有的安全操作日志
-    const logsStr = localStorage.getItem('security_operation_logs');
-    let logs: SecurityOperationLog[] = [];
-    if (logsStr) {
-      logs = JSON.parse(logsStr);
-    }
-
-    // 添加新的日志条目
-    logs.push(logEntry);
-
-    // 只保留最近的500条日志
-    if (logs.length > 500) {
-      logs = logs.slice(-500);
-    }
-
-    // 保存日志
-    localStorage.setItem('security_operation_logs', JSON.stringify(logs));
-  } catch (error) {
-    console.error('记录安全操作日志失败:', error);
-  }
-};
-
-/**
- * 获取安全操作日志
- * @param userId 用户ID
- * @param limit 返回条数限制
+ * 从后端获取安全操作日志
+ * @param params 查询参数
  * @returns 安全操作日志列表
  */
-export const getSecurityOperationLogs = (userId: string, limit: number = 100): SecurityOperationLog[] => {
+export const getSecurityOperationLogs = async (params: {
+  userId?: string;
+  type?: string;
+  limit?: number;
+  offset?: number;
+  startDate?: string;
+  endDate?: string;
+}): Promise<ApiResponse<SecurityLogsResponse>> => {
   try {
-    const logsStr = localStorage.getItem('security_operation_logs');
-    if (!logsStr) {
-      return [];
+    const queryParams = new URLSearchParams();
+    if (params.userId) queryParams.append('userId', params.userId);
+    if (params.type) queryParams.append('type', params.type);
+    if (params.limit) queryParams.append('limit', params.limit.toString());
+    if (params.offset) queryParams.append('offset', params.offset.toString());
+    if (params.startDate) queryParams.append('startDate', params.startDate);
+    if (params.endDate) queryParams.append('endDate', params.endDate);
+
+    const response = await request<ApiResponse<SecurityLogsResponse>>(`/security/audit-logs?${queryParams.toString()}`, {
+      method: 'GET'
+    });
+
+    // 处理双层嵌套结构 (Rule 5)
+    if (response.success && response.data) {
+      const actualData = (response.data as any).data || response.data;
+      return {
+        ...response,
+        data: actualData
+      };
     }
 
-    const logs: SecurityOperationLog[] = JSON.parse(logsStr);
-    
-    // 过滤指定用户的安全操作日志
-    const userLogs = logs.filter(log => log.userId === userId);
-    
-    // 按时间倒序排列并限制数量
-    return userLogs
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .slice(0, limit);
+    return response;
   } catch (error) {
     console.error('获取安全操作日志失败:', error);
-    return [];
+    return {
+      success: false,
+      message: '获取安全操作日志失败',
+      data: { logs: [], total: 0, hasMore: false }
+    };
   }
 };
 
 /**
- * 清除安全操作日志
- * @param userId 用户ID
+ * 记录安全操作日志到后端
+ * @param eventData 事件数据
  */
-export const clearSecurityOperationLogs = (userId: string): void => {
+export const logSecurityOperation = async (eventData: any): Promise<ApiResponse<any>> => {
   try {
-    const logsStr = localStorage.getItem('security_operation_logs');
-    if (!logsStr) {
-      return;
-    }
+    // 补全后端需要的字段 (type 和 outcome)
+    const normalizedData = {
+      ...eventData,
+      type: eventData.type || eventData.operation || eventData.action || 'unknown_event',
+      outcome: eventData.outcome || eventData.status || 'unknown'
+    };
 
-    let logs: SecurityOperationLog[] = JSON.parse(logsStr);
+    const response = await request<ApiResponse<any>>('/security/log-event', {
+      method: 'POST',
+      data: normalizedData
+    });
     
-    // 过滤掉指定用户的日志
-    logs = logs.filter(log => log.userId !== userId);
+    // 处理双层嵌套结构 (Rule 5)
+    if (response.success && response.data) {
+      const actualData = (response.data as any).data || response.data;
+      return {
+        ...response,
+        data: actualData
+      };
+    }
     
-    // 保存日志
-    localStorage.setItem('security_operation_logs', JSON.stringify(logs));
+    return response;
   } catch (error) {
-    console.error('清除安全操作日志失败:', error);
+    console.error('记录安全操作日志失败:', error);
+    return {
+      success: false,
+      message: '记录安全操作日志失败',
+      data: null
+    };
   }
 };
 
@@ -105,20 +115,24 @@ export const clearSecurityOperationLogs = (userId: string): void => {
  * @param userId 用户ID
  * @returns 日志数据的Blob对象
  */
-export const exportSecurityOperationLogs = (userId: string): Blob => {
+export const exportSecurityOperationLogs = async (userId: string): Promise<Blob> => {
   try {
-    const logs = getSecurityOperationLogs(userId, 1000);
+    const response = await getSecurityOperationLogs({ userId, limit: 1000 });
+    const logs = response.data?.logs || [];
+    
     // 添加BOM以支持UTF-8编码，解决Excel打开乱码问题
     const csvHeader = '\uFEFF';
     const csvContent = [
-      ['时间', '操作', '描述', 'IP地址', '状态', '详细信息'],
+      ['时间', '类型', 'IP地址', 'User-Agent', '资源', '操作', '结果', '严重程度'],
       ...logs.map(log => [
         new Date(log.timestamp).toLocaleString(),
-        log.operation,
-        log.description,
-        log.ip,
-        log.status === 'success' ? '成功' : '失败',
-        log.details ? escapeCsvField(JSON.stringify(log.details)) : ''
+        log.type,
+        log.sourceIp,
+        log.userAgent,
+        log.resource,
+        log.action,
+        log.outcome,
+        log.severity
       ])
     ]
       .map(row => row.map(field => `"${String(field).replace(/"/g, '""')}"`).join(','))
@@ -131,27 +145,8 @@ export const exportSecurityOperationLogs = (userId: string): Blob => {
   }
 };
 
-/**
- * 转义CSV字段中的特殊字符
- * @param field 字段值
- * @returns 转义后的字段值
- */
-const escapeCsvField = (field: string): string => {
-  // 替换所有双引号为两个双引号
-  return field.replace(/"/g, '""');
-};
-
-/**
- * 生成唯一ID
- * @returns 唯一ID
- */
-const generateId = (): string => {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-};
-
 export default {
-  logSecurityOperation,
   getSecurityOperationLogs,
-  clearSecurityOperationLogs,
+  logSecurityOperation,
   exportSecurityOperationLogs
 };

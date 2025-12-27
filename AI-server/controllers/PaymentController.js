@@ -8,6 +8,29 @@ const { query } = require('../config/database');
 const fs = require('fs');
 const path = require('path');
 
+/**
+ * 处理日期字段，确保它们被正确序列化为字符串
+ * @param {Object} row - 数据库行对象
+ * @param {string[]} dateFields - 需要处理的日期字段名数组
+ * @returns {Object} 处理后的对象
+ */
+const processDateFields = (row, dateFields) => {
+  const processed = { ...row };
+  for (const field of dateFields) {
+    if (processed[field]) {
+      if (typeof processed[field] === 'object' && processed[field].toISOString) {
+        processed[field] = processed[field].toISOString();
+      } else {
+        processed[field] = processed[field].toString();
+      }
+    } else if (field === 'createdAt') {
+      // createdAt 字段不能为 null，使用当前时间
+      processed[field] = new Date().toISOString();
+    }
+  }
+  return processed;
+};
+
 class PaymentController extends BaseController {
   /**
    * 获取收款码列表
@@ -872,10 +895,17 @@ class PaymentController extends BaseController {
       const total = parseInt(countResult.rows[0].total);
       const pages = Math.ceil(total / pageSize);
       
+      // 处理日期字段，确保它们被正确序列化
+      const processedRecords = result.rows.map(row => ({
+        ...row,
+        createdAt: row.createdAt ? (typeof row.createdAt === 'object' && row.createdAt.toISOString ? row.createdAt.toISOString() : row.createdAt.toString()) : new Date().toISOString(),
+        completedAt: row.completedAt ? (typeof row.completedAt === 'object' && row.completedAt.toISOString ? row.completedAt.toISOString() : row.completedAt.toString()) : null
+      }));
+      
       return res.json({
         success: true,
         data: {
-          records: result.rows,
+          records: processedRecords,
           total,
           page: pageNum,
           size: pageSize,
@@ -932,9 +962,11 @@ class PaymentController extends BaseController {
         });
       }
       
+      const processedData = processDateFields(result.rows[0], ['createdAt', 'completedAt']);
+      
       return res.json({
         success: true,
-        data: result.rows[0],
+        data: processedData,
         message: '获取支付记录详情成功'
       });
     } catch (error) {
@@ -1159,116 +1191,7 @@ class PaymentController extends BaseController {
     }
   }
 
-  /**
-   * 保存提醒设置
-   * POST /api/payments/reminder-settings
-   * 
-   * 请求参数:
-   * - enabled: 是否启用
-   * - methods: 提醒方式列表
-   * - intervalMinutes: 提醒间隔（分钟）
-   * 
-   * 返回结果:
-   * - 保存结果
-   */
-  async saveReminderSettings(req, res, next) {
-    try {
-      const { enabled, methods, intervalMinutes } = req.body;
-      
-      // 验证参数
-      if (enabled === undefined || !methods || !Array.isArray(methods) || intervalMinutes === undefined) {
-        return res.status(400).json({
-          success: false,
-          message: '缺少必填字段：enabled, methods, intervalMinutes'
-        });
-      }
-      
-      // 检查是否已存在设置
-      const checkSql = 'SELECT id FROM reminder_settings WHERE user_id = $1';
-      const checkResult = await query(checkSql, [req.user.id]);
-      
-      if (checkResult.rows.length > 0) {
-        // 更新现有设置
-        const updateSql = `
-          UPDATE reminder_settings
-          SET enabled = $1, methods = $2, interval_minutes = $3, updated_at = NOW()
-          WHERE user_id = $4
-        `;
-        await query(updateSql, [enabled, methods, intervalMinutes, req.user.id]);
-      } else {
-        // 创建新设置
-        const insertSql = `
-          INSERT INTO reminder_settings (user_id, enabled, methods, interval_minutes)
-          VALUES ($1, $2, $3, $4)
-        `;
-        await query(insertSql, [req.user.id, enabled, methods, intervalMinutes]);
-      }
-      
-      return res.json({
-        success: true,
-        data: true,
-        message: '保存提醒设置成功'
-      });
-    } catch (error) {
-      console.error('保存提醒设置失败:', error);
-      next(error);
-    }
-  }
 
-  /**
-   * 计算费用分摊
-   * POST /api/payments/calculate-sharing
-   * 
-   * 请求参数:
-   * - expenses: 费用列表
-   * - members: 成员列表
-   * 
-   * 返回结果:
-   * - 分摊结果
-   */
-  async calculateSharing(req, res, next) {
-    try {
-      const { expenses, members } = req.body;
-      
-      // 验证参数
-      if (!expenses || !Array.isArray(expenses) || !members || !Array.isArray(members)) {
-        return res.status(400).json({
-          success: false,
-          message: '缺少必填字段：expenses, members'
-        });
-      }
-      
-      // 计算总费用
-      const totalExpense = expenses.reduce((sum, expense) => sum + parseFloat(expense.amount), 0);
-      
-      // 计算人均分摊
-      const perPersonShare = totalExpense / members.length;
-      
-      // 生成分摊结果
-      const sharingResults = members.map(member => ({
-        name: member.name,
-        shouldPay: parseFloat(perPersonShare.toFixed(2)),
-        paid: 0,
-        pending: parseFloat(perPersonShare.toFixed(2)),
-        status: 'pending'
-      }));
-      
-      return res.json({
-        success: true,
-        data: {
-          sharingResults,
-          totalExpense: parseFloat(totalExpense.toFixed(2)),
-          perPersonShare: parseFloat(perPersonShare.toFixed(2)),
-          totalPaid: 0,
-          totalPending: parseFloat(totalExpense.toFixed(2))
-        },
-        message: '费用分摊计算成功'
-      });
-    } catch (error) {
-      console.error('费用分摊计算失败:', error);
-      next(error);
-    }
-  }
 
   /**
    * 收款码安全检测
@@ -1576,7 +1499,9 @@ class PaymentController extends BaseController {
       return res.json({
         success: true,
         data: {
-          records: recordsResult.rows,
+          records: recordsResult.rows.map(row => 
+            processDateFields(row, ['createdAt', 'completedAt'])
+          ),
           total,
           page: pageNum,
           size: pageSize,
@@ -1719,10 +1644,14 @@ class PaymentController extends BaseController {
       
       const recordsResult = await query(recordsSql, params);
       
+      const processedRecords = recordsResult.rows.map(row => 
+        processDateFields(row, ['createdAt', 'completedAt'])
+      );
+      
       return res.json({
         success: true,
         data: {
-          records: recordsResult.rows,
+          records: processedRecords,
           total,
           page: pageNum,
           size: pageSize,
@@ -1974,109 +1903,7 @@ class PaymentController extends BaseController {
     }
   }
   
-  /**
-   * 保存提醒设置
-   * POST /api/payments/reminder-settings
-   * 
-   * 请求参数:
-   * - enabled: 是否启用提醒
-   * - methods: 提醒方式数组
-   * - intervalMinutes: 提醒间隔（分钟）
-   * 
-   * 返回结果:
-   * - 保存结果
-   */
-  async saveReminderSettings(req, res, next) {
-    try {
-      const { enabled = false, methods = ['email', 'sms'], intervalMinutes = 60 } = req.body;
-      
-      // 检查是否已存在提醒设置
-      const checkSql = `SELECT id FROM reminder_settings WHERE user_id = $1`;
-      const checkResult = await query(checkSql, [req.user.id]);
-      
-      if (checkResult.rows.length > 0) {
-        // 更新现有设置
-        const updateSql = `
-          UPDATE reminder_settings 
-          SET enabled = $1, methods = $2, interval_minutes = $3, updated_at = NOW()
-          WHERE user_id = $4
-          RETURNING id
-        `;
-        await query(updateSql, [enabled, methods, intervalMinutes, req.user.id]);
-      } else {
-        // 创建新设置
-        const insertSql = `
-          INSERT INTO reminder_settings (user_id, enabled, methods, interval_minutes)
-          VALUES ($1, $2, $3, $4)
-          RETURNING id
-        `;
-        await query(insertSql, [req.user.id, enabled, methods, intervalMinutes]);
-      }
-      
-      return res.json({
-        success: true,
-        data: true,
-        message: '保存提醒设置成功'
-      });
-    } catch (error) {
-      console.error('保存提醒设置失败:', error);
-      next(error);
-    }
-  }
-  
-  /**
-   * 计算费用分摊
-   * POST /api/payments/calculate-sharing
-   * 
-   * 请求参数:
-   * - expenses: 费用列表
-   * - members: 成员列表
-   * 
-   * 返回结果:
-   * - 费用分摊结果
-   */
-  async calculateSharing(req, res, next) {
-    try {
-      const { expenses = [], members = [] } = req.body;
-      
-      if (!expenses.length || !members.length) {
-        return res.status(400).json({
-          success: false,
-          message: '缺少费用列表或成员列表'
-        });
-      }
-      
-      // 计算总费用
-      const totalExpense = expenses.reduce((sum, expense) => sum + parseFloat(expense.amount || 0), 0);
-      
-      // 计算人均分摊金额
-      const perPersonShare = totalExpense / members.length;
-      
-      // 生成分摊结果
-      const sharingResults = members.map(member => ({
-        name: member.name,
-        shouldPay: perPersonShare,
-        paid: 0,
-        pending: perPersonShare,
-        status: 'pending'
-      }));
-      
-      return res.json({
-        success: true,
-        data: {
-          sharingResults,
-          totalExpense,
-          perPersonShare,
-          totalPaid: 0,
-          totalPending: totalExpense
-        },
-        message: '费用分摊计算成功'
-      });
-    } catch (error) {
-      console.error('费用分摊计算失败:', error);
-      next(error);
-    }
-  }
+
 
   /**
    * 获取支付记录列表
@@ -2198,10 +2025,14 @@ class PaymentController extends BaseController {
       const total = parseInt(countResult.rows[0].total);
       const pages = Math.ceil(total / pageSize);
       
+      const processedRecords = recordsResult.rows.map(row => 
+        processDateFields(row, ['createdAt'])
+      );
+      
       return res.json({
         success: true,
         data: {
-          records: recordsResult.rows,
+          records: processedRecords,
           total,
           page: pageNum,
           size: pageSize,
@@ -2535,114 +2366,7 @@ class PaymentController extends BaseController {
     }
   }
   
-  /**
-   * 保存提醒设置
-   * POST /api/payments/reminder-settings
-   * 
-   * 请求参数:
-   * - enabled: 是否启用提醒
-   * - methods: 提醒方式 (email, sms)
-   * - intervalMinutes: 提醒间隔（分钟）
-   * 
-   * 返回结果:
-   * - 保存结果
-   */
-  async saveReminderSettings(req, res, next) {
-    try {
-      const { enabled = false, methods = ['email'], intervalMinutes = 60 } = req.body;
-      
-      // 验证提醒方式
-      const validMethods = ['email', 'sms'];
-      const invalidMethods = methods.filter(method => !validMethods.includes(method));
-      if (invalidMethods.length > 0) {
-        return res.status(400).json({
-          success: false,
-          message: `无效的提醒方式：${invalidMethods.join(', ')}`
-        });
-      }
-      
-      // 保存提醒设置
-      const sql = `
-        INSERT INTO reminder_settings (user_id, enabled, methods, interval_minutes, updated_at)
-        VALUES ($1, $2, $3, $4, NOW())
-        ON CONFLICT (user_id) DO UPDATE
-        SET enabled = $2, methods = $3, interval_minutes = $4, updated_at = NOW()
-      `;
-      
-      await query(sql, [req.user.id, enabled, methods, intervalMinutes]);
-      
-      return res.json({
-        success: true,
-        data: true,
-        message: '保存提醒设置成功'
-      });
-    } catch (error) {
-      console.error('保存提醒设置失败:', error);
-      next(error);
-    }
-  }
-  
-  /**
-   * 计算费用分摊
-   * POST /api/payments/calculate-sharing
-   * 
-   * 请求参数:
-   * - expenses: 费用列表
-   * - members: 成员列表
-   * 
-   * 返回结果:
-   * - 费用分摊结果
-   */
-  async calculateSharing(req, res, next) {
-    try {
-      const { expenses = [], members = [] } = req.body;
-      
-      // 验证参数
-      if (!Array.isArray(expenses) || expenses.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: '请提供有效的费用列表'
-        });
-      }
-      
-      if (!Array.isArray(members) || members.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: '请提供有效的成员列表'
-        });
-      }
-      
-      // 计算总费用
-      const totalExpense = expenses.reduce((sum, expense) => sum + parseFloat(expense.amount || 0), 0);
-      
-      // 计算人均分摊金额
-      const perPersonShare = totalExpense / members.length;
-      
-      // 生成分摊结果
-      const sharingResults = members.map(member => ({
-        name: member.name,
-        shouldPay: parseFloat(perPersonShare.toFixed(2)),
-        paid: 0,
-        pending: parseFloat(perPersonShare.toFixed(2)),
-        status: 'pending'
-      }));
-      
-      return res.json({
-        success: true,
-        data: {
-          sharingResults,
-          totalExpense: parseFloat(totalExpense.toFixed(2)),
-          perPersonShare: parseFloat(perPersonShare.toFixed(2)),
-          totalPaid: 0,
-          totalPending: parseFloat(totalExpense.toFixed(2))
-        },
-        message: '费用分摊计算成功'
-      });
-    } catch (error) {
-      console.error('费用分摊计算失败:', error);
-      next(error);
-    }
-  }
+
 
   /**
    * 获取支付记录详情
@@ -3313,14 +3037,14 @@ class PaymentController extends BaseController {
           SET enabled = $1, methods = $2, interval_minutes = $3, updated_at = NOW()
           WHERE user_id = $4
         `;
-        await query(updateSql, [enabled, JSON.stringify(methods), intervalMinutes, req.user.id]);
+        await query(updateSql, [enabled, methods, intervalMinutes, req.user.id]);
       } else {
         // 创建新设置
         const insertSql = `
           INSERT INTO reminder_settings (user_id, enabled, methods, interval_minutes)
           VALUES ($1, $2, $3, $4)
         `;
-        await query(insertSql, [req.user.id, enabled, JSON.stringify(methods), intervalMinutes]);
+        await query(insertSql, [req.user.id, enabled, methods, intervalMinutes]);
       }
       
       return res.json({
@@ -3558,6 +3282,89 @@ class PaymentController extends BaseController {
       });
     } catch (error) {
       console.error('获取支付确认统计数据失败:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * 保存支付提醒设置
+   * POST /api/payments/reminder-settings
+   */
+  async saveReminderSettings(req, res, next) {
+    try {
+      const { enabled, methods, intervalMinutes } = req.body;
+      const userId = req.user.id;
+
+      console.log('[PaymentController] 保存提醒设置:', { userId, enabled, methods, intervalMinutes });
+
+      // 检查记录是否存在
+      const checkSql = 'SELECT id FROM reminder_settings WHERE user_id = $1';
+      const checkResult = await query(checkSql, [userId]);
+
+      if (checkResult.rows.length > 0) {
+        // 更新记录
+        const updateSql = `
+          UPDATE reminder_settings 
+          SET enabled = $1, methods = $2, interval_minutes = $3, updated_at = NOW() 
+          WHERE user_id = $4
+          RETURNING *
+        `;
+        const updateResult = await query(updateSql, [enabled, methods, intervalMinutes, userId]);
+        return res.json({
+          success: true,
+          data: updateResult.rows[0],
+          message: '提醒设置保存成功'
+        });
+      } else {
+        // 创建记录
+        const insertSql = `
+          INSERT INTO reminder_settings (user_id, enabled, methods, interval_minutes) 
+          VALUES ($1, $2, $3, $4) 
+          RETURNING *
+        `;
+        const insertResult = await query(insertSql, [userId, enabled, methods, intervalMinutes]);
+        return res.json({
+          success: true,
+          data: insertResult.rows[0],
+          message: '提醒设置创建成功'
+        });
+      }
+    } catch (error) {
+      console.error('保存提醒设置失败:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * 获取支付提醒设置
+   * GET /api/payments/reminder-settings
+   */
+  async getReminderSettings(req, res, next) {
+    try {
+      const userId = req.user.id;
+      console.log('[PaymentController] 获取提醒设置:', { userId });
+
+      const sql = 'SELECT enabled, methods, interval_minutes as "intervalMinutes" FROM reminder_settings WHERE user_id = $1';
+      const result = await query(sql, [userId]);
+
+      if (result.rows.length > 0) {
+        return res.json({
+          success: true,
+          data: result.rows[0]
+        });
+      } else {
+        // 返回默认设置
+        return res.json({
+          success: true,
+          data: {
+            enabled: false,
+            methods: ['email', 'sms'],
+            intervalMinutes: 60
+          }
+        });
+      }
+    } catch (error) {
+      console.error('获取提醒设置失败:', error);
       next(error);
     }
   }

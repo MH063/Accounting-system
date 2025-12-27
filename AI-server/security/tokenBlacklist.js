@@ -12,7 +12,7 @@ const redis = require('redis');
 class TokenBlacklist {
   constructor() {
     this.client = null;
-    this.memoryStore = new Set(); // 内存存储作为备选
+    this.memoryStore = {}; // 修改为对象存储，记录撤销详情
     this.redisEnabled = false;
     this.initializeRedis();
   }
@@ -81,12 +81,12 @@ class TokenBlacklist {
         // 同时记录到已撤销令牌集合
         await this.client.sAdd('revoked_tokens', token);
       } else {
-        // 使用内存存储
-        this.memoryStore.add(token);
+        // 使用内存存储详情，支持jti索引
+        this.memoryStore[tokenId] = revokedInfo;
         
-        // 设置内存清理（可选实现）
+        // 设置内存清理
         setTimeout(() => {
-          this.memoryStore.delete(token);
+          delete this.memoryStore[tokenId];
         }, expiresIn * 1000);
       }
 
@@ -107,22 +107,55 @@ class TokenBlacklist {
   /**
    * 检查令牌是否在黑名单中
    * @param {string} token - JWT令牌
+   * @param {boolean} ignoreGracePeriod - 是否忽略宽限期（默认不忽略）
    * @returns {boolean} 是否在黑名单中
    */
-  async isTokenRevoked(token) {
+  async isTokenRevoked(token, ignoreGracePeriod = false) {
     try {
+      const tokenId = this.extractTokenId(token);
+      if (!tokenId) return false;
+
+      let revokedInfoStr = null;
       if (this.redisEnabled && this.client) {
         // Redis检查
-        const tokenId = this.extractTokenId(token);
-        if (!tokenId) return false;
-
         const key = `revoked_token:${tokenId}`;
-        const result = await this.client.get(key);
-        return !!result;
+        revokedInfoStr = await this.client.get(key);
       } else {
         // 内存检查
-        return this.memoryStore.has(token);
+        // 内存存储现在需要支持存储撤销信息对象，而不仅仅是Set
+        // 兼容旧代码，如果Set里有，则认为是撤销的
+        if (this.memoryStore instanceof Set) {
+          return this.memoryStore.has(token);
+        }
+        revokedInfoStr = this.memoryStore[tokenId];
       }
+
+      if (!revokedInfoStr) return false;
+
+      // 如果提供了撤销信息，检查宽限期
+      try {
+        const revokedInfo = typeof revokedInfoStr === 'string' ? JSON.parse(revokedInfoStr) : revokedInfoStr;
+        
+        // 并发刷新宽限期处理：
+        // 如果是因为令牌轮换导致的撤销，且在宽限期内（例如10秒），则允许使用
+        if (!ignoreGracePeriod && revokedInfo.reason === 'token_rotated') {
+          const GRACE_PERIOD_MS = 10000; // 10秒宽限期
+          const timeSinceRevocation = Date.now() - revokedInfo.revokedAt;
+          
+          if (timeSinceRevocation < GRACE_PERIOD_MS) {
+            logger.debug('[TokenBlacklist] 令牌处于轮换宽限期内，允许使用', { 
+              tokenId, 
+              timeSinceRevocation: `${timeSinceRevocation}ms` 
+            });
+            return false; // 不视为撤销
+          }
+        }
+      } catch (e) {
+        // 解析失败，按已撤销处理
+        return true;
+      }
+
+      return true;
     } catch (error) {
       logger.error('[TokenBlacklist] 检查令牌状态失败', { error: error.message });
       return false;
@@ -176,7 +209,7 @@ class TokenBlacklist {
       return {
         redis: redisStats,
         memory: {
-          revokedTokenCount: this.memoryStore.size,
+          revokedTokenCount: Object.keys(this.memoryStore).length,
           storage: 'memory'
         },
         enabled: this.redisEnabled,
@@ -187,7 +220,7 @@ class TokenBlacklist {
       return {
         error: error.message,
         memory: {
-          revokedTokenCount: this.memoryStore.size,
+          revokedTokenCount: Object.keys(this.memoryStore).length,
           storage: 'memory'
         },
         enabled: this.redisEnabled
@@ -209,9 +242,9 @@ class TokenBlacklist {
           storage: 'redis'
         });
       } else {
-        // 内存存储的清理逻辑（如果实现了时间戳记录）
-        logger.info('[TokenBlacklist] 内存存储清理', { 
-          currentSize: this.memoryStore.size,
+        // 内存存储清理
+        logger.info('[TokenBlacklist] 内存存储状态', { 
+          currentSize: Object.keys(this.memoryStore).length,
           storage: 'memory'
         });
       }

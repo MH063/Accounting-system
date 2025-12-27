@@ -182,7 +182,7 @@ const healthCheck = async () => {
     return {
       status: 'healthy',
       message: '数据库连接正常',
-      timestamp: result.rows[0].current_time,
+      timestamp: result.rows[0].current_time instanceof Date ? result.rows[0].current_time.toISOString() : new Date().toISOString(),
       responseTime: `${responseTime}ms`,
       poolSize: poolStatus.totalCount,
       availableConnections: poolStatus.idleCount,

@@ -47,8 +47,15 @@ export const checkSystemHealth = async (): Promise<HealthCheckResponse> => {
     });
     
     if (response.ok) {
-      const data = await response.json();
-      return data;
+      const result = await response.json();
+      // 按照规则 #5 处理双层嵌套结构 {success: true, data: { ... }}
+      if (result && result.success && result.data) {
+        console.log('[systemStatus] 成功获取健康检查数据:', result.data);
+        return result.data;
+      }
+      // 如果数据结构不符合预期，但响应是成功的，尝试直接返回数据
+      console.warn('[systemStatus] 健康检查响应结构不符合规则 #5:', result);
+      return result as HealthCheckResponse;
     } else {
       throw new Error(`健康检查API调用失败: ${response.status}`);
     }
@@ -77,8 +84,10 @@ export const checkSystemHealth = async (): Promise<HealthCheckResponse> => {
  * 将健康检查响应转换为系统状态
  */
 export const mapHealthToStatus = (health: HealthCheckResponse): SystemStatus => {
+  const timestamp = health.timestamp ? new Date(health.timestamp) : new Date()
+  
   const baseStatus = {
-    lastCheckTime: new Date(health.timestamp),
+    lastCheckTime: timestamp,
     uptime: health.metrics?.uptime,
     cpuUsage: health.metrics?.cpu,
     memoryUsage: health.metrics?.memory,

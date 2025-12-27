@@ -175,9 +175,12 @@ export const getMemberById = async (memberId: string): Promise<ApiResponse<Membe
     // 调用真实API获取成员信息
     const response = await request<Member>(`/members/${memberId}`)
     
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = (response as any)?.data?.data || (response as any)?.data || response
+    
     return {
       success: true,
-      data: response
+      data: actualData as Member
     }
   } catch (error) {
     console.error('获取成员信息失败:', error)
@@ -205,9 +208,12 @@ export const updateMember = async (memberId: string, memberData: Partial<Member>
       body: JSON.stringify(memberData)
     })
     
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = (response as any)?.data?.data || (response as any)?.data || response
+    
     return {
       success: true,
-      data: response
+      data: actualData as Member
     }
   } catch (error) {
     console.error('更新成员信息失败:', error)
@@ -231,9 +237,12 @@ export const getMemberFinancialStats = async (memberId: string): Promise<ApiResp
     // 调用真实API获取财务统计数据
     const response = await request<FinancialStats>(`/members/${memberId}/financial-stats`)
     
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = (response as any)?.data?.data || (response as any)?.data || response
+    
     return {
       success: true,
-      data: response
+      data: actualData as FinancialStats
     }
   } catch (error) {
     console.error('获取成员财务统计数据失败:', error)
@@ -264,9 +273,12 @@ export const getMemberActivityStats = async (memberId: string): Promise<ApiRespo
     // 调用真实API获取活跃度统计数据
     const response = await request<ActivityStats>(`/members/${memberId}/activity-stats`)
     
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = (response as any)?.data?.data || (response as any)?.data || response
+    
     return {
       success: true,
-      data: response
+      data: actualData as ActivityStats
     }
   } catch (error) {
     console.error('获取成员活跃度统计数据失败:', error)
@@ -331,9 +343,12 @@ export const getMembers = async (params: {
       method: 'GET'
     })
     
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = (response as any)?.data?.data || (response as any)?.data || response
+    
     return {
       success: true,
-      data: response,
+      data: actualData as MembersResponse,
       message: '成员列表信息获取成功'
     }
   } catch (error) {
@@ -373,9 +388,12 @@ export const inviteMember = async (
       body: JSON.stringify(inviteData)
     })
     
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = (response as any)?.data?.data || (response as any)?.data || response
+    
     return {
       success: true,
-      data: response,
+      data: actualData as InviteMemberResponse,
       message: '邀请已发送'
     }
   } catch (error) {
@@ -413,9 +431,12 @@ export const updateMemberRole = async (
       body: JSON.stringify(roleData)
     })
     
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = (response as any)?.data?.data || (response as any)?.data || response
+    
     return {
       success: true,
-      data: response,
+      data: actualData,
       message: '成员角色更新成功'
     }
   } catch (error) {
@@ -462,9 +483,12 @@ export const deleteDormMember = async (
       data: params
     });
     
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = (response as any)?.data?.data || (response as any)?.data || response
+    
     return {
       success: true,
-      data: response,
+      data: actualData,
       message: '成员删除成功'
     };
   } catch (error) {
@@ -565,9 +589,12 @@ export default {
         body: JSON.stringify(statusData)
       });
       
+      // 处理双层嵌套结构 (Rule 5)
+      const actualData = (response as any)?.data?.data || (response as any)?.data || response
+      
       return {
         success: true,
-        data: response,
+        data: actualData,
         message: '成员状态更新成功'
       };
     } catch (error) {

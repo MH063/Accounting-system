@@ -35,6 +35,9 @@ router.get('/method-distribution', paymentController.getPaymentMethodDistributio
 // 获取支付记录列表接口 - GET方法
 router.get('/', paymentController.getPaymentRecords);
 
+// 获取提醒设置接口 - GET方法
+router.get('/reminder-settings', paymentController.getReminderSettings);
+
 // 获取支付记录详情接口 - GET方法（必须放在最后，避免匹配其他具体路径）
 router.get('/:orderId', paymentController.getPaymentRecordDetail);
 

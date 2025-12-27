@@ -11,6 +11,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const logger = require('../config/logger');
 const TotpService = require('./TotpService');
+const { getQueue, QUEUES } = require('../config/messageQueue');
 const { 
   generateTokenPair, 
   refreshAccessToken, 
@@ -330,7 +331,7 @@ class UserService extends BaseService {
       
       if (!isPasswordValid) {
         // 记录登录失败
-        await this.handleLoginFailure(user.id, username || email);
+        await this.handleLoginFailure(user.id, username || email, user.login_protection_enabled);
         
         logger.warn('[UserService] 用户登录失败: 密码错误', { 
           userId: user.id,
@@ -342,6 +343,53 @@ class UserService extends BaseService {
       // 密码正确，重置登录失败次数
       await this.userRepository.resetLoginAttempts(user.id);
       
+      // 异地登录检测
+      if (user.login_protection_enabled && user.lastLoginIp && user.lastLoginIp !== ip) {
+        logger.warn('[UserService] 检测到异地登录', {
+          userId: user.id,
+          oldIp: user.lastLoginIp,
+          newIp: ip
+        });
+        
+        // 如果启用了邮件提醒
+        if (user.email_alerts_enabled) {
+          try {
+            const emailQueue = getQueue(QUEUES.EMAIL);
+            await emailQueue.add({
+              to: user.email,
+              subject: '【安全提醒】检测到异地登录',
+              html: `
+                <div style="padding: 20px; font-family: sans-serif; line-height: 1.6; color: #333;">
+                  <h2 style="color: #d9534f; border-bottom: 1px solid #eee; padding-bottom: 10px;">账户安全提醒</h2>
+                  <p>尊敬的 <strong>${user.nickname || user.username}</strong>：</p>
+                  <p>系统检测到您的账户在新的地理位置（IP地址）登录，请确认是否为您本人操作。</p>
+                  <div style="background: #f8f9fa; padding: 15px; border-radius: 4px; margin: 20px 0;">
+                    <p style="margin: 5px 0;"><strong>登录时间：</strong>${new Date().toLocaleString()}</p>
+                    <p style="margin: 5px 0;"><strong>登录 IP：</strong>${ip}</p>
+                    <p style="margin: 5px 0;"><strong>上次登录 IP：</strong>${user.lastLoginIp}</p>
+                  </div>
+                  <p>如果这不是您的本人操作，您的账户可能面临安全风险。请立即采取以下措施：</p>
+                  <ol>
+                    <li>修改您的账户登录密码</li>
+                    <li>检查账户的安全保护设置</li>
+                    <li>检查是否有异常的操作记录</li>
+                  </ol>
+                  <p>如有疑问，请联系系统管理员。</p>
+                  <hr style="border: none; border-top: 1px solid #eee; margin-top: 30px;">
+                  <p style="color: #888; font-size: 12px; text-align: center;">此邮件由系统自动发送，请勿直接回复。</p>
+                </div>
+              `
+            });
+            logger.info('[UserService] 异地登录提醒邮件已加入队列', { userId: user.id });
+          } catch (emailError) {
+            logger.error('[UserService] 发送异地登录提醒邮件失败', { 
+              error: emailError.message,
+              userId: user.id 
+            });
+          }
+        }
+      }
+
       // 更新最后登录时间和IP
       await this.userRepository.updateLastLogin(user.id, ip);
 
@@ -392,9 +440,20 @@ class UserService extends BaseService {
    * 处理登录失败
    * @param {number} userId - 用户ID
    * @param {string} identifier - 用户标识符
+   * @param {boolean} protectionEnabled - 是否启用登录保护
    */
-  async handleLoginFailure(userId, identifier) {
+  async handleLoginFailure(userId, identifier, protectionEnabled = true) {
     try {
+      // 如果未启用登录保护，仅记录日志，不执行锁定逻辑
+      if (!protectionEnabled) {
+        logger.warn('[UserService] 登录失败 (未启用登录保护锁定)', { 
+          userId, 
+          identifier,
+          timestamp: new Date().toISOString()
+        });
+        return;
+      }
+
       const result = await this.userRepository.increaseFailedAttempts(userId);
       
       if (result.success) {
@@ -451,7 +510,7 @@ class UserService extends BaseService {
         UPDATE user_sessions 
         SET status = 'revoked', last_accessed_at = NOW() 
         WHERE session_token = $1 AND status = 'active' AND user_id = $2
-        RETURNING id, session_token, status, expires_at
+        RETURNING id, session_token, refresh_token, status, expires_at
       `;
 
       const sessionResult = await this.userRepository.executeQuery(updateSessionQuery, [sessionToken, userId]);
@@ -468,6 +527,17 @@ class UserService extends BaseService {
       }
 
       const updatedSession = sessionResult.rows[0];
+
+      // 2. 撤销JWT令牌（加入黑名单）
+      const { revokeTokenPair } = require('../config/jwtManager');
+      try {
+        // session_token 实际上存储的是访问令牌或与之关联的令牌
+        // refresh_token 存储的是刷新令牌
+        await revokeTokenPair(sessionToken, updatedSession.refresh_token, 'user_logout');
+        logger.info('[UserService] JWT令牌已加入黑名单', { userId });
+      } catch (revokeError) {
+        logger.warn('[UserService] 撤销JWT令牌失败', { error: revokeError.message });
+      }
 
       logger.info('[UserService] 用户登出成功', { 
         userId, 
@@ -520,7 +590,7 @@ class UserService extends BaseService {
       logger.info('[UserService] 刷新访问令牌');
 
       // 使用JWT管理器刷新令牌
-      const newTokens = refreshAccessToken(refreshToken, userInfo);
+      const newTokens = await refreshAccessToken(refreshToken, userInfo);
 
       logger.info('[UserService] 访问令牌刷新成功');
 
@@ -561,7 +631,7 @@ class UserService extends BaseService {
       // 首先尝试直接匹配数据库中的刷新令牌
       let sessionQuery = `
         SELECT 
-          s.id, s.user_id, s.refresh_token, s.status, s.expires_at,
+          s.id, s.user_id, s.session_token, s.refresh_token, s.status, s.expires_at,
           u.id as user_id, u.status as user_status, u.locked_until
         FROM user_sessions s
         JOIN users u ON s.user_id = u.id
@@ -575,36 +645,88 @@ class UserService extends BaseService {
       
       let sessionResult = await client.query(sessionQuery, [refreshToken]);
       
-      // 如果没有找到匹配的记录，尝试验证JWT令牌
+      // 令牌复用检测逻辑
       if (sessionResult.rows.length === 0) {
+        logger.warn('[UserService] 刷新令牌不匹配或会话不活跃，执行安全检测', { 
+          refreshToken: refreshToken.substring(0, 15) + '...'
+        });
+        
         try {
           const { verifyToken } = require('../config/jwtManager');
           const decoded = verifyToken(refreshToken);
           
-          // 如果是有效的JWT刷新令牌，查找对应的会话记录
           if (decoded.type === 'refresh') {
-            sessionQuery = `
-              SELECT 
-                s.id, s.user_id, s.refresh_token, s.status, s.expires_at,
-                u.id as user_id, u.status as user_status, u.locked_until
-              FROM user_sessions s
-              JOIN users u ON s.user_id = u.id
-              WHERE s.user_id = $1
-                AND s.status = 'active'
-                AND s.expires_at > NOW()
-                AND u.status = 'active'
-                AND (u.locked_until IS NULL OR u.locked_until < NOW())
-              FOR UPDATE  -- 行级锁，防止并发刷新
-            `;
-            sessionResult = await client.query(sessionQuery, [decoded.userId]);
+            // 并发刷新容错：检查是否在令牌轮换的宽限期内
+            const tokenBlacklist = require('../security/tokenBlacklist');
+            const isActuallyRevoked = await tokenBlacklist.isTokenRevoked(refreshToken, true);
+            const isRevokedWithGrace = await tokenBlacklist.isTokenRevoked(refreshToken, false);
+            
+            logger.info('[UserService] 令牌黑名单状态检测', {
+              userId: decoded.userId,
+              isActuallyRevoked,
+              isRevokedWithGrace
+            });
+
+            // 如果 isActuallyRevoked 为 true 但 isRevokedWithGrace 为 false，
+            // 说明该令牌处于轮换宽限期内（例如10秒内刚刚被刷新过）
+            if (isActuallyRevoked && !isRevokedWithGrace) {
+              logger.info('[UserService] 检测到处于宽限期内的并发刷新，尝试获取新令牌', { 
+                userId: decoded.userId,
+                tokenId: refreshToken.substring(refreshToken.length - 10)
+              });
+              
+              // 尝试找到该用户最近更新的活跃会话，返回新的令牌对
+              const latestSessionQuery = `
+                SELECT session_token, refresh_token, expires_at
+                FROM user_sessions 
+                WHERE user_id = $1 AND status = 'active'
+                ORDER BY last_accessed_at DESC
+                LIMIT 1
+              `;
+              const latestSessionResult = await client.query(latestSessionQuery, [decoded.userId]);
+              
+              if (latestSessionResult.rows.length > 0) {
+                const latestSession = latestSessionResult.rows[0];
+                logger.info('[UserService] 成功获取并发刷新的新令牌', { userId: decoded.userId });
+                
+                await client.query('ROLLBACK');
+                const error = new Error('检测到并发刷新尝试，请使用已更新的令牌');
+                error.code = 'CONCURRENT_REFRESH';
+                error.statusCode = 409;
+                error.data = {
+                  accessToken: latestSession.session_token,
+                  refreshToken: latestSession.refresh_token,
+                  userId: decoded.userId
+                };
+                throw error;
+              }
+              
+              await client.query('ROLLBACK');
+              const error = new Error('检测到并发刷新尝试，请使用已更新的令牌');
+              error.code = 'CONCURRENT_REFRESH';
+              error.statusCode = 409;
+              throw error;
+            }
+
+            // 如果令牌本身有效但不在数据库中匹配，且不在黑名单宽限期内
+            logger.warn('[UserService] 检测到刷新令牌复用尝试！强制撤销所有会话', { userId: decoded.userId });
+            
+            // 安全策略：撤销该用户的所有活跃会话，强制重新登录
+            await client.query(
+              "UPDATE user_sessions SET status = 'revoked', last_accessed_at = NOW() WHERE user_id = $1 AND status = 'active'",
+              [decoded.userId]
+            );
+            
+            await client.query('COMMIT');
+            throw new Error('检测到异常的令牌使用行为，请重新登录');
           }
         } catch (jwtError) {
-          // JWT验证失败，保持原来的错误处理
-          logger.debug('[UserService] JWT验证失败:', jwtError.message);
+          if (jwtError.statusCode === 409 || jwtError.message === '检测到异常的令牌使用行为，请重新登录') {
+            throw jwtError;
+          }
+          logger.debug('[UserService] 刷新令牌验证失败:', jwtError.message);
         }
-      }
-      
-      if (sessionResult.rows.length === 0) {
+        
         await client.query('ROLLBACK');
         throw new Error('无效的刷新令牌或会话已过期');
       }
@@ -660,10 +782,11 @@ class UserService extends BaseService {
       const { revokeTokenPair } = require('../config/jwtManager');
       
       try {
-        await revokeTokenPair(null, refreshToken, 'token_refresh');
-        logger.info('[UserService] 旧刷新令牌已加入黑名单');
+        // 同时撤销旧的访问令牌和刷新令牌，使用 token_rotated 原因以支持宽限期
+        await revokeTokenPair(session.session_token, refreshToken, 'token_rotated');
+        logger.info('[UserService] 旧令牌对已加入黑名单（宽限期模式）');
       } catch (revokeError) {
-        logger.warn('[UserService] 撤销旧刷新令牌失败', { error: revokeError.message });
+        logger.warn('[UserService] 撤销旧令牌失败', { error: revokeError.message });
         // 这里不抛出错误，因为数据库已经更新成功
       }
       
@@ -929,7 +1052,11 @@ class UserService extends BaseService {
       }
 
       // 验证更新数据
-      const allowedFields = ['real_name', 'phone', 'avatar', 'bio'];
+      const allowedFields = [
+        'real_name', 'phone', 'avatar', 'bio',
+        'login_protection_enabled', 'email_alerts_enabled', 'sms_alerts_enabled',
+        'session_timeout_minutes', 'session_timeout_warning_minutes', 'biometric_enabled'
+      ];
       const filteredData = {};
       
       for (const field of allowedFields) {
@@ -1119,16 +1246,13 @@ class UserService extends BaseService {
    * @returns {string} JWT令牌
    */
   generateToken(user) {
-    const payload = {
+    const { generateToken: signToken } = require('../config/jwtManager');
+    return signToken({
       userId: user.id,
       username: user.username,
       email: user.email,
-      role: user.role,
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24小时过期
-    };
-
-    return jwt.sign(payload, process.env.JWT_SECRET || 'your-secret-key');
+      role: user.role
+    });
   }
 
   /**
@@ -1810,8 +1934,81 @@ class UserService extends BaseService {
    * @param {string} userAgent - 用户代理
    * @returns {Promise<Object>} 会话信息
    */
+  /**
+   * 记录并识别设备
+   * @param {string} ip - IP地址
+   * @param {number} userId - 用户ID
+   * @returns {Promise<Object>} 设备信息及冲突状态
+   */
+  async identifyAndTrackDevice(ip, userId) {
+    try {
+      // 1. 查找或创建设备标识 (以 IP 为核心标识)
+      const findDeviceQuery = 'SELECT * FROM devices WHERE ip_address = $1';
+      let deviceResult = await this.userRepository.executeQuery(findDeviceQuery, [ip]);
+      let device;
+      let conflictDetected = false;
+      let conflictWithUserId = null;
+
+      if (deviceResult.rows.length === 0) {
+        // 创建新设备
+        const insertDeviceQuery = `
+          INSERT INTO devices (ip_address, last_login_user_id, updated_at)
+          VALUES ($1, $2, NOW())
+          RETURNING *
+        `;
+        const insertResult = await this.userRepository.executeQuery(insertDeviceQuery, [ip, userId]);
+        device = insertResult.rows[0];
+      } else {
+        device = deviceResult.rows[0];
+        // 2. 检测冲突：如果当前登录用户与该 IP 上次登录的用户不同
+        if (device.last_login_user_id && device.last_login_user_id !== userId) {
+          conflictDetected = true;
+          conflictWithUserId = device.last_login_user_id;
+          
+          // 记录冲突日志
+          const logConflictQuery = `
+            INSERT INTO ip_conflict_logs (ip_address, user_id, other_user_id)
+            VALUES ($1, $2, $3)
+          `;
+          await this.userRepository.executeQuery(logConflictQuery, [ip, userId, conflictWithUserId]);
+          
+          logger.warn('[UserService] 检测到 IP 地址冲突', {
+            ip,
+            currentUserId: userId,
+            previousUserId: conflictWithUserId
+          });
+        }
+
+        // 更新设备最后访问信息
+        const updateDeviceQuery = 'UPDATE devices SET last_login_user_id = $1, updated_at = NOW() WHERE id = $2';
+        await this.userRepository.executeQuery(updateDeviceQuery, [userId, device.id]);
+      }
+
+      return {
+        deviceId: device.id,
+        conflictDetected,
+        conflictWithUserId
+      };
+    } catch (error) {
+      logger.error('[UserService] 设备识别失败', { error: error.message, ip, userId });
+      // 降级处理：如果不具备表结构，返回默认值不中断登录流程
+      return { deviceId: null, conflictDetected: false };
+    }
+  }
+
+  /**
+   * 创建用户会话
+   * @param {number} userId - 用户ID
+   * @param {string} ip - IP地址
+   * @param {string} userAgent - 用户代理
+   * @param {Object} tokens - 令牌信息
+   * @returns {Promise<Object>} 会话对象
+   */
   async createUserSession(userId, ip, userAgent, tokens = null) {
     try {
+      // 识别并跟踪设备
+      const deviceTrack = await this.identifyAndTrackDevice(ip || '0.0.0.0', userId);
+      
       // 生成会话令牌
       const sessionToken = tokens?.accessToken || this.generateSecureToken();
       const refreshToken = tokens?.refreshToken || this.generateSecureToken();
@@ -1824,35 +2021,72 @@ class UserService extends BaseService {
       expiresAt.setDate(expiresAt.getDate() + 7);
       
       // 插入到数据库的 user_sessions 表
-      const insertQuery = `
-        INSERT INTO user_sessions (
-          user_id, session_token, refresh_token, device_info, 
-          ip_address, user_agent, status, expires_at, last_accessed_at
-        ) VALUES (
-          $1, $2, $3, $4, 
-          $5, $6, 'active', $7, NOW()
-        )
-        RETURNING id, user_id, session_token, refresh_token, device_info, ip_address, user_agent, status, expires_at, created_at, last_accessed_at
-      `;
+      let insertQuery, params;
       
-      const params = [
-        userId,
-        sessionToken,
-        refreshToken,
-        JSON.stringify(deviceInfo),
-        ip || '0.0.0.0',
-        userAgent || '',
-        expiresAt
-      ];
+      if (deviceTrack.deviceId) {
+        // 如果有deviceId，包含device_id字段
+        insertQuery = `
+          INSERT INTO user_sessions (
+            user_id, session_token, refresh_token, device_info, 
+            ip_address, user_agent, status, expires_at, last_accessed_at,
+            device_id
+          ) VALUES (
+            $1, $2, $3, $4, 
+            $5, $6, 'active', $7, NOW(),
+            $8
+          )
+          RETURNING id, user_id, session_token, refresh_token, device_info, ip_address, user_agent, status, expires_at, created_at, last_accessed_at
+        `;
+        
+        params = [
+          userId,
+          sessionToken,
+          refreshToken,
+          JSON.stringify(deviceInfo),
+          ip || '0.0.0.0',
+          userAgent || '',
+          expiresAt,
+          deviceTrack.deviceId
+        ];
+      } else {
+        // 如果没有deviceId，不包含device_id字段
+        insertQuery = `
+          INSERT INTO user_sessions (
+            user_id, session_token, refresh_token, device_info, 
+            ip_address, user_agent, status, expires_at, last_accessed_at
+          ) VALUES (
+            $1, $2, $3, $4, 
+            $5, $6, 'active', $7, NOW()
+          )
+          RETURNING id, user_id, session_token, refresh_token, device_info, ip_address, user_agent, status, expires_at, created_at, last_accessed_at
+        `;
+        
+        params = [
+          userId,
+          sessionToken,
+          refreshToken,
+          JSON.stringify(deviceInfo),
+          ip || '0.0.0.0',
+          userAgent || '',
+          expiresAt
+        ];
+      }
       
       const result = await this.userRepository.executeQuery(insertQuery, params);
       const session = result.rows[0];
+      
+      // 如果检测到冲突，将会话标记中包含冲突信息
+      if (deviceTrack.conflictDetected) {
+        session.ip_conflict = true;
+        session.conflict_with_user_id = deviceTrack.conflictWithUserId;
+      }
       
       logger.info('[UserService] 创建用户会话', { 
         userId,
         sessionId: session.id,
         ip,
-        expiresAt: session.expires_at
+        deviceId: deviceTrack.deviceId,
+        conflict: deviceTrack.conflictDetected
       });
       
       return session;
@@ -1863,6 +2097,94 @@ class UserService extends BaseService {
         ip
       });
       return null;
+    }
+  }
+
+  /**
+   * 获取用户的所有活跃会话
+   * @param {number} userId - 用户ID
+   * @returns {Promise<Array>} 会话列表
+   */
+  /**
+   * 获取用户的所有活跃会话，包含 IP 冲突检测
+   * @param {number} userId - 用户ID
+   * @returns {Promise<Array>} 会话列表
+   */
+  async getUserSessions(userId) {
+    try {
+      // 查询会话，并关联设备表，同时检测是否有其他用户也在使用相同的 IP
+      const query = `
+        SELECT 
+          s.id, s.session_token, s.device_info, s.ip_address, s.user_agent, 
+          s.status, s.expires_at, s.created_at, s.last_accessed_at, s.device_id,
+          (
+            SELECT COUNT(DISTINCT s2.user_id) 
+            FROM user_sessions s2 
+            WHERE s2.ip_address = s.ip_address 
+            AND s2.user_id != s.user_id 
+            AND s2.status = 'active' 
+            AND s2.expires_at > NOW()
+          ) > 0 as has_ip_conflict
+        FROM user_sessions s
+        WHERE s.user_id = $1 AND s.status = 'active' AND s.expires_at > NOW()
+        ORDER BY s.last_accessed_at DESC
+      `;
+      const result = await this.userRepository.executeQuery(query, [userId]);
+      return result.rows;
+    } catch (error) {
+      logger.error('[UserService] 获取用户会话失败', { error: error.message, userId });
+      // 降级查询：如果上述复杂查询失败（例如表结构未更新），则执行基本查询
+      const fallbackQuery = `
+        SELECT id, session_token, device_info, ip_address, user_agent, status, expires_at, created_at, last_accessed_at
+        FROM user_sessions
+        WHERE user_id = $1 AND status = 'active' AND expires_at > NOW()
+        ORDER BY last_accessed_at DESC
+      `;
+      const fallbackResult = await this.userRepository.executeQuery(fallbackQuery, [userId]);
+      return fallbackResult.rows;
+    }
+  }
+
+  /**
+   * 撤销会话
+   * @param {number} userId - 用户ID
+   * @param {number} sessionId - 会话ID
+   * @returns {Promise<boolean>} 是否成功
+   */
+  async revokeSession(userId, sessionId) {
+    try {
+      const query = `
+        UPDATE user_sessions
+        SET status = 'revoked', last_accessed_at = NOW()
+        WHERE id = $1 AND user_id = $2 AND status = 'active'
+        RETURNING id
+      `;
+      const result = await this.userRepository.executeQuery(query, [sessionId, userId]);
+      return result.rowCount > 0;
+    } catch (error) {
+      logger.error('[UserService] 撤销会话失败', { error: error.message, userId, sessionId });
+      throw error;
+    }
+  }
+
+  /**
+   * 撤销用户除当前会话外的所有会话
+   * @param {number} userId - 用户ID
+   * @param {number} currentSessionId - 当前会话ID
+   * @returns {Promise<number>} 撤销的会话数量
+   */
+  async revokeOtherSessions(userId, currentSessionId) {
+    try {
+      const query = `
+        UPDATE user_sessions
+        SET status = 'revoked', last_accessed_at = NOW()
+        WHERE user_id = $1 AND id != $2 AND status = 'active'
+      `;
+      const result = await this.userRepository.executeQuery(query, [userId, currentSessionId]);
+      return result.rowCount;
+    } catch (error) {
+      logger.error('[UserService] 撤销其他会话失败', { error: error.message, userId, currentSessionId });
+      throw error;
     }
   }
 
@@ -3025,42 +3347,70 @@ class UserService extends BaseService {
   async validateToken(validationData) {
     const { pool } = require('../config/database');
     const client = await pool.connect();
+    const { verifyTokenWithBlacklist } = require('../config/jwtManager');
     
     try {
-      logger.info('[UserService] 令牌验证开始', { sessionToken: validationData.sessionToken });
+      logger.info('[UserService] 令牌验证开始');
 
-      const { sessionToken } = validationData;
+      let { sessionToken, accessToken } = validationData;
+      const token = accessToken || sessionToken;
 
       // 验证必填字段
       if (!sessionToken) {
         throw new Error('访问令牌为必填项');
       }
 
+      // 1. 首先通过 JWT 和黑名单验证（处理宽限期）
+      let decoded;
+      try {
+        decoded = await verifyTokenWithBlacklist(token);
+      } catch (jwtError) {
+        logger.warn('[UserService] JWT 验证未通过', { error: jwtError.message });
+        throw new Error('令牌无效或已过期');
+      }
+
       // 开始事务
       await client.query('BEGIN');
 
-      // 1. 验证访问令牌有效性 - 查询 user_sessions 表
+      // 2. 验证访问令牌有效性 - 查询 user_sessions 表
+      // 允许两种情况：
+      // a) session_token 匹配且 session 为 active
+      // b) 如果 session_token 不匹配，但 decoded 成功且在黑名单宽限期内（通过 verifyTokenWithBlacklist 已验证），
+      //    我们需要找到该用户当前活跃的 session
+      
       const findSessionQuery = `
-        SELECT us.id, us.user_id, us.status, us.expires_at, us.last_accessed_at,
+        SELECT us.id, us.user_id, us.status, us.expires_at, us.last_accessed_at, us.session_token,
                u.id as user_id, u.username, u.email, u.nickname, u.status as user_status, 
                u.two_factor_enabled, u.locked_until
         FROM user_sessions us
         JOIN users u ON us.user_id = u.id
-        WHERE us.session_token = $1
+        WHERE (us.session_token = $1 OR (u.id = $2 AND us.status = 'active'))
           AND us.status = 'active'
           AND us.expires_at > NOW()
           AND u.status = 'active'
           AND (u.locked_until IS NULL OR u.locked_until < NOW())
+        ORDER BY (us.session_token = $1) DESC -- 优先匹配当前的 token
+        LIMIT 1
       `;
       
-      const sessionResult = await client.query(findSessionQuery, [sessionToken]);
+      const sessionResult = await client.query(findSessionQuery, [sessionToken, decoded.userId]);
       
       if (sessionResult.rows.length === 0) {
         await client.query('ROLLBACK');
+        logger.warn('[UserService] 数据库中未找到有效会话', { userId: decoded.userId });
         throw new Error('令牌无效或已过期');
       }
       
       const session = sessionResult.rows[0];
+      
+      // 如果 token 不匹配，说明它是旧 token 但处于宽限期内
+      if (session.session_token !== sessionToken) {
+        logger.info('[UserService] 使用宽限期内的旧访问令牌验证成功', { 
+          userId: decoded.userId,
+          currentSessionId: session.id 
+        });
+      }
+
       const user = {
         id: session.user_id,
         username: session.username,
@@ -3071,14 +3421,14 @@ class UserService extends BaseService {
         locked_until: session.locked_until
       };
 
-      // 2. 更新会话最后访问时间 - 更新 user_sessions 表
+      // 3. 更新会话最后访问时间
       const updateSessionQuery = `
         UPDATE user_sessions 
         SET last_accessed_at = NOW() 
-        WHERE session_token = $1 AND status = 'active'
+        WHERE id = $1
       `;
       
-      await client.query(updateSessionQuery, [sessionToken]);
+      await client.query(updateSessionQuery, [session.id]);
 
       // 提交事务
       await client.query('COMMIT');
@@ -3096,7 +3446,8 @@ class UserService extends BaseService {
             id: session.id,
             status: session.status,
             expires_at: session.expires_at,
-            last_accessed_at: session.last_accessed_at
+            last_accessed_at: session.last_accessed_at,
+            sessionToken: session.session_token // 返回最新的 session_token
           }
         },
         message: '验证成功'

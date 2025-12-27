@@ -60,6 +60,9 @@ if (envValidation.status !== 'OK') {
 // 创建Express应用
 const app = express();
 
+// 信任代理设置 - 允许从 X-Forwarded-For 获取真实 IP
+app.set('trust proxy', true);
+
 // 安全头部设置 - 使用更完善的Helmet配置
 app.use(helmet({
   // 内容安全策略
@@ -156,6 +159,9 @@ app.use('/api/system', apiVersionManager.getRouter());
 // 路由配置管理API
 app.use('/api/system', routeConfigManager.getRouter());
 
+// 系统管理路由（包含时间同步等）
+app.use('/api/system', require('./routes/system'));
+
 // 向后兼容：现有路由保持不变，但增加版本支持
 // 这些路由将通过版本化中间件自动支持版本识别
 app.use('/api/auth', authRoutes);
@@ -237,11 +243,26 @@ app.use('/api/bills', require('./routes/bills'));
 // 账户管理路由
 app.use('/api/accounts', require('./routes/accounts'));
 
+// 设备会话路由
+app.use('/api/device-sessions', require('./routes/deviceSessions'));
+
 // 通知管理路由
 app.use('/api/notifications', require('./routes/notifications'));
 
+// 安全管理路由
+app.use('/api/security', require('./routes/security'));
+
 // 安全问题路由
 app.use('/api/security-questions', require('./routes/securityQuestions'));
+
+// 安全检查路由
+app.use('/api/security', require('./routes/securityCheck'));
+
+// 密钥管理路由
+app.use('/api/keys', require('./routes/keyManagement'));
+
+// 数据加密路由
+app.use('/api/encryption', require('./routes/dataEncryption'));
 
 // 服务器端口
 // 优先使用环境变量PORT（例如在Zeabur等平台上通常为3000）

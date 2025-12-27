@@ -53,10 +53,13 @@ export const getNotifications = async (filters?: NotificationFilters): Promise<N
   if (filters?.pageSize) params.append('pageSize', filters.pageSize.toString())
   
   const url = `/notifications${params.toString() ? `?${params.toString()}` : ''}`
-  const response = await get<NotificationListResponse>(url)
+  const response = await get<any>(url)
   
-  console.log('通知列表获取成功，共', response.total, '条通知')
-  return response
+  // 处理后端返回的双层嵌套结构 (Rule 5)
+  const actualData = response.data?.data || response.data || response;
+  
+  console.log('通知列表获取成功，共', actualData.total, '条通知')
+  return actualData
 }
 
 /**
@@ -66,12 +69,15 @@ export const getNotifications = async (filters?: NotificationFilters): Promise<N
 export const getUnreadCount = async (): Promise<{ unreadCount: number; totalCount: number }> => {
   console.log('获取未读通知数量')
   
-  const response = await get<{ unreadCount: number; totalCount: number }>(
+  const response = await get<any>(
     '/notifications/unread-count'
   )
   
-  console.log('未读通知数量:', response.unreadCount, '，总通知数量:', response.totalCount)
-  return response
+  // 处理后端返回的双层嵌套结构 (Rule 5)
+  const actualData = response.data?.data || response.data || response;
+  
+  console.log('未读通知数量:', actualData.unreadCount, '，总通知数量:', actualData.totalCount)
+  return actualData
 }
 
 /**
@@ -82,10 +88,13 @@ export const getUnreadCount = async (): Promise<{ unreadCount: number; totalCoun
 export const markAsRead = async (id: number): Promise<{ message: string }> => {
   console.log('标记通知为已读，通知ID:', id)
   
-  const response = await put<{ message: string }>(`/notifications/${id}/read`)
+  const response = await put<any>(`/notifications/${id}/read`)
+  
+  // 处理后端返回的双层嵌套结构 (Rule 5)
+  const actualData = response.data?.data || response.data || response;
   
   console.log('通知已标记为已读')
-  return response
+  return actualData
 }
 
 /**
@@ -96,10 +105,13 @@ export const markAsRead = async (id: number): Promise<{ message: string }> => {
 export const markAsUnread = async (id: number): Promise<{ message: string }> => {
   console.log('标记通知为未读，通知ID:', id)
   
-  const response = await put<{ message: string }>(`/notifications/${id}/unread`)
+  const response = await put<any>(`/notifications/${id}/unread`)
+  
+  // 处理后端返回的双层嵌套结构 (Rule 5)
+  const actualData = response.data?.data || response.data || response;
   
   console.log('通知已标记为未读')
-  return response
+  return actualData
 }
 
 /**
@@ -110,10 +122,13 @@ export const markAsUnread = async (id: number): Promise<{ message: string }> => 
 export const deleteNotification = async (id: number): Promise<{ message: string }> => {
   console.log('删除通知，通知ID:', id)
   
-  const response = await del<{ message: string }>(`/notifications/${id}`)
+  const response = await del<any>(`/notifications/${id}`)
+  
+  // 处理后端返回的双层嵌套结构 (Rule 5)
+  const actualData = response.data?.data || response.data || response;
   
   console.log('通知已删除')
-  return response
+  return actualData
 }
 
 /**
@@ -123,12 +138,15 @@ export const deleteNotification = async (id: number): Promise<{ message: string 
 export const markAllAsRead = async (): Promise<{ message: string; affectedCount: number }> => {
   console.log('标记所有通知为已读')
   
-  const response = await put<{ message: string; affectedCount: number }>(
+  const response = await put<any>(
     '/notifications/read-all'
   )
   
-  console.log('所有通知已标记为已读，影响行数:', response.affectedCount)
-  return response
+  // 处理后端返回的双层嵌套结构 (Rule 5)
+  const actualData = response.data?.data || response.data || response;
+  
+  console.log('所有通知已标记为已读，影响行数:', actualData.affectedCount)
+  return actualData
 }
 
 /**
@@ -139,13 +157,16 @@ export const markAllAsRead = async (): Promise<{ message: string; affectedCount:
 export const batchMarkAsRead = async (ids: number[]): Promise<{ message: string; affectedCount: number }> => {
   console.log('批量标记通知为已读，通知ID列表:', ids)
   
-  const response = await put<{ message: string; affectedCount: number }>(
+  const response = await put<any>(
     '/notifications/batch/read',
     { ids }
   )
   
-  console.log('批量标记已读完成，影响行数:', response.affectedCount)
-  return response
+  // 处理后端返回的双层嵌套结构 (Rule 5)
+  const actualData = response.data?.data || response.data || response;
+  
+  console.log('批量标记已读完成，影响行数:', actualData.affectedCount)
+  return actualData
 }
 
 /**
@@ -156,13 +177,16 @@ export const batchMarkAsRead = async (ids: number[]): Promise<{ message: string;
 export const batchMarkAsUnread = async (ids: number[]): Promise<{ message: string; affectedCount: number }> => {
   console.log('批量标记通知为未读，通知ID列表:', ids)
   
-  const response = await put<{ message: string; affectedCount: number }>(
+  const response = await put<any>(
     '/notifications/batch/unread',
     { ids }
   )
   
-  console.log('批量标记未读完成，影响行数:', response.affectedCount)
-  return response
+  // 处理后端返回的双层嵌套结构 (Rule 5)
+  const actualData = response.data?.data || response.data || response;
+  
+  console.log('批量标记未读完成，影响行数:', actualData.affectedCount)
+  return actualData
 }
 
 /**
@@ -173,11 +197,14 @@ export const batchMarkAsUnread = async (ids: number[]): Promise<{ message: strin
 export const batchDelete = async (ids: number[]): Promise<{ message: string; affectedCount: number }> => {
   console.log('批量删除通知，通知ID列表:', ids)
   
-  const response = await del<{ message: string; affectedCount: number }>(
+  const response = await del<any>(
     '/notifications/batch',
     { ids }
   )
   
-  console.log('批量删除完成，影响行数:', response.affectedCount)
-  return response
+  // 处理后端返回的双层嵌套结构 (Rule 5)
+  const actualData = response.data?.data || response.data || response;
+  
+  console.log('批量删除完成，影响行数:', actualData.affectedCount)
+  return actualData
 }

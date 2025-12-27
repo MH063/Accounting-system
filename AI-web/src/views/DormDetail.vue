@@ -761,10 +761,11 @@ const getOccupancyStatus = (rate: number) => {
 }
 
 // 格式化日期
-const formatDate = (dateString: string) => {
+const formatDate = (dateString: string | number | undefined | null): string => {
   if (!dateString) return '无'
   const date = new Date(dateString)
-  return date.toLocaleDateString('zh-CN', {
+  if (isNaN(date.getTime())) return '无'
+  return date.toLocaleString('zh-CN', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
@@ -774,13 +775,18 @@ const formatDate = (dateString: string) => {
 }
 
 // 格式化相对时间
-const formatRelativeTime = (date: Date) => {
+const formatRelativeTime = (date: Date | string | number | undefined | null) => {
+  if (!date) return '-'
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return '-'
+  
   const now = new Date()
-  const diff = now.getTime() - date.getTime()
+  const diff = now.getTime() - d.getTime()
   const minutes = Math.floor(diff / (1000 * 60))
   const hours = Math.floor(diff / (1000 * 60 * 60))
   const days = Math.floor(diff / (1000 * 60 * 60 * 24))
   
+  if (minutes < 1) return '刚刚'
   if (minutes < 60) return `${minutes}分钟前`
   if (hours < 24) return `${hours}小时前`
   return `${days}天前`

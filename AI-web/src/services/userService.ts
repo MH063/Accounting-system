@@ -109,6 +109,15 @@ export const updateUser = async (userData: Partial<UserInfo>): Promise<ApiRespon
       body: JSON.stringify(updateData)
     })
     
+    // 处理双层嵌套结构 (Rule 5)
+    if (response && response.success) {
+      const actualData = (response.data as any)?.data || response.data
+      return {
+        ...response,
+        data: actualData
+      }
+    }
+    
     return response
   } catch (error) {
     console.error('更新用户信息失败:', error)
@@ -151,11 +160,12 @@ export const getUserList = async (page: number = 1, size: number = 10): Promise<
       pages: number
     }>(`/users?${params.toString()}`)
     
-    // 处理双层嵌套的数据结构
-    if (response.success && response.data && response.data.data) {
+    // 处理双层嵌套的数据结构 (Rule 5)
+    if (response.success && response.data) {
+      const actualData = (response.data as any).data || response.data;
       return {
         ...response,
-        data: response.data.data
+        data: actualData
       };
     }
     
@@ -237,6 +247,15 @@ export const savePersonalInfo = async (personalData: {
       body: JSON.stringify(saveData)
     })
     
+    // 处理双层嵌套结构 (Rule 5)
+    if (response && response.success) {
+      const actualData = (response.data as any)?.data || response.data
+      return {
+        ...response,
+        data: actualData
+      }
+    }
+    
     return response
   } catch (error) {
     console.error('保存个人信息失败:', error)
@@ -261,6 +280,15 @@ export const syncPersonalInfo = async (): Promise<ApiResponse<UserInfo>> => {
     const response = await request<UserInfo>('/users/personal-info/sync', {
       method: 'POST'
     })
+    
+    // 处理双层嵌套结构 (Rule 5)
+    if (response && response.success) {
+      const actualData = (response.data as any)?.data || response.data
+      return {
+        ...response,
+        data: actualData
+      }
+    }
     
     return response
   } catch (error) {
