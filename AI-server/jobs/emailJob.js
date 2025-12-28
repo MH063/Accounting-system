@@ -4,8 +4,13 @@
  */
 
 const nodemailer = require('nodemailer');
-const { getQueue, QUEUES } = require('../config/messageQueue');
 const logger = require('../config/logger');
+
+// 延后加载 messageQueue 以避免循环依赖
+const getEmailQueue = () => {
+  const { getQueue, QUEUES } = require('../config/messageQueue');
+  return getQueue(QUEUES.EMAIL);
+};
 
 // 邮件传输配置
 const emailConfig = {
@@ -84,7 +89,7 @@ class EmailJobProcessor {
         replyTo: replyTo || undefined,
         headers: {
           'X-Job-ID': job.id,
-          'X-Queue-Name': QUEUES.EMAIL,
+          'X-Queue-Name': 'email',
           'X-Timestamp': new Date().toISOString()
         }
       };
@@ -138,7 +143,7 @@ class EmailJobProcessor {
       for (const emailData of emails) {
         try {
           // 为每封邮件创建新的作业
-          const emailJob = await getQueue(QUEUES.EMAIL).add('sendEmail', {
+          const emailJob = await getEmailQueue().add('sendEmail', {
             ...emailData,
             batchId: batchId
           }, {
@@ -201,7 +206,7 @@ class EmailJobProcessor {
  */
 function registerEmailProcessors() {
   try {
-    const emailQueue = getQueue(QUEUES.EMAIL);
+    const emailQueue = getEmailQueue();
     
     // 单封邮件处理器
     emailQueue.process('sendEmail', 5, async (job) => {
@@ -229,7 +234,7 @@ const EmailJobHelpers = {
    * 发送单封邮件
    */
   async sendSingleEmail(emailData) {
-    const emailQueue = getQueue(QUEUES.EMAIL);
+    const emailQueue = getEmailQueue();
     
     const job = await emailQueue.add('sendEmail', {
       ...emailData,
@@ -256,7 +261,7 @@ const EmailJobHelpers = {
    * 批量发送邮件
    */
   async sendBatchEmails(emails, batchOptions = {}) {
-    const emailQueue = getQueue(QUEUES.EMAIL);
+    const emailQueue = getEmailQueue();
     
     const batchId = batchOptions.batchId || `batch_${Date.now()}`;
     
@@ -301,6 +306,55 @@ const EmailJobHelpers = {
       report_ready: {
         subject: '财务报表已生成',
         html: `<p>您的财务报表 "${data.reportName}" 已生成完成。</p>`
+      },
+      email_verification: {
+        subject: '验证您的邮箱地址',
+        html: `
+          <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+            <h2>验证您的邮箱</h2>
+            <p>您好，</p>
+            <p>感谢您注册我们的系统。您的验证码是：</p>
+            <div style="background-color: #f4f4f4; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #4a90e2; border-radius: 5px;">
+              ${data.code}
+            </div>
+            <p>该验证码将在 30 分钟后过期。如果您没有请求此验证，请忽略此邮件。</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+            <p style="font-size: 12px; color: #888;">这是一封系统自动发送的邮件，请勿直接回复。</p>
+          </div>
+        `
+      },
+      email_verification_link: {
+        subject: '验证您的邮箱地址',
+        html: `
+          <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+            <h2>验证您的邮箱</h2>
+            <p>您好，</p>
+            <p>感谢您注册我们的系统。请点击下面的按钮验证您的邮箱地址：</p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${data.verifyUrl}" style="background-color: #4a90e2; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">验证邮箱</a>
+            </div>
+            <p>或者复制以下链接到浏览器打开：</p>
+            <p style="word-break: break-all; color: #888;">${data.verifyUrl}</p>
+            <p>该链接将在 24 小时后过期。如果您没有请求此验证，请忽略此邮件。</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+            <p style="font-size: 12px; color: #888;">这是一封系统自动发送的邮件，请勿直接回复。</p>
+          </div>
+        `
+      },
+      login_alert: {
+        subject: '异地登录提醒',
+        html: `
+          <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+            <h2>安全提醒：新设备登录</h2>
+            <p>您的账户刚刚在以下设备登录：</p>
+            <ul>
+              <li><strong>设备：</strong> ${data.device}</li>
+              <li><strong>IP地址：</strong> ${data.ip}</li>
+              <li><strong>时间：</strong> ${data.time}</li>
+            </ul>
+            <p>如果这不是您的操作，请立即修改密码并联系客服。</p>
+          </div>
+        `
       }
     };
     

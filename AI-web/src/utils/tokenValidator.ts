@@ -2,7 +2,7 @@ import { ApiResponse } from '@/types'
 import { validateAccessToken } from '@/services/authService'
 import authStorageService from '@/services/authStorageService'
 import router from '@/router'
-import { waitForRefresh } from './request'
+import { waitForRefresh, isTokenExpiringSoon, refreshAccessToken } from './request'
 
 /**
  * 验证用户访问令牌
@@ -10,15 +10,33 @@ import { waitForRefresh } from './request'
  */
 export const validateUserToken = async (): Promise<boolean> => {
   try {
+    // 1. 首先等待可能正在进行的刷新流程
     await waitForRefresh()
 
     const tokenInfo = authStorageService.getTokenInfo()
-    const accessToken = tokenInfo?.accessToken || localStorage.getItem('access_token')
+    let accessToken = tokenInfo?.accessToken || localStorage.getItem('access_token')
     
     if (!accessToken) {
       console.log('validateUserToken: 访问令牌不存在')
       redirectToLogin()
       return false
+    }
+
+    // 2. 检查令牌是否已过期或即将过期
+    const tokenExpires = localStorage.getItem('token_expires')
+    const now = Date.now()
+    const isExpired = tokenExpires ? parseInt(tokenExpires) <= now : false
+    
+    if (isExpired || isTokenExpiringSoon()) {
+      console.log('validateUserToken: 令牌已过期或即将过期，触发主动刷新')
+      const refreshed = await refreshAccessToken()
+      if (!refreshed) {
+        console.log('validateUserToken: 令牌刷新失败')
+        redirectToLogin()
+        return false
+      }
+      // 获取刷新后的新令牌
+      accessToken = localStorage.getItem('access_token') || ''
     }
     
     console.log('validateUserToken: 开始验证令牌')
@@ -32,6 +50,14 @@ export const validateUserToken = async (): Promise<boolean> => {
       return true
     } else {
       console.log('validateUserToken: 令牌验证失败', response.message)
+      // 如果验证失败是由于令牌过期，再次尝试刷新（双重保障）
+      if (response.message?.includes('过期') || response.code === 401) {
+        console.log('validateUserToken: 验证失败显示过期，最后尝试刷新一次')
+        const secondRefreshed = await refreshAccessToken()
+        if (secondRefreshed) {
+          return true
+        }
+      }
       redirectToLogin()
       return false
     }

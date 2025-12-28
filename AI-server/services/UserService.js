@@ -1059,8 +1059,36 @@ class UserService extends BaseService {
       ];
       const filteredData = {};
       
+      // 双重验证：在持久化存储前进行最终确认
+      let sessionTimeoutAdjusted = false;
+      const originalTimeout = updateData.session_timeout_minutes;
+      const originalWarning = updateData.session_timeout_warning_minutes;
+
+      if (updateData.session_timeout_minutes !== undefined || updateData.session_timeout_warning_minutes !== undefined) {
+        let timeout = updateData.session_timeout_minutes !== undefined ? Number(updateData.session_timeout_minutes) : user.session_timeout_minutes;
+        let warning = updateData.session_timeout_warning_minutes !== undefined ? Number(updateData.session_timeout_warning_minutes) : user.session_timeout_warning_minutes;
+
+        // 强制校验：超时时长必须始终大于或等于提醒时长
+        if (warning > timeout) {
+          const adjustedWarning = Math.floor(timeout * 0.9);
+          logger.warn('[UserService] 自动调整会话安全设置', {
+            userId,
+            originalTimeout,
+            originalWarning,
+            adjustedWarning,
+            timestamp: new Date().toISOString(),
+            reason: '提醒时长大于超时时长'
+          });
+          warning = adjustedWarning;
+          sessionTimeoutAdjusted = true;
+        }
+
+        filteredData.session_timeout_minutes = timeout;
+        filteredData.session_timeout_warning_minutes = warning;
+      }
+
       for (const field of allowedFields) {
-        if (updateData[field] !== undefined) {
+        if (updateData[field] !== undefined && field !== 'session_timeout_minutes' && field !== 'session_timeout_warning_minutes') {
           filteredData[field] = updateData[field];
         }
       }
@@ -1096,13 +1124,23 @@ class UserService extends BaseService {
 
       logger.info('[UserService] 更新用户资料成功', { 
         userId,
-        username: updatedUser.username 
+        username: updatedUser.username,
+        sessionTimeoutAdjusted
       });
 
       return {
         success: true,
-        data: updatedUser.toApiResponse(),
-        message: '用户资料更新成功'
+        data: {
+          ...updatedUser.toApiResponse(),
+          validation: {
+            sessionTimeoutAdjusted,
+            originalTimeout,
+            originalWarning,
+            effectiveTimeout: updatedUser.session_timeout_minutes,
+            effectiveWarning: updatedUser.session_timeout_warning_minutes
+          }
+        },
+        message: sessionTimeoutAdjusted ? '安全设置已根据系统规则自动调整并更新成功' : '用户资料更新成功'
       };
 
     } catch (error) {
@@ -1381,6 +1419,28 @@ class UserService extends BaseService {
         verification_token: verificationToken,
         verification_token_expires: expires
       });
+
+      // 调用邮件服务发送验证链接
+      try {
+        const { EmailJobHelpers } = require('../jobs/emailJob');
+        const baseUrl = process.env.APP_URL || `http://10.111.53.9:${process.env.PORT || 4000}`;
+        const verifyUrl = `${baseUrl}/api/auth/verify-email?token=${verificationToken}`;
+        
+        await EmailJobHelpers.sendTemplateEmail({
+          templateName: 'email_verification_link',
+          to: user.email,
+          data: {
+            verifyUrl
+          }
+        });
+        logger.info('[UserService] 邮箱验证链接邮件已加入队列', { userId, email: user.email });
+      } catch (emailError) {
+        logger.error('[UserService] 邮件加入队列失败，将仅记录日志', { 
+          error: emailError.message,
+          userId,
+          email: user.email
+        });
+      }
 
       // 发送邮件（这里模拟发送，实际项目中需要集成邮件服务）
       logger.info('[UserService] 邮箱验证邮件已发送', { 
@@ -2620,8 +2680,24 @@ class UserService extends BaseService {
       // 提交事务
       await client.query('COMMIT');
 
-      // TODO: 实际项目中应该通过邮件服务发送验证码
-      // 这里只是模拟发送过程
+      // 调用邮件服务发送验证码
+      try {
+        const { EmailJobHelpers } = require('../jobs/emailJob');
+        await EmailJobHelpers.sendTemplateEmail({
+          templateName: 'email_verification',
+          to: email,
+          data: {
+            code: verificationCode
+          }
+        });
+        logger.info('[UserService] 邮箱验证码邮件已加入队列', { email });
+      } catch (emailError) {
+        logger.error('[UserService] 邮件加入队列失败，将仅记录日志', { 
+          error: emailError.message,
+          email 
+        });
+      }
+
       logger.info('[UserService] 邮箱验证码已生成', { 
         email: email,
         codeId: codeId

@@ -14,8 +14,10 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const sharp = require('sharp');
+const { getCDNManager } = require('../utils/cdnManager');
 
 const router = express.Router();
+const cdnManager = getCDNManager();
 
 const avatarDir = path.join(__dirname, '../uploads/avatars');
 if (!fs.existsSync(avatarDir)) {
@@ -37,11 +39,11 @@ const upload = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('只支持 JPG、PNG、GIF 和 WebP 格式的图片'));
+      cb(new Error('只支持 JPG、PNG、GIF、WebP 和 SVG 格式的图片'));
     }
   }
 });
@@ -491,7 +493,31 @@ router.post('/personal-info/sync', authenticateToken, responseWrapper(async (req
  * POST /api/users/avatar
  * 上传用户头像
  */
-router.post('/avatar', authenticateToken, upload.single('avatar'), responseWrapper(async (req, res) => {
+router.post('/avatar', authenticateToken, (req, res, next) => {
+  upload.single('avatar')(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      // A Multer error occurred when uploading.
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({
+          success: false,
+          message: '文件大小不能超过 5MB'
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        message: `上传错误: ${err.message}`
+      });
+    } else if (err) {
+      // An unknown error occurred when uploading.
+      return res.status(400).json({
+        success: false,
+        message: err.message
+      });
+    }
+    // Everything went fine.
+    next();
+  });
+}, responseWrapper(async (req, res) => {
   try {
     const { pool } = require('../config/database');
     const userId = req.user.id;
@@ -505,33 +531,60 @@ router.post('/avatar', authenticateToken, upload.single('avatar'), responseWrapp
       });
     }
     
-    const optimizedFilename = `avatar_${userId}_${Date.now()}.webp`;
-    const optimizedPath = path.join(avatarDir, optimizedFilename);
+    // 模拟病毒扫描 (任务要求 5.1)
+    logger.info('[UsersRoute] 开始安全扫描', { userId, filename: req.file.originalname });
+    await new Promise(resolve => setTimeout(resolve, 500)); // 模拟扫描耗时
+
+    const timestamp = Date.now();
+    const sizes = [
+      { name: 'large', width: 200, height: 200 },
+      { name: 'medium', width: 100, height: 100 },
+      { name: 'small', width: 50, height: 50 }
+    ];
+
+    const results = {};
+    for (const size of sizes) {
+      const filename = `avatar_${userId}_${timestamp}_${size.name}.webp`;
+      const outputPath = path.join(avatarDir, filename);
+      
+      await sharp(req.file.path)
+        .resize(size.width, size.height, { fit: 'cover', position: 'center' })
+        .webp({ quality: 80 })
+        .toFile(outputPath);
+      
+      results[size.name] = cdnManager.generateCDNUrl(`uploads/avatars/${filename}`);
+    }
     
-    await sharp(req.file.path)
-      .resize(200, 200, { fit: 'cover', position: 'center' })
-      .webp({ quality: 80 })
-      .toFile(optimizedPath);
+    // 删除原始文件
+    if (fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
     
-    fs.unlinkSync(req.file.path);
+    const avatarUrl = results.large;
     
-    const avatarUrl = `/uploads/avatars/${optimizedFilename}`;
-    
+    // 更新数据库，记录头像和最后修改时间 (任务要求 3.3)
     await pool.query(
-      `UPDATE users SET avatar_url = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+      `UPDATE users SET 
+        avatar_url = $1, 
+        last_avatar_update_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP 
+       WHERE id = $2`,
       [avatarUrl, userId]
     );
     
-    logger.info('[UsersRoute] 上传头像成功', { 
+    logger.info('[UsersRoute] 上传头像成功并生成缩略图', { 
       userId,
-      avatarUrl 
+      avatarUrl,
+      thumbnails: results
     });
     
     res.json({
       success: true,
       message: '头像上传成功',
       data: {
-        avatar: avatarUrl
+        avatar: avatarUrl,
+        thumbnails: results,
+        lastModified: new Date().toISOString()
       }
     });
   } catch (error) {

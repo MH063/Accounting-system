@@ -25,7 +25,7 @@ const REDIS_CONFIG = {
   commandTimeout: 5000,
   
   // 自动重连配置
-  lazyConnect: true,
+  lazyConnect: false,
   reconnectOnError: (err) => {
     const targetError = 'READONLY';
     return err.message.includes(targetError);
@@ -47,6 +47,14 @@ const CLUSTER_CONFIG = {
 // Redis连接实例
 let redisClient = null;
 let isCluster = false;
+let redisAvailable = false;
+
+/**
+ * 检查Redis是否可用
+ */
+function isRedisAvailable() {
+  return redisAvailable && redisClient && redisClient.status === 'ready';
+}
 
 /**
  * 创建Redis连接
@@ -99,23 +107,54 @@ function createRedisConnection() {
     });
     
     redisClient.on('ready', () => {
+      redisAvailable = true;
       logger.info('Redis连接就绪');
     });
     
     redisClient.on('error', (error) => {
-      logger.error('Redis连接错误', { error: error.message });
+      redisAvailable = false;
+      
+      const isConnectionError = error.message.includes('ECONNREFUSED') || 
+                               error.message.includes('NR_CLOSED') || 
+                               error.message.includes('CONNECTION_BROKEN');
+      
+      const now = Date.now();
+      const lastLog = redisClient.lastErrorLogTime || 0;
+      const LOG_INTERVAL = 60000; // 60秒内只打印一次
+
+      if (isConnectionError) {
+        if (now - lastLog > LOG_INTERVAL) {
+          logger.warn('Redis服务不可用，系统已自动切换至降级模式。', { error: error.message });
+          redisClient.lastErrorLogTime = now;
+        }
+      } else {
+        if (now - lastLog > LOG_INTERVAL) {
+          logger.error('Redis运行时错误', { error: error.message });
+          redisClient.lastErrorLogTime = now;
+        }
+      }
     });
     
     redisClient.on('close', () => {
-      logger.warn('Redis连接已关闭');
+      redisAvailable = false;
+      const now = Date.now();
+      const lastCloseLog = redisClient.lastCloseLogTime || 0;
+      if (now - lastCloseLog > 60000) {
+        logger.warn('Redis连接已关闭');
+        redisClient.lastCloseLogTime = now;
+      }
     });
     
     redisClient.on('reconnecting', (delay, attempt) => {
-      logger.info('Redis重连中', { delay, attempt });
+      // 限制重连日志输出频率
+      if (attempt % 10 === 1) {
+        logger.info('Redis重连中', { delay, attempt });
+      }
     });
     
     return redisClient;
   } catch (error) {
+    redisAvailable = false;
     logger.error('Redis连接创建失败', { error: error.message });
     throw error;
   }
@@ -231,6 +270,7 @@ module.exports = {
   testRedisConnection,
   closeRedisConnection,
   healthCheck,
+  isRedisAvailable,
   REDIS_CONFIG,
   isCluster
 };

@@ -32,9 +32,10 @@ class LoginValidator {
   /**
    * 验证用户名或邮箱
    * @param value 输入值
+   * @param options 验证选项
    * @returns 验证结果
    */
-  validateUsernameOrEmail(value: string): ValidationResult {
+  validateUsernameOrEmail(value: string, options: { isLogin?: boolean } = {}): ValidationResult {
     const result: ValidationResult = {
       isValid: true,
       errors: [],
@@ -53,7 +54,7 @@ class LoginValidator {
     // 判断是邮箱还是用户名
     if (trimmedValue.includes('@')) {
       // 邮箱验证
-      const emailValidation = this.validateEmail(trimmedValue)
+      const emailValidation = this.validateEmail(trimmedValue, options)
       if (!emailValidation.isValid) {
         result.isValid = false
         result.errors.push(...emailValidation.errors)
@@ -61,7 +62,7 @@ class LoginValidator {
       result.warnings.push(...emailValidation.warnings)
     } else {
       // 用户名验证
-      const usernameValidation = this.validateUsername(trimmedValue)
+      const usernameValidation = this.validateUsername(trimmedValue, options)
       if (!usernameValidation.isValid) {
         result.isValid = false
         result.errors.push(...usernameValidation.errors)
@@ -75,9 +76,10 @@ class LoginValidator {
   /**
    * 验证邮箱格式
    * @param email 邮箱地址
+   * @param options 验证选项
    * @returns 验证结果
    */
-  validateEmail(email: string): ValidationResult {
+  validateEmail(email: string, options: { isLogin?: boolean } = {}): ValidationResult {
     const result: ValidationResult = {
       isValid: true,
       errors: [],
@@ -115,11 +117,13 @@ class LoginValidator {
       return result
     }
 
-    // 安全性警告
-    if (email.toLowerCase().includes('test') || 
-        email.toLowerCase().includes('example') ||
-        email.toLowerCase().includes('temp')) {
-      result.warnings.push('建议使用正式邮箱地址')
+    // 安全性警告 - 仅在非登录场景显示
+    if (!options.isLogin) {
+      if (email.toLowerCase().includes('test') || 
+          email.toLowerCase().includes('example') ||
+          email.toLowerCase().includes('temp')) {
+        result.warnings.push('建议使用正式邮箱地址')
+      }
     }
 
     return result
@@ -128,9 +132,10 @@ class LoginValidator {
   /**
    * 验证用户名格式
    * @param username 用户名
+   * @param options 验证选项
    * @returns 验证结果
    */
-  validateUsername(username: string): ValidationResult {
+  validateUsername(username: string, options: { isLogin?: boolean } = {}): ValidationResult {
     const result: ValidationResult = {
       isValid: true,
       errors: [],
@@ -172,11 +177,13 @@ class LoginValidator {
       return result
     }
 
-    // 安全性警告
-    if (username.toLowerCase().includes('admin') || 
-        username.toLowerCase().includes('root') ||
-        username.toLowerCase().includes('system')) {
-      result.warnings.push('不建议使用系统保留关键字作为用户名')
+    // 安全性警告 - 仅在非登录场景显示
+    if (!options.isLogin) {
+      if (username.toLowerCase().includes('admin') || 
+          username.toLowerCase().includes('root') ||
+          username.toLowerCase().includes('system')) {
+        result.warnings.push('不建议使用系统保留关键字作为用户名')
+      }
     }
 
     return result
@@ -185,9 +192,10 @@ class LoginValidator {
   /**
    * 验证密码格式
    * @param password 密码
+   * @param options 验证选项
    * @returns 验证结果
    */
-  validatePassword(password: string): ValidationResult {
+  validatePassword(password: string, options: { isLogin?: boolean } = {}): ValidationResult {
     const result: ValidationResult = {
       isValid: true,
       errors: [],
@@ -215,17 +223,20 @@ class LoginValidator {
     }
 
     // 复杂度验证
-    let hasLetter = /[a-zA-Z]/.test(password)
-    let hasNumber = /[0-9]/.test(password)
-    let hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)
+    const hasLetter = /[a-zA-Z]/.test(password)
+    const hasNumber = /[0-9]/.test(password)
+    // 改进特殊字符检测：任何非字母数字的字符都视为特殊字符，包括中文标点等
+    const hasSpecial = /[^A-Za-z0-9]/.test(password)
 
-    // 安全性建议
-    if (!hasLetter || !hasNumber) {
-      result.warnings.push('建议使用包含字母和数字的密码')
-    }
+    // 安全性建议 - 仅在非登录场景或明确需要时显示
+    if (!options.isLogin) {
+      if (!hasLetter || !hasNumber) {
+        result.warnings.push('建议使用包含字母和数字的密码')
+      }
 
-    if (!hasSpecial) {
-      result.warnings.push('建议使用包含特殊字符的密码以提高安全性')
+      if (!hasSpecial) {
+        result.warnings.push('建议使用包含特殊字符的密码以提高安全性')
+      }
     }
 
     // 弱密码检查
@@ -256,7 +267,7 @@ class LoginValidator {
     }
 
     // 验证用户名或邮箱
-    const usernameValidation = this.validateUsernameOrEmail(formData.username)
+    const usernameValidation = this.validateUsernameOrEmail(formData.username, { isLogin: true })
     if (!usernameValidation.isValid) {
       result.isValid = false
       result.errors.push(...usernameValidation.errors)
@@ -264,7 +275,7 @@ class LoginValidator {
     result.warnings.push(...usernameValidation.warnings)
 
     // 验证密码
-    const passwordValidation = this.validatePassword(formData.password)
+    const passwordValidation = this.validatePassword(formData.password, { isLogin: true })
     if (!passwordValidation.isValid) {
       result.isValid = false
       result.errors.push(...passwordValidation.errors)

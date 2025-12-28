@@ -47,10 +47,13 @@ export const getNotificationSettings = async (): Promise<ApiResponse<Notificatio
       '/notifications/settings'
     )
     
-    console.log('通知设置获取成功:', response.data)
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = response.data?.data || response.data
+    
+    console.log('通知设置获取成功:', actualData)
     return {
       success: true,
-      data: response.data
+      data: actualData
     }
   } catch (error) {
     console.error('获取通知设置失败:', error)
@@ -78,10 +81,13 @@ export const saveNotificationSettings = async (
       settings
     )
     
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = response.data?.data || response.data
+    
     console.log('通知设置保存成功')
     return {
       success: true,
-      data: response.data
+      data: actualData
     }
   } catch (error) {
     console.error('保存通知设置失败:', error)

@@ -72,15 +72,16 @@ api.interceptors.response.use(
           console.log('🔄 尝试刷新管理员令牌...')
           const response = await adminAuthApi.refreshAdminToken()
           
-          if (response.token) {
+          if (response && response.tokens && response.tokens.accessToken) {
+            const { accessToken, refreshToken: newRefreshToken } = response.tokens
             // 更新本地存储的令牌
-            localStorage.setItem('adminToken', response.token)
-            if (response.refreshToken) {
-              localStorage.setItem('adminRefreshToken', response.refreshToken)
+            localStorage.setItem('adminToken', accessToken)
+            if (newRefreshToken) {
+              localStorage.setItem('adminRefreshToken', newRefreshToken)
             }
             
             // 更新请求头的Authorization
-            error.config.headers.Authorization = `Bearer ${response.token}`
+            error.config.headers.Authorization = `Bearer ${accessToken}`
             
             console.log('✅ 令牌刷新成功，重试原请求')
             // 重试原请求

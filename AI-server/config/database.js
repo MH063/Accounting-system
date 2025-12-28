@@ -63,7 +63,11 @@ pool.on('connect', (client) => {
 
 // 简化的错误处理 - 避免信息泄露
 pool.on('error', (err, client) => {
-  console.error('[DB_POOL] 连接池错误: [错误信息已过滤]');
+  if (err.message.includes('ECONNRESET') || err.message.includes('socket hang up')) {
+    // 忽略常见的空闲连接重置错误，不打印到错误控制台
+    return;
+  }
+  console.error('[DB_POOL] 连接池错误:', err.message);
 });
 
 // 简化版查询函数 - 过滤敏感信息
@@ -90,8 +94,9 @@ const query = async (text, params = []) => {
 // 简化版测试连接函数 - 避免信息泄露
 const testConnection = async () => {
   console.log('[DB_TEST] 开始测试连接...');
+  let client;
   try {
-    const client = await pool.connect();
+    client = await pool.connect();
     if (process.env.NODE_ENV !== 'production') {
       console.log('[DB_TEST] 获得连接');
     }
@@ -101,16 +106,18 @@ const testConnection = async () => {
       console.log('[DB_TEST] 执行查询成功');
     }
     
-    client.release();
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('[DB_TEST] 连接已释放');
-    }
-    
     console.log('✅ 数据库连接测试成功');
     return true;
   } catch (error) {
-    console.error('❌ 数据库连接测试失败');
+    console.error('❌ 数据库连接测试失败:', error.message);
     return false;
+  } finally {
+    if (client) {
+      client.release();
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[DB_TEST] 连接已释放');
+      }
+    }
   }
 };
 
@@ -164,18 +171,18 @@ const resetCacheStats = () => {
 };
 
 // 清空所有缓存
-const flushCache = () => {
-  flush();
+const flushCache = async () => {
+  await flush();
 };
 
 // 健康检查函数 - 过滤敏感信息
 const healthCheck = async () => {
+  let client;
   try {
-    const client = await pool.connect();
+    client = await pool.connect();
     const start = Date.now();
     const result = await client.query('SELECT NOW() as current_time');
     const responseTime = Date.now() - start;
-    client.release();
     
     const poolStatus = getPoolStatus();
     
@@ -197,6 +204,10 @@ const healthCheck = async () => {
       responseTime: 0,
       errorCount: 1
     };
+  } finally {
+    if (client) {
+      client.release();
+    }
   }
 };
 

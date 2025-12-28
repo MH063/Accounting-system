@@ -99,9 +99,12 @@ export const getActivityHistory = async (limit: number = 10): Promise<ApiRespons
     const response = await request<any>('/dashboard/statistics')
     
     if (response.success && response.data) {
+      // 处理双层嵌套的数据结构 (Rule 5)
+      const actualData = response.data.data || response.data
+      
       // 从新的响应格式中提取最近费用记录和最近报修记录，并合并为活动历史
-      const recentExpenses = response.data.recentExpenses || []
-      const recentMaintenance = response.data.recentMaintenance || []
+      const recentExpenses = actualData.recentExpenses || []
+      const recentMaintenance = actualData.recentMaintenance || []
       
       // 转换费用记录为活动历史格式
       const expenseActivities: ActivityRecord[] = recentExpenses.map((expense: any, index: number) => ({

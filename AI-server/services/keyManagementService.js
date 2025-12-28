@@ -544,7 +544,7 @@ class KeyManagementService {
    */
   async getTrustedDevices(userId) {
     try {
-      const result = await client.query(`
+      const result = await this.pool.query(`
         SELECT 
           id,
           device_name,

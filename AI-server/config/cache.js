@@ -3,16 +3,8 @@
  * 使用node-cache实现内存缓存，提高数据库查询性能
  */
 
-const NodeCache = require('node-cache');
+const { unifiedCache } = require('./unifiedCache');
 const logger = require('./logger');
-
-// 创建缓存实例
-// 默认TTL为300秒(5分钟)，检查周期为120秒(2分钟)
-const queryCache = new NodeCache({
-  stdTTL: 300, // 缓存过期时间(秒)
-  checkperiod: 120, // 定期检查过期缓存的周期(秒)
-  useClones: false // 不克隆对象，提高性能
-});
 
 // 缓存统计
 let cacheStats = {
@@ -50,9 +42,9 @@ const generateCacheKey = (query, params = []) => {
  * @param {Array} params - 查询参数
  * @returns {Object|null} 缓存的数据或null
  */
-const get = (query, params = []) => {
+const get = async (query, params = []) => {
   const key = generateCacheKey(query, params);
-  const cachedData = queryCache.get(key);
+  const cachedData = await unifiedCache.get(key, 'query');
   
   if (cachedData) {
     cacheStats.hits++;
@@ -72,9 +64,9 @@ const get = (query, params = []) => {
  * @param {Object} data - 要缓存的数据
  * @param {number} ttl - 缓存过期时间(秒)，可选
  */
-const set = (query, params = [], data, ttl) => {
+const set = async (query, params = [], data, ttl) => {
   const key = generateCacheKey(query, params);
-  const success = queryCache.set(key, data, ttl);
+  const success = await unifiedCache.set(key, data, { prefix: 'query', ttl });
   
   if (success) {
     cacheStats.sets++;
@@ -92,11 +84,11 @@ const set = (query, params = [], data, ttl) => {
  * @param {Array} params - 查询参数
  * @returns {boolean} 是否成功删除
  */
-const del = (query, params = []) => {
+const del = async (query, params = []) => {
   const key = generateCacheKey(query, params);
-  const deleted = queryCache.del(key);
+  const deleted = await unifiedCache.del(key, 'query');
   
-  if (deleted > 0) {
+  if (deleted) {
     cacheStats.deletes++;
     logger.debug(`[CACHE] 缓存删除: ${key}`);
     return true;
@@ -108,8 +100,8 @@ const del = (query, params = []) => {
 /**
  * 清空所有缓存
  */
-const flush = () => {
-  queryCache.flushAll();
+const flush = async () => {
+  await unifiedCache.flush();
   logger.info('[CACHE] 所有缓存已清空');
 };
 
@@ -118,13 +110,11 @@ const flush = () => {
  * @returns {Object} 缓存统计信息
  */
 const getStats = () => {
-  const nodeCacheStats = queryCache.getStats();
+  const unifiedStats = unifiedCache.getStats();
   
   return {
     ...cacheStats,
-    keys: nodeCacheStats.keys,
-    ksize: nodeCacheStats.ksize,
-    vsize: nodeCacheStats.vsize,
+    ...unifiedStats,
     hitRate: cacheStats.hits / (cacheStats.hits + cacheStats.misses) * 100 || 0
   };
 };
@@ -139,26 +129,17 @@ const resetStats = () => {
     sets: 0,
     deletes: 0
   };
+  unifiedCache.resetStats();
 };
 
 /**
  * 根据表名清除相关缓存
  * @param {string} tableName - 表名
  */
-const invalidateTableCache = (tableName) => {
-  const keys = queryCache.keys();
-  let invalidatedCount = 0;
-  
-  keys.forEach(key => {
-    // 检查缓存键是否包含表名
-    if (key.includes(tableName)) {
-      queryCache.del(key);
-      invalidatedCount++;
-    }
-  });
-  
-  logger.info(`[CACHE] 已清除表 "${tableName}" 的 ${invalidatedCount} 个缓存项`);
-  return invalidatedCount;
+const invalidateTableCache = async (tableName) => {
+  const deletedCount = await unifiedCache.batchDelete(tableName);
+  logger.info(`[CACHE] 已清除包含 "${tableName}" 的 ${deletedCount} 个缓存项`);
+  return deletedCount;
 };
 
 /**
@@ -173,7 +154,7 @@ const cacheMiddleware = (options = {}) => {
     condition = () => true // 缓存条件函数
   } = options;
   
-  return (req, res, next) => {
+  return async (req, res, next) => {
     // 只缓存GET请求
     if (req.method !== 'GET' || !condition(req)) {
       return next();
@@ -183,7 +164,7 @@ const cacheMiddleware = (options = {}) => {
     const cacheKey = keyGenerator ? keyGenerator(req) : `${req.originalUrl}`;
     
     // 尝试从缓存获取
-    const cachedResponse = queryCache.get(cacheKey);
+    const cachedResponse = await unifiedCache.get(cacheKey, 'api');
     if (cachedResponse) {
       logger.debug(`[CACHE] API缓存命中: ${cacheKey}`);
       return res.json(cachedResponse);
@@ -193,10 +174,10 @@ const cacheMiddleware = (options = {}) => {
     const originalJson = res.json;
     
     // 重写res.json方法以缓存响应
-    res.json = function(data) {
+    res.json = async function(data) {
       // 只缓存成功响应
       if (data && data.success) {
-        queryCache.set(cacheKey, data, ttl);
+        await unifiedCache.set(cacheKey, data, { prefix: 'api', ttl });
         cacheStats.sets++;
         logger.debug(`[CACHE] API缓存设置: ${cacheKey}`);
       }

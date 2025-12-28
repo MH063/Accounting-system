@@ -1,11 +1,21 @@
 const FileManager = require('../services/fileManager');
 const path = require('path');
 const multer = require('multer');
+const BaseController = require('./BaseController');
+const { successResponse, errorResponse } = require('../middleware/response');
 
-class FileController {
+class FileController extends BaseController {
   constructor() {
+    super();
     this.fileManager = new FileManager();
     this.setupMulter();
+    
+    // 确保方法正确绑定到类实例
+    this.uploadFiles = this.uploadFiles.bind(this);
+    this.getFileInfo = this.getFileInfo.bind(this);
+    this.deleteFile = this.deleteFile.bind(this);
+    this.listFiles = this.listFiles.bind(this);
+    this.getStorageStats = this.getStorageStats.bind(this);
   }
 
   /**
@@ -72,10 +82,7 @@ class FileController {
       
       const files = req.files;
       if (!files || files.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: '没有找到上传的文件'
-        });
+        return errorResponse(res, '没有找到上传的文件', 400);
       }
 
       const options = {
@@ -89,7 +96,10 @@ class FileController {
       // 单文件上传
       if (files.length === 1) {
         const result = await this.fileManager.uploadFile(files[0], options);
-        return res.status(200).json(result);
+        if (!result.success) {
+          return errorResponse(res, result.message || '文件上传失败', 400);
+        }
+        return successResponse(res, { file: result.data }, result.message || '文件上传成功');
       }
 
       // 批量上传
@@ -98,24 +108,17 @@ class FileController {
       const successCount = results.filter(r => r.success).length;
       const failureCount = results.length - successCount;
 
-      return res.status(200).json({
-        success: true,
-        message: `上传完成: ${successCount}个成功, ${failureCount}个失败`,
-        data: {
+      return successResponse(res, {
+        results,
+        stats: {
           total: results.length,
-          successful: successCount,
-          failed: failureCount,
-          results: results
+          success: successCount,
+          failure: failureCount
         }
-      });
-
+      }, `文件上传完成: 成功 ${successCount} 个, 失败 ${failureCount} 个`);
     } catch (error) {
       console.error('[FILE-CONTROLLER] 文件上传失败:', error);
-      return res.status(500).json({
-        success: false,
-        message: '文件上传失败',
-        error: error.message
-      });
+      return errorResponse(res, '文件上传失败', 500, error.message);
     }
   }
 
@@ -127,23 +130,17 @@ class FileController {
       const { fileId } = req.params;
       
       if (!fileId) {
-        return res.status(400).json({
-          success: false,
-          message: '缺少文件ID参数'
-        });
+        return errorResponse(res, '缺少文件ID参数', 400);
       }
 
       const result = await this.fileManager.getFileInfo(fileId);
-      return res.status(200).json(result);
+      return successResponse(res, result.data, result.message || '获取文件信息成功');
 
     } catch (error) {
       console.error('[FILE-CONTROLLER] 获取文件信息失败:', error);
       
       const status = error.message === '文件不存在' ? 404 : 500;
-      return res.status(status).json({
-        success: false,
-        message: error.message
-      });
+      return errorResponse(res, error.message, status);
     }
   }
 
@@ -155,23 +152,17 @@ class FileController {
       const { fileId } = req.params;
       
       if (!fileId) {
-        return res.status(400).json({
-          success: false,
-          message: '缺少文件ID参数'
-        });
+        return errorResponse(res, '缺少文件ID参数', 400);
       }
 
       const result = await this.fileManager.deleteFile(fileId);
-      return res.status(200).json(result);
+      return successResponse(res, result.data, result.message || '文件删除成功');
 
     } catch (error) {
       console.error('[FILE-CONTROLLER] 删除文件失败:', error);
       
       const status = error.message === '文件不存在' ? 404 : 500;
-      return res.status(status).json({
-        success: false,
-        message: error.message
-      });
+      return errorResponse(res, error.message, status);
     }
   }
 
@@ -183,10 +174,7 @@ class FileController {
       const { fileIds } = req.body;
       
       if (!fileIds || !Array.isArray(fileIds) || fileIds.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: '缺少文件ID数组参数'
-        });
+        return errorResponse(res, '缺少文件ID数组参数', 400);
       }
 
       const results = await this.fileManager.batchDeleteFiles(fileIds);
@@ -194,24 +182,16 @@ class FileController {
       const successCount = results.filter(r => r.success).length;
       const failureCount = results.length - successCount;
 
-      return res.status(200).json({
-        success: true,
-        message: `删除完成: ${successCount}个成功, ${failureCount}个失败`,
-        data: {
-          total: results.length,
-          successful: successCount,
-          failed: failureCount,
-          results: results
-        }
-      });
+      return successResponse(res, {
+        total: results.length,
+        successful: successCount,
+        failed: failureCount,
+        results: results
+      }, `删除完成: ${successCount}个成功, ${failureCount}个失败`);
 
     } catch (error) {
       console.error('[FILE-CONTROLLER] 批量删除文件失败:', error);
-      return res.status(500).json({
-        success: false,
-        message: '批量删除文件失败',
-        error: error.message
-      });
+      return errorResponse(res, '批量删除文件失败', 500, error.message);
     }
   }
 
@@ -243,15 +223,11 @@ class FileController {
       }
 
       const result = await this.fileManager.listFiles(options);
-      return res.status(200).json(result);
+      return successResponse(res, result.data, result.message || '获取文件列表成功');
 
     } catch (error) {
       console.error('[FILE-CONTROLLER] 列出文件失败:', error);
-      return res.status(500).json({
-        success: false,
-        message: '列出文件失败',
-        error: error.message
-      });
+      return errorResponse(res, '列出文件失败', 500, error.message);
     }
   }
 
@@ -261,15 +237,11 @@ class FileController {
   async getStorageStats(req, res) {
     try {
       const result = await this.fileManager.getStorageStats();
-      return res.status(200).json(result);
+      return successResponse(res, result.data, result.message || '获取存储统计成功');
 
     } catch (error) {
       console.error('[FILE-CONTROLLER] 获取存储统计失败:', error);
-      return res.status(500).json({
-        success: false,
-        message: '获取存储统计失败',
-        error: error.message
-      });
+      return errorResponse(res, '获取存储统计失败', 500, error.message);
     }
   }
 
@@ -279,15 +251,11 @@ class FileController {
   async cleanupTempFiles(req, res) {
     try {
       const result = await this.fileManager.cleanupTempFiles();
-      return res.status(200).json(result);
+      return successResponse(res, result.data, result.message || '清理临时文件成功');
 
     } catch (error) {
       console.error('[FILE-CONTROLLER] 清理临时文件失败:', error);
-      return res.status(500).json({
-        success: false,
-        message: '清理临时文件失败',
-        error: error.message
-      });
+      return errorResponse(res, '清理临时文件失败', 500, error.message);
     }
   }
 
@@ -297,18 +265,11 @@ class FileController {
   async getSupportedFileTypes(req, res) {
     try {
       const fileTypes = this.fileManager.getSupportedFileTypes();
-      return res.status(200).json({
-        success: true,
-        data: fileTypes
-      });
+      return successResponse(res, fileTypes);
 
     } catch (error) {
       console.error('[FILE-CONTROLLER] 获取支持的文件类型失败:', error);
-      return res.status(500).json({
-        success: false,
-        message: '获取支持的文件类型失败',
-        error: error.message
-      });
+      return errorResponse(res, '获取支持的文件类型失败', 500, error.message);
     }
   }
 }

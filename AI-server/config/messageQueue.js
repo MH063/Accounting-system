@@ -4,7 +4,7 @@
  */
 
 const Bull = require('bull');
-const { getRedisClient } = require('./redis');
+const { getRedisClient, isRedisAvailable } = require('./redis');
 const logger = require('./logger');
 const { EmailJobProcessor } = require('../jobs/emailJob');
 const { DataProcessingJobProcessor } = require('../jobs/dataProcessingJob');
@@ -30,6 +30,58 @@ const QUEUE_CONFIG = {
     }
   }
 };
+
+// 预定义处理器存储（用于降级模式）
+const jobProcessors = new Map();
+
+/**
+ * 降级模式下的模拟队列对象
+ */
+const createMockQueue = (queueName) => ({
+  isMock: true,
+  name: queueName,
+  add: async (jobName, data, opts) => {
+    logger.warn(`[降级模式] Redis不可用，同步执行任务: ${queueName}:${jobName}`);
+    const processor = jobProcessors.get(`${queueName}:${jobName}`);
+    if (processor) {
+      try {
+        // 模拟异步执行
+        setImmediate(async () => {
+          try {
+            await processor({ id: `mock_${Date.now()}`, data, name: jobName });
+            logger.info(`[降级模式] 任务同步执行成功: ${jobName}`);
+          } catch (err) {
+            logger.error(`[降级模式] 任务同步执行失败: ${jobName}`, { error: err.message });
+          }
+        });
+        return { id: `mock_${Date.now()}`, data };
+      } catch (error) {
+        logger.error(`[降级模式] 任务执行出错: ${jobName}`, { error: error.message });
+        throw error;
+      }
+    }
+    logger.warn(`[降级模式] 未找到处理器: ${jobName}`);
+    return { id: `mock_${Date.now()}`, data };
+  },
+  process: (jobName, concurrency, processor) => {
+    if (typeof concurrency === 'function') {
+      processor = concurrency;
+    }
+    jobProcessors.set(`${queueName}:${jobName}`, processor);
+    logger.info(`[降级模式] 注册本地处理器: ${queueName}:${jobName}`);
+  },
+  on: () => {},
+  close: async () => {},
+  getWaiting: async () => [],
+  getActive: async () => [],
+  getCompleted: async () => [],
+  getFailed: async () => [],
+  getDelayed: async () => [],
+  getPaused: async () => [],
+  pause: async () => {},
+  resume: async () => {},
+  clean: async () => 0
+});
 
 // 预定义队列
 const QUEUES = {
@@ -66,6 +118,13 @@ const queueInstances = new Map();
  */
 function createQueue(queueName, options = {}) {
   try {
+    // 如果没有启用 Redis 或 Redis 不可用，则返回模拟队列
+    if (process.env.DISABLE_REDIS === 'true') {
+      const mockQueue = createMockQueue(queueName);
+      queueInstances.set(queueName, mockQueue);
+      return mockQueue;
+    }
+
     const redisConfig = QUEUE_CONFIG.default.redis;
     
     const queue = new Bull(queueName, {
@@ -108,7 +167,29 @@ function createQueue(queueName, options = {}) {
     });
     
     queue.on('error', (error) => {
-      logger.error(`队列错误: ${queueName}`, { error: error.message });
+      // 极其进取地抑制所有频繁发生的错误日志，避免刷屏
+      const now = Date.now();
+      const lastLog = queue.lastErrorLogTime || 0;
+      
+      // 如果距离上次日志不到 1 分钟，则抑制
+      if (now - lastLog < 60000) {
+        return;
+      }
+
+      const isConnectionError = !error.message || 
+                               error.message.includes('ECONNREFUSED') || 
+                               error.message.includes('NR_CLOSED') || 
+                               error.message.includes('CONNECTION_BROKEN') ||
+                               error.message.includes('failed') ||
+                               error.message.includes('Redis');
+      
+      if (isConnectionError) {
+        logger.warn(`[降级模式] 队列服务(Redis)连接不可用: ${queueName} (${error.message || '未知连接错误'})。系统将自动切换至同步执行模式。`);
+      } else {
+        logger.error(`队列运行时错误: ${queueName} - ${error.message}`);
+      }
+      
+      queue.lastErrorLogTime = now;
     });
     
     queueInstances.set(queueName, queue);
@@ -117,7 +198,10 @@ function createQueue(queueName, options = {}) {
     return queue;
   } catch (error) {
     logger.error(`队列创建失败: ${queueName}`, { error: error.message });
-    throw error;
+    // 失败时自动回退到模拟队列
+    const mockQueue = createMockQueue(queueName);
+    queueInstances.set(queueName, mockQueue);
+    return mockQueue;
   }
 }
 
@@ -125,10 +209,51 @@ function createQueue(queueName, options = {}) {
  * 获取队列实例
  */
 function getQueue(queueName) {
-  if (!queueInstances.has(queueName)) {
-    return createQueue(queueName);
+  const existingQueue = queueInstances.get(queueName);
+  
+  // 如果已经有实例
+  if (existingQueue) {
+    // 如果是 MockQueue，但现在 Redis 可用了，尝试升级为真实队列
+    if (existingQueue.isMock && isRedisAvailable()) {
+      logger.info(`[自动恢复] Redis已就绪，正在将队列从降级模式恢复: ${queueName}`);
+      queueInstances.delete(queueName); // 删除旧的 MockQueue
+      return createQueue(queueName);   // 创建真实队列
+    }
+    return existingQueue;
   }
-  return queueInstances.get(queueName);
+  
+  // 没有实例，创建新实例
+  return createQueue(queueName);
+}
+
+/**
+ * 添加任务（带自动降级判断）
+ */
+async function addJob(queueName, jobName, data, options = {}) {
+  try {
+    const queue = getQueue(queueName);
+    
+    // 如果是降级模式或者是真实队列但连接已断开
+    if (!isRedisAvailable() && !queue.isMock) {
+      logger.warn(`[降级模式] Redis连接不可用，尝试同步执行任务: ${jobName}`);
+      const processor = jobProcessors.get(`${queueName}:${jobName}`);
+      if (processor) {
+        setImmediate(async () => {
+          try {
+            await processor({ id: `fallback_${Date.now()}`, data, name: jobName });
+          } catch (err) {
+            logger.error(`[降级模式] 任务同步执行失败: ${jobName}`, { error: err.message });
+          }
+        });
+        return { id: `fallback_${Date.now()}`, data };
+      }
+    }
+
+    return await queue.add(jobName, data, options);
+  } catch (error) {
+    logger.error(`添加任务失败: ${jobName}`, { error: error.message });
+    throw error;
+  }
 }
 
 /**
@@ -382,6 +507,7 @@ process.on('SIGTERM', async () => {
 module.exports = {
   createQueue,
   getQueue,
+  addJob,
   getAllQueues,
   closeAllQueues,
   getQueueStatus,

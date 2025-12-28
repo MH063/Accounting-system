@@ -285,7 +285,9 @@ class AuthStorageService {
       const session = this.getSessionInfo()
       
       return {
-        isAuthenticated: isAuthenticated && !!tokens && !this.isTokenExpired(),
+        // 只有当明确标记为已登录且拥有令牌时才认为已认证
+        // 令牌过期不应直接导致 isAuthenticated 为 false，而应该由路由守卫或请求拦截器处理刷新
+        isAuthenticated: isAuthenticated && !!tokens,
         user: hasValidUser ? user : null,
         tokens: isAuthenticated ? tokens : null,
         session
@@ -468,9 +470,9 @@ class AuthStorageService {
       
       const isAuthenticated = localStorage.getItem(STORAGE_KEYS.IS_AUTHENTICATED) === 'true'
       const hasAccessToken = !!this.getAccessToken()
-      const tokenNotExpired = !this.isTokenExpired()
       
-      return isAuthenticated && hasAccessToken && tokenNotExpired
+      // 移除 tokenNotExpired 检查，允许在令牌过期时通过刷新机制恢复会话
+      return isAuthenticated && hasAccessToken
     } catch (error) {
       console.error('检查认证状态失败:', error)
       return false

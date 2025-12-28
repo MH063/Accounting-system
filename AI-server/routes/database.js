@@ -8,8 +8,7 @@ const router = express.Router();
 const migrationManager = require('../utils/migrationManager');
 const poolMonitor = require('../utils/dbPoolMonitor');
 const dbCluster = require('../config/databaseCluster');
-const DatabaseOptimizer = require('../utils/databaseOptimizer');
-const dbOptimizer = new DatabaseOptimizer();
+const dbOptimizer = require('../utils/databaseOptimizer');
 
 // ==================== 数据库迁移路由 ====================
 

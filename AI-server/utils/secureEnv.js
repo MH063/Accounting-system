@@ -176,8 +176,11 @@ function validateEnvConfig() {
     const value = process.env[varName];
     if (!value) {
       errors.push(`${varName} 未设置，这将导致安全问题`);
-    } else if (value.length < 16) {
-      warnings.push(`${varName} 长度过短，建议使用更长的随机字符串`);
+    } else {
+      const minLength = process.env.NODE_ENV === 'production' ? 16 : 8;
+      if (value.length < minLength) {
+        warnings.push(`${varName} 长度过短，建议使用更长的随机字符串`);
+      }
     }
   });
   
@@ -189,7 +192,8 @@ function validateEnvConfig() {
     }
     
     const dbPassword = process.env.DB_PASSWORD;
-    if (dbPassword && (dbPassword.includes('123456') || dbPassword.includes('password'))) {
+    const simplePasswords = ['123456', 'password', 'postgres', 'admin'];
+    if (dbPassword && simplePasswords.some(p => dbPassword.toLowerCase() === p)) {
       warnings.push('数据库密码过于简单，建议使用强密码');
     }
   }

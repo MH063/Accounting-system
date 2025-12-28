@@ -72,7 +72,7 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdnjs.cloudflare.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com"],
-      imgSrc: ["'self'", "data:", "https:", "http://[SERVER_HOST]"],
+      imgSrc: ["'self'", "data:", "https:", "http://*", "https://*"],
       connectSrc: ["'self'", "https://api.github.com", "https://api.pixabay.com"],
       frameSrc: ["'none'"],
       objectSrc: ["'none'"],
@@ -80,6 +80,10 @@ app.use(helmet({
       childSrc: ["'none'"]
     },
   },
+  // 跨域资源策略 - 允许跨域加载资源
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  // 跨域嵌入策略 - 禁用以允许跨域加载图片
+  crossOriginEmbedderPolicy: false,
   // 阻止页面被嵌入iframe
   frameguard: { action: 'deny' },
   // 隐藏X-Powered-By头
@@ -121,6 +125,15 @@ app.use(express.static('public'));
 app.use(express.static(__dirname));
 app.use('/test-page', express.static(__dirname));
 // 配置uploads目录的静态文件访问
+// 为/uploads目录的静态资源添加CORS头支持（解决跨域图片加载问题）
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
+  next();
+});
 app.use('/uploads', express.static('uploads'));
 
 // 信息泄露防护中间件 - 必须在静态文件服务之后，其他中间件之前
@@ -181,6 +194,7 @@ app.use('/api/logs', require('./routes/logManagement'));
 app.use('/api/cache', require('./routes/cache'));
 app.use('/api/cache', require('./routes/enhancedCache'));
 app.use('/api/cache', require('./routes/multiLevelCache'));
+app.use('/api/performance', require('./routes/performance'));
 app.use('/api/oauth2', require('./routes/oauth2'));
 app.use('/api/permissions', require('./routes/permissions'));
 // API文档路由

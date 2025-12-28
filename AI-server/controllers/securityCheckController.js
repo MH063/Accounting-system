@@ -4,7 +4,7 @@
  */
 
 const { SecurityCheckService } = require('../services/securityCheckService');
-const { responseWrapper } = require('../middleware/response');
+const { responseWrapper, successResponse, errorResponse } = require('../middleware/response');
 const { asyncHandler } = require('../middleware/errorHandling');
 const { pool } = require('../config/database');
 const logger = require('../config/logger');
@@ -37,26 +37,18 @@ const performSecurityCheck = responseWrapper(asyncHandler(async (req, res, next)
   const result = await getSecurityCheckService().performCheck(userId, context);
 
   if (result.success) {
-    res.json({
-      success: true,
-      message: '实时安全评估完成',
-      data: {
-        overallScore: result.overallScore,
-        riskLevel: result.riskLevel,
-        riskLabel: result.riskLabel,
-        checkTime: result.checkTime,
-        duration: result.duration,
-        factors: result.factors,
-        weightExplanation: result.weightExplanation,
-        summary: result.summary
-      }
-    });
+    return successResponse(res, {
+      overallScore: result.overallScore,
+      riskLevel: result.riskLevel,
+      riskLabel: result.riskLabel,
+      checkTime: result.checkTime,
+      duration: result.duration,
+      factors: result.factors,
+      weightExplanation: result.weightExplanation,
+      summary: result.summary
+    }, '实时安全评估完成');
   } else {
-    res.status(500).json({
-      success: false,
-      message: '安全评估失败',
-      error: result.error
-    });
+    return errorResponse(res, '安全评估失败', 500, result.error);
   }
 }));
 
@@ -75,13 +67,10 @@ const getSecurityFactors = responseWrapper(asyncHandler(async (req, res, next) =
     description: `${factor.weight}%权重，影响整体安全性`
   }));
 
-  res.json({
-    success: true,
-    data: {
-      factors,
-      totalWeight: factors.reduce((sum, f) => sum + f.weight, 0)
-    }
-  });
+  return successResponse(res, {
+    factors,
+    totalWeight: factors.reduce((sum, f) => sum + f.weight, 0)
+  }, '获取安全因子成功');
 }));
 
 /**
@@ -97,19 +86,11 @@ const updateSecuritySettings = responseWrapper(asyncHandler(async (req, res, nex
   logger.info(`[SecurityCheck] 用户 ${userId} 更新安全设置:`, updateData);
 
   const result = await userService.updateProfile(userId, updateData);
-
+  
   if (result.success) {
-    res.json({
-      success: true,
-      message: '安全设置更新成功',
-      data: result.data
-    });
+    return successResponse(res, result.data, '安全设置更新成功');
   } else {
-    res.status(400).json({
-      success: false,
-      message: '安全设置更新失败',
-      error: result.message
-    });
+    return errorResponse(res, result.message || '更新失败', 400);
   }
 }));
 
@@ -128,23 +109,16 @@ const getSecuritySettings = responseWrapper(asyncHandler(async (req, res, next) 
 
   if (result.success) {
     const user = result.data;
-    res.json({
-      success: true,
-      data: {
-        login_protection_enabled: user.login_protection_enabled,
-        email_alerts_enabled: user.email_alerts_enabled,
-        sms_alerts_enabled: user.sms_alerts_enabled,
-        session_timeout_minutes: user.session_timeout_minutes,
-        session_timeout_warning_minutes: user.session_timeout_warning_minutes,
-        biometric_enabled: user.biometric_enabled
-      }
-    });
+    return successResponse(res, {
+      login_protection_enabled: user.login_protection_enabled,
+      email_alerts_enabled: user.email_alerts_enabled,
+      sms_alerts_enabled: user.sms_alerts_enabled,
+      session_timeout_minutes: user.session_timeout_minutes,
+      session_timeout_warning_minutes: user.session_timeout_warning_minutes,
+      biometric_enabled: user.biometric_enabled
+    }, '获取安全设置成功');
   } else {
-    res.status(400).json({
-      success: false,
-      message: '获取安全设置失败',
-      error: result.message
-    });
+    return errorResponse(res, '获取安全设置失败', 400);
   }
 }));
 

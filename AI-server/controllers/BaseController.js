@@ -4,6 +4,7 @@
  */
 
 const logger = require('../config/logger');
+const { successResponse, errorResponse } = require('../middleware/response');
 
 class BaseController {
   constructor(service) {
@@ -33,12 +34,11 @@ class BaseController {
 
       const result = await this.service.getAll(options);
       
-      return res.json({
-        success: true,
-        message: '数据获取成功',
-        data: result.data,
+      const key = this.entityName.toLowerCase() + 's';
+      return successResponse(res, {
+        [key]: result.data,
         pagination: result.pagination
-      });
+      }, '数据获取成功');
     } catch (error) {
       logger.error(`[${this.entityName}] 获取所有记录失败`, { error: error.message });
       next(error);
@@ -61,17 +61,13 @@ class BaseController {
       const result = await this.service.getById(id);
       
       if (!result) {
-        return res.status(404).json({
-          success: false,
-          message: '记录不存在'
-        });
+        return errorResponse(res, '记录不存在', 404);
       }
 
-      return res.json({
-        success: true,
-        message: '数据获取成功',
-        data: result
-      });
+      const key = this.entityName.toLowerCase();
+      return successResponse(res, {
+        [key]: result
+      }, '数据获取成功');
     } catch (error) {
       logger.error(`[${this.entityName}] 根据ID获取记录失败`, { error: error.message });
       next(error);
@@ -91,11 +87,10 @@ class BaseController {
 
       const result = await this.service.create(req.body);
       
-      return res.status(201).json({
-        success: true,
-        message: '创建成功',
-        data: result
-      });
+      const key = this.entityName.toLowerCase();
+      return successResponse(res, {
+        [key]: result
+      }, '创建成功', 201);
     } catch (error) {
       logger.error(`[${this.entityName}] 创建记录失败`, { error: error.message });
       next(error);
@@ -119,17 +114,13 @@ class BaseController {
       const result = await this.service.update(id, req.body);
       
       if (!result) {
-        return res.status(404).json({
-          success: false,
-          message: '记录不存在'
-        });
+        return errorResponse(res, '记录不存在', 404);
       }
 
-      return res.json({
-        success: true,
-        message: '更新成功',
-        data: result
-      });
+      const key = this.entityName.toLowerCase();
+      return successResponse(res, {
+        [key]: result
+      }, '更新成功');
     } catch (error) {
       logger.error(`[${this.entityName}] 更新记录失败`, { error: error.message });
       next(error);
@@ -152,16 +143,10 @@ class BaseController {
       const result = await this.service.delete(id);
       
       if (!result) {
-        return res.status(404).json({
-          success: false,
-          message: '记录不存在'
-        });
+        return errorResponse(res, '记录不存在', 404);
       }
 
-      return res.json({
-        success: true,
-        message: '删除成功'
-      });
+      return successResponse(res, null, '删除成功');
     } catch (error) {
       logger.error(`[${this.entityName}] 删除记录失败`, { error: error.message });
       next(error);
@@ -203,22 +188,15 @@ class BaseController {
   /**
    * 发送成功响应
    */
-  sendSuccess(res, data, message = '操作成功') {
-    return res.json({
-      success: true,
-      message,
-      data
-    });
+  sendSuccess(res, data, message = '操作成功', statusCode = 200) {
+    return successResponse(res, data, message, statusCode);
   }
 
   /**
    * 发送错误响应
    */
-  sendError(res, message, statusCode = 400) {
-    return res.status(statusCode).json({
-      success: false,
-      message
-    });
+  sendError(res, message, statusCode = 400, error = null) {
+    return errorResponse(res, message, statusCode, error);
   }
 
   /**
@@ -230,7 +208,7 @@ class BaseController {
       const { items } = req.body;
       
       if (!Array.isArray(items) || items.length === 0) {
-        return this.sendError(res, '请提供有效的数据数组', 400);
+        return errorResponse(res, '请提供有效的数据数组', 400);
       }
 
       logger.info(`[${this.entityName}] 批量创建记录`, { 
@@ -240,11 +218,10 @@ class BaseController {
 
       const results = await this.service.batchCreate(items);
       
-      return res.status(201).json({
-        success: true,
-        message: '批量创建成功',
-        data: results
-      });
+      const key = this.entityName.toLowerCase() + 's';
+      return successResponse(res, {
+        [key]: results
+      }, '批量创建成功', 201);
     } catch (error) {
       logger.error(`[${this.entityName}] 批量创建记录失败`, { error: error.message });
       next(error);
@@ -260,7 +237,7 @@ class BaseController {
       const { items } = req.body;
       
       if (!Array.isArray(items) || items.length === 0) {
-        return this.sendError(res, '请提供有效的数据数组', 400);
+        return errorResponse(res, '请提供有效的数据数组', 400);
       }
 
       logger.info(`[${this.entityName}] 批量更新记录`, { 
@@ -270,11 +247,10 @@ class BaseController {
 
       const results = await this.service.batchUpdate(items);
       
-      return res.json({
-        success: true,
-        message: '批量更新成功',
-        data: results
-      });
+      const key = this.entityName.toLowerCase() + 's';
+      return successResponse(res, {
+        [key]: results
+      }, '批量更新成功');
     } catch (error) {
       logger.error(`[${this.entityName}] 批量更新记录失败`, { error: error.message });
       next(error);
@@ -290,7 +266,7 @@ class BaseController {
       const { ids } = req.body;
       
       if (!Array.isArray(ids) || ids.length === 0) {
-        return this.sendError(res, '请提供有效的ID数组', 400);
+        return errorResponse(res, '请提供有效的ID数组', 400);
       }
 
       logger.info(`[${this.entityName}] 批量删除记录`, { 
@@ -298,13 +274,9 @@ class BaseController {
         count: ids.length 
       });
 
-      const result = await this.service.batchDelete(ids);
+      await this.service.batchDelete(ids);
       
-      return res.json({
-        success: true,
-        message: '批量删除成功',
-        data: result
-      });
+      return successResponse(res, null, '批量删除成功');
     } catch (error) {
       logger.error(`[${this.entityName}] 批量删除记录失败`, { error: error.message });
       next(error);
@@ -334,17 +306,16 @@ class BaseController {
 
       const result = await this.service.paginate(options);
       
-      return res.json({
-        success: true,
-        message: '查询成功',
-        data: result.data,
+      const key = this.entityName.toLowerCase() + 's';
+      return successResponse(res, {
+        [key]: result.data,
         pagination: {
           total: result.total,
           page: result.page,
           limit: result.limit,
           totalPages: result.totalPages
         }
-      });
+      }, '查询成功');
     } catch (error) {
       logger.error(`[${this.entityName}] 分页查询失败`, { error: error.message });
       next(error);
@@ -360,7 +331,7 @@ class BaseController {
       const { q, fields } = req.query;
       
       if (!q) {
-        return this.sendError(res, '请提供搜索关键词', 400);
+        return errorResponse(res, '请提供搜索关键词', 400);
       }
 
       logger.info(`[${this.entityName}] 搜索记录`, { 
@@ -372,11 +343,7 @@ class BaseController {
       const searchFields = fields ? fields.split(',') : [];
       const results = await this.service.search(q, searchFields);
       
-      return res.json({
-        success: true,
-        message: '搜索成功',
-        data: results
-      });
+      return successResponse(res, results, '搜索成功');
     } catch (error) {
       logger.error(`[${this.entityName}] 搜索失败`, { error: error.message });
       next(error);

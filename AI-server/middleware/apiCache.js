@@ -3,16 +3,9 @@
  * 提供灵活的API响应缓存功能，支持多种缓存策略
  */
 
-const NodeCache = require('node-cache');
+const { unifiedCache } = require('../config/unifiedCache');
 const crypto = require('crypto');
 const logger = require('../config/logger');
-
-// 创建缓存实例
-const apiCache = new NodeCache({
-  stdTTL: 300, // 默认缓存过期时间(秒) - 5分钟
-  checkperiod: 120, // 定期检查过期缓存的周期(秒) - 2分钟
-  useClones: false // 不克隆对象，提高性能
-});
 
 // 缓存统计
 let cacheStats = {
@@ -84,9 +77,9 @@ const generateCacheKey = (req, options = {}) => {
  * @param {string} key - 缓存键
  * @returns {Object|null} 缓存的数据或null
  */
-const get = (key) => {
+const get = async (key) => {
   try {
-    const cachedData = apiCache.get(key);
+    const cachedData = await unifiedCache.get(key, 'api');
     
     if (cachedData) {
       cacheStats.hits++;
@@ -111,9 +104,9 @@ const get = (key) => {
  * @param {number} ttl - 缓存过期时间(秒)，可选
  * @returns {boolean} 是否成功设置
  */
-const set = (key, data, ttl) => {
+const set = async (key, data, ttl) => {
   try {
-    const success = apiCache.set(key, data, ttl);
+    const success = await unifiedCache.set(key, data, { prefix: 'api', ttl });
     
     if (success) {
       cacheStats.sets++;
@@ -135,11 +128,11 @@ const set = (key, data, ttl) => {
  * @param {string} key - 缓存键
  * @returns {boolean} 是否成功删除
  */
-const del = (key) => {
+const del = async (key) => {
   try {
-    const deleted = apiCache.del(key);
+    const deleted = await unifiedCache.del(key, 'api');
     
-    if (deleted > 0) {
+    if (deleted) {
       cacheStats.deletes++;
       logger.debug(`[API_CACHE] 缓存删除: ${key}`);
       return true;
@@ -156,9 +149,9 @@ const del = (key) => {
 /**
  * 清空所有缓存
  */
-const flush = () => {
+const flush = async () => {
   try {
-    apiCache.flushAll();
+    await unifiedCache.flush();
     logger.info('[API_CACHE] 所有缓存已清空');
   } catch (error) {
     cacheStats.errors++;
@@ -171,13 +164,11 @@ const flush = () => {
  * @returns {Object} 缓存统计信息
  */
 const getStats = () => {
-  const nodeCacheStats = apiCache.getStats();
+  const unifiedStats = unifiedCache.getStats();
   
   return {
     ...cacheStats,
-    keys: nodeCacheStats.keys,
-    ksize: nodeCacheStats.ksize,
-    vsize: nodeCacheStats.vsize,
+    ...unifiedStats,
     hitRate: cacheStats.hits / (cacheStats.hits + cacheStats.misses) * 100 || 0
   };
 };
@@ -193,6 +184,7 @@ const resetStats = () => {
     deletes: 0,
     errors: 0
   };
+  unifiedCache.resetStats();
 };
 
 /**
@@ -200,21 +192,11 @@ const resetStats = () => {
  * @param {string} pattern - 缓存键模式
  * @returns {number} 清除的缓存项数量
  */
-const invalidateByPattern = (pattern) => {
+const invalidateByPattern = async (pattern) => {
   try {
-    const keys = apiCache.keys();
-    const regex = new RegExp(pattern);
-    let invalidatedCount = 0;
-    
-    keys.forEach(key => {
-      if (regex.test(key)) {
-        apiCache.del(key);
-        invalidatedCount++;
-      }
-    });
-    
-    logger.info(`[API_CACHE] 已清除 ${invalidatedCount} 个匹配模式 "${pattern}" 的缓存项`);
-    return invalidatedCount;
+    const deletedCount = await unifiedCache.batchDelete(pattern);
+    logger.info(`[API_CACHE] 已清除 ${deletedCount} 个匹配模式 "${pattern}" 的缓存项`);
+    return deletedCount;
   } catch (error) {
     cacheStats.errors++;
     logger.error(`[API_CACHE] 按模式清除缓存失败: ${pattern}`, { error: error.message });
@@ -240,7 +222,7 @@ const apiCacheMiddleware = (options = {}) => {
     includeUser = false // 是否包含用户信息
   } = options;
   
-  return (req, res, next) => {
+  return async (req, res, next) => {
     // 如果跳过缓存或条件不满足，直接继续
     if (skipCache || !condition(req)) {
       return next();
@@ -262,7 +244,7 @@ const apiCacheMiddleware = (options = {}) => {
     const cacheKey = cacheKeyPrefix + generateCacheKey(req, cacheKeyOptions);
     
     // 尝试从缓存获取
-    const cachedResponse = get(cacheKey);
+    const cachedResponse = await get(cacheKey);
     if (cachedResponse) {
       // 设置缓存状态头
       res.set(cacheStatusHeader, 'HIT');
@@ -278,10 +260,10 @@ const apiCacheMiddleware = (options = {}) => {
     const originalJson = res.json;
     
     // 重写res.json方法以缓存响应
-    res.json = function(data) {
+    res.json = async function(data) {
       // 只缓存成功响应
       if (data && data.success !== false) {
-        set(cacheKey, data, ttl);
+        await set(cacheKey, data, ttl);
       }
       
       // 调用原始方法
@@ -318,19 +300,6 @@ const cacheMiddleware = {
   // 自定义缓存
   custom: apiCacheMiddleware
 };
-
-// 监听缓存事件
-apiCache.on('set', (key, value) => {
-  logger.debug(`[API_CACHE] 事件: 设置缓存 ${key}`);
-});
-
-apiCache.on('del', (key, value) => {
-  logger.debug(`[API_CACHE] 事件: 删除缓存 ${key}`);
-});
-
-apiCache.on('expired', (key, value) => {
-  logger.debug(`[API_CACHE] 事件: 缓存过期 ${key}`);
-});
 
 module.exports = {
   get,

@@ -13,6 +13,8 @@ class DatabaseOptimizer {
     this.pool = pool;
     this.slowQueryLog = [];
     this.maxSlowQueryLog = 100;
+    this.extensionChecked = false;
+    this.extensionEnabled = false;
     
     // 启动连接池监控
     this.initializeMonitoring();
@@ -35,10 +37,7 @@ class DatabaseOptimizer {
    * 分析数据库性能
    */
   async analyzePerformance() {
-    let client = null;
-    
     try {
-      client = await this.pool.connect();
       logger.info('[DATABASE] 开始性能分析...');
       
       // 并行获取所有统计信息，提高效率
@@ -81,10 +80,6 @@ class DatabaseOptimizer {
         locks: { total: 0, waiting: 0, blocked: 0 },
         recommendations: []
       };
-    } finally {
-      if (client) {
-        client.release();
-      }
     }
   }
 
@@ -149,40 +144,49 @@ class DatabaseOptimizer {
    */
   async getSlowQueries() {
     try {
-      // 启用慢查询日志收集（如果尚未启用）
-      await this.enableSlowQueryLog();
+      // 检查缓存的扩展状态
+      if (!this.extensionChecked) {
+        const checkExtensionQuery = "SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements'";
+        const extensionResult = await this.pool.query(checkExtensionQuery);
+        this.extensionEnabled = extensionResult.rows.length > 0;
+        this.extensionChecked = true;
+        
+        if (!this.extensionEnabled) {
+          logger.warn('[DATABASE] pg_stat_statements 扩展未安装，慢查询分析功能已禁用');
+        }
+      }
       
+      if (!this.extensionEnabled) {
+        return {
+          enabled: false,
+          message: '请安装 pg_stat_statements 扩展以获取慢查询统计'
+        };
+      }
+
       // 获取当前数据库的慢查询
       const query = `
         SELECT 
           query,
           calls,
-          total_time,
-          mean_time,
-          stddev_time,
-          min_time,
-          max_time,
+          total_exec_time as total_time,
+          mean_exec_time as mean_time,
+          stddev_exec_time as stddev_time,
+          min_exec_time as min_time,
+          max_exec_time as max_time,
           rows
         FROM pg_stat_statements 
         WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
-        ORDER BY mean_time DESC 
+          AND query NOT LIKE '%pg_stat_statements%'
+          AND query NOT LIKE '%pg_stat_database%'
+          AND query NOT LIKE '%pg_stat_user_tables%'
+          AND query NOT LIKE '%pg_stat_user_indexes%'
+          AND query NOT LIKE '%information_schema%'
+        ORDER BY mean_exec_time DESC 
         LIMIT 20
       `;
       
-      try {
-        const result = await this.pool.query(query);
-        return result.rows;
-      } catch (error) {
-        // 如果pg_stat_statements扩展未安装，返回空结果
-        if (error.message.includes('pg_stat_statements')) {
-          logger.warn('[DATABASE] pg_stat_statements扩展未安装，跳过慢查询统计');
-          return {
-            enabled: false,
-            message: '请安装pg_stat_statements扩展以获取慢查询统计'
-          };
-        }
-        throw error;
-      }
+      const result = await this.pool.query(query);
+      return result.rows;
     } catch (error) {
       logger.error('[DATABASE] 获取慢查询统计失败:', error);
       return {
@@ -200,8 +204,8 @@ class DatabaseOptimizer {
       const query = `
         SELECT 
           s.schemaname,
-          s.tablename,
-          s.indexname,
+          s.relname as tablename,
+          s.indexrelname as indexname,
           s.idx_scan as index_scans,
           s.idx_tup_read as tuples_read,
           s.idx_tup_fetch as tuples_fetched,
@@ -397,6 +401,99 @@ class DatabaseOptimizer {
       };
     } catch (error) {
       logger.error('[DATABASE] 获取锁信息失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 执行数据库健康检查并发出警报（如果需要）
+   */
+  async checkHealthAndAlert() {
+    try {
+      const analysis = await this.analyzePerformance();
+      const alerts = [];
+
+      // 1. 检查连接池状态
+      if (analysis.connectionStats && analysis.connectionStats.pool) {
+        const { total, max, waiting } = analysis.connectionStats.pool;
+        const usageRatio = total / max;
+        
+        if (usageRatio > 0.9) {
+          alerts.push({
+            level: 'CRITICAL',
+            type: 'pool_exhaustion',
+            message: `数据库连接池接近枯竭 (${total}/${max})`,
+            recommendation: '考虑增加 DB_POOL_MAX 或检查连接泄漏'
+          });
+        } else if (usageRatio > 0.7) {
+          alerts.push({
+            level: 'WARNING',
+            type: 'high_pool_usage',
+            message: `数据库连接池使用率较高 (${total}/${max})`
+          });
+        }
+
+        if (waiting > 0) {
+          alerts.push({
+            level: 'CRITICAL',
+            type: 'waiting_clients',
+            message: `发现 ${waiting} 个客户端正在等待数据库连接`,
+            recommendation: '立即增加连接池大小或优化长查询'
+          });
+        }
+      }
+
+      // 2. 检查慢查询
+      if (analysis.slowQueries && Array.isArray(analysis.slowQueries)) {
+        const criticalSlowQueries = analysis.slowQueries.filter(q => q.mean_time > 5000); // 5秒
+        if (criticalSlowQueries.length > 0) {
+          alerts.push({
+            level: 'WARNING',
+            type: 'slow_queries',
+            message: `发现 ${criticalSlowQueries.length} 个执行时间超过 5s 的慢查询`,
+            recommendation: '检查 pg_stat_statements 获取详细 SQL 并进行优化'
+          });
+        }
+      }
+
+      // 3. 检查回滚率
+      if (analysis.basicStats && !analysis.basicStats.error) {
+        const { commits, rollbacks } = analysis.basicStats;
+        const totalXact = commits + rollbacks;
+        if (totalXact > 100) {
+          const rollbackRatio = rollbacks / totalXact;
+          if (rollbackRatio > 0.05) { // 超过5%的回滚率
+            alerts.push({
+              level: 'WARNING',
+              type: 'high_rollback_ratio',
+              message: `事务回滚率较高 (${(rollbackRatio * 100).toFixed(2)}%)`,
+              recommendation: '检查应用层是否存在频繁的事务冲突或逻辑错误'
+            });
+          }
+        }
+      }
+
+      // 记录警报到日志
+      if (alerts.length > 0) {
+        alerts.forEach(alert => {
+          const logMsg = `[DB-ALERT] [${alert.level}] ${alert.message}${alert.recommendation ? ' - 建议: ' + alert.recommendation : ''}`;
+          if (alert.level === 'CRITICAL') {
+            logger.error(logMsg);
+          } else {
+            logger.warn(logMsg);
+          }
+        });
+      } else {
+        logger.info('[DATABASE] 健康检查完成，系统状态良好');
+      }
+
+      return {
+        timestamp: new Date().toISOString(),
+        status: alerts.length === 0 ? 'HEALTHY' : (alerts.some(a => a.level === 'CRITICAL') ? 'CRITICAL' : 'WARNING'),
+        alerts
+      };
+    } catch (error) {
+      logger.error('[DATABASE] 健康检查执行失败:', error);
       throw error;
     }
   }
@@ -1068,4 +1165,6 @@ class DatabaseOptimizer {
   }
 }
 
-module.exports = DatabaseOptimizer;
+// 创建并导出单例
+const databaseOptimizer = new DatabaseOptimizer();
+module.exports = databaseOptimizer;

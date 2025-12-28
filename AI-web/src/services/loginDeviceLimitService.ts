@@ -30,9 +30,17 @@ export interface ActiveDeviceSession {
  */
 export const getBackendDeviceSessionsAPI = async (): Promise<ApiResponse<{ sessions: ActiveDeviceSession[], count: number }>> => {
   try {
-    return await request<{ sessions: ActiveDeviceSession[], count: number }>('/device-sessions', {
+    const response = await request<any>('/device-sessions', {
       method: 'GET'
     });
+    
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = response.data?.data || response.data;
+    
+    return {
+      ...response,
+      data: actualData
+    };
   } catch (error) {
     console.error('获取后端设备会话失败:', error);
     return {

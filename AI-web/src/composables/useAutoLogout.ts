@@ -6,12 +6,22 @@ export interface AutoLogoutConfig {
   enabled: boolean
   timeoutMinutes: number
   warningMinutes: number
+  timeoutMs: number      // 毫秒精度存储
+  warningMs: number      // 毫秒精度存储
+  lastValidation?: {
+    isValid: boolean
+    adjusted: boolean
+    message: string
+    timestamp: number
+  }
 }
 
 const DEFAULT_CONFIG: AutoLogoutConfig = {
   enabled: true,
   timeoutMinutes: 30,
-  warningMinutes: 2
+  warningMinutes: 2,
+  timeoutMs: 30 * 60 * 1000,
+  warningMs: 2 * 60 * 1000
 }
 
 const CONFIG_KEY = 'auto_logout_config'
@@ -32,19 +42,45 @@ let heartbeatTimer: number | null = null
 let countdownTimer: number | null = null
 let isListenersSetup = false
 
-const timeoutMs = computed(() => config.value.timeoutMinutes * 60 * 1000)
-const warningMs = computed(() => config.value.warningMinutes * 60 * 1000)
-const warningThresholdMs = computed(() => timeoutMs.value - warningMs.value)
+const timeoutMs = computed(() => config.value.timeoutMs)
+const warningMs = computed(() => config.value.warningMs)
+const warningThresholdMs = computed(() => config.value.timeoutMs - config.value.warningMs)
 
 const loadConfig = (): AutoLogoutConfig => {
   try {
     const stored = localStorage.getItem(CONFIG_KEY)
     if (stored) {
       const parsed = JSON.parse(stored)
+      const timeoutMinutes = Math.max(1, Math.min(120, parsed.timeoutMinutes ?? DEFAULT_CONFIG.timeoutMinutes))
+      let warningMinutes = parsed.warningMinutes ?? DEFAULT_CONFIG.warningMinutes
+      
+      let adjusted = false
+      let message = '验证通过'
+      const originalWarning = warningMinutes
+
+      // 1. 验证超时时长 ≥ 提醒时长
+      if (warningMinutes > timeoutMinutes) {
+        // 2. 自动调整为超时时长的90%
+        warningMinutes = Number((timeoutMinutes * 0.9).toFixed(2))
+        adjusted = true
+        message = `提醒时长(${originalWarning}min)大于超时时长(${timeoutMinutes}min)，已自动调整为${warningMinutes}min (90%)`
+        
+        // 5. 系统日志记录自动调整事件
+        logActivity(`[自动调整] 原始输入: ${originalWarning}min, 调整后: ${warningMinutes}min, 时间戳: ${Date.now()}, 原因: 提醒时长超过超时时长`)
+      }
+
       return {
         enabled: parsed.enabled ?? DEFAULT_CONFIG.enabled,
-        timeoutMinutes: Math.max(1, Math.min(120, parsed.timeoutMinutes ?? DEFAULT_CONFIG.timeoutMinutes)),
-        warningMinutes: Math.max(1, Math.min(10, parsed.warningMinutes ?? DEFAULT_CONFIG.warningMinutes))
+        timeoutMinutes,
+        warningMinutes,
+        timeoutMs: timeoutMinutes * 60 * 1000,
+        warningMs: warningMinutes * 60 * 1000,
+        lastValidation: {
+          isValid: !adjusted,
+          adjusted,
+          message,
+          timestamp: Date.now()
+        }
       }
     }
   } catch (error) {
@@ -55,8 +91,37 @@ const loadConfig = (): AutoLogoutConfig => {
 
 const saveConfig = (newConfig: AutoLogoutConfig): void => {
   try {
-    localStorage.setItem(CONFIG_KEY, JSON.stringify(newConfig))
-    config.value = newConfig
+    const timeoutMinutes = newConfig.timeoutMinutes
+    let warningMinutes = newConfig.warningMinutes
+    
+    let adjusted = false
+    let message = '验证通过'
+    const originalWarning = warningMinutes
+
+    // 强制校验：超时时长必须始终大于或等于提醒时长
+    if (warningMinutes > timeoutMinutes) {
+      warningMinutes = Number((timeoutMinutes * 0.9).toFixed(2))
+      adjusted = true
+      message = `提醒时长(${originalWarning}min)大于超时时长(${timeoutMinutes}min)，已自动调整为${warningMinutes}min`
+      
+      logActivity(`[自动保存调整] 原始值: ${originalWarning}min, 调整值: ${warningMinutes}min, 时间戳: ${Date.now()}`)
+    }
+
+    const finalConfig: AutoLogoutConfig = {
+      ...newConfig,
+      warningMinutes,
+      timeoutMs: timeoutMinutes * 60 * 1000,
+      warningMs: warningMinutes * 60 * 1000,
+      lastValidation: {
+        isValid: !adjusted,
+        adjusted,
+        message,
+        timestamp: Date.now()
+      }
+    }
+    
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(finalConfig))
+    config.value = finalConfig
   } catch (error) {
     console.error('[AutoLogout] 保存配置失败:', error)
   }
@@ -71,7 +136,9 @@ const getConfig = (): AutoLogoutConfig => config.value
 
 const isAuthenticated = (): boolean => {
   const authState = authStorageService.getAuthState()
-  return authState.isAuthenticated && !authStorageService.isTokenExpired() && !authStorageService.isSessionExpired()
+  // 移除对令牌过期的直接检查，允许通过刷新令牌维持会话。
+  // 只有当会话完全过期或未认证时才认为已登出。
+  return authState.isAuthenticated && !authStorageService.isSessionExpired()
 }
 
 const logActivity = (action: string): void => {
@@ -187,7 +254,6 @@ const resetTimer = (): void => {
     warningSessionId.value = currentSessionId
     showWarning.value = false
     clearWarningTimers()
-    logActivity(`检测到活动，关闭警告对话框，开始新会话 (ID: ${currentSessionId})`)
   }
 
   clearAllTimers()
@@ -255,8 +321,12 @@ const startHeartbeat = (): void => {
   }, 10000)
 }
 
-const handleUserActivity = (): void => {
-  if (isOnline.value) {
+const handleUserActivity = (eventOrManual?: any): void => {
+  // 只在页面处于可见状态（在该系统页面内）时才采集行为
+  if (isOnline.value && document.visibilityState === 'visible' && document.hasFocus()) {
+    if (showWarning.value && eventOrManual !== true) {
+      logActivity('检测到活动，自动保持会话活跃')
+    }
     resetTimer()
   }
 }
@@ -386,7 +456,7 @@ const deactivate = (): void => {
 
 const keepSessionAlive = (): void => {
   logActivity('用户选择保持会话活跃')
-  handleUserActivity()
+  handleUserActivity(true)
 }
 
 const setRouter = (newRouter: any): void => {

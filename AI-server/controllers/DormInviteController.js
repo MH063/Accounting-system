@@ -1,6 +1,7 @@
 const BaseController = require('./BaseController');
 const DormInviteService = require('../services/DormInviteService');
 const logger = require('../config/logger');
+const { successResponse, errorResponse } = require('../middleware/response');
 
 class DormInviteController extends BaseController {
   constructor() {
@@ -35,7 +36,7 @@ class DormInviteController extends BaseController {
           dormId,
           userId: currentUser.id
         });
-        return this.sendError(res, '宿舍ID无效', 400);
+        return errorResponse(res, '宿舍ID无效', 400);
       }
       
       // 验证邀请数据
@@ -46,7 +47,7 @@ class DormInviteController extends BaseController {
           userId: currentUser.id,
           dormId
         });
-        return this.sendError(res, validation.message, 400);
+        return errorResponse(res, validation.message, 400);
       }
       
       // 调用服务层邀请成员
@@ -62,7 +63,7 @@ class DormInviteController extends BaseController {
           userId: currentUser.id,
           dormId
         });
-        return this.sendError(res, result.message, 400);
+        return errorResponse(res, result.message, 400);
       }
 
       const { inviteRecord, userInfo, dormInfo } = result.data;
@@ -75,7 +76,7 @@ class DormInviteController extends BaseController {
       });
 
       // 返回成功响应
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         inviteRecord: {
           id: inviteRecord.id,
           inviteCode: inviteRecord.invite_code,

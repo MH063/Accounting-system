@@ -14,10 +14,20 @@ export const updateSecuritySettings = async (settings: {
   session_timeout_warning_minutes?: number;
   biometric_enabled?: boolean;
 }): Promise<ApiResponse<any>> => {
-  return request<ApiResponse<any>>('/security/settings', {
+  const response = await request<ApiResponse<any>>('/security/settings', {
     method: 'PUT',
     body: JSON.stringify(settings)
   });
+  
+  // 处理双层嵌套结构 (Rule 5)
+  if (response && response.success) {
+    const actualData = (response.data as any)?.data || response.data;
+    return {
+      ...response,
+      data: actualData
+    };
+  }
+  return response;
 };
 
 /**
@@ -32,7 +42,17 @@ export const getSecuritySettings = async (): Promise<ApiResponse<{
   session_timeout_warning_minutes: number;
   biometric_enabled: boolean;
 }>> => {
-  return request<ApiResponse<any>>('/security/settings', {
+  const response = await request<ApiResponse<any>>('/security/settings', {
     method: 'GET'
   });
+  
+  // 处理双层嵌套结构 (Rule 5)
+  if (response && response.success) {
+    const actualData = (response.data as any)?.data || response.data;
+    return {
+      ...response,
+      data: actualData
+    };
+  }
+  return response;
 };

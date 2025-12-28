@@ -39,25 +39,6 @@
     </div>
     
     <div class="info-content">
-      <!-- 头像区域 -->
-      <div class="avatar-section">
-        <div class="avatar-container">
-          <img :src="avatarUrl" alt="用户头像" class="user-avatar" role="img" aria-label="当前用户头像" />
-          <div class="avatar-overlay">
-            <el-button type="primary" size="small" @click="showAvatarDialog = true">更换头像</el-button>
-          </div>
-        </div>
-        
-        <!-- 头像上传状态 -->
-        <div class="avatar-status" v-if="avatarUploadStatus.visible">
-          <el-progress 
-            :percentage="avatarUploadStatus.percentage" 
-            :status="avatarUploadStatus.status"
-            :stroke-width="2"
-          />
-        </div>
-      </div>
-
       <!-- 基本信息表单 -->
       <div class="info-form-section">
         <el-form 
@@ -67,6 +48,25 @@
           :rules="formRules"
           ref="personalFormRef"
         >
+          <el-form-item label="当前头像">
+            <div class="current-avatar-container">
+              <div class="avatar-wrapper">
+                <el-image 
+                  :src="personalForm.avatar" 
+                  class="current-avatar-img"
+                  :style="currentAvatarStyle"
+                  fit="cover"
+                >
+                  <template #error>
+                    <div class="avatar-error">
+                      <el-icon><Picture /></el-icon>
+                    </div>
+                  </template>
+                </el-image>
+              </div>
+            </div>
+          </el-form-item>
+
           <el-form-item label="用户名">
             <el-input v-model="personalForm.username" disabled />
           </el-form-item>
@@ -150,17 +150,13 @@
             <el-button type="primary" @click="savePersonalInfo" :loading="saveLoading">
               保存修改
             </el-button>
+            <el-button @click="showAvatarDialog = true">
+              <el-icon><User /></el-icon>
+              更换头像
+            </el-button>
             <el-button @click="resetForm">重置</el-button>
             <el-button @click="syncData" :loading="syncLoading">
               同步数据
-            </el-button>
-            <el-button @click="exportPersonalData">
-              <el-icon><Download /></el-icon>
-              导出数据
-            </el-button>
-            <el-button @click="importPersonalData">
-              <el-icon><Upload /></el-icon>
-              导入数据
             </el-button>
             <el-dropdown>
               <el-button type="default">
@@ -169,6 +165,14 @@
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
+                  <el-dropdown-item @click="exportPersonalData">
+                    <el-icon><Download /></el-icon>
+                    导出数据
+                  </el-dropdown-item>
+                  <el-dropdown-item @click="importPersonalData">
+                    <el-icon><Upload /></el-icon>
+                    导入数据
+                  </el-dropdown-item>
                   <el-dropdown-item @click="createDataBackup">
                     <el-icon><Document /></el-icon>
                     创建备份
@@ -180,6 +184,16 @@
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
+            
+            <!-- 头像上传状态 -->
+            <div class="avatar-status-form" v-if="avatarUploadStatus.visible">
+              <el-progress 
+                :percentage="avatarUploadStatus.percentage" 
+                :status="avatarUploadStatus.status"
+                :stroke-width="2"
+              />
+              <span class="status-text">头像上传中...</span>
+            </div>
           </el-form-item>
         </el-form>
       </div>
@@ -189,53 +203,120 @@
     <el-dialog
       v-model="showAvatarDialog"
       title="更换头像"
-      width="600px"
+      width="800px"
+      class="avatar-dialog"
+      destroy-on-close
     >
-      <div class="avatar-crop-content">
-        <div v-if="!cropData.image" class="avatar-upload-area">
-          <el-upload
-            ref="avatarUploadRef"
-            class="avatar-uploader"
-            action="#"
-            :auto-upload="false"
-            :show-file-list="false"
-            :on-change="handleAvatarChange"
-            :before-upload="beforeAvatarUpload"
-          >
-            <div class="upload-trigger">
-              <el-icon class="upload-icon"><Plus /></el-icon>
-              <div>点击上传头像</div>
-              <div class="upload-tip">支持JPG/PNG格式，文件大小不超过2MB</div>
+      <div class="avatar-dialog-content">
+        <el-tabs v-model="avatarMode" class="avatar-tabs">
+          <el-tab-pane label="本地上传" name="upload">
+            <div class="upload-section">
+              <div v-if="!cropData.image" class="avatar-upload-area">
+                <el-upload
+                  ref="avatarUploadRef"
+                  class="avatar-uploader"
+                  action="#"
+                  :auto-upload="false"
+                  :show-file-list="false"
+                  :on-change="handleAvatarChange"
+                  accept=".jpg,.jpeg,.png,.gif,.webp,.svg"
+                >
+                  <div class="upload-trigger" role="button" aria-label="点击上传头像图片">
+                    <el-icon class="upload-icon"><Plus /></el-icon>
+                    <div>点击或拖拽上传图片</div>
+                    <div class="upload-tip">支持 JPG、PNG、GIF、WebP、SVG 格式，文件大小不超过 5MB</div>
+                  </div>
+                </el-upload>
+              </div>
+              
+              <div v-else class="avatar-edit-area">
+                <div class="cropper-wrapper">
+                  <img ref="cropImageRef" :src="cropData.image" alt="裁剪预览" />
+                </div>
+                <div class="cropper-controls">
+                  <el-button-group>
+                    <el-button @click="rotateImage(-90)" :icon="RefreshLeft">向左旋转</el-button>
+                    <el-button @click="rotateImage(90)" :icon="RefreshRight">向右旋转</el-button>
+                  </el-button-group>
+                  <el-button-group>
+                    <el-button @click="zoomImage(0.1)" :icon="ZoomIn">放大</el-button>
+                    <el-button @click="zoomImage(-0.1)" :icon="ZoomOut">缩小</el-button>
+                  </el-button-group>
+                  <el-button @click="resetAvatarCrop">重新上传</el-button>
+                </div>
+              </div>
             </div>
-          </el-upload>
-        </div>
-        
-        <div v-else class="avatar-crop-area">
-          <div class="crop-container">
-            <img 
-              ref="cropImageRef" 
-              :src="cropData.image" 
-              alt="待裁剪图片"
-              role="img"
-              aria-label="待裁剪的头像图片"
-            />
+          </el-tab-pane>
+          
+          <el-tab-pane label="卡通头像 (DiceBear)" name="dicebear">
+            <div class="dicebear-section">
+              <div class="dicebear-main">
+                <div class="dicebear-preview">
+                  <img :src="dicebearPreviewUrl" alt="DiceBear 预览" :style="dicebearPreviewStyle" />
+                  <el-button @click="dicebearConfig.seed = Math.random().toString(36).substring(7)" :icon="Refresh">
+                    随机种子
+                  </el-button>
+                </div>
+                <div class="dicebear-styles" role="radiogroup" aria-label="头像风格选择">
+                  <div 
+                    v-for="style in dicebearStyles" 
+                    :key="style.value"
+                    class="style-item"
+                    :class="{ active: dicebearConfig.style === style.value }"
+                    @click="dicebearConfig.style = style.value"
+                    role="radio"
+                    :aria-checked="dicebearConfig.style === style.value"
+                    :aria-label="style.label"
+                    tabindex="0"
+                    @keyup.enter="dicebearConfig.style = style.value"
+                  >
+                    <img :src="`https://api.dicebear.com/7.x/${style.value}/svg?seed=preview&radius=${dicebearConfig.radius}`" alt="" :style="dicebearPreviewStyle" />
+                    <span>{{ style.label }}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="dicebear-controls">
+                <el-form label-position="top">
+                  <el-form-item label="背景颜色">
+                    <el-color-picker v-model="dicebearConfig.backgroundColor" :predefine="['#b6e3f4', '#c0aede', '#d1d4f9', '#ffd5dc', '#ffdfbf']" color-format="hex" />
+                  </el-form-item>
+                  <el-form-item label="圆角半径">
+                    <el-slider v-model="dicebearConfig.radius" :max="50" />
+                  </el-form-item>
+                  <el-form-item label="水平翻转">
+                    <el-switch v-model="dicebearConfig.flip" />
+                  </el-form-item>
+                </el-form>
+              </div>
+            </div>
+          </el-tab-pane>
+        </el-tabs>
+
+        <div class="avatar-dialog-footer">
+          <div class="history-actions">
+            <el-button 
+              v-if="avatarHistory.length > 1" 
+              size="small" 
+              @click="undoAvatarChange"
+              :icon="RefreshLeft"
+            >
+              撤销 ({{ avatarHistory.length - 1 }})
+            </el-button>
           </div>
-          <div class="crop-preview">
-            <div class="preview-title">预览</div>
-            <div class="preview-circle">
-              <img :src="cropData.preview" alt="预览头像" role="img" aria-label="头像预览" />
-            </div>
+          <div class="main-actions">
+            <el-button @click="showAvatarDialog = false">取消</el-button>
+            <el-button 
+              type="primary" 
+              @click="handleCropAndUpload" 
+              :loading="avatarUploading"
+              :disabled="avatarMode === 'upload' && !cropData.image"
+            >
+              应用头像
+            </el-button>
           </div>
         </div>
       </div>
-      
-      <template #footer>
-        <el-button @click="showAvatarDialog = false">取消</el-button>
-        <el-button @click="resetAvatarCrop" v-if="cropData.image">重新选择</el-button>
-        <el-button type="primary" @click="uploadAvatar" :loading="avatarUploading">
-          确认上传
-        </el-button>
-      </template>
     </el-dialog>
     
     <!-- 同步历史对话框 -->
@@ -316,10 +397,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick, onBeforeUnmount } from 'vue'
+import { ref, reactive, onMounted, nextTick, onBeforeUnmount, watch, computed } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { savePersonalInfo as savePersonalInfoAPI, syncPersonalInfo } from '../services/userService'
+import Cropper from 'cropperjs'
+import 'cropperjs/dist/cropper.css'
+import { 
+  savePersonalInfo as savePersonalInfoAPI, 
+  syncPersonalInfo, 
+  getDefaultAvatar,
+  uploadAvatarAPI,
+  getFullAvatarUrl,
+  getUserAvatar,
+  updateUser
+} from '../services/userService'
+
 import { 
   Plus, 
   CircleCheck, 
@@ -329,14 +421,67 @@ import {
   Download,
   Clock,
   MoreFilled,
-  Document
+  Document,
+  User,
+  RefreshLeft,
+  RefreshRight,
+  ZoomIn,
+  ZoomOut,
+  Picture,
+  Camera,
+  Edit
 } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules, UploadFile } from 'element-plus'
 import SecurityVerificationModal from '@/components/SecurityVerificationModal.vue'
 import { hasSecurityQuestions } from '@/services/securityQuestionService'
 import dataEncryptionManager from '@/services/dataEncryptionManager'
+import eventBus from '@/utils/eventBus'
 
-// 表单引用
+interface PersonalForm {
+  username: string
+  realName: string
+  gender: 'male' | 'female' | 'secret'
+  birthday: string
+  phone: string
+  email: string
+  bio: string
+  avatar?: string
+  lastAvatarUpdate?: string
+}
+
+// 隐私设置接口定义
+interface PrivacySettings {
+  showProfile: boolean
+  showContact: boolean
+  allowSearch: boolean
+}
+
+// 同步历史接口定义
+interface SyncHistoryItem {
+  time: string
+  type: 'manual' | 'auto'
+  status: 'success' | 'failed'
+  message: string
+}
+
+// 验证状态接口定义
+interface VerifyDialogState {
+  title: string
+  type: 'phone' | 'email'
+}
+
+// ... (existing icons)
+
+// 对话框控制
+const showAvatarDialog = ref(false)
+const showSyncHistoryDialog = ref(false)
+const showVerifyDialog = ref(false)
+const showSecurityVerification = ref(false)
+
+// 切换头像模式：'upload' 或 'dicebear'
+const avatarMode = ref<'upload' | 'dicebear'>('upload')
+
+// 个人信息表单引用
 const personalFormRef = ref<FormInstance>()
 const avatarUploadRef = ref()
 const cropImageRef = ref<HTMLImageElement>()
@@ -350,23 +495,33 @@ const personalForm = reactive<PersonalForm>({
   birthday: '',
   phone: '',
   email: '',
-  bio: ''
+  bio: '',
+  avatar: '',
+  lastAvatarUpdate: ''
+})
+
+// 原始表单数据副本（用于比较更改）
+const originalPersonalForm = reactive<PersonalForm>({
+  username: '',
+  realName: '',
+  gender: 'secret',
+  birthday: '',
+  phone: '',
+  email: '',
+  bio: '',
+  avatar: '',
+  lastAvatarUpdate: ''
 })
 
 // 验证状态
 const phoneVerified = ref(false)
 const emailVerified = ref(false)
 
-// 对话框控制
-const showAvatarDialog = ref(false)
-const showSyncHistoryDialog = ref(false)
-const showVerifyDialog = ref(false)
-const showSecurityVerification = ref(false)
-
 // 裁剪数据
 const cropData = reactive({
   image: '',
-  preview: ''
+  preview: '',
+  file: null as File | null
 })
 
 // 验证对话框状态
@@ -423,6 +578,34 @@ const hasUnsavedChanges = ref(false)
 
 // 头像URL
 const avatarUrl = ref('')
+const avatarLoadError = ref(false)
+
+// 动态计算当前头像的边框样式
+const currentAvatarStyle = computed(() => {
+  const avatar = personalForm.avatar
+  if (!avatar) return { borderRadius: '8px' }
+  
+  // 如果是 DiceBear 头像，解析其 radius 参数
+  if (avatar.includes('api.dicebear.com')) {
+    try {
+      const url = new URL(avatar)
+      const radius = url.searchParams.get('radius')
+      if (radius !== null) {
+        return { borderRadius: `${radius}%` }
+      }
+    } catch (e) {
+      console.error('[PersonalInfo] 解析头像 URL 失败:', e)
+    }
+  }
+  
+  // 默认返回 50% 圆角（通常头像为圆形）
+  return { borderRadius: '50%' }
+})
+
+// 动态计算 DiceBear 预览图的边框样式
+const dicebearPreviewStyle = computed(() => {
+  return { borderRadius: `${dicebearConfig.radius}%` }
+})
 
 // 加载状态
 const saveLoading = ref(false)
@@ -434,6 +617,259 @@ const privacySettings = reactive<PrivacySettings>({
   showContact: false,
   allowSearch: true
 })
+
+// DiceBear 配置
+const dicebearStyles = [
+  { label: '冒险者', value: 'adventurer' },
+  { label: '头像', value: 'avataaars' },
+  { label: '机器人', value: 'bottts' },
+  { label: '开心表情', value: 'fun-emoji' },
+  { label: '洛莱莱', value: 'lorelei' },
+  { label: '米卡', value: 'micah' },
+  { label: '迷你人', value: 'miniavs' },
+  { label: '诺绅士', value: 'notionists' },
+  { label: '开朗小人', value: 'open-peeps' },
+  { label: '像素艺术', value: 'pixel-art' }
+]
+
+const dicebearConfig = reactive({
+  style: 'avataaars',
+  seed: Math.random().toString(36).substring(7),
+  backgroundColor: '#b6e3f4',
+  radius: 0,
+  flip: false
+})
+
+const dicebearPreviewUrl = ref('')
+
+// 防抖计时器
+let dicebearTimer: any = null
+
+// 操作历史记录
+const avatarHistory = ref<string[]>([])
+const maxHistory = 4 // 包含当前，所以实际可撤销3次
+
+// 添加到历史记录
+const addToHistory = (url: string) => {
+  if (!url || avatarHistory.value[0] === url) return
+  avatarHistory.value.unshift(url)
+  if (avatarHistory.value.length > maxHistory) {
+    avatarHistory.value.pop()
+  }
+}
+
+// 撤销修改
+const undoAvatarChange = () => {
+  if (avatarHistory.value.length > 1) {
+    avatarHistory.value.shift()
+    const previousAvatar = avatarHistory.value[0]
+    
+    if (previousAvatar.startsWith('https://api.dicebear.com')) {
+      avatarMode.value = 'dicebear'
+      dicebearPreviewUrl.value = previousAvatar
+      // 简单解析 URL 恢复部分配置 (可选)
+    } else {
+      avatarMode.value = 'upload'
+      cropData.image = previousAvatar
+      nextTick(() => initCropper())
+    }
+  }
+}
+
+// 更新 DiceBear 预览 URL (带防抖)
+const updateDicebearPreview = () => {
+  if (dicebearTimer) clearTimeout(dicebearTimer)
+  
+  dicebearTimer = setTimeout(() => {
+    const { style, seed, backgroundColor, radius, flip } = dicebearConfig
+    // 确保颜色值不包含 #
+    const cleanColor = backgroundColor?.replace('#', '') || 'b6e3f4'
+    const newUrl = `https://api.dicebear.com/7.x/${style}/svg?seed=${seed}&backgroundColor=${cleanColor}&radius=${radius}${flip ? '&flip=true' : ''}`
+    
+    // 如果预览图变化了，才更新并记录历史
+    if (dicebearPreviewUrl.value !== newUrl) {
+      dicebearPreviewUrl.value = newUrl
+      // 预览时也记录历史，方便撤销
+      addToHistory(newUrl)
+    }
+  }, 300) // 300ms 防抖
+}
+
+// 监听配置变化实时预览
+watch(dicebearConfig, () => {
+  updateDicebearPreview()
+}, { deep: true })
+
+/**
+ * 解析 DiceBear URL 并更新配置
+ * @param url DiceBear URL
+ */
+const parseDicebearUrl = (url: string) => {
+  if (!url || !url.includes('api.dicebear.com')) return
+  
+  try {
+    const urlObj = new URL(url)
+    const pathParts = urlObj.pathname.split('/')
+    // 路径格式通常为 /7.x/{style}/svg
+    const style = pathParts[2]
+    
+    if (style) {
+      dicebearConfig.style = style
+    }
+    
+    const params = urlObj.searchParams
+    if (params.get('seed')) {
+      dicebearConfig.seed = params.get('seed') || ''
+    }
+    
+    const bg = params.get('backgroundColor')
+    if (bg) {
+      dicebearConfig.backgroundColor = bg.startsWith('#') ? bg : `#${bg}`
+    }
+    
+    const radius = params.get('radius')
+    if (radius) {
+      dicebearConfig.radius = parseInt(radius, 10)
+    }
+    
+    const flip = params.get('flip')
+    if (flip) {
+      dicebearConfig.flip = flip === 'true'
+    } else {
+      dicebearConfig.flip = false
+    }
+    
+    // 更新预览
+    updateDicebearPreview()
+  } catch (error) {
+    console.error('解析 DiceBear URL 失败:', error)
+  }
+}
+
+watch(showAvatarDialog, (val) => {
+  if (val) {
+    // 弹窗打开时，尝试从当前头像恢复 DiceBear 配置
+    if (personalForm.avatar && personalForm.avatar.includes('api.dicebear.com')) {
+      parseDicebearUrl(personalForm.avatar)
+      avatarMode.value = 'dicebear'
+    }
+  }
+})
+
+// 裁剪并上传
+const handleCropAndUpload = async () => {
+  // 取消更换头像的安全验证 (Rule: 更换头像不需要安全验证)
+  await performAvatarUpload()
+}
+
+// 执行头像上传的实际操作
+const performAvatarUpload = async () => {
+  if (avatarMode.value === 'dicebear') {
+    try {
+      avatarUploading.value = true
+      // 直接将 DiceBear URL 发送给后端保存
+      // 这样后期可以解析并再次更改背景颜色、圆角等参数 (Rule: 不更改已经设定图像，即保持 seed/style)
+      const response = await updateUser({ avatar: dicebearPreviewUrl.value })
+      
+      if (response.success) {
+        updateAvatarUrl(response.data)
+        showAvatarDialog.value = false
+        ElMessage.success('卡通头像设置成功')
+      } else {
+        ElMessage.error(response.message || '设置头像失败')
+      }
+    } catch (error) {
+      ElMessage.error('设置并保存头像失败')
+    } finally {
+      avatarUploading.value = false
+    }
+  } else {
+    if (!cropper) return
+    
+    cropper.getCroppedCanvas({
+      width: 400,
+      height: 400,
+      imageSmoothingEnabled: true,
+      imageSmoothingQuality: 'high'
+    }).toBlob(async (blob) => {
+      if (!blob) return
+      
+      try {
+        avatarUploading.value = true
+        const file = new File([blob], `avatar_${Date.now()}.png`, { type: 'image/png' })
+        const response = await uploadAvatarAPI(file)
+        
+        if (response.success) {
+          updateAvatarUrl(response.data)
+          showAvatarDialog.value = false
+          ElMessage.success('头像裁剪上传成功')
+        } else {
+          ElMessage.error(response.message || '上传失败')
+        }
+      } catch (error) {
+        ElMessage.error('头像上传出错')
+      } finally {
+        avatarUploading.value = false
+      }
+    }, 'image/png')
+  }
+}
+
+// 处理二次验证成功
+const handleSecurityVerificationSuccess = async (result: boolean): Promise<void> => {
+  if (result) {
+    ElMessage.success('身份验证成功')
+    showSecurityVerification.value = false
+    // 只有个人信息保存才需要安全验证 (头像更换已取消验证)
+    await performSavePersonalInfo()
+  } else {
+    ElMessage.error('身份验证失败，请重新输入')
+  }
+}
+
+// 定义 emit
+const emit = defineEmits(['refresh'])
+
+// 关键位置打印日志方便控制台查看日志调试
+console.log('[PersonalInfo] 组件初始化')
+
+// 设置头像URL的辅助函数
+const updateAvatarUrl = (userData: any): void => {
+  console.log('[PersonalInfo] 更新头像URL, 数据:', userData)
+  avatarLoadError.value = false
+  
+  // 统一通过 getUserAvatar 获取头像，它会自动处理：
+  // 1. 完整 URL
+  // 2. 相对路径拼接后端地址
+  // 3. 为空时返回基于用户信息的 DiceBear 默认头像
+  const avatarPath = userData?.avatar || userData?.avatar_url
+  const fullUrl = getUserAvatar(
+    avatarPath, 
+    userData?.email, 
+    userData?.real_name || userData?.name || userData?.username
+  )
+  
+  avatarUrl.value = fullUrl
+  personalForm.avatar = fullUrl
+  
+  // 打印头像加载状态，辅助调试
+  console.log('[PersonalInfo] 最终头像URL:', fullUrl)
+  
+  if (userData.last_avatar_update_at || userData.lastModified) {
+    personalForm.lastAvatarUpdate = userData.last_avatar_update_at || userData.lastModified
+  }
+  
+  // 通知父组件刷新用户信息以保持侧边栏同步
+  emit('refresh')
+  // 通过事件总线通知全局头像更新
+  eventBus.emit('user-info-updated')
+}
+
+// 头像加载失败处理
+const handleAvatarError = (): void => {
+  console.warn('[PersonalInfo] 头像加载失败，标记错误状态')
+  avatarLoadError.value = true
+}
 
 // 表单验证规则
 const formRules: FormRules = {
@@ -548,6 +984,9 @@ const performSavePersonalInfo = async (): Promise<void> => {
     
     if (response.success && response.data) {
       ElMessage.success('个人信息保存成功')
+      
+      // 通知全局用户信息已更新，确保侧边栏和头像同步
+      eventBus.emit('user-info-updated')
     } else {
       ElMessage.error(response.message || '个人信息保存失败')
       return
@@ -568,19 +1007,6 @@ const performSavePersonalInfo = async (): Promise<void> => {
     await updateValidationStatus()
   } finally {
     saveLoading.value = false
-  }
-}
-
-// 处理安全验证成功
-const handleSecurityVerificationSuccess = async (result: boolean): Promise<void> => {
-  if (result) {
-    ElMessage.success('身份验证成功')
-    // 关闭安全验证对话框
-    showSecurityVerification.value = false
-    // 执行保存操作
-    await performSavePersonalInfo()
-  } else {
-    ElMessage.error('身份验证失败，请重新输入')
   }
 }
 
@@ -611,31 +1037,43 @@ const syncData = async (): Promise<void> => {
     // 调用真实API同步个人信息
     const response = await syncPersonalInfo()
     
+    // 关键位置打印日志方便控制台查看日志调试 (Rule 7)
+    console.log('[PersonalInfo] 同步数据响应:', response)
+    
     if (response.success && response.data) {
-      // 更新本地数据
-      const userData = response.data
-      Object.assign(personalForm, {
-        username: userData.name || 'user123',
-        realName: userData.name || '张三',
-        gender: 'male',
-        birthday: '1990-01-01',
-        phone: userData.phone || '13800138000',
-        email: userData.email || 'user@example.com',
-        bio: '这是我的个人简介，喜欢技术和生活。'
-      })
+      // 处理双层嵌套结构 (Rule 5)
+      const userData = (response.data as any).data || response.data
+      console.log('[PersonalInfo] 处理后的用户数据:', userData)
+      
+      // 更新本地数据，不要显示模拟数据 (Rule 6)
+      const personalData = {
+        username: userData.username || userData.name || '',
+        realName: userData.real_name || userData.name || '',
+        gender: userData.gender || 'secret',
+        birthday: userData.birthday || '',
+        phone: userData.phone || '',
+        email: userData.email || '',
+        bio: userData.bio || '',
+        avatar: userData.avatar || userData.avatar_url || '',
+        lastAvatarUpdate: userData.last_avatar_update_at || userData.updatedAt || ''
+      }
+      
+      Object.assign(personalForm, personalData)
+      Object.assign(originalPersonalForm, { ...personalData })
+      
+      // 设置头像URL
+      updateAvatarUrl(userData)
       
       // 设置验证状态
       phoneVerified.value = userData.phone_verified || false
       emailVerified.value = userData.email_verified || false
       
       // 设置隐私设置
-      Object.assign(privacySettings, {
-        showProfile: true,
-        showContact: false,
-        allowSearch: true
-      })
+      if (userData.privacy_settings || userData.privacySettings) {
+        Object.assign(privacySettings, userData.privacy_settings || userData.privacySettings)
+      }
       
-      console.log('个人信息加载完成:', personalForm)
+      console.log('[PersonalInfo] 个人信息同步完成:', personalForm)
       
       // 初始化验证状态
       await updateValidationStatus()
@@ -644,49 +1082,18 @@ const syncData = async (): Promise<void> => {
       addSyncHistory('manual', 'success', '数据同步成功')
       showSyncStatus('success', '同步成功', '个人信息已更新为最新数据')
     } else {
-      // 同步失败，使用默认数据
-      Object.assign(personalForm, {
-        username: 'user123',
-        realName: '张三',
-        gender: 'male',
-        birthday: '1990-01-01',
-        phone: '13800138000',
-        email: 'user@example.com',
-        bio: '这是我的个人简介，喜欢技术和生活。'
-      })
-      
-      phoneVerified.value = true
-      emailVerified.value = false
-      
-      Object.assign(privacySettings, {
-        showProfile: true,
-        showContact: false,
-        allowSearch: true
-      })
-      
-      await updateValidationStatus()
+      // 同步失败
       addSyncHistory('manual', 'failed', response.message || '数据同步失败')
-      showSyncStatus('error', '同步失败', response.message || '个人信息同步失败')
+      showSyncStatus('warning', '同步失败', response.message || '无法同步最新数据')
     }
-  } catch (error) {
-    // 同步数据失败日志已移除以优化性能
-    addSyncHistory('manual', 'failed', '数据同步失败')
-    showSyncStatus('error', '同步失败', '个人信息同步失败，请稍后重试')
+  } catch (error: any) {
+    console.error('[PersonalInfo] 数据同步出错:', error)
+    addSyncHistory('manual', 'failed', '服务器连接错误')
+    showSyncStatus('error', '同步失败', '服务器连接失败，请检查网络')
   } finally {
     syncLoading.value = false
   }
 }
-
-// 原始个人信息（用于比较是否有修改）
-const originalPersonalForm = reactive<PersonalForm>({
-  username: '',
-  realName: '',
-  gender: 'secret',
-  birthday: '',
-  phone: '',
-  email: '',
-  bio: ''
-})
 
 // 加载个人信息
 const loadPersonalInfo = async (): Promise<void> => {
@@ -696,151 +1103,83 @@ const loadPersonalInfo = async (): Promise<void> => {
     // 调用真实API获取个人信息
     const response = await syncPersonalInfo()
     
-    // 检查是否启用了数据加密
-    let personalData = {
-      username: 'user123',
-      realName: '张三',
-      gender: 'male',
-      birthday: '1990-01-01',
-      phone: '13800138000',
-      email: 'user@example.com',
-      bio: '这是我的个人简介，喜欢技术和生活。'
-    }
+    // 关键位置打印日志 (Rule 7)
+    console.log('[PersonalInfo] 获取个人信息结果:', response)
     
     // 如果API调用成功，使用返回的数据
     if (response.success && response.data) {
-      const userData = response.data as any // 使用any避免类型问题
-      personalData = {
-        username: userData.name || 'user123',
-        realName: userData.name || '张三',
-        gender: 'male',
-        birthday: '1990-01-01',
-        phone: userData.phone || '13800138000',
-        email: userData.email || 'user@example.com',
-        bio: '这是我的个人简介，喜欢技术和生活。'
+      // 处理双层嵌套结构 (Rule 5)
+      const userData = (response.data as any).data || response.data
+      
+      const personalData = {
+        username: userData.username || userData.name || '',
+        realName: userData.real_name || userData.name || '',
+        gender: userData.gender || 'secret',
+        birthday: userData.birthday || '',
+        phone: userData.phone || '',
+        email: userData.email || '',
+        bio: userData.bio || '',
+        avatar: userData.avatar || userData.avatar_url || '',
+        lastAvatarUpdate: userData.last_avatar_update_at || userData.updatedAt || ''
       }
       
+      // 设置表单数据
+      Object.assign(personalForm, personalData)
+      
+      // 保存原始数据副本
+      Object.assign(originalPersonalForm, { ...personalData })
+      
       // 设置头像URL
-      if (userData.avatar || userData.avatar_url) {
-        // 检查avatar_url是否已包含base64前缀，避免重复添加
-        const avatar = userData.avatar || userData.avatar_url
-        if (typeof avatar === 'string' && avatar.trim()) {
-          // 检查是否已包含完整的data:image前缀
-          if (avatar.startsWith('data:image')) {
-            avatarUrl.value = avatar
-          } 
-          // 检查是否只包含部分前缀（如 image/png;base64,）
-          else if (avatar.startsWith('image/')) {
-            // 补充data:前缀
-            avatarUrl.value = 'data:' + avatar
-          }
-          // HTTP/HTTPS URL
-          else if (avatar.startsWith('/') || avatar.startsWith('http')) {
-            avatarUrl.value = avatar
-          }
-          // 纯base64数据（不含任何前缀）
-          else if (/^[A-Za-z0-9+/=]+$/.test(avatar)) {
-            // 假设是PNG格式，添加完整前缀
-            avatarUrl.value = 'data:image/png;base64,' + avatar
-          }
-          // 其他情况使用默认头像
-          else {
-            console.warn('无法识别的头像格式:', avatar.substring(0, 50))
-            avatarUrl.value = 'https://picsum.photos/120/120'
-          }
-        } else {
-          avatarUrl.value = 'https://picsum.photos/120/120'
-        }
-      } else {
-        avatarUrl.value = 'https://picsum.photos/120/120'
-      }
+      updateAvatarUrl(userData)
       
       // 设置验证状态
       phoneVerified.value = userData.phone_verified || false
       emailVerified.value = userData.email_verified || false
-    } else {
-      // 使用默认头像
-      avatarUrl.value = 'https://picsum.photos/120/120'
-    }
-    
-    if (dataEncryptionManager.isEncryptionEnabled()) {
-      // 检查是否已有主密钥，如果没有则从存储中加载
-      if (!dataEncryptionManager.hasMasterKey()) {
-        // 设置主密钥（实际应用中应从安全存储获取）
-        const masterKey = localStorage.getItem('master_encryption_key') || 'default_master_key'
-        dataEncryptionManager.setMasterKey(masterKey)
+      
+      // 设置隐私设置 (如果有的话)
+      if (userData.privacy_settings) {
+        Object.assign(privacySettings, userData.privacy_settings)
+      } else {
+        // 默认设置
+        Object.assign(privacySettings, {
+          showProfile: true,
+          showContact: false,
+          allowSearch: true
+        })
       }
       
-      try {
-        // 尝试解密敏感信息
-        const encryptedPhone = localStorage.getItem('encrypted_user_phone')
-        const encryptedEmail = localStorage.getItem('encrypted_user_email')
-        const encryptedRealName = localStorage.getItem('encrypted_user_realname')
-        const encryptedBio = localStorage.getItem('encrypted_user_bio')
-        
-        if (encryptedPhone) {
-          personalData.phone = dataEncryptionManager.decryptField(encryptedPhone)
-        }
-        
-        if (encryptedEmail) {
-          personalData.email = dataEncryptionManager.decryptField(encryptedEmail)
-        }
-        
-        if (encryptedRealName) {
-          personalData.realName = dataEncryptionManager.decryptField(encryptedRealName)
-        }
-        
-        if (encryptedBio) {
-          personalData.bio = dataEncryptionManager.decryptField(encryptedBio)
-        }
-        
-        // 敏感信息已解密加载日志已移除以优化性能
-      } catch (error) {
-        // 解密个人信息失败日志已移除以优化性能
-        // 如果解密失败，使用原始值
-      }
+      showSyncStatus('success', '同步成功', '个人信息已从服务器同步')
+      addDataOperationHistory('sync', 'success', '从服务器同步信息成功')
+    } else {
+      // API 失败处理
+      avatarLoadError.value = true
+      showSyncStatus('warning', '加载失败', response.message || '无法从服务器获取最新信息')
+      addDataOperationHistory('sync', 'failed', response.message || '从服务器同步信息失败')
     }
-    
-    // 模拟数据
-    Object.assign(personalForm, personalData)
-    
-    // 保存原始数据副本
-    Object.assign(originalPersonalForm, personalForm)
-    
-    // 设置验证状态
-    const userData = response.data as any
-    phoneVerified.value = userData.phone_verified || false
-    emailVerified.value = userData.email_verified || false
-    
-    // 设置隐私设置
-    Object.assign(privacySettings, {
-      showProfile: true,
-      showContact: false,
-      allowSearch: true
-    })
-    
-    console.log('个人信息加载完成:', personalForm)
     
     // 初始化验证状态
     await updateValidationStatus()
     
-  } catch (error) {
-    // 加载个人信息失败日志已移除以优化性能
-    showSyncStatus('error', '加载失败', '个人信息加载失败')
+  } catch (error: any) {
+    console.error('[PersonalInfo] 加载个人信息出错:', error)
+    showSyncStatus('error', '加载失败', '服务器连接失败，请检查网络')
+    avatarLoadError.value = true
+    addDataOperationHistory('sync', 'failed', '服务器连接错误')
   }
 }
 
 // 头像上传前验证
 const beforeAvatarUpload = (file: File): boolean => {
-  const isImage = file.type.startsWith('image/')
-  const isLt2M = file.size / 1024 / 1024 < 2
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/webp', 'image/svg+xml']
+  const isAllowedType = allowedTypes.includes(file.type)
+  const isLt5M = file.size / 1024 / 1024 < 5
   
-  if (!isImage) {
-    ElMessage.error('只能上传图片文件!')
+  if (!isAllowedType) {
+    ElMessage.error('只能上传 JPG、PNG、GIF、WebP 或 SVG 格式的图片!')
     return false
   }
-  if (!isLt2M) {
-    ElMessage.error('头像大小不能超过 2MB!')
+  if (!isLt5M) {
+    ElMessage.error('头像图片大小不能超过 5MB!')
     return false
   }
   return true
@@ -852,6 +1191,9 @@ const handleAvatarChange = (uploadFile: UploadFile): void => {
   
   if (!beforeAvatarUpload(uploadFile.raw)) return
   
+  // 保存原始文件对象用于上传
+  cropData.file = uploadFile.raw
+  
   // 创建本地预览URL
   const imageUrl = URL.createObjectURL(uploadFile.raw)
   cropData.image = imageUrl
@@ -862,89 +1204,55 @@ const handleAvatarChange = (uploadFile: UploadFile): void => {
   })
 }
 
-// 个人信息表单接口定义
-interface PersonalForm {
-  username: string
-  realName: string
-  gender: 'male' | 'female' | 'secret'
-  birthday: string
-  phone: string
-  email: string
-  bio: string
-}
-
-// 隐私设置接口定义
-interface PrivacySettings {
-  showProfile: boolean
-  showContact: boolean
-  allowSearch: boolean
-}
-
-// 同步历史接口定义
-interface SyncHistoryItem {
-  time: string
-  type: 'manual' | 'auto'
-  status: 'success' | 'failed'
-  message: string
-}
-
-// 验证状态接口定义
-interface VerifyDialogState {
-  title: string
-  type: 'phone' | 'email'
-}
-
 // 初始化裁剪器
+let cropper: Cropper | null = null
 const initCropper = (): void => {
   if (!cropImageRef.value) return
   
-  // 这里使用简单的裁剪实现，实际项目中可以使用 cropper.js 等库
-  // 初始化头像裁剪器日志已移除以优化性能
+  if (cropper) {
+    cropper.destroy()
+  }
   
-  // 创建预览
-  cropData.preview = cropData.image
+  cropper = new Cropper(cropImageRef.value, {
+    aspectRatio: 1,
+    viewMode: 1,
+    dragMode: 'move',
+    autoCropArea: 0.8,
+    restore: false,
+    guides: true,
+    center: true,
+    highlight: false,
+    cropBoxMovable: true,
+    cropBoxResizable: true,
+    toggleDragModeOnDblclick: false,
+  })
+}
+
+// 旋转图片
+const rotateImage = (degree: number) => {
+  if (cropper) {
+    cropper.rotate(degree)
+  }
+}
+
+// 缩放图片
+const zoomImage = (ratio: number) => {
+  if (cropper) {
+    cropper.zoom(ratio)
+  }
 }
 
 // 重置头像裁剪
 const resetAvatarCrop = (): void => {
+  if (cropper) {
+    cropper.destroy()
+    cropper = null
+  }
   cropData.image = ''
-  cropData.preview = ''
+  cropData.file = null
 }
 
-// 上传头像
-const uploadAvatar = async (): Promise<void> => {
-  if (!cropData.image) {
-    ElMessage.error('请先选择图片')
-    return
-  }
-  
-  avatarUploading.value = true
-  avatarUploadStatus.visible = true
-  avatarUploadStatus.percentage = 0
-  avatarUploadStatus.status = 'success'
-  
-  try {
-    // 模拟上传进度
-    for (let i = 0; i <= 100; i += 10) {
-      avatarUploadStatus.percentage = i
-      await new Promise(resolve => setTimeout(resolve, 100))
-    }
-    
-    // 模拟上传成功
-    avatarUrl.value = cropData.image
-    showAvatarDialog.value = false
-    ElMessage.success('头像上传成功')
-    addDataOperationHistory('avatar_upload', 'success', '头像上传成功')
-  } catch (error) {
-    console.error('头像上传失败:', error)
-    avatarUploadStatus.status = 'exception'
-    ElMessage.error('头像上传失败，请检查网络连接或稍后重试')
-    addDataOperationHistory('avatar_upload', 'failed', '头像上传失败')
-  } finally {
-    avatarUploading.value = false
-  }
-}
-
+// 个人信息表单接口定义
 // 处理手机验证
 const handlePhoneVerify = () => {
   if (phoneVerified.value) {
@@ -1054,9 +1362,39 @@ const importPersonalData = (): void => {
       type: 'warning'
     }
   ).then(() => {
-    // 这里应该实现实际的导入逻辑
-    ElMessage.info('导入功能占位符')
-    addDataOperationHistory('import', 'success', '开始导入数据')
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json'
+    input.onchange = (e: any) => {
+      const file = e.target.files[0]
+      if (!file) return
+      
+      const reader = new FileReader()
+      reader.onload = (event: any) => {
+        try {
+          const data = JSON.parse(event.target.result)
+          if (data.personalInfo) {
+            Object.assign(personalForm, data.personalInfo)
+            if (data.privacySettings) {
+              Object.assign(privacySettings, data.privacySettings)
+            }
+            if (data.verifiedStatus) {
+              phoneVerified.value = data.verifiedStatus.phone || false
+              emailVerified.value = data.verifiedStatus.email || false
+            }
+            ElMessage.success('个人信息导入成功')
+            addDataOperationHistory('import', 'success', '个人信息导入成功')
+            hasUnsavedChanges.value = true
+          } else {
+            ElMessage.error('无效的备份文件格式')
+          }
+        } catch (error) {
+          ElMessage.error('解析备份文件失败')
+        }
+      }
+      reader.readAsText(file)
+    }
+    input.click()
   }).catch(() => {
     // 用户取消操作
   })
@@ -1108,9 +1446,39 @@ const restoreDataBackup = (): void => {
       type: 'warning'
     }
   ).then(() => {
-    // 这里应该实现实际的恢复逻辑
-    ElMessage.info('恢复备份功能占位符')
-    addDataOperationHistory('backup_restore', 'success', '开始恢复数据备份')
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json'
+    input.onchange = (e: any) => {
+      const file = e.target.files[0]
+      if (!file) return
+      
+      const reader = new FileReader()
+      reader.onload = (event: any) => {
+        try {
+          const data = JSON.parse(event.target.result)
+          if (data.personalInfo && data.backupTime) {
+            Object.assign(personalForm, data.personalInfo)
+            if (data.privacySettings) {
+              Object.assign(privacySettings, data.privacySettings)
+            }
+            if (data.verifiedStatus) {
+              phoneVerified.value = data.verifiedStatus.phone || false
+              emailVerified.value = data.verifiedStatus.email || false
+            }
+            ElMessage.success(`备份恢复成功 (备份时间: ${new Date(data.backupTime).toLocaleString()})`)
+            addDataOperationHistory('backup_restore', 'success', '备份恢复成功')
+            hasUnsavedChanges.value = true
+          } else {
+            ElMessage.error('无效的备份文件格式')
+          }
+        } catch (error) {
+          ElMessage.error('解析备份文件失败')
+        }
+      }
+      reader.readAsText(file)
+    }
+    input.click()
   }).catch(() => {
     // 用户取消操作
   })
@@ -1186,6 +1554,7 @@ const updateValidationStatus = async (): Promise<void> => {
 // 组件挂载时加载个人信息
 onMounted(() => {
   loadPersonalInfo()
+  updateDicebearPreview()
 })
 
 // 组件卸载前清理
@@ -1291,67 +1660,78 @@ onBeforeRouteLeave((_to, _from, next) => {
   margin-top: 4px;
 }
 
-/* 主要内容区域 */
+/* 内容布局 */
 .info-content {
   display: flex;
+  justify-content: center;
   gap: 40px;
-  align-items: flex-start;
-}
-
-/* 头像区域 */
-.avatar-section {
-  flex-shrink: 0;
-  text-align: center;
-}
-
-.avatar-container {
-  position: relative;
-  display: inline-block;
-}
-
-.user-avatar {
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 3px solid #e4e7ed;
-  transition: border-color 0.3s;
-}
-
-.user-avatar:hover {
-  border-color: #409eff;
-}
-
-.avatar-overlay {
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.7);
-  padding: 5px 10px;
-  border-radius: 15px;
-  opacity: 0;
-  transition: opacity 0.3s;
-}
-
-.avatar-container:hover .avatar-overlay {
-  opacity: 1;
-}
-
-.avatar-status {
-  margin-top: 10px;
+  margin-top: 30px;
 }
 
 /* 表单区域 */
 .info-form-section {
   flex: 1;
-  max-width: 500px;
+  max-width: 800px;
 }
 
 .personal-form {
   background: #f5f7fa;
-  padding: 20px;
-  border-radius: 8px;
+  padding: 30px;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+}
+
+.current-avatar-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.avatar-wrapper {
+  position: relative;
+  width: 100px;
+  height: 100px;
+}
+
+.current-avatar-img {
+  width: 100px;
+  height: 100px;
+  border: 1px solid #dcdfe6;
+  background-color: #fff;
+  transition: border-radius 0.3s ease; /* 添加平滑过渡效果 */
+}
+
+.avatar-error {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  background-color: #f5f7fa; /* 使用中性浅灰色 */
+  color: #909399;
+  font-size: 24px;
+}
+
+/* 强制覆盖可能的默认红色背景 */
+:deep(.el-avatar), :deep(.el-image) {
+  background-color: #f5f7fa !important;
+}
+
+.avatar-info {
+  font-size: 12px;
+  color: #909399;
+}
+
+.avatar-status-form {
+  margin-top: 15px;
+  width: 100%;
+}
+
+.avatar-status-form .status-text {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+  display: block;
 }
 
 /* 验证按钮样式 */
@@ -1377,73 +1757,246 @@ onBeforeRouteLeave((_to, _from, next) => {
 }
 
 /* 头像上传对话框 */
-.avatar-crop-content {
-  padding: 20px 0;
+.avatar-dialog-content {
+  padding: 10px 0;
+}
+
+.avatar-tabs {
+  margin-bottom: 20px;
+}
+
+.upload-section, .dicebear-section {
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
 }
 
 .avatar-upload-area {
-  text-align: center;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed #dcdfe6;
+  border-radius: 8px;
+  padding: 40px;
+  transition: all 0.3s;
+}
+
+.avatar-upload-area:hover {
+  border-color: #409eff;
+  background-color: #f5f7fa;
 }
 
 .upload-trigger {
-  border: 2px dashed #d9d9d9;
-  border-radius: 8px;
-  padding: 40px;
+  text-align: center;
   cursor: pointer;
-  transition: border-color 0.3s;
-}
-
-.upload-trigger:hover {
-  border-color: #409eff;
 }
 
 .upload-icon {
-  color: #8c939d;
-  margin-bottom: 10px;
+  font-size: 48px;
+  color: #909399;
+  margin-bottom: 16px;
 }
 
 .upload-tip {
-  color: #8c939d;
   font-size: 12px;
-  margin-top: 5px;
+  color: #909399;
+  margin-top: 8px;
 }
 
-.avatar-crop-area {
+.avatar-edit-area {
   display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 20px;
 }
 
-.crop-container {
-  flex: 1;
-  border: 1px solid #e4e7ed;
+.cropper-wrapper {
+  width: 100%;
+  height: 400px;
+  background-color: #f8f9fa;
   border-radius: 4px;
   overflow: hidden;
 }
 
-.crop-container img {
-  width: 100%;
-  height: auto;
-  display: block;
+.cropper-controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
-.crop-preview {
-  width: 120px;
-  text-align: center;
+.dicebear-main {
+  display: flex;
+  gap: 30px;
+  margin-bottom: 30px;
 }
 
-.preview-circle {
+.dicebear-preview {
+  width: 200px;
+  height: 200px;
+  background-color: #f8f9fa;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  padding: 20px;
+  border: 1px solid #ebeef5;
+}
+
+.dicebear-preview img {
   width: 120px;
   height: 120px;
-  border-radius: 50%;
-  overflow: hidden;
-  border: 2px solid #e4e7ed;
-  margin-bottom: 10px;
+  border: 1px solid #ebeef5;
+  background-color: #fff;
+  transition: border-radius 0.3s ease;
 }
 
-.preview-circle img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.style-item img {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #f0f2f5;
+  background-color: #fff;
+  transition: border-radius 0.3s ease;
+}
+
+.dicebear-styles {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  max-height: 250px;
+  overflow-y: auto;
+  padding-right: 10px;
+}
+
+.style-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+/* 移动端适配 */
+@media screen and (max-width: 768px) {
+  .personal-info {
+    padding: 15px;
+  }
+  
+  .info-content {
+    flex-direction: column;
+    gap: 20px;
+  }
+  
+  .personal-form {
+    padding: 15px;
+  }
+  
+  .current-avatar-container {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  
+  .avatar-info-group {
+    align-items: center;
+  }
+  
+  .change-avatar-btn {
+    align-self: center;
+  }
+  
+  .dicebear-main {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .dicebear-styles {
+    grid-template-columns: repeat(3, 1fr);
+    max-height: none;
+  }
+  
+  .cropper-wrapper {
+    height: 300px;
+  }
+  
+  .avatar-dialog {
+    width: 95% !important;
+  }
+
+  .input-with-verify {
+    flex-direction: row; /* 保持一行，或者在极小屏幕下再切换 */
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .input-with-verify {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .verify-input-group {
+    flex-direction: column;
+  }
+  
+  .el-form-item {
+    margin-bottom: 15px;
+  }
+  
+  .el-button-group {
+    display: flex;
+    width: 100%;
+  }
+  
+  .el-button-group .el-button {
+    flex: 1;
+  }
+}
+
+.style-item:hover {
+  background-color: #f5f7fa;
+}
+
+.style-item.active {
+  border-color: #409eff;
+  background-color: #ecf5ff;
+}
+
+.style-item img {
+  width: 40px;
+  height: 40px;
+}
+
+.style-item span {
+  font-size: 12px;
+  color: #606266;
+}
+
+.dicebear-controls {
+  background-color: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+}
+
+.avatar-dialog-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid #ebeef5;
+}
+
+.main-actions {
+  display: flex;
+  gap: 12px;
 }
 
 /* 验证对话框 */
@@ -1506,7 +2059,8 @@ onBeforeRouteLeave((_to, _from, next) => {
     font-size: 20px;
   }
   
-  .user-avatar {
+  .user-avatar,
+  .user-avatar-fallback {
     width: 100px;
     height: 100px;
   }

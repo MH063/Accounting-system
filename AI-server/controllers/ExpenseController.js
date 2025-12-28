@@ -5,13 +5,11 @@
 
 const BaseController = require('./BaseController');
 const { query } = require('../config/database');
+const { successResponse, errorResponse } = require('../middleware/response');
 
 class ExpenseController extends BaseController {
   constructor() {
     super();
-    // 确保方法正确绑定到类实例
-    this.updateBudgetWithExpense = this.updateBudgetWithExpense.bind(this);
-    this.removeExpenseFromBudget = this.removeExpenseFromBudget.bind(this);
   }
   
   /**
@@ -206,7 +204,7 @@ class ExpenseController extends BaseController {
           maxExpenseCategory: maxExpenseCategory
         },
         trendData: trendResult.rows.map(row => ({
-          date: row.date.toISOString().split('T')[0],
+          date: row.date ? (typeof row.date === 'object' && row.date.toISOString ? row.date.toISOString().split('T')[0] : row.date.toString()) : null,
           amount: parseFloat(row.total || 0)
         })),
         categoryData: categoryResult.rows.map(row => ({
@@ -220,13 +218,13 @@ class ExpenseController extends BaseController {
           count: parseInt(row.count || 0)
         })),
         timeData: timePeriodResult.rows.map(row => ({
-          period: row.date.toISOString().split('T')[0],
+          period: row.date ? (typeof row.date === 'object' && row.date.toISOString ? row.date.toISOString().split('T')[0] : row.date.toString()) : null,
           amount: parseFloat(row.amount || 0),
           count: parseInt(row.count || 0)
         })),
         detailData: detailResult.rows.map(row => ({
           id: row.id,
-          date: row.date.toISOString().split('T')[0],
+          date: row.date ? (typeof row.date === 'object' && row.date.toISOString ? row.date.toISOString().split('T')[0] : row.date.toString()) : null,
           category: row.category,
           description: row.description,
           amount: parseFloat(row.amount || 0),
@@ -236,11 +234,7 @@ class ExpenseController extends BaseController {
         total: parseInt(totalStats.totalcount || 0)
       };
       
-      return res.json({
-        success: true,
-        message: '获取费用统计数据成功',
-        data: statistics
-      });
+      return successResponse(res, statistics, '获取费用统计数据成功');
     } catch (error) {
       console.error('获取费用统计数据失败:', error);
       next(error);
@@ -258,10 +252,7 @@ class ExpenseController extends BaseController {
       
       // 验证必填字段
       if (!id) {
-        return res.status(400).json({
-          success: false,
-          message: '缺少费用ID'
-        });
+        return errorResponse(res, '缺少费用ID', 400);
       }
       
       // 先检查费用是否存在
@@ -275,10 +266,7 @@ class ExpenseController extends BaseController {
       const checkResult = await query(checkSql, [id]);
       
       if (checkResult.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: '费用不存在'
-        });
+        return errorResponse(res, '费用不存在', 404);
       }
       
       const expense = checkResult.rows[0];
@@ -307,15 +295,11 @@ class ExpenseController extends BaseController {
         // 继续执行，不中断主流程
       }
       
-      return res.json({
-        success: true,
-        message: '费用提醒发送成功',
-        data: {
-          expenseId: id,
-          method: method,
-          reminderId: reminderResult?.rows[0]?.id || null
-        }
-      });
+      return successResponse(res, {
+        expenseId: id,
+        method: method,
+        reminderId: reminderResult?.rows[0]?.id || null
+      }, '费用提醒发送成功');
     } catch (error) {
       console.error('发送费用提醒失败:', error);
       next(error);
@@ -333,10 +317,7 @@ class ExpenseController extends BaseController {
       
       // 验证必填字段
       if (!id) {
-        return res.status(400).json({
-          success: false,
-          message: '缺少费用ID'
-        });
+        return errorResponse(res, '缺少费用ID', 400);
       }
       
       // 先检查费用是否存在
@@ -344,10 +325,7 @@ class ExpenseController extends BaseController {
       const checkResult = await query(checkSql, [id]);
       
       if (checkResult.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: '费用不存在'
-        });
+        return errorResponse(res, '费用不存在', 404);
       }
       
       // 准备更新数据
@@ -385,10 +363,7 @@ class ExpenseController extends BaseController {
         );
         
         if (categoryQuery.rows.length === 0) {
-          return res.status(400).json({
-            success: false,
-            message: '无效的费用类别'
-          });
+          return errorResponse(res, '无效的费用类别', 400);
         }
         
         updateSql += `, category_id = $${paramIndex}`;
@@ -410,10 +385,7 @@ class ExpenseController extends BaseController {
       const updateResult = await query(updateSql, updateParams);
       
       if (updateResult.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: '费用更新失败'
-        });
+        return errorResponse(res, '费用更新失败', 404);
       }
       
       // 查询更新后的费用详情
@@ -442,11 +414,7 @@ class ExpenseController extends BaseController {
         updatedAt: row.updatedAt ? (typeof row.updatedAt === 'object' && row.updatedAt.toISOString ? row.updatedAt.toISOString() : row.updatedAt.toString()) : null
       };
       
-      return res.json({
-        success: true,
-        message: '费用更新成功',
-        data: processedRow
-      });
+      return successResponse(res, processedRow, '费用更新成功');
     } catch (error) {
       console.error('更新费用失败:', error);
       next(error);
@@ -543,8 +511,7 @@ class ExpenseController extends BaseController {
       });
       
       // 返回结果
-      return res.json({
-        success: true,
+      return successResponse(res, {
         data: processedRows, // 直接返回数组
         list: processedRows, // 兼容性字段
         items: processedRows, // 兼容性字段
@@ -555,7 +522,7 @@ class ExpenseController extends BaseController {
           overdue: processedRows.filter(row => row.status === 'overdue').length,
           totalAmount: processedRows.reduce((sum, row) => sum + parseFloat(row.amount), 0)
         }
-      });
+      }, '获取费用列表成功');
     } catch (error) {
       console.error('获取费用列表失败:', error);
       next(error);
@@ -586,10 +553,7 @@ class ExpenseController extends BaseController {
       const result = await query(sql, [id]);
       
       if (result.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: '费用不存在'
-        });
+        return errorResponse(res, '费用不存在', 404);
       }
       
       // 处理日期字段，确保它们被正确序列化为字符串
@@ -601,10 +565,7 @@ class ExpenseController extends BaseController {
         createdAt: row.createdAt ? (typeof row.createdAt === 'object' && row.createdAt.toISOString ? row.createdAt.toISOString() : row.createdAt.toString()) : null
       };
       
-      return res.json({
-        success: true,
-        data: processedRow
-      });
+      return successResponse(res, processedRow, '费用创建成功');
     } catch (error) {
       console.error('获取费用详情失败:', error);
       next(error);
@@ -621,10 +582,7 @@ class ExpenseController extends BaseController {
       
       // 验证必填字段
       if (!title || !amount || !category || !date) {
-        return res.status(400).json({
-          success: false,
-          message: '缺少必填字段'
-        });
+        return errorResponse(res, '缺少必填字段', 400);
       }
       
       // 先查询费用类别ID（支持类别名称或类别代码）
@@ -634,10 +592,7 @@ class ExpenseController extends BaseController {
       );
       
       if (categoryQuery.rows.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: '无效的费用类别'
-        });
+        return errorResponse(res, '无效的费用类别', 400);
       }
       
       const categoryId = categoryQuery.rows[0].id;
@@ -652,10 +607,7 @@ class ExpenseController extends BaseController {
       );
       
       if (dormQuery.rows.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: '用户未加入任何宿舍'
-        });
+        return errorResponse(res, '用户未加入任何宿舍', 400);
       }
       
       const dormId = dormQuery.rows[0].dorm_id;
@@ -695,10 +647,7 @@ class ExpenseController extends BaseController {
         createdAt: row.createdAt ? (typeof row.createdAt === 'object' && row.createdAt.toISOString ? row.createdAt.toISOString() : row.createdAt.toString()) : null
       };
       
-      return res.json({
-        success: true,
-        data: processedRow
-      });
+      return successResponse(res, processedRow, '费用创建成功');
     } catch (error) {
       console.error('创建费用失败:', error);
       next(error);
@@ -716,10 +665,7 @@ class ExpenseController extends BaseController {
       
       // 验证状态
       if (!status || !['approved', 'rejected'].includes(status)) {
-        return res.status(400).json({
-          success: false,
-          message: '无效的审核状态'
-        });
+        return errorResponse(res, '无效的审核状态', 400);
       }
       
       // 首先获取费用详情，用于后续预算更新
@@ -731,10 +677,7 @@ class ExpenseController extends BaseController {
       const expenseResult = await query(expenseSql, [id]);
       
       if (expenseResult.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: '费用不存在'
-        });
+        return errorResponse(res, '费用不存在', 404);
       }
       
       const expense = expenseResult.rows[0];
@@ -756,10 +699,7 @@ class ExpenseController extends BaseController {
       const result = await query(updateSql, [status, reviewerId, comment, id]);
       
       if (result.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: '费用不存在'
-        });
+        return errorResponse(res, '费用不存在', 404);
       }
       
       // 如果费用被批准，需要更新相关预算
@@ -790,10 +730,7 @@ class ExpenseController extends BaseController {
         reviewDate: row.reviewDate ? (typeof row.reviewDate === 'object' && row.reviewDate.toISOString ? row.reviewDate.toISOString() : row.reviewDate.toString()) : null
       };
       
-      return res.json({
-        success: true,
-        data: processedRow
-      });
+      return successResponse(res, processedRow, '费用审核成功');
     } catch (error) {
       console.error('审核费用失败:', error);
       next(error);
@@ -811,10 +748,7 @@ class ExpenseController extends BaseController {
       
       // 验证支付方式
       if (!paymentMethod) {
-        return res.status(400).json({
-          success: false,
-          message: '缺少支付方式'
-        });
+        return errorResponse(res, '缺少支付方式', 400);
       }
       
       const sql = `
@@ -830,16 +764,10 @@ class ExpenseController extends BaseController {
       const result = await query(sql, [paymentMethod, id]);
       
       if (result.rows.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: '费用不存在或状态不正确'
-        });
+        return errorResponse(res, '费用不存在或状态不正确', 400);
       }
       
-      return res.json({
-        success: true,
-        data: result.rows[0]
-      });
+      return successResponse(res, result.rows[0], '费用支付成功');
     } catch (error) {
       console.error('支付费用失败:', error);
       next(error);
@@ -858,16 +786,10 @@ class ExpenseController extends BaseController {
       const result = await query(sql, [id]);
       
       if (result.rowCount === 0) {
-        return res.status(404).json({
-          success: false,
-          message: '费用不存在'
-        });
+        return errorResponse(res, '费用不存在', 404);
       }
       
-      return res.json({
-        success: true,
-        message: '费用删除成功'
-      });
+      return successResponse(res, null, '费用删除成功');
     } catch (error) {
       console.error('删除费用失败:', error);
       next(error);
@@ -883,10 +805,7 @@ class ExpenseController extends BaseController {
       const { ids } = req.body;
       
       if (!Array.isArray(ids) || ids.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: '缺少有效的费用ID列表'
-        });
+        return errorResponse(res, '缺少有效的费用ID列表', 400);
       }
       
       // 首先获取这些费用的详细信息，用于后续预算更新
@@ -920,13 +839,10 @@ class ExpenseController extends BaseController {
         await this.updateBudgetWithExpense(expense.id, expense.amount, expense.applicant_id, expense.dorm_id);
       }
       
-      return res.json({
-        success: true,
-        data: {
-          affectedIds: result.rows.map(row => row.id),
-          message: `批量审核通过成功，共${result.rowCount}条记录`
-        }
-      });
+      return successResponse(res, {
+        affectedIds: result.rows.map(row => row.id),
+        message: `批量审核通过成功，共${result.rowCount}条记录`
+      }, '批量审核通过成功');
     } catch (error) {
       console.error('批量审核通过失败:', error);
       next(error);
@@ -942,10 +858,7 @@ class ExpenseController extends BaseController {
       const { ids, comment = '' } = req.body;
       
       if (!Array.isArray(ids) || ids.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: '缺少有效的费用ID列表'
-        });
+        return errorResponse(res, '缺少有效的费用ID列表', 400);
       }
       
       // 首先获取这些费用的详细信息，用于后续预算更新
@@ -979,13 +892,10 @@ class ExpenseController extends BaseController {
         await this.removeExpenseFromBudget(expense.id, expense.amount, expense.applicant_id, expense.dorm_id);
       }
       
-      return res.json({
-        success: true,
-        data: {
-          affectedIds: result.rows.map(row => row.id),
-          message: `批量拒绝成功，共${result.rowCount}条记录`
-        }
-      });
+      return successResponse(res, {
+        affectedIds: result.rows.map(row => row.id),
+        message: `批量拒绝成功，共${result.rowCount}条记录`
+      }, '批量拒绝成功');
     } catch (error) {
       console.error('批量拒绝失败:', error);
       next(error);
@@ -1001,22 +911,16 @@ class ExpenseController extends BaseController {
       const { ids } = req.body;
       
       if (!Array.isArray(ids) || ids.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: '缺少有效的费用ID列表'
-        });
+        return errorResponse(res, '缺少有效的费用ID列表', 400);
       }
       
       const sql = `DELETE FROM expenses WHERE id = ANY($1::int[]) RETURNING id`;
       const result = await query(sql, [ids]);
       
-      return res.json({
-        success: true,
-        data: {
-          affectedIds: result.rows.map(row => row.id),
-          message: `批量删除成功，共${result.rowCount}条记录`
-        }
-      });
+      return successResponse(res, {
+        affectedIds: result.rows.map(row => row.id),
+        message: `批量删除成功，共${result.rowCount}条记录`
+      }, '批量删除成功');
     } catch (error) {
       console.error('批量删除失败:', error);
       next(error);
@@ -1101,10 +1005,7 @@ class ExpenseController extends BaseController {
         res.send('\uFEFF' + csvContent); // 添加BOM解决中文乱码问题
       } else {
         // 其他格式暂时返回JSON数据
-        return res.json({
-          success: true,
-          data: result.rows
-        });
+        return successResponse(res, result.rows, '获取导出数据成功');
       }
     } catch (error) {
       console.error('导出费用数据失败:', error);
@@ -1125,28 +1026,19 @@ class ExpenseController extends BaseController {
       // 验证必填字段
       if (!title) {
         console.log('标题不能为空');
-        return res.status(400).json({
-          success: false,
-          message: '标题不能为空'
-        });
+        return errorResponse(res, '标题不能为空', 400);
       }
       
       if (!category) {
         console.log('类别不能为空');
-        return res.status(400).json({
-          success: false,
-          message: '类别不能为空'
-        });
+        return errorResponse(res, '类别不能为空', 400);
       }
       
       // 从认证中间件获取当前登录用户信息
       const currentUser = req.user;
       if (!currentUser || !currentUser.id) {
         console.log('用户未认证');
-        return res.status(401).json({
-          success: false,
-          message: '用户未认证，请先登录'
-        });
+        return errorResponse(res, '用户未认证，请先登录', 401);
       }
       
       const applicantId = currentUser.id;
@@ -1166,10 +1058,7 @@ class ExpenseController extends BaseController {
           dormId = userDormQuery.rows[0].dorm_id;
         } else {
           console.log('用户未加入任何宿舍');
-          return res.status(400).json({
-            success: false,
-            message: '用户未加入任何宿舍'
-          });
+          return errorResponse(res, '用户未加入任何宿舍', 400);
         }
       }
       console.log('使用的宿舍ID:', dormId);
@@ -1185,10 +1074,7 @@ class ExpenseController extends BaseController {
       
       if (categoryQuery.rows.length === 0) {
         console.log('无效的费用类别:', category);
-        return res.status(400).json({
-          success: false,
-          message: '无效的费用类别'
-        });
+        return errorResponse(res, '无效的费用类别', 400);
       }
       
       const categoryId = categoryQuery.rows[0].id;
@@ -1236,10 +1122,7 @@ class ExpenseController extends BaseController {
         applicant: applicantName
       };
       
-      return res.json({
-        success: true,
-        data: returnData
-      });
+      return successResponse(res, returnData, '保存草稿成功');
     } catch (error) {
       console.error('保存草稿失败:', error);
       // 更详细的错误信息

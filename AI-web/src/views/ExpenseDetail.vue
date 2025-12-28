@@ -224,7 +224,7 @@
           >
             <div class="participant-info">
               <div class="participant-avatar">
-                <el-avatar :size="40" :src="participant.avatar">
+                <el-avatar :size="40" :src="getUserAvatar(participant.avatar, '', participant.name)">
                   {{ participant.name?.charAt(0) }}
                 </el-avatar>
               </div>
@@ -336,7 +336,7 @@
           <!-- 添加评论输入框 -->
           <div class="comment-input-section">
             <div class="comment-input-header">
-              <el-avatar :size="32" :src="currentUser.avatar">
+              <el-avatar :size="32" :src="getUserAvatar(currentUser.avatar, '', currentUser.name)">
                 {{ currentUser.name?.charAt(0) }}
               </el-avatar>
               <span class="comment-user-name">{{ currentUser.name }}</span>
@@ -379,7 +379,7 @@
               :class="{ 'unread': !comment.read }"
             >
               <div class="comment-avatar">
-                <el-avatar :size="40" :src="comment.author.avatar">
+                <el-avatar :size="40" :src="getUserAvatar(comment.author.avatar, '', comment.author.name)">
                   {{ comment.author.name?.charAt(0) }}
                 </el-avatar>
               </div>
@@ -477,7 +477,7 @@
                       class="reply-item"
                     >
                       <div class="reply-avatar">
-                        <el-avatar :size="28" :src="reply.author.avatar">
+                        <el-avatar :size="28" :src="getUserAvatar(reply.author.avatar, '', reply.author.name)">
                           {{ reply.author.name?.charAt(0) }}
                         </el-avatar>
                       </div>
@@ -666,6 +666,7 @@ import {
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ExpenseItem, Participant, User as UserType } from '@/types'
 import { expenseService } from '@/services/expenseService'
+import { getFullAvatarUrl, getUserAvatar } from '@/services/userService'
 
 // 路由
 const route = useRoute()

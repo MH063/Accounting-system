@@ -46,10 +46,10 @@
             <div class="member-info">
               <el-avatar 
                 :size="40" 
-                :src="member.avatar || 'https://picsum.photos/40/40?random=' + member.id"
+                :src="getUserAvatar(member.avatar, '', member.name)"
                 class="member-avatar"
               >
-                {{ member.name.charAt(0) }}
+                <el-icon><User /></el-icon>
               </el-avatar>
               <div class="member-details">
                 <div class="member-name">{{ member.name }}</div>
@@ -157,10 +157,10 @@
                 <div class="avatar-container">
                   <el-avatar 
                     :size="50" 
-                    :src="member.avatar || 'https://picsum.photos/50/50?random=' + member.id"
+                    :src="getUserAvatar(member.avatar, '', member.name)"
                     class="member-avatar"
                   >
-                    {{ member.name.charAt(0) }}
+                    <el-icon><User /></el-icon>
                   </el-avatar>
                   <div class="online-badge" v-if="member.onlineStatus === 'online'">
                     <el-icon><CircleCheck /></el-icon>
@@ -316,9 +316,9 @@
         <div class="member-info">
           <el-avatar 
             :size="50" 
-            :src="selectedMemberForRoleUpdate.avatar || 'https://picsum.photos/50/50?random=' + selectedMemberForRoleUpdate.id"
+            :src="getUserAvatar(selectedMemberForRoleUpdate.avatar, '', selectedMemberForRoleUpdate.name)"
           >
-            {{ selectedMemberForRoleUpdate.name.charAt(0) }}
+            <el-icon><User /></el-icon>
           </el-avatar>
           <div class="member-details">
             <div class="member-name">{{ selectedMemberForRoleUpdate.name }}</div>
@@ -369,9 +369,9 @@
         <div class="member-info">
           <el-avatar 
             :size="50" 
-            :src="selectedMemberForStatusUpdate.avatar || 'https://picsum.photos/50/50?random=' + selectedMemberForStatusUpdate.id"
+            :src="getUserAvatar(selectedMemberForStatusUpdate.avatar, '', selectedMemberForStatusUpdate.name)"
           >
-            {{ selectedMemberForStatusUpdate.name.charAt(0) }}
+            <el-icon><User /></el-icon>
           </el-avatar>
           <div class="member-details">
             <div class="member-name">{{ selectedMemberForStatusUpdate.name }}</div>
@@ -463,7 +463,7 @@ import {
   Search, ArrowLeft, Refresh, CircleCheck, Clock, CircleClose, 
   House, View, ChatDotRound, Delete, Check, Close, User, Setting
 } from '@element-plus/icons-vue'
-import { getCurrentUser } from '@/services/userService'
+import { getCurrentUser, getDefaultAvatar, getFullAvatarUrl, getUserAvatar } from '@/services/userService'
 import dormService from '@/services/dormService'
 import memberService, { deleteDormMember } from '@/services/memberService'
 import type { UserInfo } from '@/services/userService'

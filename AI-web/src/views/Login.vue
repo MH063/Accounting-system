@@ -216,6 +216,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import authService from '@/services/authService'
 import authStorageService from '@/services/authStorageService'
 import loginValidator from '@/utils/loginValidator'
+import { useAutoLogout } from '@/composables/useAutoLogout'
 import { withLoading } from '@/utils/loadingUtils'
 import { handleApiError } from '@/utils/errorUtils'
 import { request } from '@/utils/request'
@@ -231,6 +232,9 @@ const smsLoginFormRef = ref<FormInstance>()
 // 加载状态
 const loading = ref(false)
 
+// 使用自动登出单例
+const { activate: activateAutoLogout } = useAutoLogout()
+
 // 登录模式（传统登录 vs 短信登录）
 const activeLoginMode = ref('traditional')
 
@@ -239,14 +243,19 @@ onMounted(() => {
   const authState = authStorageService.getAuthState()
   const reason = route.query.reason as string
 
-  if (authState.isAuthenticated && !route.query.redirect && !reason) {
-    console.log('[Login] 用户已认证，自动跳转到仪表盘')
-    router.push('/dashboard')
+  // 移除自动跳转逻辑，允许已登录用户访问登录页面（例如为了切换账号）
+  // 仅在明确有重定向要求时才进行跳转
+  if (authState.isAuthenticated && route.query.redirect) {
+    const redirectPath = decodeURIComponent(route.query.redirect as string)
+    console.log(`[Login] 用户已认证，跳转到目标页面: ${redirectPath}`)
+    router.push(redirectPath)
     return
   }
 
-  if (!authState.isAuthenticated) {
-    authStorageService.clearAuthData()
+  if (reason === 'session_expired') {
+    ElMessage.warning('会话已过期，请重新登录')
+  } else if (reason === 'not_authenticated') {
+    ElMessage.info('请先登录以访问该页面')
   }
 })
 
@@ -277,8 +286,8 @@ const rules = reactive<FormRules>({
           return
         }
         
-        // 使用增强的验证器
-        const validation = loginValidator.validateUsernameOrEmail(value)
+        // 使用增强的验证器，登录场景不显示强度警告
+        const validation = loginValidator.validateUsernameOrEmail(value, { isLogin: true })
         if (!validation.isValid) {
           callback(new Error(validation.errors[0]))
           return
@@ -303,8 +312,8 @@ const rules = reactive<FormRules>({
           return
         }
         
-        // 使用增强的验证器
-        const validation = loginValidator.validatePassword(value)
+        // 使用增强的验证器，登录场景不显示强度警告
+        const validation = loginValidator.validatePassword(value, { isLogin: true })
         if (!validation.isValid) {
           callback(new Error(validation.errors[0]))
           return
@@ -404,6 +413,9 @@ const handleLogin = async (): Promise<void> => {
           } else {
             ElMessage.success('登录成功！')
           }
+          
+          // 启动自动登出监控
+          activateAutoLogout(router)
           
           // 跳转到仪表盘
           router.push('/dashboard')
@@ -511,6 +523,9 @@ const handleSmsLogin = async (): Promise<void> => {
             
             // 显示登录成功信息
             ElMessage.success('登录成功！')
+            
+            // 启动自动登出监控
+            activateAutoLogout(router)
             
             // 跳转到仪表盘
             router.push('/dashboard')

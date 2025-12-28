@@ -4,7 +4,7 @@
  */
 
 const { KeyManagementService, computeDeviceFingerprint } = require('../services/keyManagementService');
-const { responseWrapper } = require('../middleware/response');
+const { responseWrapper, successResponse, errorResponse } = require('../middleware/response');
 const { asyncHandler } = require('../middleware/errorHandling');
 const { pool } = require('../config/database');
 
@@ -52,11 +52,7 @@ const generateMasterKey = responseWrapper(asyncHandler(async (req, res, next) =>
     await getKeyManagementService().registerHardwareBinding(userId, enrichedHardwareInfo);
   }
 
-  res.json({
-    success: true,
-    message: '主密钥生成成功',
-    data: result
-  });
+  return successResponse(res, result, '主密钥生成成功');
 }));
 
 /**
@@ -74,17 +70,9 @@ const verifyKey = responseWrapper(asyncHandler(async (req, res, next) => {
   });
 
   if (result.success) {
-    res.json({
-      success: true,
-      message: '密钥验证成功',
-      data: result
-    });
+    return successResponse(res, result, '密钥验证成功');
   } else {
-    res.status(401).json({
-      success: false,
-      message: '密钥验证失败',
-      error: result.error
-    });
+    return errorResponse(res, '密钥验证失败', 401, result.error);
   }
 }));
 
@@ -98,11 +86,11 @@ const rotateKey = responseWrapper(asyncHandler(async (req, res, next) => {
 
   const result = await getKeyManagementService().rotateKey(userId, reason || 'manual');
 
-  res.json({
-    success: true,
-    message: '密钥轮换成功',
-    data: result
-  });
+  if (result.success) {
+    return successResponse(res, result, '密钥轮换成功');
+  } else {
+    return errorResponse(res, '密钥轮换失败', 500, result.error);
+  }
 }));
 
 /**
@@ -124,23 +112,20 @@ const getKeyStatus = responseWrapper(asyncHandler(async (req, res, next) => {
   const activeKey = result.rows.find(r => r.status === 'active');
   const previousKey = result.rows.find(r => r.status === 'rotated');
 
-  res.json({
-    success: true,
-    data: {
-      hasActiveKey: !!activeKey,
-      currentKey: activeKey ? {
-        id: activeKey.id,
-        version: activeKey.key_version,
-        createdAt: activeKey.created_at,
-        lastUsedAt: activeKey.last_used_at,
-        rotationCount: activeKey.rotation_count
-      } : null,
-      previousKey: previousKey ? {
-        id: previousKey.id,
-        version: previousKey.key_version
-      } : null
-    }
-  });
+  return successResponse(res, {
+    hasActiveKey: !!activeKey,
+    currentKey: activeKey ? {
+      id: activeKey.id,
+      version: activeKey.key_version,
+      createdAt: activeKey.created_at,
+      lastUsedAt: activeKey.last_used_at,
+      rotationCount: activeKey.rotation_count
+    } : null,
+    previousKey: previousKey ? {
+      id: previousKey.id,
+      version: previousKey.key_version
+    } : null
+  }, '获取密钥状态成功');
 }));
 
 /**
@@ -157,11 +142,7 @@ const registerHardware = responseWrapper(asyncHandler(async (req, res, next) => 
     userAgent: req.headers['user-agent']
   });
 
-  res.json({
-    success: true,
-    message: result.isNewBinding ? '设备注册成功' : '设备已更新',
-    data: result
-  });
+  return successResponse(res, result, result.isNewBinding ? '设备注册成功' : '设备已更新');
 }));
 
 /**
@@ -175,17 +156,9 @@ const verifyHardware = responseWrapper(asyncHandler(async (req, res, next) => {
   const result = await getKeyManagementService().verifyHardwareBinding(userId, hardwareInfo);
 
   if (result.success) {
-    res.json({
-      success: true,
-      message: '设备验证成功',
-      data: result
-    });
+    return successResponse(res, result, '设备验证成功');
   } else {
-    res.status(401).json({
-      success: false,
-      message: result.message,
-      reason: result.reason
-    });
+    return errorResponse(res, result.message, 401, result.reason);
   }
 }));
 
@@ -198,20 +171,17 @@ const getTrustedDevices = responseWrapper(asyncHandler(async (req, res, next) =>
 
   const devices = await getKeyManagementService().getTrustedDevices(userId);
 
-  res.json({
-    success: true,
-    data: devices.map(d => ({
-      id: d.id,
-      deviceName: d.device_name,
-      browserInfo: d.browser_info,
-      screenInfo: d.screen_info,
-      timezone: d.timezone,
-      firstSeen: d.first_seen,
-      lastSeen: d.last_seen,
-      trustScore: d.trust_score,
-      isActive: d.is_active
-    }))
-  });
+  return successResponse(res, devices.map(d => ({
+    id: d.id,
+    deviceName: d.device_name,
+    browserInfo: d.browser_info,
+    screenInfo: d.screen_info,
+    timezone: d.timezone,
+    firstSeen: d.first_seen,
+    lastSeen: d.last_seen,
+    trustScore: d.trust_score,
+    isActive: d.is_active
+  })), '获取可信设备列表成功');
 }));
 
 /**
@@ -224,10 +194,29 @@ const revokeDevice = responseWrapper(asyncHandler(async (req, res, next) => {
 
   await getKeyManagementService().revokeDeviceBinding(userId, fingerprint);
 
-  res.json({
-    success: true,
-    message: '设备绑定已撤销'
-  });
+  return successResponse(res, null, '设备已从可信列表中移除');
+}));
+
+/**
+ * 获取主密钥详情 (敏感操作)
+ * GET /api/keys/master/detail
+ */
+const getMasterKeyDetail = responseWrapper(asyncHandler(async (req, res, next) => {
+  const userId = BigInt(req.user.id);
+
+  const result = await getKeyManagementService().getLatestMasterKey(userId);
+
+  if (result.success) {
+    return successResponse(res, {
+      keyId: result.keyId,
+      version: result.version,
+      createdAt: result.createdAt,
+      // 不返回实际密钥内容，仅返回元数据
+      keyType: 'AES-256-GCM'
+    }, '获取主密钥详情成功');
+  } else {
+    return errorResponse(res, '未找到主密钥', 404);
+  }
 }));
 
 /**
@@ -240,10 +229,7 @@ const getAuditLogs = responseWrapper(asyncHandler(async (req, res, next) => {
 
   const logs = await getKeyManagementService().getAuditLogs(userId, limit);
 
-  res.json({
-    success: true,
-    data: logs
-  });
+  return successResponse(res, logs, '获取审计日志成功');
 }));
 
 module.exports = {
@@ -256,5 +242,6 @@ module.exports = {
   verifyHardware,
   getTrustedDevices,
   revokeDevice,
+  getMasterKeyDetail,
   getAuditLogs
 };

@@ -47,8 +47,12 @@ export const getSecurityQuestionConfig = async (userId: string): Promise<Securit
     const response = await requestFn<SecurityQuestionResponse>('/security-questions/config', {
       method: 'GET'
     })
-    console.log('[SecurityQuestionService] 获取安全问题配置成功', response.data)
-    return response.data
+    
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = response.data?.data || response.data
+    
+    console.log('[SecurityQuestionService] 获取安全问题配置成功', actualData)
+    return actualData
   } catch (error) {
     console.error('[SecurityQuestionService] 获取安全问题配置失败:', error)
     throw error
@@ -66,8 +70,12 @@ export const getSecurityQuestionConfigForVerification = async (userId: string): 
     const response = await requestFn<SecurityQuestionConfig>('/security-questions/config-for-verification', {
       method: 'POST'
     })
-    console.log('[SecurityQuestionService] 获取安全问题配置用于验证成功', response.data)
-    return response.data
+    
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = response.data?.data || response.data
+    
+    console.log('[SecurityQuestionService] 获取安全问题配置用于验证成功', actualData)
+    return actualData
   } catch (error) {
     console.error('[SecurityQuestionService] 获取安全问题配置用于验证失败:', error)
     throw error
@@ -96,8 +104,12 @@ export const saveSecurityQuestionConfig = async (
         answer3: config.answer3
       }
     })
-    console.log('[SecurityQuestionService] 保存安全问题配置成功', response.data)
-    return response.data
+    
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = response.data?.data || response.data
+    
+    console.log('[SecurityQuestionService] 保存安全问题配置成功', actualData)
+    return actualData
   } catch (error) {
     console.error('[SecurityQuestionService] 保存安全问题配置失败:', error)
     throw error

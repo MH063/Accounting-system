@@ -66,38 +66,6 @@ export const createAuthGuard = (router: Router): void => {
         return
       }
 
-      if (authStorageService.isTokenExpired()) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[AuthGuard] 令牌已过期，尝试刷新')
-        }
-
-        try {
-          const refreshSuccess = await refreshAccessToken()
-
-          if (!refreshSuccess) {
-            if (process.env.NODE_ENV === 'development') {
-              console.log('[AuthGuard] 令牌刷新失败，重定向到登录页')
-            }
-            next({
-              path: config.redirectTo,
-              query: { redirect: to.fullPath, reason: 'token_expired' }
-            })
-            return
-          }
-
-          if (process.env.NODE_ENV === 'development') {
-            console.log('[AuthGuard] 令牌刷新成功')
-          }
-        } catch (error) {
-          console.error('[AuthGuard] 令牌刷新失败:', error)
-          next({
-            path: config.redirectTo,
-            query: { redirect: to.fullPath, reason: 'refresh_failed' }
-          })
-          return
-        }
-      }
-
       if (authStorageService.isSessionExpired()) {
         if (process.env.NODE_ENV === 'development') {
           console.log('[AuthGuard] 会话已过期，重定向到登录页')

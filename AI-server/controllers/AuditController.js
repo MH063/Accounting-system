@@ -8,6 +8,7 @@ const path = require('path');
 const BaseController = require('./BaseController');
 const logger = require('../config/logger');
 const { getAnomalyStats } = require('../security/anomalyDetector');
+const { successResponse, errorResponse } = require('../middleware/response');
 
 class AuditController extends BaseController {
   constructor() {
@@ -132,7 +133,7 @@ class AuditController extends BaseController {
         filters: req.query
       });
 
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         logs: filtered,
         totalRecords: filtered.length,
         filters: req.query
@@ -174,7 +175,7 @@ class AuditController extends BaseController {
         filters: req.query
       });
 
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         logs: filtered,
         totalRecords: filtered.length,
         filters: req.query
@@ -216,7 +217,7 @@ class AuditController extends BaseController {
         filters: req.query
       });
 
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         logs: filtered,
         totalRecords: filtered.length,
         filters: req.query
@@ -258,7 +259,7 @@ class AuditController extends BaseController {
         filters: req.query
       });
 
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         logs: filtered,
         totalRecords: filtered.length,
         filters: req.query
@@ -315,7 +316,7 @@ class AuditController extends BaseController {
         stats: Object.keys(stats).map(key => `${key}: ${stats[key].totalRecords || stats[key].length}`)
       });
 
-      return this.sendSuccess(res, stats);
+      return successResponse(res, stats);
 
     } catch (error) {
       logger.error('[AuditController] 获取审计统计失败:', error);
@@ -391,7 +392,7 @@ class AuditController extends BaseController {
         summary: report.summary
       });
 
-      return this.sendSuccess(res, report);
+      return successResponse(res, report);
 
     } catch (error) {
       logger.error('[AuditController] 生成审计报告失败:', error);

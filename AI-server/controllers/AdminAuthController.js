@@ -9,12 +9,19 @@ const AdminAuthService = require('../services/AdminAuthService');
 const logger = require('../config/logger');
 const { generateTokenPair, refreshAccessToken, revokeTokenPair } = require('../config/jwtManager');
 const { logSecurityEvent, SECURITY_EVENTS } = require('../middleware/securityAudit');
+const { successResponse, errorResponse } = require('../middleware/response');
 
 class AdminAuthController extends BaseController {
   constructor() {
     super();
     this.userService = new UserService();
     this.adminAuthService = new AdminAuthService();
+    
+    // 确保方法正确绑定到类实例
+    this.adminLogin = this.adminLogin.bind(this);
+    this.adminLogout = this.adminLogout.bind(this);
+    this.getAdminProfile = this.getAdminProfile.bind(this);
+    this.refreshAdminToken = this.refreshAdminToken.bind(this);
   }
 
   /**
@@ -74,7 +81,7 @@ class AdminAuthController extends BaseController {
         // 根据失败原因返回不同的状态码
         const statusCode = loginResult.message.includes('锁定') ? 423 : 
                           loginResult.message.includes('权限') ? 403 : 401;
-        return this.sendError(res, loginResult.message, statusCode);
+        return errorResponse(res, loginResult.message, statusCode);
       }
 
       // AdminAuthService返回的结构与UserService不同，需要适配
@@ -103,7 +110,7 @@ class AdminAuthController extends BaseController {
       });
 
       // 返回成功响应（包含双令牌和管理员信息）
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         user: {
           id: user.id,
           username: user.username,
@@ -166,7 +173,7 @@ class AdminAuthController extends BaseController {
 
       logger.auth('管理员登出成功', { userId });
 
-      return this.sendSuccess(res, null, '管理员登出成功');
+      return successResponse(res, null, '管理员登出成功');
 
     } catch (error) {
       logger.error('[AdminAuthController] 管理员登出失败', { error: error.message });
@@ -186,12 +193,12 @@ class AdminAuthController extends BaseController {
       const adminProfile = await this.userService.getAdminProfile(userId);
       
       if (!adminProfile) {
-        return this.sendError(res, '管理员信息不存在', 404);
+        return errorResponse(res, '管理员信息不存在', 404);
       }
 
       logger.info('[AdminAuthController] 获取管理员资料成功', { userId });
 
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         user: adminProfile
       });
 
@@ -210,19 +217,19 @@ class AdminAuthController extends BaseController {
       const { refreshToken } = req.body;
 
       if (!refreshToken) {
-        return this.sendError(res, '刷新令牌不能为空', 400);
+        return errorResponse(res, '刷新令牌不能为空', 400);
       }
 
       // 刷新令牌
       const newTokens = await refreshAccessToken(refreshToken);
 
       if (!newTokens) {
-        return this.sendError(res, '无效的刷新令牌', 401);
+        return errorResponse(res, '无效的刷新令牌', 401);
       }
 
       logger.info('[AdminAuthController] 管理员令牌刷新成功');
 
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         tokens: newTokens
       }, '令牌刷新成功');
 

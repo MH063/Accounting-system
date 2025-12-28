@@ -64,10 +64,13 @@ export const getPredictionData = async (days: number): Promise<ApiResponse<Trend
     // 调用真实API获取预测数据
     const response = await request<ApiResponse<TrendDataPoint[]>>(`/trend/prediction?days=${days}`)
     
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = response.data?.data || response.data
+    
     // 直接返回预测数据数组
     return {
       success: response.success,
-      data: response.data || [],
+      data: actualData || [],
       message: response.message
     }
   } catch (error) {

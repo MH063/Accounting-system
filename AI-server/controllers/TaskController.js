@@ -10,6 +10,7 @@ const {
 } = require('../utils/scheduledTasks');
 
 const { logger } = require('../config/logger');
+const { successResponse, errorResponse } = require('../middleware/response');
 
 /**
  * 定时任务管理控制器
@@ -23,19 +24,10 @@ class TaskController {
     try {
       const status = getTaskStatus();
       
-      res.status(200).json({
-        success: true,
-        data: status
-      });
-      
-      logger.info('获取定时任务状态成功', { taskCount: status.totalTasks });
+      return successResponse(res, status, '获取定时任务状态成功');
     } catch (error) {
       logger.error('获取定时任务状态失败', error);
-      res.status(500).json({
-        success: false,
-        message: '获取任务状态失败',
-        error: error.message
-      });
+      return errorResponse(res, '获取任务状态失败', 500);
     }
   }
 
@@ -48,23 +40,14 @@ class TaskController {
       const { limit = 100, taskName } = req.query;
       const history = getTaskHistory(parseInt(limit), taskName);
       
-      res.status(200).json({
-        success: true,
-        data: {
-          history,
-          total: history.length,
-          filter: taskName || 'all'
-        }
-      });
-      
-      logger.info('获取任务历史成功', { limit, taskName, recordCount: history.length });
+      return successResponse(res, {
+        history,
+        total: history.length,
+        filter: taskName || 'all'
+      }, '获取任务历史成功');
     } catch (error) {
       logger.error('获取任务历史失败', error);
-      res.status(500).json({
-        success: false,
-        message: '获取任务历史失败',
-        error: error.message
-      });
+      return errorResponse(res, '获取任务历史失败', 500);
     }
   }
 
@@ -78,20 +61,10 @@ class TaskController {
       
       const status = getTaskStatus();
       
-      res.status(200).json({
-        success: true,
-        message: '所有定时任务已启动',
-        data: status
-      });
-      
-      logger.info('启动所有定时任务成功');
+      return successResponse(res, status, '所有定时任务已启动');
     } catch (error) {
       logger.error('启动所有定时任务失败', error);
-      res.status(500).json({
-        success: false,
-        message: '启动任务失败',
-        error: error.message
-      });
+      return errorResponse(res, '启动任务失败', 500);
     }
   }
 
@@ -103,19 +76,11 @@ class TaskController {
     try {
       stopScheduledTasks();
       
-      res.status(200).json({
-        success: true,
-        message: '所有定时任务已停止'
-      });
-      
       logger.info('停止所有定时任务成功');
+      return successResponse(res, null, '所有定时任务已停止');
     } catch (error) {
       logger.error('停止所有定时任务失败', error);
-      res.status(500).json({
-        success: false,
-        message: '停止任务失败',
-        error: error.message
-      });
+      return errorResponse(res, '停止任务失败', 500);
     }
   }
 
@@ -128,33 +93,21 @@ class TaskController {
       const { taskName } = req.params;
       
       if (!taskName) {
-        return res.status(400).json({
-          success: false,
-          message: '任务名称不能为空'
-        });
+        return errorResponse(res, '任务名称不能为空', 400);
       }
       
       startTask(taskName);
       
       const status = getTaskStatus();
       
-      res.status(200).json({
-        success: true,
-        message: `任务 ${taskName} 已启动`,
-        data: {
-          taskName,
-          status: status.tasks[taskName]
-        }
-      });
-      
       logger.info(`启动定时任务成功: ${taskName}`);
+      return successResponse(res, {
+        taskName,
+        status: status.tasks[taskName]
+      }, `任务 ${taskName} 已启动`);
     } catch (error) {
       logger.error(`启动定时任务失败: ${req.params.taskName}`, error);
-      res.status(500).json({
-        success: false,
-        message: '启动任务失败',
-        error: error.message
-      });
+      return errorResponse(res, '启动任务失败', 500);
     }
   }
 
@@ -167,34 +120,22 @@ class TaskController {
       const { taskName } = req.params;
       
       if (!taskName) {
-        return res.status(400).json({
-          success: false,
-          message: '任务名称不能为空'
-        });
+        return errorResponse(res, '任务名称不能为空', 400);
       }
       
       stopTask(taskName);
       
-      res.status(200).json({
-        success: true,
-        message: `任务 ${taskName} 已停止`,
-        data: {
-          taskName,
-          status: {
-            running: false,
-            scheduled: true
-          }
-        }
-      });
-      
       logger.info(`停止定时任务成功: ${taskName}`);
+      return successResponse(res, {
+        taskName,
+        status: {
+          running: false,
+          scheduled: true
+        }
+      }, `任务 ${taskName} 已停止`);
     } catch (error) {
       logger.error(`停止定时任务失败: ${req.params.taskName}`, error);
-      res.status(500).json({
-        success: false,
-        message: '停止任务失败',
-        error: error.message
-      });
+      return errorResponse(res, '停止任务失败', 500);
     }
   }
 
@@ -207,33 +148,21 @@ class TaskController {
       const { taskName } = req.params;
       
       if (!taskName) {
-        return res.status(400).json({
-          success: false,
-          message: '任务名称不能为空'
-        });
+        return errorResponse(res, '任务名称不能为空', 400);
       }
       
       restartTask(taskName);
       
       const status = getTaskStatus();
       
-      res.status(200).json({
-        success: true,
-        message: `任务 ${taskName} 已重启`,
-        data: {
-          taskName,
-          status: status.tasks[taskName]
-        }
-      });
-      
       logger.info(`重启定时任务成功: ${taskName}`);
+      return successResponse(res, {
+        taskName,
+        status: status.tasks[taskName]
+      }, `任务 ${taskName} 已重启`);
     } catch (error) {
       logger.error(`重启定时任务失败: ${req.params.taskName}`, error);
-      res.status(500).json({
-        success: false,
-        message: '重启任务失败',
-        error: error.message
-      });
+      return errorResponse(res, '重启任务失败', 500);
     }
   }
 
@@ -246,40 +175,25 @@ class TaskController {
       const { taskName } = req.params;
       
       if (!taskName) {
-        return res.status(400).json({
-          success: false,
-          message: '任务名称不能为空'
-        });
+        return errorResponse(res, '任务名称不能为空', 400);
       }
       
       // 验证任务名称
       const validTasks = ['logCleanup', 'databaseBackup', 'queueCleanup', 'fileOptimization', 'healthCheck'];
       if (!validTasks.includes(taskName)) {
-        return res.status(400).json({
-          success: false,
-          message: `无效的任务名称。有效任务: ${validTasks.join(', ')}`
-        });
+        return errorResponse(res, `无效的任务名称。有效任务: ${validTasks.join(', ')}`, 400);
       }
       
       const result = await executeTaskManually(taskName);
       
-      res.status(200).json({
-        success: true,
-        message: result.message,
-        data: {
-          taskName,
-          executedAt: result.timestamp
-        }
-      });
-      
-      logger.info(`手动执行定时任务成功: ${taskName}`);
+      logger.info(`手动执行任务请求已提交: ${taskName}`);
+      return successResponse(res, {
+        taskName,
+        timestamp: new Date().toISOString()
+      }, `任务 ${taskName} 已触发手动执行`);
     } catch (error) {
-      logger.error(`手动执行定时任务失败: ${req.params.taskName}`, error);
-      res.status(500).json({
-        success: false,
-        message: '执行任务失败',
-        error: error.message
-      });
+      logger.error(`手动执行任务失败: ${req.params.taskName}`, error);
+      return errorResponse(res, '执行任务失败', 500);
     }
   }
 
@@ -316,28 +230,20 @@ class TaskController {
         },
         {
           name: 'healthCheck',
-          description: '系统健康检查任务 - 每5分钟执行系统健康检查',
-          schedule: '*/5 * * * *',
+          description: '系统健康检查任务 - 每10分钟执行系统健康检查',
+          schedule: '*/10 * * * *',
           category: 'monitoring'
         }
       ];
       
-      res.status(200).json({
-        success: true,
-        data: {
-          tasks: availableTasks,
-          total: availableTasks.length
-        }
-      });
-      
       logger.info('获取可用任务列表成功', { taskCount: availableTasks.length });
+      return successResponse(res, {
+        tasks: availableTasks,
+        total: availableTasks.length
+      }, '获取可用任务列表成功');
     } catch (error) {
       logger.error('获取可用任务列表失败', error);
-      res.status(500).json({
-        success: false,
-        message: '获取任务列表失败',
-        error: error.message
-      });
+      return errorResponse(res, '获取任务列表失败', 500);
     }
   }
 
@@ -384,26 +290,23 @@ class TaskController {
           taskStats.failed++;
         }
         
-        // 计算平均执行时长
-        taskStats.avgDuration = (taskStats.avgDuration * (taskStats.total - 1) + record.duration) / taskStats.total;
+        // 简单累加持续时间，稍后计算平均值
+        taskStats.avgDuration += (record.duration || 0);
       }
       
-      res.status(200).json({
-        success: true,
-        data: {
-          overall: status.stats,
-          breakdown: stats
+      // 计算各任务平均持续时间
+      for (const taskName in stats.taskBreakdown) {
+        const taskStats = stats.taskBreakdown[taskName];
+        if (taskStats.total > 0) {
+          taskStats.avgDuration = Math.round(taskStats.avgDuration / taskStats.total);
         }
-      });
+      }
       
-      logger.info('获取任务统计信息成功');
+      logger.info('获取定时任务统计成功');
+      return successResponse(res, stats, '获取定时任务统计成功');
     } catch (error) {
-      logger.error('获取任务统计信息失败', error);
-      res.status(500).json({
-        success: false,
-        message: '获取任务统计失败',
-        error: error.message
-      });
+      logger.error('获取定时任务统计失败', error);
+      return errorResponse(res, '获取任务统计失败', 500);
     }
   }
 }

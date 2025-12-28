@@ -19,14 +19,25 @@ const globalErrorHandler = () => {
     });
 
     // 确定HTTP状态码
-    const statusCode = err.statusCode || 500;
-    const message = err.message || '服务器内部错误';
+    const statusCode = err.status || err.statusCode || 500;
+    let message = err.message || '服务器内部错误';
+
+    // 针对特定类型的错误优化提示信息
+    if (err.name === 'ValidationError') {
+      message = `数据验证失败: ${err.message}`;
+    } else if (err.code === '23505') {
+      message = '数据已存在，请勿重复提交';
+    }
 
     // 发送错误响应
     res.status(statusCode).json({
       success: false,
       message: message,
-      ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+      error_code: err.code || 'INTERNAL_ERROR',
+      ...(process.env.NODE_ENV === 'development' && { 
+        stack: err.stack,
+        details: err.details || undefined 
+      }),
       timestamp: new Date().toISOString()
     });
   };

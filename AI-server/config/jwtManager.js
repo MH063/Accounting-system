@@ -21,7 +21,7 @@ const JWT_CONFIG = {
   
   // 令牌过期时间配置
   accessTokenExpiresIn: getSecureEnv('JWT_ACCESS_EXPIRES_IN') || '60m', // Access token: 60分钟
-  refreshTokenExpiresIn: getSecureEnv('JWT_REFRESH_EXPIRES_IN') || '7d', // Refresh token: 7天 (从30天缩短)
+  refreshTokenExpiresIn: getSecureEnv('JWT_REFRESH_EXPIRES_IN') || '30d', // Refresh token: 30天
   
   // 密钥文件存储路径
   keyFilePath: getSecureEnv('JWT_KEY_FILE') || path.join(__dirname, '../data/jwt-keys.json'),

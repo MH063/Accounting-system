@@ -97,8 +97,11 @@ export const decryptBatchData = async (
       method: 'GET'
     })
     
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = response.data?.data || response.data
+    
     console.log(`[EncryptionService] ${dataType} 批量解密成功`)
-    return { success: true, data: response.data || [] }
+    return { success: true, data: Array.isArray(actualData) ? actualData : [] }
   } catch (error: any) {
     console.error(`[EncryptionService] ${dataType} 批量解密失败:`, error)
     return { success: false, data: [], error: error.message }

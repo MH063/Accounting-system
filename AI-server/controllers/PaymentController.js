@@ -7,6 +7,7 @@ const BaseController = require('./BaseController');
 const { query } = require('../config/database');
 const fs = require('fs');
 const path = require('path');
+const { successResponse, errorResponse } = require('../middleware/response');
 
 /**
  * 处理日期字段，确保它们被正确序列化为字符串
@@ -32,6 +33,27 @@ const processDateFields = (row, dateFields) => {
 };
 
 class PaymentController extends BaseController {
+  constructor() {
+    super();
+    this.getQRCodes = this.getQRCodes.bind(this);
+    this.createQRCode = this.createQRCode.bind(this);
+    this.getQRCodeById = this.getQRCodeById.bind(this);
+    this.updateQRCode = this.updateQRCode.bind(this);
+    this.deleteQRCode = this.deleteQRCode.bind(this);
+    this.setDefaultQRCode = this.setDefaultQRCode.bind(this);
+    this.scanQRCode = this.scanQRCode.bind(this);
+    this.getPaymentStatus = this.getPaymentStatus.bind(this);
+    this.confirmPayment = this.confirmPayment.bind(this);
+    this.getPaymentRecords = this.getPaymentRecords.bind(this);
+    this.getPaymentRecordDetail = this.getPaymentRecordDetail.bind(this);
+    this.createPaymentOrder = this.createPaymentOrder.bind(this);
+    this.getPaymentStatistics = this.getPaymentStatistics.bind(this);
+    this.getIncomeTrend = this.getIncomeTrend.bind(this);
+    this.getPaymentMethodDistribution = this.getPaymentMethodDistribution.bind(this);
+    this.performSecurityCheck = this.performSecurityCheck.bind(this);
+    this.getSecurityCheckHistory = this.getSecurityCheckHistory.bind(this);
+    this.uploadQRCodeImage = this.uploadQRCodeImage.bind(this);
+  }
   /**
    * 获取收款码列表
    * GET /api/payment/qrcodes
@@ -80,17 +102,13 @@ class PaymentController extends BaseController {
       
       const result = await query(sql, params);
       
-      return res.json({
-        success: true,
-        data: {
-          records: result.rows,
-          total: result.rows.length, // 由于没有分页，total 为数组长度
-          page: 1,
-          size: result.rows.length,
-          pages: 1
-        },
-        message: '获取收款码列表成功'
-      });
+      return successResponse(res, {
+        records: result.rows,
+        total: result.rows.length,
+        page: 1,
+        size: result.rows.length,
+        pages: 1
+      }, '获取收款码列表成功');
     } catch (error) {
       console.error('获取收款码列表失败:', error);
       next(error);
@@ -131,28 +149,19 @@ class PaymentController extends BaseController {
       
       // 验证必填字段
       if (!name || !platform) {
-        return res.status(400).json({
-          success: false,
-          message: '缺少必填字段：name 和 platform'
-        });
+        return errorResponse(res, '缺少必填字段：name 和 platform', 400);
       }
       
       // 验证平台
       const validPlatforms = ['alipay', 'wechat', 'unionpay'];
       if (!validPlatforms.includes(platform)) {
-        return res.status(400).json({
-          success: false,
-          message: '无效的支付平台'
-        });
+        return errorResponse(res, '无效的支付平台', 400);
       }
       
       // 验证类型
       const validTypes = ['fixed', 'custom', 'dynamic'];
       if (!validTypes.includes(type)) {
-        return res.status(400).json({
-          success: false,
-          message: '无效的收款码类型'
-        });
+        return errorResponse(res, '无效的收款码类型', 400);
       }
       
       // 如果设置了默认收款码，需要将其他收款码设为非默认
@@ -183,11 +192,7 @@ class PaymentController extends BaseController {
         expiresAt, usageLimit, qrCodeUrl, req.user.id
       ]);
       
-      return res.status(201).json({
-        success: true,
-        data: result.rows[0],
-        message: '创建收款码成功'
-      });
+      return successResponse(res, result.rows[0], '创建收款码成功', 201);
     } catch (error) {
       console.error('创建收款码失败:', error);
       next(error);
@@ -220,17 +225,10 @@ class PaymentController extends BaseController {
       const result = await query(sql, [id, req.user.id]);
       
       if (result.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: '收款码不存在'
-        });
+        return errorResponse(res, '收款码不存在', 404);
       }
       
-      return res.json({
-        success: true,
-        data: result.rows[0],
-        message: '获取收款码详情成功'
-      });
+      return successResponse(res, result.rows[0], '获取收款码详情成功');
     } catch (error) {
       console.error('获取收款码详情失败:', error);
       next(error);
@@ -275,10 +273,7 @@ class PaymentController extends BaseController {
       const checkResult = await query(checkSql, [id, req.user.id]);
       
       if (checkResult.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: '收款码不存在'
-        });
+        return errorResponse(res, '收款码不存在', 404);
       }
       
       // 如果设置了默认收款码，需要将其他收款码设为非默认
@@ -304,10 +299,7 @@ class PaymentController extends BaseController {
         // 验证类型
         const validTypes = ['fixed', 'custom', 'dynamic'];
         if (!validTypes.includes(type)) {
-          return res.status(400).json({
-            success: false,
-            message: '无效的收款码类型'
-          });
+          return errorResponse(res, '无效的收款码类型', 400);
         }
         updateFields.push(`type = $${paramIndex}`);
         params.push(type);
@@ -336,10 +328,7 @@ class PaymentController extends BaseController {
         // 验证状态
         const validStatuses = ['active', 'inactive'];
         if (!validStatuses.includes(status)) {
-          return res.status(400).json({
-            success: false,
-            message: '无效的状态'
-          });
+          return errorResponse(res, '无效的状态', 400);
         }
         updateFields.push(`status = $${paramIndex}`);
         params.push(status);
@@ -350,10 +339,7 @@ class PaymentController extends BaseController {
         // 验证平台
         const validPlatforms = ['alipay', 'wechat', 'unionpay'];
         if (!validPlatforms.includes(platform)) {
-          return res.status(400).json({
-            success: false,
-            message: '无效的支付平台'
-          });
+          return errorResponse(res, '无效的支付平台', 400);
         }
         updateFields.push(`platform = $${paramIndex}`);
         params.push(platform);
@@ -410,10 +396,7 @@ class PaymentController extends BaseController {
       
       // 如果没有任何字段需要更新
       if (updateFields.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: '没有提供需要更新的字段'
-        });
+        return errorResponse(res, '没有提供需要更新的字段', 400);
       }
       
       // 添加更新时间和ID参数
@@ -430,11 +413,7 @@ class PaymentController extends BaseController {
       
       const result = await query(updateSql, params);
       
-      return res.json({
-        success: true,
-        data: result.rows[0],
-        message: '更新收款码成功'
-      });
+      return successResponse(res, result.rows[0], '更新收款码成功');
     } catch (error) {
       console.error('更新收款码失败:', error);
       next(error);
@@ -457,20 +436,14 @@ class PaymentController extends BaseController {
       const checkResult = await query(checkSql, [id, req.user.id]);
       
       if (checkResult.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: '收款码不存在'
-        });
+        return errorResponse(res, '收款码不存在', 404);
       }
       
       // 删除收款码
       const deleteSql = 'DELETE FROM qr_codes WHERE id = $1 AND user_id = $2';
       await query(deleteSql, [id, req.user.id]);
       
-      return res.json({
-        success: true,
-        message: '删除收款码成功'
-      });
+      return successResponse(res, null, '删除收款码成功');
     } catch (error) {
       console.error('删除收款码失败:', error);
       next(error);
@@ -493,10 +466,7 @@ class PaymentController extends BaseController {
       const checkResult = await query(checkSql, [id, req.user.id]);
       
       if (checkResult.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: '收款码不存在'
-        });
+        return errorResponse(res, '收款码不存在', 404);
       }
       
       // 将其他收款码设为非默认
@@ -509,10 +479,7 @@ class PaymentController extends BaseController {
       const updateSql = 'UPDATE qr_codes SET is_default = true WHERE id = $1 AND user_id = $2';
       await query(updateSql, [id, req.user.id]);
       
-      return res.json({
-        success: true,
-        message: '设置默认收款码成功'
-      });
+      return successResponse(res, null, '设置默认收款码成功');
     } catch (error) {
       console.error('设置默认收款码失败:', error);
       next(error);
@@ -538,19 +505,13 @@ class PaymentController extends BaseController {
       
       // 验证必填字段
       if (!amount || !paymentMethod) {
-        return res.status(400).json({
-          success: false,
-          message: '缺少必填字段：amount 和 paymentMethod'
-        });
+        return errorResponse(res, '缺少必填字段：amount 和 paymentMethod', 400);
       }
       
       // 验证支付方式
       const validMethods = ['alipay', 'wechat', 'unionpay', 'bank', 'cash'];
       if (!validMethods.includes(paymentMethod)) {
-        return res.status(400).json({
-          success: false,
-          message: '无效的支付方式'
-        });
+        return errorResponse(res, '无效的支付方式', 400);
       }
       
       // 检查收款码是否存在且有效
@@ -563,36 +524,24 @@ class PaymentController extends BaseController {
       const checkResult = await query(checkSql, [id, req.user.id]);
       
       if (checkResult.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: '收款码不存在或已失效'
-        });
+        return errorResponse(res, '收款码不存在或已失效', 404);
       }
       
       const qrCode = checkResult.rows[0];
       
       // 检查是否过期
       if (qrCode.expiresAt && new Date(qrCode.expiresAt) < new Date()) {
-        return res.status(400).json({
-          success: false,
-          message: '收款码已过期'
-        });
+        return errorResponse(res, '收款码已过期', 400);
       }
       
       // 检查使用次数限制
       if (qrCode.usageLimit && qrCode.usageCount >= qrCode.usageLimit) {
-        return res.status(400).json({
-          success: false,
-          message: '收款码已达到使用次数限制'
-        });
+        return errorResponse(res, '收款码已达到使用次数限制', 400);
       }
       
       // 对于固定金额收款码，验证金额是否匹配
       if (qrCode.type === 'fixed' && amount !== qrCode.fixedAmount) {
-        return res.status(400).json({
-          success: false,
-          message: '支付金额与固定金额收款码不匹配'
-        });
+        return errorResponse(res, '支付金额与固定金额收款码不匹配', 400);
       }
       
       // 开始事务
@@ -637,17 +586,13 @@ class PaymentController extends BaseController {
         // 提交事务
         await query('COMMIT');
         
-        return res.json({
-          success: true,
-          data: {
-            transactionId,
-            amount,
-            paymentMethod,
-            paidAt: new Date().toISOString(),
-            qrPaymentRecordId: recordResult.rows[0].id
-          },
-          message: '支付成功'
-        });
+        return successResponse(res, {
+          transactionId,
+          amount,
+          paymentMethod,
+          paidAt: new Date().toISOString(),
+          qrPaymentRecordId: recordResult.rows[0].id
+        }, '支付成功');
       } catch (error) {
         // 回滚事务
         await query('ROLLBACK');
@@ -684,11 +629,7 @@ class PaymentController extends BaseController {
       
       const result = await query(sql, [id]);
       
-      return res.json({
-        success: true,
-        data: result.rows,
-        message: '获取支付状态成功'
-      });
+      return successResponse(res, result.rows, '获取支付状态成功');
     } catch (error) {
       console.error('查询支付状态失败:', error);
       next(error);
@@ -714,10 +655,7 @@ class PaymentController extends BaseController {
       
       // 验证必填字段
       if (!expenseId || !paymentMethod || !amount) {
-        return res.status(400).json({
-          success: false,
-          message: '缺少必填字段'
-        });
+        return errorResponse(res, '缺少必填字段', 400);
       }
       
       // 开始事务
@@ -740,10 +678,7 @@ class PaymentController extends BaseController {
         
         if (expenseResult.rows.length === 0) {
           await query('ROLLBACK');
-          return res.status(404).json({
-            success: false,
-            message: '费用不存在'
-          });
+          return errorResponse(res, '费用不存在', 404);
         }
         
         // 记录支付日志
@@ -760,14 +695,11 @@ class PaymentController extends BaseController {
         // 提交事务
         await query('COMMIT');
         
-        return res.json({
-          success: true,
-          data: {
-            expense: expenseResult.rows[0],
-            message: '支付确认成功'
-          }
-        });
-      } catch (error) {
+        return successResponse(res, {
+        expense: expenseResult.rows[0],
+        message: '支付确认成功'
+      }, '确认支付成功');
+    } catch (error) {
         // 回滚事务
         await query('ROLLBACK');
         throw error;
@@ -902,17 +834,13 @@ class PaymentController extends BaseController {
         completedAt: row.completedAt ? (typeof row.completedAt === 'object' && row.completedAt.toISOString ? row.completedAt.toISOString() : row.completedAt.toString()) : null
       }));
       
-      return res.json({
-        success: true,
-        data: {
-          records: processedRecords,
-          total,
-          page: pageNum,
-          size: pageSize,
-          pages
-        },
-        message: '获取支付记录列表成功'
-      });
+      return successResponse(res, {
+        records: processedRecords,
+        total,
+        page: pageNum,
+        size: pageSize,
+        pages
+      }, '获取支付记录列表成功');
     } catch (error) {
       console.error('获取支付记录列表失败:', error);
       next(error);
@@ -956,19 +884,12 @@ class PaymentController extends BaseController {
       const result = await query(sql, [orderId, req.user.id]);
       
       if (result.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: '支付记录不存在'
-        });
+        return errorResponse(res, '支付记录不存在', 404);
       }
       
       const processedData = processDateFields(result.rows[0], ['createdAt', 'completedAt']);
       
-      return res.json({
-        success: true,
-        data: processedData,
-        message: '获取支付记录详情成功'
-      });
+      return successResponse(res, processedData, '获取支付记录详情成功');
     } catch (error) {
       console.error('获取支付记录详情失败:', error);
       next(error);
@@ -1003,31 +924,24 @@ class PaymentController extends BaseController {
       
       // 验证必填字段
       if (!paymentMethod || !amount || !description) {
-        return res.status(400).json({
-          success: false,
-          message: '缺少必填字段：paymentMethod, amount, description'
-        });
+        return errorResponse(res, '缺少必填字段：paymentMethod, amount, description', 400);
       }
       
       // 生成交易ID
       const transactionId = `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
-      return res.json({
+      return successResponse(res, {
         success: true,
+        orderId: transactionId,
+        status: 'pending',
+        message: '支付订单创建成功',
         data: {
-          success: true,
-          orderId: transactionId,
-          status: 'pending',
-          message: '支付订单创建成功',
-          data: {
-            transactionId,
-            paymentMethod,
-            amount,
-            description
-          }
-        },
-        message: '创建支付订单成功'
-      });
+          transactionId,
+          paymentMethod,
+          amount,
+          description
+        }
+      }, '创建支付订单成功');
     } catch (error) {
       console.error('创建支付订单失败:', error);
       next(error);
@@ -1111,20 +1025,16 @@ class PaymentController extends BaseController {
       
       const methodResult = await query(methodSql, params);
       
-      return res.json({
-        success: true,
-        data: {
-          totalIncome: parseFloat(stats.totalIncome) || 0,
-          totalExpense: parseFloat(stats.totalExpense) || 0,
-          totalTransactions: parseInt(stats.totalTransactions) || 0,
-          successfulPayments: parseInt(stats.successfulPayments) || 0,
-          pendingPayments: parseInt(stats.pendingPayments) || 0,
-          failedPayments: parseInt(stats.failedPayments) || 0,
-          monthlyTransactions: monthlyResult.rows,
-          methodDistribution: methodResult.rows
-        },
-        message: '获取支付统计数据成功'
-      });
+      return successResponse(res, {
+        totalIncome: parseFloat(stats.totalIncome) || 0,
+        totalExpense: parseFloat(stats.totalExpense) || 0,
+        totalTransactions: parseInt(stats.totalTransactions) || 0,
+        successfulPayments: parseInt(stats.successfulPayments) || 0,
+        pendingPayments: parseInt(stats.pendingPayments) || 0,
+        failedPayments: parseInt(stats.failedPayments) || 0,
+        monthlyTransactions: monthlyResult.rows,
+        methodDistribution: methodResult.rows
+      }, '获取支付统计数据成功');
     } catch (error) {
       console.error('获取支付统计数据失败:', error);
       next(error);
@@ -1140,18 +1050,20 @@ class PaymentController extends BaseController {
    */
   async getIncomeTrend(req, res, next) {
     try {
-      // 简化实现，返回模拟数据
-      const months = ['2025-01', '2025-02', '2025-03', '2025-04', '2025-05', '2025-06'];
-      const trendData = months.map(month => ({
-        month,
-        amount: Math.floor(Math.random() * 10000) + 5000
-      }));
+      const sql = `
+        SELECT 
+          TO_CHAR(created_at, 'YYYY-MM') as month,
+          SUM(amount) as amount
+        FROM qr_payment_records
+        WHERE payer_id = $1
+        GROUP BY TO_CHAR(created_at, 'YYYY-MM')
+        ORDER BY month DESC
+        LIMIT 6
+      `;
       
-      return res.json({
-        success: true,
-        data: trendData,
-        message: '获取收入趋势数据成功'
-      });
+      const result = await query(sql, [req.user.id]);
+      
+      return successResponse(res, result.rows.reverse(), '获取收入趋势数据成功');
     } catch (error) {
       console.error('获取收入趋势数据失败:', error);
       next(error);
@@ -1180,11 +1092,7 @@ class PaymentController extends BaseController {
       
       const result = await query(sql, [req.user.id]);
       
-      return res.json({
-        success: true,
-        data: result.rows,
-        message: '获取支付方式分布数据成功'
-      });
+      return successResponse(res, result.rows, '获取支付方式分布数据成功');
     } catch (error) {
       console.error('获取支付方式分布数据失败:', error);
       next(error);
@@ -1209,26 +1117,37 @@ class PaymentController extends BaseController {
       
       // 验证参数
       if (!qrCodeIds || !Array.isArray(qrCodeIds)) {
-        return res.status(400).json({
-          success: false,
-          message: '缺少必填字段：qrCodeIds'
-        });
+        return errorResponse(res, '缺少必填字段：qrCodeIds', 400);
       }
       
-      // 简化实现，返回模拟数据
-      return res.json({
-        success: true,
-        data: {
-          qrCodeStatus: 'success',
-          usageAnalysis: 'success',
-          amountValidation: 'success',
-          permissions: 'success',
-          issues: [],
-          recommendations: [],
-          lastCheckTime: new Date().toISOString()
-        },
-        message: '收款码安全检测成功'
+      // 检查收款码是否存在
+      const checkSql = 'SELECT id, status FROM qr_codes WHERE id = ANY($1) AND user_id = $2';
+      const checkResult = await query(checkSql, [qrCodeIds, req.user.id]);
+      
+      const foundIds = checkResult.rows.map(r => r.id);
+      const issues = [];
+      
+      qrCodeIds.forEach(id => {
+        if (!foundIds.includes(id)) {
+          issues.push(`收款码 ${id} 不存在或无权访问`);
+        }
       });
+      
+      checkResult.rows.forEach(r => {
+        if (r.status !== 'active') {
+          issues.push(`收款码 ${r.id} 状态异常: ${r.status}`);
+        }
+      });
+      
+      return successResponse(res, {
+        qrCodeStatus: issues.length > 0 ? 'warning' : 'success',
+        usageAnalysis: 'success',
+        amountValidation: 'success',
+        permissions: 'success',
+        issues: issues,
+        recommendations: issues.length > 0 ? ['请检查并更新异常收款码状态'] : [],
+        lastCheckTime: new Date().toISOString()
+      }, '收款码安全检测成功');
     } catch (error) {
       console.error('收款码安全检测失败:', error);
       next(error);
@@ -1262,11 +1181,7 @@ class PaymentController extends BaseController {
         });
       }
       
-      return res.json({
-        success: true,
-        data: history,
-        message: '获取安全检测历史记录成功'
-      });
+      return successResponse(res, history, '获取安全检测历史记录成功');
     } catch (error) {
       console.error('获取安全检测历史记录失败:', error);
       next(error);
@@ -1296,27 +1211,18 @@ class PaymentController extends BaseController {
       // 验证上传的文件
       if (!req.file) {
         console.error('[uploadQRCodeImage] 文件上传失败：req.file为undefined');
-        return res.status(400).json({
-          success: false,
-          message: '请上传收款码图片文件'
-        });
+        return errorResponse(res, '请上传收款码图片文件', 400);
       }
       
       // 验证平台参数
       const platform = req.body.platform;
       if (!platform) {
-        return res.status(400).json({
-          success: false,
-          message: '缺少平台参数'
-        });
+        return errorResponse(res, '缺少平台参数', 400);
       }
       
       const validPlatforms = ['alipay', 'wechat', 'unionpay'];
       if (!validPlatforms.includes(platform)) {
-        return res.status(400).json({
-          success: false,
-          message: '无效的支付平台'
-        });
+        return errorResponse(res, '无效的支付平台', 400);
       }
       
       const description = req.body.description || '';
@@ -1355,11 +1261,7 @@ class PaymentController extends BaseController {
         true // is_user_uploaded
       ]);
       
-      return res.json({
-        success: true,
-        data: result.rows[0],
-        message: '收款码上传成功'
-      });
+      return successResponse(res, result.rows[0], '收款码上传成功');
     } catch (error) {
       console.error('上传收款码图片失败:', error);
       next(error);
@@ -1496,19 +1398,15 @@ class PaymentController extends BaseController {
       
       const recordsResult = await query(recordsSql, params);
       
-      return res.json({
-        success: true,
-        data: {
-          records: recordsResult.rows.map(row => 
-            processDateFields(row, ['createdAt', 'completedAt'])
-          ),
-          total,
-          page: pageNum,
-          size: pageSize,
-          pages: Math.ceil(total / pageSize)
-        },
-        message: '获取支付记录列表成功'
-      });
+      return successResponse(res, {
+        records: recordsResult.rows.map(row => 
+          processDateFields(row, ['createdAt', 'completedAt'])
+        ),
+        total,
+        page: pageNum,
+        size: pageSize,
+        pages: Math.ceil(total / pageSize)
+      }, '获取支付记录列表成功');
     } catch (error) {
       console.error('获取支付记录列表失败:', error);
       next(error);
@@ -1556,17 +1454,10 @@ class PaymentController extends BaseController {
       const result = await query(sql, [orderId, req.user.id]);
       
       if (result.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: '支付记录不存在'
-        });
+        return errorResponse(res, '支付记录不存在', 404);
       }
       
-      return res.json({
-        success: true,
-        data: result.rows[0],
-        message: '获取支付记录详情成功'
-      });
+      return successResponse(res, result.rows[0], '获取支付记录详情成功');
     } catch (error) {
       console.error('获取支付记录详情失败:', error);
       next(error);
@@ -1648,17 +1539,13 @@ class PaymentController extends BaseController {
         processDateFields(row, ['createdAt', 'completedAt'])
       );
       
-      return res.json({
-        success: true,
-        data: {
-          records: processedRecords,
-          total,
-          page: pageNum,
-          size: pageSize,
-          pages: Math.ceil(total / pageSize)
-        },
-        message: '获取待确认支付列表成功'
-      });
+      return successResponse(res, {
+        records: processedRecords,
+        total,
+        page: pageNum,
+        size: pageSize,
+        pages: Math.ceil(total / pageSize)
+      }, '获取待确认支付列表成功');
     } catch (error) {
       console.error('获取待确认支付列表失败:', error);
       next(error);
@@ -1693,28 +1580,21 @@ class PaymentController extends BaseController {
       
       // 验证必填字段
       if (!paymentMethod || !amount || !description) {
-        return res.status(400).json({
-          success: false,
-          message: '缺少必填字段'
-        });
+        return errorResponse(res, '缺少必填字段', 400);
       }
       
       // 生成交易ID
       const transactionId = `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
       // 目前仅返回模拟数据，实际实现需要创建订单并返回支付链接
-      return res.json({
+      return successResponse(res, {
         success: true,
-        data: {
-          success: true,
-          orderId: transactionId,
-          transactionId,
-          status: 'processing',
-          message: '支付订单创建成功',
-          data: {}
-        },
-        message: '创建支付订单成功'
-      });
+        orderId: transactionId,
+        transactionId,
+        status: 'processing',
+        message: '支付订单创建成功',
+        data: {}
+      }, '创建支付订单成功');
     } catch (error) {
       console.error('创建支付订单失败:', error);
       next(error);
@@ -1799,29 +1679,25 @@ class PaymentController extends BaseController {
       
       const methodResult = await query(methodSql, params);
       
-      return res.json({
-        success: true,
-        data: {
-          totalIncome: parseFloat(stats.totalIncome || 0),
-          totalExpense: parseFloat(stats.totalExpense || 0),
-          totalTransactions: parseInt(stats.totalTransactions),
-          successfulPayments: parseInt(stats.successfulPayments),
-          pendingPayments: parseInt(stats.pendingPayments),
-          failedPayments: parseInt(stats.failedPayments),
-          monthlyTransactions: monthlyResult.rows.map(row => ({
-            month: row.month,
-            count: parseInt(row.count),
-            amount: parseFloat(row.amount || 0)
-          })),
-          methodDistribution: methodResult.rows.map(row => ({
-            method: row.method,
-            count: parseInt(row.count),
-            amount: parseFloat(row.amount || 0),
-            percentage: parseFloat(row.percentage || 0)
-          }))
-        },
-        message: '获取支付统计数据成功'
-      });
+      return successResponse(res, {
+        totalIncome: parseFloat(stats.totalIncome || 0),
+        totalExpense: parseFloat(stats.totalExpense || 0),
+        totalTransactions: parseInt(stats.totalTransactions),
+        successfulPayments: parseInt(stats.successfulPayments),
+        pendingPayments: parseInt(stats.pendingPayments),
+        failedPayments: parseInt(stats.failedPayments),
+        monthlyTransactions: monthlyResult.rows.map(row => ({
+          month: row.month,
+          count: parseInt(row.count),
+          amount: parseFloat(row.amount || 0)
+        })),
+        methodDistribution: methodResult.rows.map(row => ({
+          method: row.method,
+          count: parseInt(row.count),
+          amount: parseFloat(row.amount || 0),
+          percentage: parseFloat(row.percentage || 0)
+        }))
+      }, '获取支付统计数据成功');
     } catch (error) {
       console.error('获取支付统计数据失败:', error);
       next(error);
@@ -1851,14 +1727,10 @@ class PaymentController extends BaseController {
       
       const result = await query(sql, [req.user.id]);
       
-      return res.json({
-        success: true,
-        data: result.rows.map(row => ({
-          month: row.month,
-          amount: parseFloat(row.amount || 0)
-        })),
-        message: '获取收入趋势数据成功'
-      });
+      return successResponse(res, result.rows.map(row => ({
+        month: row.month,
+        amount: parseFloat(row.amount || 0)
+      })), '获取收入趋势数据成功');
     } catch (error) {
       console.error('获取收入趋势数据失败:', error);
       next(error);
@@ -1888,15 +1760,11 @@ class PaymentController extends BaseController {
       
       const result = await query(sql, [req.user.id]);
       
-      return res.json({
-        success: true,
-        data: result.rows.map(row => ({
-          name: row.name,
-          amount: parseFloat(row.amount || 0),
-          percentage: parseFloat(row.percentage || 0)
-        })),
-        message: '获取支付方式分布数据成功'
-      });
+      return successResponse(res, result.rows.map(row => ({
+        name: row.name,
+        amount: parseFloat(row.amount || 0),
+        percentage: parseFloat(row.percentage || 0)
+      })), '获取支付方式分布数据成功');
     } catch (error) {
       console.error('获取支付方式分布数据失败:', error);
       next(error);
@@ -2029,17 +1897,13 @@ class PaymentController extends BaseController {
         processDateFields(row, ['createdAt'])
       );
       
-      return res.json({
-        success: true,
-        data: {
-          records: processedRecords,
-          total,
-          page: pageNum,
-          size: pageSize,
-          pages
-        },
-        message: '获取支付记录列表成功'
-      });
+      return successResponse(res, {
+        records: processedRecords,
+        total,
+        page: pageNum,
+        size: pageSize,
+        pages
+      }, '获取支付记录列表成功');
     } catch (error) {
       console.error('获取支付记录列表失败:', error);
       next(error);
@@ -2076,17 +1940,10 @@ class PaymentController extends BaseController {
       const result = await query(sql, [orderId, req.user.id]);
       
       if (result.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: '支付记录不存在'
-        });
+        return errorResponse(res, '支付记录不存在', 404);
       }
       
-      return res.json({
-        success: true,
-        data: result.rows[0],
-        message: '获取支付记录详情成功'
-      });
+      return successResponse(res, result.rows[0], '获取支付记录详情成功');
     } catch (error) {
       console.error('获取支付记录详情失败:', error);
       next(error);
@@ -2170,20 +2027,16 @@ class PaymentController extends BaseController {
       
       const monthlyResult = await query(monthlySql, params);
       
-      return res.json({
-        success: true,
-        data: {
-          totalIncome: parseFloat(statsResult.rows[0].totalIncome) || 0,
-          totalExpense: 0, // 目前没有支出数据，暂时返回0
-          totalTransactions: parseInt(statsResult.rows[0].totalTransactions) || 0,
-          successfulPayments: parseInt(statsResult.rows[0].successfulPayments) || 0,
-          pendingPayments: parseInt(statsResult.rows[0].pendingPayments) || 0,
-          failedPayments: parseInt(statsResult.rows[0].failedPayments) || 0,
-          monthlyTransactions: monthlyResult.rows,
-          methodDistribution: methodResult.rows
-        },
-        message: '获取支付统计数据成功'
-      });
+      return successResponse(res, {
+        totalIncome: parseFloat(statsResult.rows[0].totalIncome) || 0,
+        totalExpense: 0, // 目前没有支出数据，暂时返回0
+        totalTransactions: parseInt(statsResult.rows[0].totalTransactions) || 0,
+        successfulPayments: parseInt(statsResult.rows[0].successfulPayments) || 0,
+        pendingPayments: parseInt(statsResult.rows[0].pendingPayments) || 0,
+        failedPayments: parseInt(statsResult.rows[0].failedPayments) || 0,
+        monthlyTransactions: monthlyResult.rows,
+        methodDistribution: methodResult.rows
+      }, '获取支付统计数据成功');
     } catch (error) {
       console.error('获取支付统计数据失败:', error);
       next(error);
@@ -2210,15 +2063,11 @@ class PaymentController extends BaseController {
       
       // 这里简单实现，实际项目中应该使用专门的库生成Excel或CSV文件
       // 暂时返回一个模拟的下载链接
-      return res.json({
-        success: true,
-        data: {
-          downloadUrl: `/download/payment-records-${Date.now()}.${format === 'csv' ? 'csv' : 'xlsx'}`,
-          recordCount: 100, // 模拟数据
-          format
-        },
-        message: '导出支付记录成功'
-      });
+      return successResponse(res, {
+        downloadUrl: `/download/payment-records-${Date.now()}.${format === 'csv' ? 'csv' : 'xlsx'}`,
+        recordCount: 100, // 模拟数据
+        format
+      }, '导出支付记录成功');
     } catch (error) {
       console.error('导出支付记录失败:', error);
       next(error);
@@ -2247,11 +2096,7 @@ class PaymentController extends BaseController {
       
       const result = await query(sql, [req.user.id]);
       
-      return res.json({
-        success: true,
-        data: result.rows,
-        message: '获取收入趋势数据成功'
-      });
+      return successResponse(res, result.rows, '获取收入趋势数据成功');
     } catch (error) {
       console.error('获取收入趋势数据失败:', error);
       next(error);
@@ -2280,11 +2125,7 @@ class PaymentController extends BaseController {
       
       const result = await query(sql, [req.user.id]);
       
-      return res.json({
-        success: true,
-        data: result.rows,
-        message: '获取支付方式分布数据成功'
-      });
+      return successResponse(res, result.rows, '获取支付方式分布数据成功');
     } catch (error) {
       console.error('获取支付方式分布数据失败:', error);
       next(error);
@@ -2325,19 +2166,13 @@ class PaymentController extends BaseController {
       
       // 验证必填字段
       if (!paymentMethod || !amount || !description) {
-        return res.status(400).json({
-          success: false,
-          message: '缺少必填字段：paymentMethod, amount, description'
-        });
+        return errorResponse(res, '缺少必填字段：paymentMethod, amount, description', 400);
       }
       
       // 验证支付方式
       const validMethods = ['wechat', 'alipay', 'bank', 'cash'];
       if (!validMethods.includes(paymentMethod)) {
-        return res.status(400).json({
-          success: false,
-          message: '无效的支付方式'
-        });
+        return errorResponse(res, '无效的支付方式', 400);
       }
       
       // 生成订单ID和交易ID
@@ -2345,21 +2180,17 @@ class PaymentController extends BaseController {
       const transactionId = `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
       // 这里应该创建支付订单记录，暂时返回模拟数据
-      return res.json({
+      return successResponse(res, {
         success: true,
+        orderId,
+        transactionId,
+        status: 'processing',
+        message: '创建支付订单成功',
         data: {
-          success: true,
-          orderId,
-          transactionId,
-          status: 'processing',
-          message: '创建支付订单成功',
-          data: {
-            paymentUrl: `https://payment.example.com/${transactionId}`,
-            qrCodeUrl: `https://picsum.photos/200/200?random=${transactionId}`
-          }
-        },
-        message: '创建支付订单成功'
-      });
+          paymentUrl: `https://payment.example.com/${transactionId}`,
+          qrCodeUrl: `https://picsum.photos/200/200?random=${transactionId}`
+        }
+      }, '创建支付订单成功');
     } catch (error) {
       console.error('创建支付订单失败:', error);
       next(error);
@@ -2406,17 +2237,10 @@ class PaymentController extends BaseController {
       const result = await query(sql, [orderId, req.user.id]);
       
       if (result.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: '支付记录不存在'
-        });
+        return errorResponse(res, '支付记录不存在', 404);
       }
       
-      return res.json({
-        success: true,
-        data: result.rows[0],
-        message: '获取支付记录详情成功'
-      });
+      return successResponse(res, result.rows[0], '获取支付记录详情成功');
     } catch (error) {
       console.error('获取支付记录详情失败:', error);
       next(error);
@@ -2526,15 +2350,11 @@ class PaymentController extends BaseController {
       // 返回下载链接
       const downloadUrl = `/payments/download-export?format=${format}&status=${status}&paymentMethod=${paymentMethod}&transactionType=${transactionType}&startDate=${startDate}&endDate=${endDate}&minAmount=${minAmount}&maxAmount=${maxAmount}&keyword=${encodeURIComponent(keyword || '')}&fileName=${fileName}`;
       
-      return res.json({
-        success: true,
-        data: {
-          downloadUrl: downloadUrl,
-          recordCount: result.rows.length,
-          format
-        },
-        message: '导出支付记录成功'
-      });
+      return successResponse(res, {
+        downloadUrl: downloadUrl,
+        recordCount: result.rows.length,
+        format
+      }, '导出支付记录成功');
     } catch (error) {
       console.error('导出支付记录失败:', error);
       next(error);
@@ -2713,10 +2533,7 @@ class PaymentController extends BaseController {
     } catch (error) {
       console.error('下载导出支付记录失败:', error);
       // 返回错误信息而不是抛出异常
-      res.status(500).json({
-        success: false,
-        message: '导出文件生成失败，请稍后重试'
-      });
+      return errorResponse(res, '导出文件生成失败，请稍后重试', 500);
     }
   }
 
@@ -2749,10 +2566,7 @@ class PaymentController extends BaseController {
       
       // 验证必填字段
       if (!paymentMethod || !amount || !description) {
-        return res.status(400).json({
-          success: false,
-          message: '缺少必填字段：paymentMethod, amount, description'
-        });
+        return errorResponse(res, '缺少必填字段：paymentMethod, amount, description', 400);
       }
       
       // 生成交易ID
@@ -2761,18 +2575,14 @@ class PaymentController extends BaseController {
       // 创建支付订单（这里简化处理，实际应该生成真实的支付链接或二维码）
       const paymentUrl = `https://example.com/pay/${transactionId}`;
       
-      return res.json({
+      return successResponse(res, {
         success: true,
-        data: {
-          success: true,
-          orderId: transactionId,
-          status: 'processing',
-          paymentUrl,
-          message: '支付订单创建成功',
-          data: {}
-        },
-        message: '支付订单创建成功'
-      });
+        orderId: transactionId,
+        status: 'processing',
+        paymentUrl,
+        message: '支付订单创建成功',
+        data: {}
+      }, '支付订单创建成功');
     } catch (error) {
       console.error('创建支付订单失败:', error);
       next(error);
@@ -2900,29 +2710,25 @@ class PaymentController extends BaseController {
         query(methodDistributionSql, params)
       ]);
       
-      return res.json({
-        success: true,
-        data: {
-          totalIncome: parseFloat(totalIncomeResult.rows[0].totalIncome),
-          totalExpense: parseFloat(totalExpenseResult.rows[0].totalExpense),
-          totalTransactions: parseInt(totalTransactionsResult.rows[0].totalTransactions),
-          successfulPayments: parseInt(successfulPaymentsResult.rows[0].successfulPayments),
-          pendingPayments: parseInt(pendingPaymentsResult.rows[0].pendingPayments),
-          failedPayments: parseInt(failedPaymentsResult.rows[0].failedPayments),
-          monthlyTransactions: monthlyTransactionsResult.rows.map(row => ({
-            month: row.month,
-            count: parseInt(row.count),
-            amount: parseFloat(row.amount)
-          })),
-          methodDistribution: methodDistributionResult.rows.map(row => ({
-            method: row.method,
-            count: parseInt(row.count),
-            amount: parseFloat(row.amount),
-            percentage: parseFloat(row.percentage)
-          }))
-        },
-        message: '获取支付统计数据成功'
-      });
+      return successResponse(res, {
+        totalIncome: parseFloat(totalIncomeResult.rows[0].totalIncome),
+        totalExpense: parseFloat(totalExpenseResult.rows[0].totalExpense),
+        totalTransactions: parseInt(totalTransactionsResult.rows[0].totalTransactions),
+        successfulPayments: parseInt(successfulPaymentsResult.rows[0].successfulPayments),
+        pendingPayments: parseInt(pendingPaymentsResult.rows[0].pendingPayments),
+        failedPayments: parseInt(failedPaymentsResult.rows[0].failedPayments),
+        monthlyTransactions: monthlyTransactionsResult.rows.map(row => ({
+          month: row.month,
+          count: parseInt(row.count),
+          amount: parseFloat(row.amount)
+        })),
+        methodDistribution: methodDistributionResult.rows.map(row => ({
+          method: row.method,
+          count: parseInt(row.count),
+          amount: parseFloat(row.amount),
+          percentage: parseFloat(row.percentage)
+        }))
+      }, '获取支付统计数据成功');
     } catch (error) {
       console.error('获取支付统计数据失败:', error);
       next(error);
@@ -2951,14 +2757,10 @@ class PaymentController extends BaseController {
       
       const result = await query(sql, [req.user.id]);
       
-      return res.json({
-        success: true,
-        data: result.rows.map(row => ({
-          month: row.month,
-          amount: parseFloat(row.amount)
-        })),
-        message: '获取收入趋势数据成功'
-      });
+      return successResponse(res, result.rows.map(row => ({
+        month: row.month,
+        amount: parseFloat(row.amount)
+      })), '获取收入趋势数据成功');
     } catch (error) {
       console.error('获取收入趋势数据失败:', error);
       next(error);
@@ -2987,15 +2789,11 @@ class PaymentController extends BaseController {
       
       const result = await query(sql, [req.user.id]);
       
-      return res.json({
-        success: true,
-        data: result.rows.map(row => ({
-          name: row.name,
-          amount: parseFloat(row.amount),
-          percentage: parseFloat(row.percentage)
-        })),
-        message: '获取支付方式分布数据成功'
-      });
+      return successResponse(res, result.rows.map(row => ({
+        name: row.name,
+        amount: parseFloat(row.amount),
+        percentage: parseFloat(row.percentage)
+      })), '获取支付方式分布数据成功');
     } catch (error) {
       console.error('获取支付方式分布数据失败:', error);
       next(error);
@@ -3020,10 +2818,7 @@ class PaymentController extends BaseController {
       
       // 验证必填字段
       if (enabled === undefined || !methods || intervalMinutes === undefined) {
-        return res.status(400).json({
-          success: false,
-          message: '缺少必填字段：enabled, methods, intervalMinutes'
-        });
+        return errorResponse(res, '缺少必填字段：enabled, methods, intervalMinutes', 400);
       }
       
       // 检查是否已存在提醒设置
@@ -3047,18 +2842,10 @@ class PaymentController extends BaseController {
         await query(insertSql, [req.user.id, enabled, methods, intervalMinutes]);
       }
       
-      return res.json({
-        success: true,
-        data: true,
-        message: '提醒设置保存成功'
-      });
+      return successResponse(res, true, '提醒设置保存成功');
     } catch (error) {
       console.error('保存提醒设置失败:', error);
-      return res.status(500).json({
-        success: false,
-        data: false,
-        message: '保存提醒设置失败'
-      });
+      return errorResponse(res, '保存提醒设置失败', 500);
     }
   }
 
@@ -3079,10 +2866,7 @@ class PaymentController extends BaseController {
       
       // 验证必填字段
       if (!expenses || !Array.isArray(expenses) || !members || !Array.isArray(members)) {
-        return res.status(400).json({
-          success: false,
-          message: '缺少必填字段或字段类型错误：expenses和members必须是数组'
-        });
+        return errorResponse(res, '缺少必填字段或字段类型错误：expenses和members必须是数组', 400);
       }
       
       // 计算总费用
@@ -3117,16 +2901,13 @@ class PaymentController extends BaseController {
       const totalPaid = sharingResults.reduce((sum, result) => sum + result.paid, 0);
       const totalPending = sharingResults.reduce((sum, result) => sum + result.pending, 0);
       
-      return res.json({
-        success: true,
-        data: {
-          sharingResults,
-          totalExpense: parseFloat(totalExpense.toFixed(2)),
-          perPersonShare: parseFloat(perPersonShare.toFixed(2)),
-          totalPaid: parseFloat(totalPaid.toFixed(2)),
-          totalPending: parseFloat(totalPending.toFixed(2))
-        },
-      });
+      return successResponse(res, {
+        sharingResults,
+        totalExpense: parseFloat(totalExpense.toFixed(2)),
+        perPersonShare: parseFloat(perPersonShare.toFixed(2)),
+        totalPaid: parseFloat(totalPaid.toFixed(2)),
+        totalPending: parseFloat(totalPending.toFixed(2))
+      }, '费用分摊计算成功');
     } catch (error) {
       console.error('费用分摊计算失败:', error);
       next(error);
@@ -3270,16 +3051,12 @@ class PaymentController extends BaseController {
         totalCount
       });
 
-      return res.json({
-        success: true,
-        data: {
-          pendingAmount,
-          paidAmount,
-          pendingCount,
-          totalCount
-        },
-        message: '获取支付确认统计数据成功'
-      });
+      return successResponse(res, {
+        pendingAmount,
+        paidAmount,
+        pendingCount,
+        totalCount
+      }, '获取支付确认统计数据成功');
     } catch (error) {
       console.error('获取支付确认统计数据失败:', error);
       next(error);
@@ -3310,11 +3087,7 @@ class PaymentController extends BaseController {
           RETURNING *
         `;
         const updateResult = await query(updateSql, [enabled, methods, intervalMinutes, userId]);
-        return res.json({
-          success: true,
-          data: updateResult.rows[0],
-          message: '提醒设置保存成功'
-        });
+        return successResponse(res, updateResult.rows[0], '提醒设置保存成功');
       } else {
         // 创建记录
         const insertSql = `
@@ -3323,11 +3096,7 @@ class PaymentController extends BaseController {
           RETURNING *
         `;
         const insertResult = await query(insertSql, [userId, enabled, methods, intervalMinutes]);
-        return res.json({
-          success: true,
-          data: insertResult.rows[0],
-          message: '提醒设置创建成功'
-        });
+        return successResponse(res, insertResult.rows[0], '提醒设置创建成功');
       }
     } catch (error) {
       console.error('保存提醒设置失败:', error);
@@ -3348,19 +3117,13 @@ class PaymentController extends BaseController {
       const result = await query(sql, [userId]);
 
       if (result.rows.length > 0) {
-        return res.json({
-          success: true,
-          data: result.rows[0]
-        });
+        return successResponse(res, result.rows[0]);
       } else {
         // 返回默认设置
-        return res.json({
-          success: true,
-          data: {
-            enabled: false,
-            methods: ['email', 'sms'],
-            intervalMinutes: 60
-          }
+        return successResponse(res, {
+          enabled: false,
+          methods: ['email', 'sms'],
+          intervalMinutes: 60
         });
       }
     } catch (error) {

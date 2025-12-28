@@ -5,8 +5,13 @@
 
 const BaseController = require('./BaseController');
 const { query } = require('../config/database');
+const { successResponse, errorResponse } = require('../middleware/response');
 
 class ExpenseSummaryController extends BaseController {
+  constructor() {
+    super();
+  }
+
   /**
    * 获取费用摘要
    * GET /api/expense-summary/summary
@@ -156,11 +161,7 @@ class ExpenseSummaryController extends BaseController {
       };
 
       // 返回成功响应
-      return res.json({
-        success: true,
-        message: '费用摘要获取成功',
-        data: responseData
-      });
+      return successResponse(res, responseData, '获取费用摘要成功');
     } catch (error) {
       console.error('获取费用摘要失败:', error);
       next(error);

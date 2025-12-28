@@ -315,7 +315,7 @@
               class="participant-item"
             >
               <div class="participant-avatar">
-                <el-avatar :src="participant.avatar" :size="40">
+                <el-avatar :src="getUserAvatar(participant.avatar, participant.email, participant.name)" :size="40">
                   {{ participant.name?.charAt(0) }}
                 </el-avatar>
               </div>
@@ -729,7 +729,7 @@
             class="participant-preview"
           >
             <div class="participant-info">
-              <el-avatar :size="32" :src="participant.avatar">
+              <el-avatar :size="32" :src="getUserAvatar(participant.avatar, participant.email, participant.name)">
                 {{ participant.name.charAt(0) }}
               </el-avatar>
               <span class="participant-name">{{ participant.name }}</span>
@@ -809,6 +809,7 @@ import {
   UserFilled, List, Money, Calendar, Timer, Setting, Clock
 } from '@element-plus/icons-vue'
 import { billService } from '@/services/billService'
+import { getFullAvatarUrl, getUserAvatar } from '@/services/userService'
 
 // 定义组件接收的props
 interface Props {

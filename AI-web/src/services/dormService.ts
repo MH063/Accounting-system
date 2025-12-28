@@ -80,7 +80,7 @@ export class DormService {
   /**
    * 获取单个寝室详情
    */
-  async getDormitoryDetail(dormId: string): Promise<ApiResponse<any>> {
+  async getDormitoryDetail(dormId: string | number): Promise<ApiResponse<any>> {
     try {
       // 验证参数
       if (!dormId) {
@@ -128,6 +128,39 @@ export class DormService {
         data: null,
         message: errorMessage,
         code: error.status || 500
+      }
+    }
+  }
+
+  /**
+   * 获取单个寝室详情（别名，兼容 getDormDetail 调用）
+   */
+  async getDormDetail(dormId: string | number): Promise<ApiResponse<any>> {
+    return this.getDormitoryDetail(dormId)
+  }
+
+  /**
+   * 更新寝室信息
+   */
+  async updateDormInfo(dormId: string | number, dormData: any): Promise<ApiResponse<boolean>> {
+    try {
+      const response = await request<{ success: boolean }>(`/dorms/${dormId}`, {
+        method: 'PUT',
+        data: dormData
+      })
+      
+      return {
+        success: response.success,
+        data: response.success,
+        message: response.message || '更新成功'
+      }
+    } catch (error: any) {
+      console.error('更新寝室信息失败:', error)
+      return {
+        success: false,
+        data: false,
+        message: error.message || '更新失败',
+        code: 500
       }
     }
   }
@@ -384,13 +417,18 @@ export class DormService {
     initialMembers?: { studentId: string; name: string; phone: string }[]
   }): Promise<ApiResponse<number>> {
     try {
-      const response = await request<{ success: boolean; data: { id: number } }>('/dorms/create', {
+      const response = await request<any>('/dorms/create', {
         method: 'POST',
         data: dormData
       })
+      
+      // 处理双层嵌套结构 (Rule 5)
+      const responseData = response.data?.data || response.data
+      const id = typeof responseData === 'object' ? responseData.id : responseData
+      
       return {
         success: response.success,
-        data: response.data.id,
+        data: id,
         message: response.message || '创建寝室成功'
       }
     } catch (error) {

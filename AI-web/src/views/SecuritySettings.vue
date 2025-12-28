@@ -1054,7 +1054,17 @@
       title="会话超时设置"
       width="500px"
     >
-      <el-form :model="sessionTimeoutForm" label-width="120px">
+      <div class="session-timeout-validation" v-if="showSessionTimeoutDialog">
+        <el-alert
+          :title="realTimeValidation.message"
+          :type="realTimeValidation.type"
+          :closable="false"
+          show-icon
+          class="validation-alert"
+        />
+      </div>
+
+      <el-form :model="sessionTimeoutForm" label-width="120px" class="session-timeout-form">
         <el-form-item label="超时时长">
           <el-slider 
             v-model="sessionTimeoutForm.timeout" 
@@ -1069,51 +1079,26 @@
           <el-input-number 
             v-model="sessionTimeoutForm.warningTime" 
             :min="1" 
-            :max="10"
+            :max="120"
             controls-position="right"
           />
-          <span class="form-desc">登出前提前多少分钟提醒（1-10分钟）</span>
+          <span class="form-desc">登出前提前多少分钟提醒（建议 1-10 分钟）</span>
         </el-form-item>
+        
+        <div class="validation-footer-info" v-if="realTimeValidation.adjusted">
+          <el-icon class="info-icon"><WarningFilled /></el-icon>
+          <span>系统将自动采用毫秒级精度 ({{ (sessionTimeoutForm.timeout * 60 * 1000).toLocaleString() }}ms) 存储</span>
+        </div>
       </el-form>
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="cancelSessionTimeout">取消</el-button>
-          <el-button type="primary" @click="saveSessionTimeout">保存</el-button>
+          <el-button type="primary" @click="saveSessionTimeout">保存设置</el-button>
         </span>
       </template>
     </el-dialog>
     
-    <!-- 无操作警告对话框 (会话安全提醒) -->
-    <transition name="security-fade">
-      <div v-if="showInactivityWarning" class="security-modal-overlay">
-        <div class="security-modal-container">
-          <div class="security-modal-content" role="dialog" aria-modal="true" aria-labelledby="security-modal-title">
-            <div class="security-modal-header">
-              <el-icon class="security-shield-icon" aria-hidden="true"><Checked /></el-icon>
-              <h3 id="security-modal-title">会话安全提醒</h3>
-            </div>
-            <div class="security-modal-body">
-              <div class="inactivity-warning-content">
-                <el-icon class="warning-icon"><Warning /></el-icon>
-                <p>检测到您的账号长时间处于空闲状态</p>
-                <p>系统将在 <span class="countdown-time">{{ remainingTime }}</span> 秒后自动登出</p>
-                <div class="security-divider"></div>
-                <p class="activity-hint">为了您的账号安全，请通过以下方式继续使用：</p>
-                <div class="activity-methods">
-                  <span><el-icon><Mouse /></el-icon> 移动鼠标</span>
-                  <span><el-icon><Operation /></el-icon> 按任意键</span>
-                </div>
-              </div>
-            </div>
-            <div class="security-modal-footer">
-              <el-button type="primary" class="security-confirm-btn" @click="handleUserActivity">
-                保持会话活跃
-              </el-button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </transition>
+
     
     <!-- 风险详情对话框 -->
     <el-dialog
@@ -1381,6 +1366,16 @@ const activeTab = ref('account')
 const phoneVerified = ref(false)
 const emailVerified = ref(false)
 const twoFactorEnabled = ref(false)
+const intendedTwoFactorState = ref(false)
+const originalTwoFactorState = ref(false)
+const backupCodes = ref<string[]>([])
+const backupCodesCount = ref(0)
+
+// 监听备用码数组变化，自动更新计数
+watch(backupCodes, (newCodes) => {
+  backupCodesCount.value = newCodes.length
+}, { immediate: true })
+
 const passwordStrength = ref('')
 const loginProtection = ref(false) // 登录保护状态将通过初始化函数设置
 const abnormalLoginAlert = ref(false) // 异常登录提醒状态将通过初始化函数设置
@@ -1640,8 +1635,13 @@ const initializeLoginProtectionStatus = async (): Promise<void> => {
         sessionTimeoutForm.warningTime = actualData.session_timeout_warning_minutes;
       }
       
-      // 重置定时器
-      resetInactivityTimer();
+      // 同步到全局自动登出单例
+      updateAutoLogoutConfig({
+        enabled: true,
+        timeoutMinutes: sessionTimeoutForm.timeout,
+        warningMinutes: sessionTimeoutForm.warningTime
+      })
+      activateAutoLogout()
       
       // 同步到 localStorage
       localStorage.setItem('loginProtectionEnabled', String(loginProtection.value));
@@ -1736,10 +1736,6 @@ const twoFactorQrCode = ref('')
 const twoFactorCode = ref('')
 const isTwoFactorCodeValid = ref(false)
 const newBackupCodes = ref<string[]>([])
-// 用于跟踪用户真实意图的临时变量
-const intendedTwoFactorState = ref(false)
-// 保存原始状态，用于在取消操作时恢复
-const originalTwoFactorState = ref(false)
 
 // 定时器
 const lockStatusTimer = ref<number | null>(null)
@@ -1894,6 +1890,39 @@ const sessionTimeoutForm = reactive({
   warningTime: 5
 })
 
+// 会话超时实时验证
+const realTimeValidation = computed(() => {
+  const timeout = sessionTimeoutForm.timeout
+  const warning = sessionTimeoutForm.warningTime
+  
+  if (warning > timeout) {
+    const adjustedWarning = Number((timeout * 0.9).toFixed(2))
+    return {
+      isValid: false,
+      adjusted: true,
+      message: `提醒时长(${warning}min)大于超时时长(${timeout}min)，保存时将自动调整为 ${adjustedWarning}min (90%)`,
+      type: 'warning' as const
+    }
+  }
+  
+  if (warning === timeout) {
+    return {
+      isValid: true,
+      adjusted: false,
+      message: '验证通过：提醒时长等于超时时长 (100%)',
+      type: 'success' as const
+    }
+  }
+
+  const ratio = ((warning / timeout) * 100).toFixed(0)
+  return {
+    isValid: true,
+    adjusted: false,
+    message: `验证通过：设置符合安全规则 (提醒时间占比: ${ratio}%)`,
+    type: 'success' as const
+  }
+})
+
 // 用于存储原始会话超时设置，用于取消操作时恢复
 const originalSessionTimeoutSettings = reactive({
   timeout: 30,
@@ -2019,10 +2048,6 @@ const strengthClass = computed(() => {
   }
 })
 
-const backupCodesCount = computed(() => {
-  return backupCodes.value.length
-})
-
 const maxFailedAttempts = computed(() => {
   return lockoutSettings.maxFailedAttempts
 })
@@ -2048,273 +2073,6 @@ const initializeFromGlobalConfig = () => {
   sessionTimeoutForm.warningTime = config.warningMinutes
   originalSessionTimeoutSettings.timeout = config.timeoutMinutes
   originalSessionTimeoutSettings.warningTime = config.warningMinutes
-}
-
-// 无操作自动登出功能
-const inactivityTimer = ref<number | null>(null)
-const warningTimer = ref<number | null>(null)
-const heartbeatTimer = ref<number | null>(null) // 心跳检测定时器
-const showInactivityWarning = ref(false)
-
-// 监听弹窗显示状态，锁定/解锁背景滚动
-watch(showInactivityWarning, (newVal) => {
-  if (newVal) {
-    document.body.style.overflow = 'hidden'
-  } else {
-    document.body.style.overflow = ''
-  }
-})
-
-const remainingTime = ref(0)
-const isOnline = ref(navigator.onLine) // 网络连接状态
-let lastActivityTime = Date.now()
-
-/**
- * 记录用户活动日志 (调试用)
- * @param action 操作类型
- */
-const logActivity = (action: string): void => {
-  const now = new Date().toLocaleTimeString()
-  console.log(`[用户活动] ${now} - ${action}`)
-}
-
-/**
- * 重置非活动计时器
- * 实现自动延长机制：任何活动都会重置计时器
- */
-const resetInactivityTimer = (): void => {
-  const now = Date.now()
-  const timeSinceLastActivity = now - lastActivityTime
-  
-  // 更新最后活动时间
-  lastActivityTime = now
-  
-  // 清除现有的定时器
-  if (inactivityTimer.value) {
-    clearTimeout(inactivityTimer.value)
-    inactivityTimer.value = null
-  }
-  if (warningTimer.value) {
-    clearTimeout(warningTimer.value)
-    warningTimer.value = null
-  }
-  
-  // 如果警告对话框正在显示且有新活动，则关闭它 (自动重置机制)
-  if (showInactivityWarning.value) {
-    showInactivityWarning.value = false
-    logActivity('在警告期间恢复活动，已重置计时器')
-  }
-  
-  // 如果会话超时设置已启用
-  if (originalSessionTimeoutSettings.timeout > 0) {
-    const timeoutMs = originalSessionTimeoutSettings.timeout * 60 * 1000
-    const warningMs = originalSessionTimeoutSettings.warningTime * 60 * 1000
-    
-    // 设置警告定时器
-    if (warningMs > 0 && warningMs < timeoutMs) {
-      warningTimer.value = window.setTimeout(() => {
-        // 二次确认：确保在设定时间内确实没有活动
-        const currentTime = Date.now()
-        const idleTime = currentTime - lastActivityTime
-        const warningThreshold = timeoutMs - warningMs
-        
-        // 如果实际空闲时间确实达到了警告阈值（考虑微小误差）
-        if (idleTime >= warningThreshold - 100) {
-          showInactivityWarning.value = true
-          remainingTime.value = Math.floor(warningMs / 1000)
-          startWarningCountdown()
-          logActivity('空闲时间达标，触发登出提醒')
-        } else {
-          // 如果由于某种原因计时器到期但已有新活动，重新设置
-          resetInactivityTimer()
-        }
-      }, timeoutMs - warningMs)
-    }
-    
-    // 设置登出定时器
-    inactivityTimer.value = window.setTimeout(() => {
-      // 最终确认：确保在设定时间内确实没有活动
-      const currentTime = Date.now()
-      const idleTime = currentTime - lastActivityTime
-      
-      if (idleTime >= timeoutMs - 100) {
-        performAutoLogout()
-      } else {
-        // 补偿机制：如果由于标签页休眠导致计时不准，重新设置
-        resetInactivityTimer()
-      }
-    }, timeoutMs)
-  }
-}
-
-/**
- * 心跳检测机制
- * 每隔10秒检查一次最后活动时间，防止标签页休眠导致的计时器暂停
- */
-const startHeartbeatCheck = (): void => {
-  if (heartbeatTimer.value) clearInterval(heartbeatTimer.value)
-  
-  heartbeatTimer.value = window.setInterval(() => {
-    if (originalSessionTimeoutSettings.timeout <= 0) return
-    
-    const now = Date.now()
-    const idleTime = now - lastActivityTime
-    const timeoutMs = originalSessionTimeoutSettings.timeout * 60 * 1000
-    const warningMs = originalSessionTimeoutSettings.warningTime * 60 * 1000
-    const warningThreshold = timeoutMs - warningMs
-    
-    // 如果已经超过超时时间，立即执行登出
-    if (idleTime >= timeoutMs) {
-      logActivity('心跳检测发现已超时，执行强制登出')
-      performAutoLogout()
-      return
-    }
-    
-    // 如果已经进入警告时间段但对话框未显示，则补发显示
-    if (warningMs > 0 && idleTime >= warningThreshold && !showInactivityWarning.value) {
-      logActivity('心跳检测补发现提醒对话框')
-      showInactivityWarning.value = true
-      remainingTime.value = Math.floor((timeoutMs - idleTime) / 1000)
-      startWarningCountdown()
-    }
-  }, 10000) // 每10秒检查一次
-}
-
-/**
- * 处理页面可见性变化
- */
-const handleVisibilityChange = (): void => {
-  if (document.visibilityState === 'visible') {
-    logActivity('页面恢复可见，执行同步检查')
-    // 页面切回时立即进行一次心跳检查
-    const now = Date.now()
-    const idleTime = now - lastActivityTime
-    const timeoutMs = originalSessionTimeoutSettings.timeout * 60 * 1000
-    
-    if (idleTime >= timeoutMs) {
-      performAutoLogout()
-    } else {
-      // 如果没超时，视为一次活动，重置计时器
-      resetInactivityTimer()
-    }
-  } else {
-    logActivity('页面切换至后台')
-  }
-}
-
-/**
- * 处理网络连接变化
- */
-const handleNetworkChange = (): void => {
-  isOnline.value = navigator.onLine
-  if (isOnline.value) {
-    logActivity('网络已连接')
-    resetInactivityTimer()
-  } else {
-    logActivity('网络已断开')
-    ElMessage.warning('网络连接已断开，自动登出计时器已暂停')
-  }
-}
-
-const startWarningCountdown = (): void => {
-  const countdownInterval = setInterval(() => {
-    // 如果在倒计时期间发生了活动（showInactivityWarning 被设为 false），清除倒计时
-    if (!showInactivityWarning.value) {
-      clearInterval(countdownInterval)
-      return
-    }
-    
-    remainingTime.value--
-    if (remainingTime.value <= 0) {
-      clearInterval(countdownInterval)
-      // performAutoLogout 会被 inactivityTimer 触发，这里不需要重复调用
-    }
-  }, 1000)
-}
-
-const performAutoLogout = (): void => {
-  // 清除所有定时器
-  if (inactivityTimer.value) {
-    clearTimeout(inactivityTimer.value)
-    inactivityTimer.value = null
-  }
-  if (warningTimer.value) {
-    clearTimeout(warningTimer.value)
-    warningTimer.value = null
-  }
-  if (heartbeatTimer.value) {
-    clearInterval(heartbeatTimer.value)
-    heartbeatTimer.value = null
-  }
-  
-  // 隐藏警告对话框
-  showInactivityWarning.value = false
-  
-  // 记录安全日志
-  logSecurityOperation({
-    userId: currentUserId.value,
-    operation: 'auto_logout',
-    description: '无操作自动登出 (智能机制)',
-    ip: clientIpAddress.value || '127.0.0.1',
-    userAgent: navigator.userAgent,
-    status: 'success'
-  })
-  
-  // 清除本地存储的认证信息
-  localStorage.removeItem('access_token')
-  localStorage.removeItem('refresh_token')
-  localStorage.removeItem('token_expires')
-  localStorage.removeItem('isAuthenticated')
-  localStorage.removeItem('user_info')
-  localStorage.removeItem('session_id')
-  localStorage.removeItem('sessionToken')
-  
-  // 跳转到登录页面
-  ElMessage.warning('由于长时间无操作，您已自动登出')
-  router.push('/login?reason=inactivity')
-}
-
-// 用户活动事件处理
-const handleUserActivity = (): void => {
-  // 如果网络在线，则重置计时器
-  if (isOnline.value) {
-    resetInactivityTimer()
-  }
-}
-
-// 绑定用户活动事件监听
-const bindActivityListeners = (): void => {
-  if (typeof window !== 'undefined') {
-    // 用户活动监听
-    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart', 'mousedown', 'wheel']
-    events.forEach(event => window.addEventListener(event, handleUserActivity))
-    
-    // 页面状态监听
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    window.addEventListener('online', handleNetworkChange)
-    window.addEventListener('offline', handleNetworkChange)
-    
-    // 启动心跳
-    startHeartbeatCheck()
-    
-    logActivity('已启动智能自动登出监听机制')
-  }
-}
-
-// 解绑用户活动事件监听
-const unbindActivityListeners = (): void => {
-  if (typeof window !== 'undefined') {
-    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart', 'mousedown', 'wheel']
-    events.forEach(event => window.removeEventListener(event, handleUserActivity))
-    
-    document.removeEventListener('visibilitychange', handleVisibilityChange)
-    window.removeEventListener('online', handleNetworkChange)
-    window.removeEventListener('offline', handleNetworkChange)
-    
-    if (heartbeatTimer.value) clearInterval(heartbeatTimer.value)
-    
-    logActivity('已停止智能自动登出监听机制')
-  }
 }
 
 // 登录频率限制状态
@@ -2354,8 +2112,6 @@ const rateLimitDetails = computed(() => {
 })
 
 // 移除模拟数据 - 现在使用真实API数据
-const backupCodes = ref<string[]>([])
-
 const loginDevices = ref<any[]>([])
 
 const loginHistory = ref<any[]>([])
@@ -2829,17 +2585,17 @@ const toggleTwoFactor = async (value: boolean): Promise<void> => {
         intendedTwoFactorState.value = false
       }
     } else {
-      // 禁用两步验证 - 需要密码确认
+      // 禁用两步验证 - 需要验证码确认
       try {
-        const { value: password } = await ElMessageBox.prompt('请输入密码以禁用两步验证', '确认禁用', {
+        const { value: code } = await ElMessageBox.prompt('请输入6位动态验证码或备用码以禁用两步验证', '确认禁用', {
           confirmButtonText: '确认',
           cancelButtonText: '取消',
-          inputType: 'password',
-          inputPattern: /.+/,
-          inputErrorMessage: '密码不能为空'
+          inputType: 'text',
+          inputPattern: /^[a-zA-Z0-9]{6,10}$/, // 允许6位纯数字TOTP或8-10位字母数字备用码
+          inputErrorMessage: '请输入有效的验证码或备用码'
         })
         
-        const response = await disableTotpAuth(password)
+        const response = await disableTotpAuth(code)
         
         if (response.success) {
       twoFactorEnabled.value = false
@@ -3002,32 +2758,37 @@ const completeTwoFactorSetup = async (): Promise<void> => {
 }
 
 const cancelTwoFactorSetup = async (): Promise<void> => {
+  console.log('[SecuritySettings] 用户取消两步验证设置，回滚前状态:', {
+    intended: intendedTwoFactorState.value,
+    current: twoFactorEnabled.value,
+    original: originalTwoFactorState.value
+  })
+  
   showTwoFactorSetupDialog.value = false
   twoFactorStep.value = 0
   
+  // 立即强制回滚状态，确保 UI 响应
+  intendedTwoFactorState.value = originalTwoFactorState.value
+  twoFactorEnabled.value = originalTwoFactorState.value
+  
+  console.log('[SecuritySettings] 状态已立即回滚:', {
+    intended: intendedTwoFactorState.value,
+    current: twoFactorEnabled.value
+  })
+  
   try {
-    // 检查用户是否已完成两步验证设置
+    // 异步检查后端状态以确保同步
     const statusResponse = await checkTotpStatus()
-    
-    // 关键点：处理双层 data 结构 (Rule 5)
     const actualData = statusResponse.data?.data || statusResponse.data;
     
-    // 只有在真正完成设置的情况下才保持开启状态
-    if (statusResponse.success && actualData?.enabled) {
-      // 已完成设置，保持开关开启状态
-      twoFactorEnabled.value = true
-      intendedTwoFactorState.value = true
-    } else {
-      // 未完成设置，回滚到原始状态
-      twoFactorEnabled.value = originalTwoFactorState.value
-      intendedTwoFactorState.value = originalTwoFactorState.value
-      // 不再清理配置，保留已有的配置以便下次使用
+    if (statusResponse.success && actualData) {
+      twoFactorEnabled.value = !!actualData.enabled
+      intendedTwoFactorState.value = !!actualData.enabled
+      originalTwoFactorState.value = !!actualData.enabled
+      backupCodesCount.value = actualData.backupCodesCount || 0
     }
   } catch (error) {
     console.error('检查两步验证状态失败:', error)
-    // 出错时回滚到原始状态
-    twoFactorEnabled.value = originalTwoFactorState.value
-    intendedTwoFactorState.value = originalTwoFactorState.value
   }
   
   // 记录安全操作日志
@@ -3046,33 +2807,29 @@ const cancelTwoFactorSetup = async (): Promise<void> => {
 }
 
 const handleTwoFactorDialogClose = async (): Promise<void> => {
-  try {
-    // 检查用户是否已完成两步验证设置
-    const statusResponse = await checkTotpStatus()
-    
-    // 关键点：处理双层 data 结构 (Rule 5)
-    const actualData = statusResponse.data?.data || statusResponse.data;
-    
-    // 只有在真正完成设置的情况下才保持开启状态
-    if (statusResponse.success && actualData?.enabled) {
-      // 已完成设置，保持开关开启状态
-      twoFactorEnabled.value = true
-      intendedTwoFactorState.value = true
-    } else {
-      // 未完成设置，回滚到原始状态
-      twoFactorEnabled.value = originalTwoFactorState.value
-      intendedTwoFactorState.value = originalTwoFactorState.value
-      // 不再清理配置，保留已有的配置以便下次使用
-    }
-  } catch (error) {
-    console.error('检查两步验证状态失败:', error)
-    // 出错时回滚到原始状态
-    twoFactorEnabled.value = originalTwoFactorState.value
-    intendedTwoFactorState.value = originalTwoFactorState.value
-  }
+  console.log('[SecuritySettings] 两步验证对话框关闭，执行状态检查/回滚...')
   
   // 重置步骤
   twoFactorStep.value = 0
+  
+  // 立即回滚状态
+  intendedTwoFactorState.value = originalTwoFactorState.value
+  twoFactorEnabled.value = originalTwoFactorState.value
+  
+  console.log('[SecuritySettings] 状态已重置为原始值:', originalTwoFactorState.value)
+  
+  try {
+    const statusResponse = await checkTotpStatus()
+    const actualData = statusResponse.data?.data || statusResponse.data;
+    
+    if (statusResponse.success && actualData) {
+      twoFactorEnabled.value = !!actualData.enabled
+      intendedTwoFactorState.value = !!actualData.enabled
+      originalTwoFactorState.value = !!actualData.enabled
+    }
+  } catch (error) {
+    console.error('检查两步验证状态失败:', error)
+  }
   
   // 记录安全操作日志
   const userId = currentUserId.value;
@@ -4375,17 +4132,33 @@ const saveSessionTimeout = async (): Promise<void> => {
     loading.close()
 
     if (response.success) {
-      ElMessage.success(`会话超时设置已保存：超时时长 ${sessionTimeoutForm.timeout} 分钟，提醒时间 ${sessionTimeoutForm.warningTime} 分钟`)
+      // 从后端返回的数据中获取实际生效的值（可能已被后端自动调整）
+      const { effectiveTimeout, effectiveWarning, sessionTimeoutAdjusted } = response.data.validation || {}
+      
+      const finalTimeout = effectiveTimeout !== undefined ? effectiveTimeout : sessionTimeoutForm.timeout
+      const finalWarning = effectiveWarning !== undefined ? effectiveWarning : sessionTimeoutForm.warningTime
+      
+      if (sessionTimeoutAdjusted) {
+        ElMessage.warning({
+          message: `设置已保存，但根据安全规则已自动调整：超时时长 ${finalTimeout} 分钟，提醒时间 ${finalWarning} 分钟`,
+          duration: 5000
+        })
+      } else {
+        ElMessage.success(`会话超时设置已保存：超时时长 ${finalTimeout} 分钟，提醒时间 ${finalWarning} 分钟`)
+      }
+      
       showSessionTimeoutDialog.value = false
       
-      // 更新原始设置为当前设置
+      // 更新本地表单和原始设置为实际生效的值
+      sessionTimeoutForm.timeout = finalTimeout
+      sessionTimeoutForm.warningTime = finalWarning
       Object.assign(originalSessionTimeoutSettings, sessionTimeoutForm)
       
-      // 更新全局自动登出配置
+      // 更新全局自动登出配置（使用毫秒精度）
       updateAutoLogoutConfig({
         enabled: true,
-        timeoutMinutes: sessionTimeoutForm.timeout,
-        warningMinutes: sessionTimeoutForm.warningTime
+        timeoutMinutes: finalTimeout,
+        warningMinutes: finalWarning
       })
       
       // 激活全局自动登出机制
@@ -4847,6 +4620,27 @@ const initializeBiometricSupport = async (): Promise<void> => {
   }
 }
 
+// 同步两步验证状态
+const syncTwoFactorStatus = async (): Promise<void> => {
+  try {
+    console.log('[SecuritySettings] 开始从后端同步两步验证状态...')
+    const statusResponse = await checkTotpStatus()
+    
+    // 关键点：处理双层 data 结构 (Rule 5)
+    const actualData = statusResponse.data?.data || statusResponse.data;
+    
+    if (statusResponse.success && actualData) {
+      console.log('[SecuritySettings] 获取到两步验证状态:', actualData.enabled ? '开启' : '关闭')
+      twoFactorEnabled.value = !!actualData.enabled
+      intendedTwoFactorState.value = !!actualData.enabled
+      originalTwoFactorState.value = !!actualData.enabled
+      backupCodesCount.value = actualData.backupCodesCount || 0
+    }
+  } catch (error) {
+    console.error('[SecuritySettings] 同步两步验证状态失败:', error)
+  }
+}
+
 // 初始化安全配置
 const initializeSecurityConfig = (): void => {
   try {
@@ -4857,10 +4651,7 @@ const initializeSecurityConfig = (): void => {
     loginRateLimit.value = config.rateLimit.enabled
     Object.assign(lockoutSettings, config.lockout)
     
-    // 初始化两步验证状态为关闭（系统默认要求）
-    twoFactorEnabled.value = false
-    // 同步设置意图状态
-    intendedTwoFactorState.value = false
+    // 注意：两步验证状态现在通过 syncTwoFactorStatus 从后端同步，不再这里硬编码
   } catch (error) {
     console.error('初始化安全配置失败:', error)
   }
@@ -4929,6 +4720,8 @@ onMounted(async () => {
   
   // 初始化生物识别支持
   await initializeBiometricSupport()
+  // 同步两步验证状态
+  await syncTwoFactorStatus()
   // 初始化安全配置
   initializeSecurityConfig()
   // 启动锁定状态检查
@@ -4948,10 +4741,6 @@ onMounted(async () => {
   
   // 启动登录历史自动刷新
   startLoginHistoryAutoRefresh()
-  
-  // 启动无操作自动登出功能
-  resetInactivityTimer()
-  bindActivityListeners()
 })
 
 // 初始化登录设备限制配置
@@ -5336,21 +5125,45 @@ onUnmounted(() => {
   stopTokenTimer()
   stopLockStatusCheck()
   stopLoginHistoryAutoRefresh()
-  // 清理无操作登出定时器和事件监听
-  if (inactivityTimer.value) {
-    clearTimeout(inactivityTimer.value)
-  }
-  if (warningTimer.value) {
-    clearTimeout(warningTimer.value)
-  }
-  if (heartbeatTimer.value) {
-    clearInterval(heartbeatTimer.value)
-  }
-  unbindActivityListeners()
 })
 </script>
 
 <style scoped>
+.session-timeout-validation {
+  margin-bottom: 20px;
+}
+
+.validation-alert {
+  border-radius: 8px;
+}
+
+.session-timeout-form {
+  padding: 10px 0;
+}
+
+.validation-footer-info {
+  margin-top: 15px;
+  padding: 10px;
+  background-color: #f0f9eb;
+  border-left: 4px solid #67c23a;
+  color: #606266;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+}
+
+.info-icon {
+  margin-right: 8px;
+  color: #67c23a;
+  font-size: 16px;
+}
+
+.form-desc {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+  display: block;
+}
 .backup-codes-actions-inline {
   display: flex;
   gap: 10px;

@@ -5,7 +5,7 @@
         v-show="show" 
         class="auto-logout-overlay"
       >
-        <div class="auto-logout-backdrop" @click="handleKeepAlive"></div>
+        <div class="auto-logout-backdrop"></div>
         <div class="auto-logout-dialog">
           <div class="dialog-icon">
             <el-icon :size="48"><Warning /></el-icon>
@@ -63,28 +63,10 @@ const handleKeepAlive = () => {
   emit('keep-alive')
 }
 
-const handleUserActivity = (event: Event) => {
-  if (props.show) {
-    event.preventDefault?.()
-    event.stopPropagation?.()
-    handleKeepAlive()
-  }
-}
-
 onMounted(() => {
-  window.addEventListener('mousemove', handleUserActivity)
-  window.addEventListener('keydown', handleUserActivity)
-  window.addEventListener('click', handleUserActivity)
-  window.addEventListener('touchstart', handleUserActivity)
-  window.addEventListener('scroll', handleUserActivity)
 })
 
 onUnmounted(() => {
-  window.removeEventListener('mousemove', handleUserActivity)
-  window.removeEventListener('keydown', handleUserActivity)
-  window.removeEventListener('click', handleUserActivity)
-  window.removeEventListener('touchstart', handleUserActivity)
-  window.removeEventListener('scroll', handleUserActivity)
 })
 </script>
 

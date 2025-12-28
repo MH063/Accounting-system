@@ -1,11 +1,24 @@
 const BaseController = require('./BaseController');
 const DormService = require('../services/DormService');
 const logger = require('../config/logger');
+const { successResponse, errorResponse } = require('../middleware/response');
 
 class DormController extends BaseController {
   constructor() {
     super();
     this.dormService = new DormService();
+    
+    // 确保方法正确绑定到类实例
+    this.getDormList = this.getDormList.bind(this);
+    this.createDorm = this.createDorm.bind(this);
+    this.getDormById = this.getDormById.bind(this);
+    this.updateDorm = this.updateDorm.bind(this);
+    this.deleteDorm = this.deleteDorm.bind(this);
+    this.getDormMembers = this.getDormMembers.bind(this);
+    this.updateMemberRole = this.updateMemberRole.bind(this);
+    this.updateMemberStatus = this.updateMemberStatus.bind(this);
+    this.removeMember = this.removeMember.bind(this);
+    this.updateDormSettings = this.updateDormSettings.bind(this);
   }
 
   /**
@@ -52,7 +65,7 @@ class DormController extends BaseController {
         logger.error('[DormController] 获取宿舍列表失败', { 
           reason: result.message 
         });
-        return this.sendError(res, result.message, 500);
+        return errorResponse(res, result.message, 500);
       }
 
       const { dorms, pagination: paginationInfo } = result.data;
@@ -63,7 +76,7 @@ class DormController extends BaseController {
       });
 
       // 返回成功响应
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         dorms: dorms,
         pagination: paginationInfo
       }, '宿舍列表获取成功');
@@ -97,7 +110,7 @@ class DormController extends BaseController {
         logger.error('[DormController] 创建宿舍失败', { 
           reason: result.message 
         });
-        return this.sendError(res, result.message, 400);
+        return errorResponse(res, result.message, 400);
       }
 
       const { dorm } = result.data;
@@ -109,7 +122,7 @@ class DormController extends BaseController {
       });
 
       // 返回成功响应
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         dorm: dorm
       }, '宿舍创建成功');
 
@@ -143,7 +156,7 @@ class DormController extends BaseController {
           reason: result.message,
           dormId: id
         });
-        return this.sendError(res, result.message, 404);
+        return errorResponse(res, result.message, 404);
       }
 
       const { dorm } = result.data;
@@ -155,7 +168,7 @@ class DormController extends BaseController {
       });
 
       // 返回成功响应
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         dorm: dorm
       }, '宿舍详情获取成功');
 
@@ -196,7 +209,7 @@ class DormController extends BaseController {
         });
         // 根据错误类型返回适当的HTTP状态码
         const statusCode = result.message.includes('权限') ? 403 : 400;
-        return this.sendError(res, result.message, statusCode);
+        return errorResponse(res, result.message, statusCode);
       }
 
       const { dorm } = result.data;
@@ -208,7 +221,7 @@ class DormController extends BaseController {
       });
 
       // 返回成功响应
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         dorm: dorm
       }, '宿舍信息更新成功');
 
@@ -247,7 +260,7 @@ class DormController extends BaseController {
         });
         // 根据错误类型返回适当的HTTP状态码
         const statusCode = result.message.includes('权限') ? 403 : 400;
-        return this.sendError(res, result.message, statusCode);
+        return errorResponse(res, result.message, statusCode);
       }
 
       const { dorm } = result.data;
@@ -259,7 +272,7 @@ class DormController extends BaseController {
       });
 
       // 返回成功响应
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         dorm: dorm
       }, '宿舍删除成功');
 
@@ -302,7 +315,7 @@ class DormController extends BaseController {
         });
         // 根据错误类型返回适当的HTTP状态码
         const statusCode = result.message.includes('权限') ? 403 : 400;
-        return this.sendError(res, result.message, statusCode);
+        return errorResponse(res, result.message, statusCode);
       }
 
       const { userDorm } = result.data;
@@ -316,7 +329,7 @@ class DormController extends BaseController {
       });
 
       // 返回成功响应
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         userDorm: userDorm
       }, '成员角色更新成功');
 
@@ -359,7 +372,7 @@ class DormController extends BaseController {
         });
         // 根据错误类型返回适当的HTTP状态码
         const statusCode = result.message.includes('权限') ? 403 : 400;
-        return this.sendError(res, result.message, statusCode);
+        return errorResponse(res, result.message, statusCode);
       }
 
       const { userDorm } = result.data;
@@ -373,7 +386,7 @@ class DormController extends BaseController {
       });
 
       // 返回成功响应
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         userDorm: userDorm
       }, '成员状态更新成功');
 
@@ -416,7 +429,7 @@ class DormController extends BaseController {
         });
         // 根据错误类型返回适当的HTTP状态码
         const statusCode = result.message.includes('权限') ? 403 : 400;
-        return this.sendError(res, result.message, statusCode);
+        return errorResponse(res, result.message, statusCode);
       }
 
       const { userDorm } = result.data;
@@ -429,7 +442,7 @@ class DormController extends BaseController {
       });
 
       // 返回成功响应
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         userDorm: userDorm
       }, '成员删除成功');
 
@@ -463,7 +476,7 @@ class DormController extends BaseController {
           reason: result.message, 
           dormId: id
         });
-        return this.sendError(res, result.message, 400);
+        return errorResponse(res, result.message, 400);
       }
 
       const settings = result.data;
@@ -474,7 +487,7 @@ class DormController extends BaseController {
       });
 
       // 返回成功响应
-      return this.sendSuccess(res, settings, '寝室设置获取成功');
+      return successResponse(res, settings, '寝室设置获取成功');
 
     } catch (error) {
       logger.error('[DormController] 获取寝室设置异常', { error: error.message });
@@ -513,7 +526,7 @@ class DormController extends BaseController {
         });
         // 根据错误类型返回适当的HTTP状态码
         const statusCode = result.message.includes('权限') ? 403 : 400;
-        return this.sendError(res, result.message, statusCode);
+        return errorResponse(res, result.message, statusCode);
       }
 
       const updatedSettings = result.data;
@@ -524,7 +537,7 @@ class DormController extends BaseController {
       });
 
       // 返回成功响应
-      return this.sendSuccess(res, updatedSettings, '寝室设置更新成功');
+      return successResponse(res, updatedSettings, '寝室设置更新成功');
 
     } catch (error) {
       logger.error('[DormController] 更新寝室设置异常', { error: error.message });
@@ -558,7 +571,7 @@ class DormController extends BaseController {
           reason: result.message, 
           dormId: id
         });
-        return this.sendError(res, result.message, 400);
+        return errorResponse(res, result.message, 400);
       }
 
       const { history, pagination } = result.data;
@@ -570,7 +583,7 @@ class DormController extends BaseController {
       });
 
       // 返回成功响应
-      return this.sendSuccess(res, { history, pagination }, '寝室变更历史获取成功');
+      return successResponse(res, { history, pagination }, '寝室变更历史获取成功');
 
     } catch (error) {
       logger.error('[DormController] 获取寝室变更历史异常', { error: error.message });
@@ -607,7 +620,7 @@ class DormController extends BaseController {
         });
         // 根据错误类型返回适当的HTTP状态码
         const statusCode = result.message.includes('权限') ? 403 : 400;
-        return this.sendError(res, result.message, statusCode);
+        return errorResponse(res, result.message, statusCode);
       }
 
       const { dorm, dismissal } = result.data;
@@ -618,7 +631,7 @@ class DormController extends BaseController {
       });
 
       // 返回成功响应
-      return this.sendSuccess(res, { dorm, dismissal }, '解散流程开始成功');
+      return successResponse(res, { dorm, dismissal }, '解散流程开始成功');
 
     } catch (error) {
       logger.error('[DormController] 开始解散流程异常', { error: error.message });
@@ -655,7 +668,7 @@ class DormController extends BaseController {
         });
         // 根据错误类型返回适当的HTTP状态码
         const statusCode = result.message.includes('权限') ? 403 : 400;
-        return this.sendError(res, result.message, statusCode);
+        return errorResponse(res, result.message, statusCode);
       }
 
       const { dorm, dismissal } = result.data;
@@ -666,7 +679,7 @@ class DormController extends BaseController {
       });
 
       // 返回成功响应
-      return this.sendSuccess(res, { dorm, dismissal }, '确认解散成功');
+      return successResponse(res, { dorm, dismissal }, '确认解散成功');
 
     } catch (error) {
       logger.error('[DormController] 确认解散异常', { error: error.message });
@@ -703,7 +716,7 @@ class DormController extends BaseController {
         });
         // 根据错误类型返回适当的HTTP状态码
         const statusCode = result.message.includes('权限') ? 403 : 400;
-        return this.sendError(res, result.message, statusCode);
+        return errorResponse(res, result.message, statusCode);
       }
 
       const { dorm, dismissal } = result.data;
@@ -714,7 +727,7 @@ class DormController extends BaseController {
       });
 
       // 返回成功响应
-      return this.sendSuccess(res, { dorm, dismissal }, '取消解散成功');
+      return successResponse(res, { dorm, dismissal }, '取消解散成功');
 
     } catch (error) {
       logger.error('[DormController] 取消解散异常', { error: error.message });
@@ -746,7 +759,7 @@ class DormController extends BaseController {
           reason: result.message, 
           dormId: id
         });
-        return this.sendError(res, result.message, 400);
+        return errorResponse(res, result.message, 400);
       }
 
       const { pendingFees } = result.data;
@@ -758,7 +771,7 @@ class DormController extends BaseController {
       });
 
       // 返回成功响应
-      return this.sendSuccess(res, { pendingFees }, '待结算费用获取成功');
+      return successResponse(res, { pendingFees }, '待结算费用获取成功');
 
     } catch (error) {
       logger.error('[DormController] 获取待结算费用异常', { error: error.message });
@@ -790,7 +803,7 @@ class DormController extends BaseController {
           reason: result.message, 
           dormId: id
         });
-        return this.sendError(res, result.message, 400);
+        return errorResponse(res, result.message, 400);
       }
 
       const { members } = result.data;
@@ -802,7 +815,7 @@ class DormController extends BaseController {
       });
 
       // 返回成功响应
-      return this.sendSuccess(res, { members }, '寝室成员列表获取成功');
+      return successResponse(res, { members }, '寝室成员列表获取成功');
 
     } catch (error) {
       logger.error('[DormController] 获取寝室成员列表异常', { error: error.message });
@@ -833,7 +846,7 @@ class DormController extends BaseController {
         logger.error('[DormController] 获取待审核成员列表失败', { 
           reason: result.message
         });
-        return this.sendError(res, result.message, 400);
+        return errorResponse(res, result.message, 400);
       }
 
       const { members } = result.data;
@@ -844,7 +857,7 @@ class DormController extends BaseController {
       });
 
       // 返回成功响应
-      return this.sendSuccess(res, { members }, '待审核成员列表获取成功');
+      return successResponse(res, { members }, '待审核成员列表获取成功');
 
     } catch (error) {
       logger.error('[DormController] 获取待审核成员列表异常', { error: error.message });
@@ -876,7 +889,7 @@ class DormController extends BaseController {
           reason: result.message,
           userId: userId
         });
-        return this.sendError(res, result.message, 404);
+        return errorResponse(res, result.message, 404);
       }
 
       const { dorm } = result.data;
@@ -889,7 +902,7 @@ class DormController extends BaseController {
       });
 
       // 返回成功响应
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         dorm: dorm
       }, '用户所在的寝室信息获取成功');
 

@@ -24,7 +24,7 @@ export const logSecurityVerification = async (
   try {
     console.log('[SecurityVerificationService] 记录安全验证日志', { operation, verificationType, success, reason })
     
-    const response = await request<{ logId: number }>('/security-verification/log', {
+    const response = await request<any>('/security-verification/log', {
       method: 'POST',
       data: {
         operation,
@@ -34,7 +34,11 @@ export const logSecurityVerification = async (
       }
     })
     
-    console.log('[SecurityVerificationService] 安全验证日志记录成功', { logId: response.data.logId })
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = response.data?.data || response.data || response;
+    const logId = typeof actualData === 'object' ? actualData.logId : actualData;
+    
+    console.log('[SecurityVerificationService] 安全验证日志记录成功', { logId })
     return true
   } catch (error) {
     console.error('[SecurityVerificationService] 记录安全验证日志失败:', error)
@@ -64,12 +68,16 @@ export const getSecurityVerificationLogs = async (params?: {
     if (params?.verificationType) queryParams.append('verificationType', params.verificationType)
     if (params?.success !== undefined) queryParams.append('success', params.success.toString())
     
-    const response = await request<{ logs: any[]; total: number }>(`/security-verification/logs?${queryParams.toString()}`, {
+    const response = await request<any>(`/security-verification/logs?${queryParams.toString()}`, {
       method: 'GET'
     })
     
-    console.log('[SecurityVerificationService] 获取安全验证日志成功', { count: response.data.logs.length })
-    return response.data.logs
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = response.data?.data || response.data || response;
+    const logs = actualData.logs || (Array.isArray(actualData) ? actualData : []);
+    
+    console.log('[SecurityVerificationService] 获取安全验证日志成功', { count: logs.length })
+    return logs
   } catch (error) {
     console.error('[SecurityVerificationService] 获取安全验证日志失败:', error)
     return []

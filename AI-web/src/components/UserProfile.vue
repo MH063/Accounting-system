@@ -2,7 +2,9 @@
   <div class="user-profile">
     <!-- 用户信息触发区域 -->
     <div class="user-info" @click="toggleDropdown">
-      <img :src="userInfo.avatar" alt="用户头像" class="user-avatar" />
+      <el-avatar :size="36" :src="userInfo.avatar" class="user-avatar">
+        <el-icon><User /></el-icon>
+      </el-avatar>
       <span class="user-name">{{ userInfo.name }}</span>
       <el-icon class="dropdown-icon" :class="{ 'is-open': dropdownVisible }">
         <ArrowDown />
@@ -14,7 +16,9 @@
       <div v-if="dropdownVisible" class="dropdown-menu" v-click-outside="closeDropdown">
         <!-- 用户预览区 -->
         <div class="user-preview">
-          <img :src="userInfo.avatar" alt="用户头像" class="preview-avatar" />
+          <el-avatar :size="48" :src="userInfo.avatar" class="preview-avatar">
+            <el-icon><User /></el-icon>
+          </el-avatar>
           <div class="preview-info">
             <div class="preview-name">{{ userInfo.name }}</div>
             <div class="preview-role">{{ userInfo.role }}</div>
@@ -55,11 +59,13 @@
 import { ref, reactive, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { User, SwitchButton, ArrowDown, Refresh, QuestionFilled, InfoFilled } from '@element-plus/icons-vue'
-import { getCurrentUser } from '@/services/userService'
+import { getCurrentUser, getDefaultAvatar, getFullAvatarUrl, getUserAvatar } from '@/services/userService'
 import { checkForUpdates } from '@/services/versionService'
 import { showInfoMessage, showErrorMessage, showSuccessMessage, showConfirmDialog } from '@/utils/messageUtils'
 import { logout } from '@/services/authService'
 import { ElMessage } from 'element-plus'
+import eventBus from '@/utils/eventBus'
+import { onUnmounted } from 'vue'
 
 
 // 路由
@@ -76,9 +82,9 @@ interface UserInfo {
 // 用户信息
 const userInfo = reactive<UserInfo>({
   name: typeof localStorage !== 'undefined' ? localStorage.getItem('username') || '用户' : '用户',
-  email: 'zhangsan@example.com',
+  email: '',
   role: '管理员',
-  avatar: 'https://picsum.photos/seed/user123/100/100.jpg'
+  avatar: getDefaultAvatar()
 })
 
 // 下拉菜单显示状态
@@ -295,8 +301,13 @@ const fetchUserInfo = async (): Promise<void> => {
     
     if (response && response.success && response.data) {
       // 更新用户信息，使用Object.assign保持响应性
-      Object.assign(userInfo, response.data)
-      console.log('用户信息获取成功:', userInfo)
+      const userData = { ...response.data }
+      const avatar = userData.avatar || userData.avatar_url
+      const finalAvatar = getUserAvatar(avatar, userData.email, userData.name)
+      userData.avatar = finalAvatar
+      
+      Object.assign(userInfo, userData)
+      console.log('用户信息获取成功，头像URL:', finalAvatar)
     } else {
       console.error('获取用户信息失败:', response?.message || '未知错误')
       showErrorMessage('获取用户信息失败')
@@ -312,8 +323,16 @@ onMounted(() => {
   console.log('UserProfile组件已挂载')
   fetchUserInfo()
   
+  // 监听用户信息更新事件
+  eventBus.on('user-info-updated', fetchUserInfo)
+  
   // 自动检查更新（可选）
   handleCheckUpdate()
+})
+
+// 组件销毁时移除监听
+onUnmounted(() => {
+  eventBus.off('user-info-updated', fetchUserInfo)
 })
 </script>
 
@@ -339,11 +358,9 @@ onMounted(() => {
 }
 
 .user-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
   margin-right: 10px;
-  object-fit: cover;
+  background-color: #f0f2f5;
+  color: #909399;
 }
 
 .user-name {
@@ -385,11 +402,9 @@ onMounted(() => {
 }
 
 .preview-avatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
   margin-right: 12px;
-  object-fit: cover;
+  background-color: #f0f2f5;
+  color: #909399;
 }
 
 .preview-info {

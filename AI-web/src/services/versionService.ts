@@ -118,7 +118,9 @@ export const checkForUpdates = async (): Promise<VersionCheckResponse> => {
     }
     
     const apiResponse = await response.json();
-    const latestVersion: AppVersion = apiResponse.data;
+    // 处理后端返回的双层嵌套结构 (Rule 5)
+    const actualData = apiResponse.data?.data || apiResponse.data || apiResponse;
+    const latestVersion: AppVersion = actualData;
     
     // 检查用户是否已忽略此版本
     if (isVersionIgnored(latestVersion.version)) {

@@ -10,7 +10,9 @@
       <div class="profile-sidebar">
         <div class="user-info-card">
           <div class="avatar-container">
-            <img :src="userInfo.avatar" alt="用户头像" class="user-avatar" />
+            <el-avatar :src="userInfo.avatar" class="user-avatar">
+              <el-icon><User /></el-icon>
+            </el-avatar>
           </div>
           <h3 class="user-name">{{ userInfo.name }}</h3>
           <p class="user-email">{{ userInfo.email }}</p>
@@ -38,7 +40,7 @@
       
       <!-- 内容区域 -->
       <div class="profile-main">
-        <component :is="currentComponent" />
+        <component :is="currentComponent" @refresh="fetchUserInfo" />
       </div>
     </div>
   </div>
@@ -51,7 +53,9 @@ import { User, Setting, Lock } from '@element-plus/icons-vue'
 import PersonalInfo from './PersonalInfo.vue'
 import PreferenceSettings from './PreferenceSettings.vue'
 import SecuritySettings from './SecuritySettings.vue'
-import { getCurrentUser } from '@/services/userService'
+import { getCurrentUser, getFullAvatarUrl, getUserAvatar } from '@/services/userService'
+import eventBus from '@/utils/eventBus'
+import { onUnmounted } from 'vue'
 
 // 当前激活的菜单
 const activeMenu = ref('personal-info')
@@ -119,7 +123,10 @@ const fetchUserInfo = async () => {
     if (response.success && response.data) {
       userInfo.value.name = response.data.name
       userInfo.value.email = response.data.email
-      userInfo.value.avatar = response.data.avatar || 'https://picsum.photos/100/100'
+      const avatar = response.data.avatar || response.data.avatar_url
+      const finalAvatar = getUserAvatar(avatar, response.data.email, response.data.name)
+      userInfo.value.avatar = finalAvatar
+      console.log('[Profile] 更新侧边栏头像:', finalAvatar)
     }
   } catch (error) {
     console.error('获取用户信息失败:', error)
@@ -130,6 +137,14 @@ const fetchUserInfo = async () => {
 onMounted(() => {
   setActiveMenuFromRoute()
   fetchUserInfo()
+  
+  // 监听用户信息更新事件
+  eventBus.on('user-info-updated', fetchUserInfo)
+})
+
+// 组件销毁时移除监听
+onUnmounted(() => {
+  eventBus.off('user-info-updated', fetchUserInfo)
 })
 
 // 监听路由变化
@@ -191,10 +206,16 @@ watch(() => route.query, () => {
 .user-avatar {
   width: 80px;
   height: 80px;
-  border-radius: 50%;
-  object-fit: cover;
   border: 3px solid #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex !important;
+  justify-content: center;
+  align-items: center;
+  margin: 0 auto;
+  background-color: #f0f2f5 !important;
+  color: #909399 !important;
+  font-size: 40px;
+  border-radius: 50%;
 }
 
 .user-name {

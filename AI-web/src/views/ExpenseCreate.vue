@@ -229,7 +229,7 @@
                   >
                     <el-avatar 
                       :size="16" 
-                      :src="member.avatar"
+                      :src="userService.getUserAvatar(member.avatar, member.email, member.name)"
                       class="member-avatar-small"
                     >
                       {{ member.name.charAt(0) }}
@@ -447,7 +447,7 @@
               <div class="member-content">
                 <el-avatar 
                   :size="50" 
-                  :src="member.avatar"
+                  :src="userService.getUserAvatar(member.avatar, '', member.name)"
                   class="member-avatar"
                 >
                   {{ member.name.charAt(0) }}

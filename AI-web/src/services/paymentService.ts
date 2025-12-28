@@ -253,10 +253,13 @@ export const getPaymentRecords = async (filter: PaymentFilter = {}) => {
 export const getPaymentRecordDetail = async (orderId: string) => {
   try {
     // 调用真实API获取支付记录详情
-    const response = await request<PaymentRecord>(`/payments/${orderId}`)
+    const response = await request<any>(`/payments/${orderId}`)
+    
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = response.data?.data || response.data
     
     // 如果启用了数据加密，尝试解密敏感信息
-    if (dataEncryptionManager.isEncryptionEnabled() && response.data.recipientName) {
+    if (dataEncryptionManager.isEncryptionEnabled() && actualData && actualData.recipientName) {
       // 检查是否已有主密钥，如果没有则从存储中加载
       if (!dataEncryptionManager.hasMasterKey()) {
         // 设置主密钥（实际应用中应从安全存储获取）
@@ -266,15 +269,18 @@ export const getPaymentRecordDetail = async (orderId: string) => {
       
       // 解密敏感字段
       try {
-        response.data.recipientName = dataEncryptionManager.decryptField(response.data.recipientName)
-        response.data.recipientAccount = dataEncryptionManager.decryptField(response.data.recipientAccount || '')
+        actualData.recipientName = dataEncryptionManager.decryptField(actualData.recipientName)
+        actualData.recipientAccount = dataEncryptionManager.decryptField(actualData.recipientAccount || '')
       } catch (error) {
         console.warn('解密支付记录敏感信息失败:', error)
         // 如果解密失败，保持加密状态或使用默认值
       }
     }
     
-    return response
+    return {
+      ...response,
+      data: actualData
+    }
   } catch (error) {
     console.error('获取支付记录详情失败:', error)
     throw new Error('获取支付记录详情失败')
@@ -298,9 +304,15 @@ export const getPaymentStatistics = async (timeRange?: TimeRange) => {
     
     // 调用真实API获取支付统计数据
     const url = `/payments/statistics${params.toString() ? `?${params.toString()}` : ''}`
-    const response = await request<PaymentStatistics>(url)
+    const response = await request<any>(url)
     
-    return response
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = response.data?.data || response.data
+    
+    return {
+      ...response,
+      data: actualData
+    }
   } catch (error: any) {
     console.error('获取支付统计数据失败:', error)
     if (error.message && error.message.includes('404')) {
@@ -332,9 +344,15 @@ export const getConfirmStatistics = async (params: {
     })
     
     const url = `/payments/confirm-statistics${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
-    const response = await request<ConfirmStatistics>(url)
+    const response = await request<any>(url)
     
-    return response
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = response.data?.data || response.data
+    
+    return {
+      ...response,
+      data: actualData
+    }
   } catch (error: any) {
     console.error('获取支付确认统计数据失败:', error)
     throw new Error(error.message || '获取支付确认统计数据失败')

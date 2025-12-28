@@ -89,9 +89,12 @@ export const getQuickStats = async (
       method: 'GET'
     })
     
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = response.data?.data || response.data
+    
     return {
       success: response.success,
-      data: response.data,
+      data: actualData,
       message: response.message
     }
   } catch (error) {

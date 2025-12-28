@@ -39,8 +39,11 @@
           <!-- 用户信息显示 -->
           <div class="user-info" v-if="userInfo">
             <div class="user-avatar">
-              <el-avatar :size="60" :src="userInfo.avatar_url">
-                {{ userInfo.username?.charAt(0)?.toUpperCase() }}
+              <el-avatar 
+                :size="60" 
+                :src="getUserAvatar(userInfo.avatar_url, userInfo.email, userInfo.nickname || userInfo.username)"
+              >
+                <el-icon><User /></el-icon>
               </el-avatar>
             </div>
             <div class="user-details">
@@ -168,6 +171,8 @@ import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { verifyTwoFactor, generateTwoFactorCode, getTwoFactorStatus } from '@/services/authService'
 import { getLocalUserInfo } from '@/services/authService'
+import { User } from '@element-plus/icons-vue'
+import { getUserAvatar } from '@/services/userService'
 
 // 路由实例
 const router = useRouter()
@@ -688,6 +693,10 @@ onUnmounted(() => {
 
 .user-avatar {
   margin-right: 15px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .user-details h4 {

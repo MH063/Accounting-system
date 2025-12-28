@@ -15,6 +15,15 @@ export const unlockAccountAPI = async (accountId: string): Promise<ApiResponse<a
       method: 'POST'
     })
     
+    // 处理双层嵌套结构 (Rule 5)
+    if (response && response.success) {
+      const actualData = (response.data as any)?.data || response.data;
+      return {
+        ...response,
+        data: actualData
+      };
+    }
+    
     return response
   } catch (error) {
     console.error('解锁账户失败:', error)
@@ -42,6 +51,15 @@ export const lockAccountAPI = async (accountId: string, duration: number = 30): 
       data: { lockDuration: duration }
     })
     
+    // 处理双层嵌套结构 (Rule 5)
+    if (response && response.success) {
+      const actualData = (response.data as any)?.data || response.data;
+      return {
+        ...response,
+        data: actualData
+      };
+    }
+    
     return response
   } catch (error) {
     console.error('锁定账户失败:', error)
@@ -66,6 +84,15 @@ export const getAccountStatusAPI = async (accountId: string): Promise<ApiRespons
     const response = await request<ApiResponse<any>>(`/accounts/${accountId}/status`, {
       method: 'GET'
     })
+    
+    // 处理双层嵌套结构 (Rule 5)
+    if (response && response.success) {
+      const actualData = (response.data as any)?.data || response.data;
+      return {
+        ...response,
+        data: actualData
+      };
+    }
     
     return response
   } catch (error) {

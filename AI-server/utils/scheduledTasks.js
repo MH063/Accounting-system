@@ -1,6 +1,29 @@
 const cron = require('node-cron');
 const { logManager } = require('./logManager');
 const { logger } = require('../config/logger');
+const databaseOptimizer = require('./databaseOptimizer');
+
+/**
+ * 数据库健康检查任务
+ * 每10分钟执行一次，监控连接池、慢查询和回滚率
+ */
+const dbHealthCheckTask = cron.schedule('*/10 * * * *', async () => {
+  logger.info('[CRON] 开始执行数据库健康检查');
+  
+  try {
+    const result = await databaseOptimizer.checkHealthAndAlert();
+    if (result.status !== 'HEALTHY') {
+      logger.warn(`[CRON] 数据库健康检查提醒: 状态为 ${result.status}，发现 ${result.alerts.length} 个潜在问题`);
+    } else {
+      logger.info('[CRON] 数据库健康检查完成，系统运行良好');
+    }
+  } catch (error) {
+    logger.error(`[CRON] 数据库健康检查异常: ${error.message}`);
+  }
+}, {
+  scheduled: false,
+  timezone: 'Asia/Shanghai'
+});
 
 /**
  * 日志清理任务
@@ -30,6 +53,7 @@ const logCleanupTask = cron.schedule('0 2 * * *', () => {
  */
 function startScheduledTasks() {
   logCleanupTask.start();
+  dbHealthCheckTask.start();
   logger.info('[CRON] 所有定时任务已启动');
 }
 
@@ -38,6 +62,7 @@ function startScheduledTasks() {
  */
 function stopScheduledTasks() {
   logCleanupTask.stop();
+  dbHealthCheckTask.stop();
   logger.info('[CRON] 所有定时任务已停止');
 }
 

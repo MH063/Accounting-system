@@ -18,7 +18,9 @@
       <div class="user-info">
         <el-dropdown>
           <span class="user-name">
-            <img src="https://picsum.photos/seed/user-avatar/32/32.jpg" alt="用户头像" class="avatar" />
+            <el-avatar :size="32" src="https://picsum.photos/seed/user-avatar/32/32.jpg" class="avatar">
+              <el-icon><User /></el-icon>
+            </el-avatar>
             管理员
             <el-icon class="el-icon--right"><arrow-down /></el-icon>
           </span>
@@ -110,7 +112,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { ArrowDown, Bell, Close } from '@element-plus/icons-vue'
+import { ArrowDown, Bell, Close, User } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '@/api'
 import { useStore } from 'vuex'
@@ -366,9 +368,6 @@ const handleLogout = () => {
 }
 
 .avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
   margin-right: 8px;
 }
 

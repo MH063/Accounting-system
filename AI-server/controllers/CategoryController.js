@@ -6,6 +6,7 @@
 const BaseController = require('./BaseController');
 const CategoryService = require('../services/CategoryService');
 const logger = require('../config/logger');
+const { successResponse, errorResponse } = require('../middleware/response');
 
 class CategoryController extends BaseController {
   constructor() {
@@ -37,12 +38,10 @@ class CategoryController extends BaseController {
       // 调用服务层获取分类列表
       const result = await this.categoryService.getCategories(options);
       
-      return res.json({
-        success: true,
-        message: '分类列表获取成功',
-        data: result.data,
+      return successResponse(res, {
+        categories: result.data,
         pagination: result.pagination
-      });
+      }, '分类列表获取成功');
     } catch (error) {
       logger.error('[CategoryController] 获取分类列表失败', { error: error.message });
       next(error);
@@ -71,12 +70,10 @@ class CategoryController extends BaseController {
       // 调用服务层获取活跃分类列表
       const result = await this.categoryService.getActiveCategories(options);
       
-      return res.json({
-        success: true,
-        message: '活跃分类列表获取成功',
-        data: result.data,
+      return successResponse(res, {
+        categories: result.data,
         pagination: result.pagination
-      });
+      }, '活跃分类列表获取成功');
     } catch (error) {
       logger.error('[CategoryController] 获取活跃分类列表失败', { error: error.message });
       next(error);
@@ -97,17 +94,10 @@ class CategoryController extends BaseController {
       const category = await this.categoryService.getCategoryDetail(id);
       
       if (!category) {
-        return res.status(404).json({
-          success: false,
-          message: '分类不存在'
-        });
+        return errorResponse(res, '分类不存在', 404);
       }
 
-      return res.json({
-        success: true,
-        message: '分类详情获取成功',
-        data: category
-      });
+      return successResponse(res, { category }, '分类详情获取成功');
     } catch (error) {
       logger.error('[CategoryController] 获取分类详情失败', { error: error.message });
       next(error);
@@ -125,13 +115,9 @@ class CategoryController extends BaseController {
       });
 
       // 调用服务层创建分类
-      const createdCategory = await this.categoryService.createCategory(req.body);
+      const result = await this.categoryService.createCategory(req.body);
       
-      return res.status(201).json({
-        success: true,
-        message: '分类创建成功',
-        data: createdCategory
-      });
+      return successResponse(res, { category: result }, '分类创建成功', 201);
     } catch (error) {
       logger.error('[CategoryController] 创建分类失败', { error: error.message });
       next(error);
@@ -152,20 +138,13 @@ class CategoryController extends BaseController {
       });
 
       // 调用服务层更新分类
-      const updatedCategory = await this.categoryService.updateCategory(id, req.body);
+      const result = await this.categoryService.updateCategory(id, req.body);
       
-      if (!updatedCategory) {
-        return res.status(404).json({
-          success: false,
-          message: '分类不存在'
-        });
+      if (!result) {
+        return errorResponse(res, '分类不存在', 404);
       }
 
-      return res.json({
-        success: true,
-        message: '分类更新成功',
-        data: updatedCategory
-      });
+      return successResponse(res, { category: result }, '分类更新成功');
     } catch (error) {
       logger.error('[CategoryController] 更新分类失败', { error: error.message });
       next(error);
@@ -183,19 +162,13 @@ class CategoryController extends BaseController {
       logger.info('[CategoryController] 删除分类', { id });
 
       // 调用服务层删除分类
-      const success = await this.categoryService.deleteCategory(id);
+      const result = await this.categoryService.deleteCategory(id);
       
-      if (!success) {
-        return res.status(404).json({
-          success: false,
-          message: '分类不存在'
-        });
+      if (!result) {
+        return errorResponse(res, '分类不存在', 404);
       }
 
-      return res.json({
-        success: true,
-        message: '分类删除成功'
-      });
+      return successResponse(res, null, '分类删除成功');
     } catch (error) {
       logger.error('[CategoryController] 删除分类失败', { error: error.message });
       next(error);
@@ -213,11 +186,7 @@ class CategoryController extends BaseController {
       // 调用服务层获取分类使用统计
       const statistics = await this.categoryService.getCategoryUsageStatistics();
       
-      return res.json({
-        success: true,
-        message: '分类使用统计获取成功',
-        data: statistics
-      });
+      return successResponse(res, statistics, '分类使用统计获取成功');
     } catch (error) {
       logger.error('[CategoryController] 获取分类使用统计失败', { error: error.message });
       next(error);

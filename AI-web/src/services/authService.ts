@@ -784,16 +784,16 @@ export const enableTotpAuth = async (enableData: TotpEnableRequest): Promise<Api
 
 /**
  * 禁用TOTP两步验证
- * @param password 用户密码
+ * @param code 6位验证码或备用码
  * @returns 禁用结果的API响应
  */
-export const disableTotpAuth = async (password: string): Promise<ApiResponse<{ disabled: boolean; message: string }>> => {
+export const disableTotpAuth = async (code: string): Promise<ApiResponse<{ disabled: boolean; message: string }>> => {
   try {
     console.log('禁用TOTP两步验证')
     
     const response = await request<ApiResponse<{ disabled: boolean; message: string }>>('/auth/totp/disable', {
       method: 'POST',
-      body: JSON.stringify({ password })
+      body: JSON.stringify({ code })
     })
     
     console.log('禁用TOTP两步验证API返回响应:', response)

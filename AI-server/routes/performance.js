@@ -9,16 +9,44 @@ const { monitor } = require('../middleware/performanceMonitor');
 
 // 导入性能优化工具类
 const { cache } = require('../config/multiLevelCache');
-const DatabaseOptimizer = require('../utils/databaseOptimizer');
+const dbOptimizer = require('../utils/databaseOptimizer');
 const StaticResourceOptimizer = require('../utils/staticResourceOptimizer');
 const LoadBalancerManager = require('../utils/loadBalancerManager');
 const { getCDNManager } = require('../utils/cdnManager');
 
-// 初始化组件
-const dbOptimizer = new DatabaseOptimizer();
 const resourceOptimizer = new StaticResourceOptimizer();
 const loadBalancer = new LoadBalancerManager();
 const cdnManager = getCDNManager();
+
+const { sendSuccess, sendError } = require('../middleware/response');
+
+// ==================== 数据库优化路由 ====================
+
+/**
+ * 获取数据库健康状态
+ * GET /api/performance/database/health
+ */
+router.get('/database/health', async (req, res) => {
+  try {
+    const health = await dbOptimizer.checkHealthAndAlert();
+    return sendSuccess(res, health, '获取数据库健康状态成功');
+  } catch (error) {
+    return sendError(res, '获取数据库健康状态失败', 500, error);
+  }
+});
+
+/**
+ * 获取数据库性能分析
+ * GET /api/performance/database/analysis
+ */
+router.get('/database/analysis', async (req, res) => {
+  try {
+    const analysis = await dbOptimizer.analyzePerformance();
+    return sendSuccess(res, analysis, '获取数据库性能分析成功');
+  } catch (error) {
+    return sendError(res, '获取数据库性能分析失败', 500, error);
+  }
+});
 
 // ==================== 多级缓存管理路由 ====================
 
@@ -32,20 +60,13 @@ router.get('/cache/status', async (req, res) => {
     const healthStatus = await cache.healthCheck();
     const config = cache.getConfig();
     
-    res.json({
-      success: true,
-      data: {
-        stats: cacheStats,
-        health: healthStatus,
-        config: config
-      }
-    });
+    return sendSuccess(res, {
+      stats: cacheStats,
+      health: healthStatus,
+      config: config
+    }, '获取缓存状态成功');
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: '获取缓存状态失败',
-      error: error.message
-    });
+    return sendError(res, '获取缓存状态失败', 500, error);
   }
 });
 
@@ -64,17 +85,9 @@ router.post('/cache/flush', async (req, res) => {
       result = await cache.flush();
     }
     
-    res.json({
-      success: true,
-      message: '缓存清除成功',
-      data: result
-    });
+    return sendSuccess(res, result, '缓存清除成功');
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: '缓存清除失败',
-      error: error.message
-    });
+    return sendError(res, '缓存清除失败', 500, error);
   }
 });
 
@@ -88,19 +101,12 @@ router.get('/cache/keys', async (req, res) => {
     
     const keys = await cache.getKeys(level, parseInt(limit));
     
-    res.json({
-      success: true,
-      data: {
-        keys,
-        count: keys.length
-      }
-    });
+    return sendSuccess(res, {
+      keys,
+      count: keys.length
+    }, '获取缓存键成功');
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: '获取缓存键失败',
-      error: error.message
-    });
+    return sendError(res, '获取缓存键失败', 500, error);
   }
 });
 
@@ -116,26 +122,19 @@ router.get('/cdn/status', async (req, res) => {
     const configStatus = cdnManager.getConfigStatus();
     const healthStatus = await cdnManager.healthCheck();
     
-    res.json({
-      success: true,
-      data: {
-        stats: cdnStats,
-        config: configStatus,
-        health: healthStatus,
-        urls: {
-          test: cdnManager.generateCDNUrl('test.jpg'),
-          homepage: cdnManager.generateCDNUrl('index.html'),
-          css: cdnManager.generateCDNUrl('assets/style.css'),
-          js: cdnManager.generateCDNUrl('assets/script.js')
-        }
+    return sendSuccess(res, {
+      stats: cdnStats,
+      config: configStatus,
+      health: healthStatus,
+      urls: {
+        test: cdnManager.generateCDNUrl('test.jpg'),
+        homepage: cdnManager.generateCDNUrl('index.html'),
+        css: cdnManager.generateCDNUrl('assets/style.css'),
+        js: cdnManager.generateCDNUrl('assets/script.js')
       }
-    });
+    }, '获取CDN状态成功');
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: '获取CDN状态失败',
-      error: error.message
-    });
+    return sendError(res, '获取CDN状态失败', 500, error);
   }
 });
 
@@ -154,17 +153,9 @@ router.post('/cdn/purge', async (req, res) => {
       result = await cdnManager.purgeCache(urls);
     }
     
-    res.json({
-      success: true,
-      message: 'CDN缓存清除请求已发送',
-      data: result
-    });
+    return sendSuccess(res, result, 'CDN缓存清除请求已发送');
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'CDN缓存清除失败',
-      error: error.message
-    });
+    return sendError(res, 'CDN缓存清除失败', 500, error);
   }
 });
 

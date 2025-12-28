@@ -3,9 +3,14 @@
  * 处理各种数据分析和转换任务
  */
 
-const { getQueue, QUEUES } = require('../config/messageQueue');
 const logger = require('../config/logger');
 const { pool } = require('../config/database');
+
+// 延后加载 messageQueue 以避免循环依赖
+const getDataQueue = () => {
+  const { getQueue, QUEUES } = require('../config/messageQueue');
+  return getQueue(QUEUES.DATA_PROCESSING);
+};
 
 /**
  * 数据处理作业处理器
@@ -659,7 +664,7 @@ class DataProcessingJobProcessor {
  */
 function registerDataProcessingProcessors() {
   try {
-    const dataQueue = getQueue(QUEUES.DATA_PROCESSING);
+    const dataQueue = getDataQueue();
     
     // 数据分析处理器
     dataQueue.process('dataAnalysis', 3, async (job) => {

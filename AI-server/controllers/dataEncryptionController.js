@@ -4,7 +4,7 @@
  */
 
 const { DataEncryptionService } = require('../services/dataEncryptionService');
-const { responseWrapper } = require('../middleware/response');
+const { responseWrapper, successResponse, errorResponse } = require('../middleware/response');
 const { asyncHandler } = require('../middleware/errorHandling');
 const { pool } = require('../config/database');
 
@@ -39,10 +39,7 @@ const encryptData = responseWrapper(asyncHandler(async (req, res, next) => {
   const { dataType, dataId, data, metadata } = req.body;
 
   if (!dataType || !data) {
-    return res.status(400).json({
-      success: false,
-      message: '缺少必要参数: dataType 和 data'
-    });
+    return errorResponse(res, '缺少必要参数: dataType 和 data', 400);
   }
 
   // 获取用户的主密钥
@@ -50,10 +47,7 @@ const encryptData = responseWrapper(asyncHandler(async (req, res, next) => {
   const masterKeyResult = await keyManagementService.getLatestMasterKey(userId);
   
   if (!masterKeyResult.success || !masterKeyResult.key) {
-    return res.status(400).json({
-      success: false,
-      message: '无法获取用户主密钥，请先生成密钥'
-    });
+    return errorResponse(res, '无法获取用户主密钥，请先生成密钥', 400);
   }
 
   const result = await getDataEncryptionService().encryptAndSave(
@@ -61,17 +55,9 @@ const encryptData = responseWrapper(asyncHandler(async (req, res, next) => {
   );
 
   if (result.success) {
-    res.json({
-      success: true,
-      message: '数据加密保存成功',
-      data: { dataHash: result.dataHash }
-    });
+    return successResponse(res, { dataHash: result.dataHash }, '数据加密保存成功');
   } else {
-    res.status(500).json({
-      success: false,
-      message: '数据加密保存失败',
-      error: result.error
-    });
+    return errorResponse(res, '数据加密保存失败', 500, result.error);
   }
 }));
 
@@ -85,10 +71,7 @@ const decryptData = responseWrapper(asyncHandler(async (req, res, next) => {
   const { dataId } = req.query;
 
   if (!dataType) {
-    return res.status(400).json({
-      success: false,
-      message: '缺少必要参数: dataType'
-    });
+    return errorResponse(res, '缺少必要参数: dataType', 400);
   }
 
   // 获取用户的主密钥
@@ -96,31 +79,21 @@ const decryptData = responseWrapper(asyncHandler(async (req, res, next) => {
   const masterKeyResult = await keyManagementService.getLatestMasterKey(userId);
   
   if (!masterKeyResult.success || !masterKeyResult.key) {
-    return res.status(400).json({
-      success: false,
-      message: '无法获取用户主密钥'
-    });
+    return errorResponse(res, '无法获取用户主密钥，请先生成密钥', 400);
   }
 
   const result = await getDataEncryptionService().decryptAndRead(
-    userId, dataType, dataId, masterKeyResult.key
+    userId, dataType, dataId || 'default', masterKeyResult.key
   );
 
   if (result.success) {
-    res.json({
-      success: true,
-      data: {
-        content: result.data,
-        metadata: result.metadata,
-        createdAt: result.createdAt,
-        updatedAt: result.updatedAt
-      }
-    });
+    return successResponse(res, { 
+      data: result.data,
+      metadata: result.metadata,
+      decryptedAt: result.decryptedAt
+    }, '数据解密成功');
   } else {
-    res.status(404).json({
-      success: false,
-      message: result.error || '未找到加密数据'
-    });
+    return errorResponse(res, '数据解密失败', 500, result.error);
   }
 }));
 
@@ -133,10 +106,7 @@ const decryptBatch = responseWrapper(asyncHandler(async (req, res, next) => {
   const { dataType } = req.params;
 
   if (!dataType) {
-    return res.status(400).json({
-      success: false,
-      message: '缺少必要参数: dataType'
-    });
+    return errorResponse(res, '缺少必要参数: dataType', 400);
   }
 
   // 获取用户的主密钥
@@ -144,10 +114,7 @@ const decryptBatch = responseWrapper(asyncHandler(async (req, res, next) => {
   const masterKeyResult = await keyManagementService.getLatestMasterKey(userId);
   
   if (!masterKeyResult.success || !masterKeyResult.key) {
-    return res.status(400).json({
-      success: false,
-      message: '无法获取用户主密钥'
-    });
+    return errorResponse(res, '无法获取用户主密钥', 400);
   }
 
   const result = await getDataEncryptionService().decryptBatch(
@@ -155,16 +122,9 @@ const decryptBatch = responseWrapper(asyncHandler(async (req, res, next) => {
   );
 
   if (result.success) {
-    res.json({
-      success: true,
-      data: result.data
-    });
+    return successResponse(res, result.data, '批量解密成功');
   } else {
-    res.status(500).json({
-      success: false,
-      message: '批量解密数据失败',
-      error: result.error
-    });
+    return errorResponse(res, '批量解密数据失败', 500, result.error);
   }
 }));
 
@@ -179,16 +139,9 @@ const deleteEncryptedData = responseWrapper(asyncHandler(async (req, res, next) 
   const result = await getDataEncryptionService().delete(userId, dataType, dataId);
 
   if (result.success) {
-    res.json({
-      success: true,
-      message: result.deleted ? '数据已删除' : '数据不存在'
-    });
+    return successResponse(res, null, result.deleted ? '数据已删除' : '数据不存在');
   } else {
-    res.status(500).json({
-      success: false,
-      message: '删除数据失败',
-      error: result.error
-    });
+    return errorResponse(res, '删除数据失败', 500, result.error);
   }
 }));
 
@@ -202,16 +155,9 @@ const getEncryptionStats = responseWrapper(asyncHandler(async (req, res, next) =
   const result = await getDataEncryptionService().getStats(userId);
 
   if (result.success) {
-    res.json({
-      success: true,
-      data: result.stats
-    });
+    return successResponse(res, result.stats, '获取统计信息成功');
   } else {
-    res.status(500).json({
-      success: false,
-      message: '获取统计信息失败',
-      error: result.error
-    });
+    return errorResponse(res, '获取统计信息失败', 500, result.error);
   }
 }));
 

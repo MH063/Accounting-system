@@ -379,7 +379,9 @@
                   <el-table-column prop="name" label="姓名" width="120">
                     <template #default="{ row }">
                       <div class="member-info">
-                        <el-avatar :size="32">{{ row.name.charAt(0) }}</el-avatar>
+                        <el-avatar :size="32" :src="getUserAvatar(row.avatar || row.avatar_url, row.email, row.name)">
+                          {{ row.name.charAt(0) }}
+                        </el-avatar>
                         <span>{{ row.name }}</span>
                       </div>
                     </template>
@@ -451,7 +453,9 @@
 
             <div class="admin-info">
               <div class="admin-avatar">
-                <el-avatar :size="60">{{ dormData.adminInfo.nickname?.charAt(0) || dormData.adminInfo.username?.charAt(0) || '管' }}</el-avatar>
+                <el-avatar :size="60" :src="getUserAvatar(dormData.adminInfo.avatar || dormData.adminInfo.avatar_url, dormData.adminInfo.email, dormData.adminInfo.nickname || dormData.adminInfo.username)">
+                  {{ dormData.adminInfo.nickname?.charAt(0) || dormData.adminInfo.username?.charAt(0) || '管' }}
+                </el-avatar>
               </div>
               <div class="admin-details">
                 <div class="admin-name">{{ dormData.adminInfo.nickname || dormData.adminInfo.username }}</div>
@@ -473,7 +477,9 @@
                 :key="member.id"
               >
                 <div class="member-avatar">
-                  <el-avatar :size="32">{{ member.name?.charAt(0) || '成' }}</el-avatar>
+                  <el-avatar :size="32" :src="getUserAvatar(member.avatar || member.avatar_url, member.email, member.name)">
+                    {{ member.name?.charAt(0) || '成' }}
+                  </el-avatar>
                 </div>
                 <div class="member-info">
                   <div class="member-name">{{ member.name }}</div>
@@ -496,7 +502,9 @@
             <div class="activity-list">
               <div class="activity-item" v-for="activity in recentActivities" :key="activity.id">
                 <div class="activity-avatar">
-                  <el-avatar :size="32">{{ activity.user.charAt(0) }}</el-avatar>
+                  <el-avatar :size="32" :src="getUserAvatar(activity.avatar || activity.avatar_url, activity.email, activity.user)">
+                    {{ activity.user.charAt(0) }}
+                  </el-avatar>
                 </div>
                 <div class="activity-content">
                   <div class="activity-text">{{ activity.description }}</div>
@@ -570,6 +578,7 @@ import {
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import dormService from '@/services/dormService'
+import { getUserAvatar } from '@/services/userService'
 
 // 路由相关
 const route = useRoute()

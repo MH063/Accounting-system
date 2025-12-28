@@ -9,8 +9,8 @@
             <el-button type="primary" :icon="Setting" @click="openWidgetSettings">
               个性化设置
             </el-button>
-            <el-button :type="autoRefreshEnabled ? 'success' : 'info'" :icon="Refresh" @click="toggleAutoRefresh">
-              {{ autoRefreshEnabled ? '已开启实时更新' : '开启实时更新' }}
+            <el-button :type="widgetSettings.autoRefresh ? 'success' : 'info'" :icon="Refresh" @click="toggleAutoRefresh">
+              {{ widgetSettings.autoRefresh ? '已开启实时更新' : '开启实时更新' }}
             </el-button>
           </div>
         </div>
@@ -142,26 +142,26 @@
             <div class="settings-section">
               <h3>显示的Widget</h3>
               <div class="widget-toggles">
-                <div class="widget-toggle" :class="{ active: enabledWidgets.includes('stats') }">
+                <div class="widget-toggle" :class="{ active: tempEnabledWidgets.includes('stats') }">
                   <div class="widget-info">
                     <el-icon class="widget-icon"><DataAnalysis /></el-icon>
                     <span>统计数据</span>
                   </div>
-                  <el-switch :model-value="enabledWidgets.includes('stats')" @change="toggleWidget('stats')" />
+                  <el-switch :model-value="tempEnabledWidgets.includes('stats')" @change="toggleWidget('stats')" />
                 </div>
-                <div class="widget-toggle" :class="{ active: enabledWidgets.includes('smart-notifications') }">
+                <div class="widget-toggle" :class="{ active: tempEnabledWidgets.includes('smart-notifications') }">
                   <div class="widget-info">
                     <el-icon class="widget-icon"><Bell /></el-icon>
                     <span>智能提醒</span>
                   </div>
-                  <el-switch :model-value="enabledWidgets.includes('smart-notifications')" @change="toggleWidget('smart-notifications')" />
+                  <el-switch :model-value="tempEnabledWidgets.includes('smart-notifications')" @change="toggleWidget('smart-notifications')" />
                 </div>
-                <div class="widget-toggle" :class="{ active: enabledWidgets.includes('activities') }">
+                <div class="widget-toggle" :class="{ active: tempEnabledWidgets.includes('activities') }">
                   <div class="widget-info">
                     <el-icon class="widget-icon"><Clock /></el-icon>
                     <span>最近活动</span>
                   </div>
-                  <el-switch :model-value="enabledWidgets.includes('activities')" @change="toggleWidget('activities')" />
+                  <el-switch :model-value="tempEnabledWidgets.includes('activities')" @change="toggleWidget('activities')" />
                 </div>
               </div>
             </div>
@@ -169,15 +169,15 @@
             <div class="settings-section">
               <h3>布局设置</h3>
               <div class="layout-options">
-                <div class="layout-option" :class="{ active: widgetSettings.layout === 'default' }" @click="widgetSettings.layout = 'default'">
+                <div class="layout-option" :class="{ active: tempWidgetSettings.layout === 'default' }" @click="tempWidgetSettings.layout = 'default'">
                   <el-icon :size="24"><Grid /></el-icon>
                   <div style="margin-top: 8px;">默认布局</div>
                 </div>
-                <div class="layout-option" :class="{ active: widgetSettings.layout === 'compact' }" @click="widgetSettings.layout = 'compact'">
+                <div class="layout-option" :class="{ active: tempWidgetSettings.layout === 'compact' }" @click="tempWidgetSettings.layout = 'compact'">
                   <el-icon :size="24"><List /></el-icon>
                   <div style="margin-top: 8px;">紧凑布局</div>
                 </div>
-                <div class="layout-option" :class="{ active: widgetSettings.layout === 'detailed' }" @click="widgetSettings.layout = 'detailed'">
+                <div class="layout-option" :class="{ active: tempWidgetSettings.layout === 'detailed' }" @click="tempWidgetSettings.layout = 'detailed'">
                   <el-icon :size="24"><Document /></el-icon>
                   <div style="margin-top: 8px;">详细布局</div>
                 </div>
@@ -196,13 +196,13 @@
                   <div style="font-weight: bold; margin-bottom: 5px;">启用自动刷新</div>
                   <div style="font-size: 12px; color: #606266;">定期自动更新仪表盘数据</div>
                 </div>
-                <el-switch v-model="widgetSettings.autoRefresh" />
+                <el-switch v-model="tempWidgetSettings.autoRefresh" />
               </div>
               
               <div style="margin-top: 20px;">
                 <div style="font-weight: bold; margin-bottom: 10px;">刷新间隔</div>
                 <el-slider 
-                  v-model="widgetSettings.refreshInterval" 
+                  v-model="tempWidgetSettings.refreshInterval" 
                   :min="10" 
                   :max="300" 
                   :step="10"
@@ -224,11 +224,9 @@
                   <div style="font-weight: bold; margin-bottom: 5px;">启用智能提醒</div>
                   <div style="font-size: 12px; color: #606266;">根据使用习惯推送个性化提醒</div>
                 </div>
-                <el-switch v-model="widgetSettings.showSmartNotifications" />
+                <el-switch v-model="tempWidgetSettings.showSmartNotifications" />
               </div>
             </div>
-
-
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -284,6 +282,10 @@ import { handleApiError } from '@/utils/errorUtils'
 const route = useRoute()
 const router = useRouter()
 
+// 存储键名
+const SETTINGS_STORAGE_KEY = 'dashboard_widget_settings'
+const ENABLED_WIDGETS_KEY = 'dashboard_enabled_widgets'
+
 // 智能提醒数据
 const smartReminders = ref<any>({  
   total: 0,
@@ -311,17 +313,55 @@ interface Activity {
 
 // 状态管理
 const loading = ref(false)
-const autoRefreshEnabled = ref(true)
 const refreshInterval = ref<NodeJS.Timeout | null>(null)
 const lastUpdateTime = ref(new Date())
-// 设置默认显示的Widget
-const enabledWidgets = ref<string[]>(['stats', 'smart-notifications', 'activities'])
-const widgetSettings = reactive({
+
+// 默认设置
+const DEFAULT_WIDGET_SETTINGS = {
   autoRefresh: true,
-  refreshInterval: 30, // 秒
+  refreshInterval: 30,
   showSmartNotifications: true,
-  layout: 'default' // default, compact, detailed
-})
+  layout: 'default'
+}
+
+const DEFAULT_ENABLED_WIDGETS = ['stats', 'smart-notifications', 'activities']
+
+// 设置状态
+const enabledWidgets = ref<string[]>(DEFAULT_ENABLED_WIDGETS)
+const widgetSettings = reactive({ ...DEFAULT_WIDGET_SETTINGS })
+
+// 暂存状态（用于弹窗编辑，取消时不生效）
+const tempEnabledWidgets = ref<string[]>([...DEFAULT_ENABLED_WIDGETS])
+const tempWidgetSettings = reactive({ ...DEFAULT_WIDGET_SETTINGS })
+
+// 持久化方法
+const saveSettingsToStorage = () => {
+  try {
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(widgetSettings))
+    localStorage.setItem(ENABLED_WIDGETS_KEY, JSON.stringify(enabledWidgets.value))
+    console.log('仪表盘设置已保存到本地存储')
+  } catch (error) {
+    console.error('保存设置到本地存储失败:', error)
+  }
+}
+
+const loadSettingsFromStorage = () => {
+  try {
+    const savedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY)
+    if (savedSettings) {
+      const parsed = JSON.parse(savedSettings)
+      Object.assign(widgetSettings, parsed)
+    }
+    
+    const savedWidgets = localStorage.getItem(ENABLED_WIDGETS_KEY)
+    if (savedWidgets) {
+      enabledWidgets.value = JSON.parse(savedWidgets)
+    }
+    console.log('从本地存储加载设置成功')
+  } catch (error) {
+    console.error('从本地存储加载设置失败:', error)
+  }
+}
 
 // 仪表盘数据
 const dashboardData = reactive({
@@ -456,22 +496,27 @@ const hasNewNotifications = computed(() => {
 
 // 方法
 const toggleAutoRefresh = () => {
-  autoRefreshEnabled.value = !autoRefreshEnabled.value
-  if (autoRefreshEnabled.value) {
+  widgetSettings.autoRefresh = !widgetSettings.autoRefresh
+  saveSettingsToStorage() // 保存设置到本地
+  if (widgetSettings.autoRefresh) {
     startAutoRefresh()
+    ElMessage.success('已开启自动刷新')
   } else {
     stopAutoRefresh()
+    ElMessage.info('已关闭自动刷新')
   }
 }
 
 const startAutoRefresh = () => {
   stopAutoRefresh()
+  console.log(`启动自动刷新，间隔: ${widgetSettings.refreshInterval}秒`)
   refreshInterval.value = setInterval(() => {
     // 自动刷新仪表盘数据
     updateDashboardData()
     loadActivityHistory() // 同时刷新活动历史
     loadSmartReminders() // 同时刷新智能提醒
     lastUpdateTime.value = new Date()
+    console.log('仪表盘数据已自动更新:', lastUpdateTime.value.toLocaleTimeString())
   }, widgetSettings.refreshInterval * 1000)
 }
 
@@ -479,6 +524,7 @@ const stopAutoRefresh = () => {
   if (refreshInterval.value) {
     clearInterval(refreshInterval.value)
     refreshInterval.value = null
+    console.log('自动刷新已停止')
   }
 }
 
@@ -673,30 +719,42 @@ const cleanupExpiredNotifications = () => {
 }
 
 const openWidgetSettings = () => {
+  // 打开设置前，将当前生效的设置同步到暂存变量
+  Object.assign(tempWidgetSettings, widgetSettings)
+  tempEnabledWidgets.value = [...enabledWidgets.value]
+  
+  activeSettingsTab.value = 'widgets'
   widgetSettingsVisible.value = true
 }
 
 const saveWidgetSettings = () => {
-  // 保存设置
+  // 保存设置：将暂存变量同步到生效变量
+  Object.assign(widgetSettings, tempWidgetSettings)
+  enabledWidgets.value = [...tempEnabledWidgets.value]
+  
+  saveSettingsToStorage()
+  if (widgetSettings.autoRefresh) {
+    startAutoRefresh()
+  } else {
+    stopAutoRefresh()
+  }
   ElMessage.success('设置已保存')
   widgetSettingsVisible.value = false
 }
 
 const resetWidgetSettings = () => {
-  // 重置设置
-  widgetSettings.autoRefresh = true
-  widgetSettings.refreshInterval = 30
-  widgetSettings.showSmartNotifications = true
-  widgetSettings.layout = 'default'
-  ElMessage.info('设置已重置')
+  // 重置暂存设置
+  Object.assign(tempWidgetSettings, DEFAULT_WIDGET_SETTINGS)
+  tempEnabledWidgets.value = [...DEFAULT_ENABLED_WIDGETS]
+  ElMessage.info('已重置为默认配置，点击保存后生效')
 }
 
 const toggleWidget = (widgetType: string) => {
-  const index = enabledWidgets.value.indexOf(widgetType)
+  const index = tempEnabledWidgets.value.indexOf(widgetType)
   if (index > -1) {
-    enabledWidgets.value.splice(index, 1)
+    tempEnabledWidgets.value.splice(index, 1)
   } else {
-    enabledWidgets.value.push(widgetType)
+    tempEnabledWidgets.value.push(widgetType)
   }
 }
 
@@ -704,6 +762,9 @@ const toggleWidget = (widgetType: string) => {
 onMounted(async () => {
   loading.value = true
   try {
+    // 从本地存储加载用户设置
+    loadSettingsFromStorage()
+    
     // 清理过期的已确认提醒
     cleanupExpiredNotifications()
     

@@ -40,9 +40,12 @@ export const scanQRCodeFromFile = async (params: FileScanParams): Promise<ApiRes
       body: formData
     })
     
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = response.data?.data || response.data
+    
     return {
       success: true,
-      data: response
+      data: actualData
     }
   } catch (error) {
     console.error('文件二维码识别失败:', error)
@@ -71,9 +74,12 @@ export const scanQRCodeFromCamera = async (params: CameraScanParams): Promise<Ap
       })
     })
     
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = response.data?.data || response.data
+    
     return {
       success: true,
-      data: response
+      data: actualData
     }
   } catch (error) {
     console.error('摄像头二维码识别失败:', error)

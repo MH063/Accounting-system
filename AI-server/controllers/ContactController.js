@@ -6,12 +6,20 @@
 const BaseController = require('./BaseController');
 const ContactService = require('../services/ContactService');
 const logger = require('../config/logger');
+const { successResponse, errorResponse } = require('../middleware/response');
 
 class ContactController extends BaseController {
   constructor() {
     const contactService = new ContactService();
     super(contactService);
     this.contactService = contactService;
+    
+    // 确保方法正确绑定到类实例
+    this.getContacts = this.getContacts.bind(this);
+    this.getContactDetail = this.getContactDetail.bind(this);
+    this.createContact = this.createContact.bind(this);
+    this.updateContact = this.updateContact.bind(this);
+    this.deleteContact = this.deleteContact.bind(this);
   }
 
   /**
@@ -43,12 +51,10 @@ class ContactController extends BaseController {
       // 调用服务层获取联系人列表
       const result = await this.contactService.getContacts(options);
       
-      return res.json({
-        success: true,
-        message: '联系人列表获取成功',
-        data: result.data,
+      return successResponse(res, {
+        contacts: result.data,
         pagination: result.pagination
-      });
+      }, '联系人列表获取成功');
     } catch (error) {
       logger.error('[ContactController] 获取联系人列表失败', { error: error.message });
       next(error);
@@ -72,25 +78,15 @@ class ContactController extends BaseController {
       const contact = await this.contactService.getContactDetail(id);
       
       if (!contact) {
-        return res.status(404).json({
-          success: false,
-          message: '联系人不存在'
-        });
+        return errorResponse(res, '联系人不存在', 404);
       }
 
       // 验证联系人是否属于当前用户
       if (req.user && req.user.id && contact.created_by !== req.user.id) {
-        return res.status(403).json({
-          success: false,
-          message: '无权访问此联系人'
-        });
+        return errorResponse(res, '无权访问此联系人', 403);
       }
 
-      return res.json({
-        success: true,
-        message: '联系人详情获取成功',
-        data: contact
-      });
+      return successResponse(res, { contact }, '联系人详情获取成功');
     } catch (error) {
       logger.error('[ContactController] 获取联系人详情失败', { error: error.message });
       next(error);
@@ -115,13 +111,9 @@ class ContactController extends BaseController {
       };
 
       // 调用服务层创建联系人
-      const createdContact = await this.contactService.createContact(contactData);
+      const result = await this.contactService.createContact(req.body);
       
-      return res.status(201).json({
-        success: true,
-        message: '联系人创建成功',
-        data: createdContact
-      });
+      return successResponse(res, { contact: result }, '联系人创建成功', 201);
     } catch (error) {
       logger.error('[ContactController] 创建联系人失败', { error: error.message });
       next(error);
@@ -145,27 +137,17 @@ class ContactController extends BaseController {
       // 验证联系人是否属于当前用户
       const existingContact = await this.contactService.getContactDetail(id);
       if (!existingContact) {
-        return res.status(404).json({
-          success: false,
-          message: '联系人不存在'
-        });
+        return errorResponse(res, '联系人不存在', 404);
       }
 
       if (req.user && req.user.id && existingContact.created_by !== req.user.id) {
-        return res.status(403).json({
-          success: false,
-          message: '无权修改此联系人'
-        });
+        return errorResponse(res, '无权修改此联系人', 403);
       }
 
       // 调用服务层更新联系人
       const updatedContact = await this.contactService.updateContact(id, req.body);
       
-      return res.json({
-        success: true,
-        message: '联系人更新成功',
-        data: updatedContact
-      });
+      return successResponse(res, updatedContact, '联系人更新成功');
     } catch (error) {
       logger.error('[ContactController] 更新联系人失败', { error: error.message });
       next(error);
@@ -188,33 +170,21 @@ class ContactController extends BaseController {
       // 验证联系人是否属于当前用户
       const existingContact = await this.contactService.getContactDetail(id);
       if (!existingContact) {
-        return res.status(404).json({
-          success: false,
-          message: '联系人不存在'
-        });
+        return errorResponse(res, '联系人不存在', 404);
       }
 
       if (req.user && req.user.id && existingContact.created_by !== req.user.id) {
-        return res.status(403).json({
-          success: false,
-          message: '无权删除此联系人'
-        });
+        return errorResponse(res, '无权删除此联系人', 403);
       }
 
       // 调用服务层删除联系人
       const success = await this.contactService.deleteContact(id);
       
       if (!success) {
-        return res.status(404).json({
-          success: false,
-          message: '联系人删除失败'
-        });
+        return errorResponse(res, '联系人删除失败', 404);
       }
 
-      return res.json({
-        success: true,
-        message: '联系人删除成功'
-      });
+      return successResponse(res, null, '联系人删除成功');
     } catch (error) {
       logger.error('[ContactController] 删除联系人失败', { error: error.message });
       next(error);
@@ -235,20 +205,13 @@ class ContactController extends BaseController {
       });
 
       if (!Array.isArray(ids) || ids.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: '请提供有效的联系人ID数组'
-        });
+        return errorResponse(res, '请提供有效的联系人ID数组', 400);
       }
 
       // 调用服务层批量删除联系人
       const result = await this.contactService.batchDeleteContacts(ids);
       
-      return res.json({
-        success: true,
-        message: '联系人批量删除成功',
-        data: result
-      });
+      return successResponse(res, result, '联系人批量删除成功');
     } catch (error) {
       logger.error('[ContactController] 批量删除联系人失败', { error: error.message });
       next(error);

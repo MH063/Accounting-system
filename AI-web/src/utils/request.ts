@@ -527,7 +527,9 @@ if (typeof window !== 'undefined') {
 }
 
 // 页面初始化时执行状态检查
-initializeAuthState()
+if (typeof window !== 'undefined') {
+  setTimeout(initializeAuthState, 0)
+}
 
 /**
  * 刷新访问令牌
@@ -991,12 +993,13 @@ export const del = <T = any>(url: string, data?: any, config?: RequestConfig): P
  */
 export const upload = <T = any>(
   url: string,
-  file: File,
+  file: File | Blob,
+  fieldName: string = 'file',
   data?: Record<string, any>,
   config?: RequestConfig
 ): Promise<T> => {
   const formData = new FormData()
-  formData.append('file', file)
+  formData.append(fieldName, file)
   
   if (data) {
     Object.keys(data).forEach(key => {

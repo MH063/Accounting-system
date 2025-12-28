@@ -74,7 +74,10 @@ export const cancelMaintenance = async (): Promise<boolean> => {
       method: 'POST'
     })
     
-    return response.success
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = response.data?.data || response.data
+    
+    return response.success || actualData?.success
   } catch (error) {
     console.error('取消维护模式失败:', error)
     return false
@@ -89,9 +92,12 @@ export const getMaintenanceHistory = async (): Promise<any[]> => {
     console.log('获取维护历史记录')
     
     // 调用真实API获取维护历史
-    const response = await request<any[]>('/maintenance/history')
+    const response = await request<any>('/maintenance/history')
     
-    return response
+    // 处理双层嵌套结构 (Rule 5)
+    const actualData = response.data?.data || response.data
+    
+    return Array.isArray(actualData) ? actualData : []
   } catch (error) {
     console.error('获取维护历史失败:', error)
     return []

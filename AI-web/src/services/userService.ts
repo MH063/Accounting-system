@@ -1,7 +1,7 @@
 import type { ApiResponse } from '@/types'
 import dataEncryptionManager from './dataEncryptionManager'
 // 导入请求函数
-import { request } from '@/utils/request'
+import { request, upload } from '@/utils/request'
 
 // 用户信息接口
 export interface UserInfo {
@@ -9,10 +9,93 @@ export interface UserInfo {
   name: string
   email: string
   avatar?: string
+  avatar_url?: string // 兼容后端字段名
   role: string
   permissions: string[]
   createdAt: string
   updatedAt: string
+}
+
+/**
+ * 上传头像
+ * @param file 头像文件
+ * @returns 上传结果
+ */
+export const uploadAvatarAPI = async (file: File): Promise<ApiResponse<{avatar: string}>> => {
+  try {
+    console.log('调用上传头像API')
+    // 后端要求字段名为 'avatar'
+    const response = await upload<{avatar: string}>('/users/avatar', file, 'avatar')
+    
+    // 处理双层嵌套结构 (Rule 5)
+    if (response && response.success) {
+      const actualData = (response.data as any)?.data || response.data
+      return {
+        ...response,
+        data: actualData
+      }
+    }
+    
+    return response
+  } catch (error) {
+    console.error('上传头像失败:', error)
+    return {
+      success: false,
+      data: { avatar: '' },
+      message: '上传头像失败',
+      code: 500
+    }
+  }
+}
+
+/**
+ * 获取完整的头像URL
+ * @param avatarPath 头像路径或URL
+ * @returns 完整的头像URL
+ */
+export const getFullAvatarUrl = (avatarPath: string | undefined): string => {
+  if (!avatarPath || !avatarPath.trim()) return '';
+  
+  // 如果是完整URL或base64，直接返回
+  if (avatarPath.startsWith('http') || avatarPath.startsWith('data:')) {
+    return avatarPath;
+  }
+  
+  // 如果是相对路径，添加后端基础URL
+  // 从 import.meta.env.VITE_API_BASE_URL 获取基础URL，或者使用默认值
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://10.111.53.9:4000/api';
+  const baseUrl = apiBaseUrl.replace(/\/api\/?$/, '');
+  
+  // 确保路径以 / 开头
+  const normalizedPath = avatarPath.startsWith('/') ? avatarPath : `/${avatarPath}`;
+  
+  return `${baseUrl}${normalizedPath}`;
+}
+
+/**
+ * 获取默认头像地址
+ * @param seed 用于生成随机图片的种子（如用户ID或邮箱）
+ * @param size 图片尺寸
+ * @returns 默认头像URL
+ */
+export const getDefaultAvatar = (seed: string = 'user', size: number = 200): string => {
+  // 使用 DiceBear 生成更美观的头像，seed 确保同一个用户头像一致
+  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}&size=${size}`
+}
+
+/**
+ * 获取用户头像URL（带回退逻辑）
+ * @param avatarPath 头像路径
+ * @param email 用户邮箱
+ * @param name 用户姓名/用户名
+ * @returns 完整的头像URL或默认头像URL
+ */
+export const getUserAvatar = (avatarPath: string | undefined, email?: string, name?: string): string => {
+  const fullUrl = getFullAvatarUrl(avatarPath);
+  if (fullUrl) return fullUrl;
+  
+  // 使用 email 或 name 作为种子，确保一致性
+  return getDefaultAvatar(email || name || 'user');
 }
 
 /**
@@ -51,10 +134,21 @@ export const getCurrentUser = async (): Promise<ApiResponse<UserInfo>> => {
     }
     
     // 转换响应格式以匹配期望的UserInfo格式
-    return {
+    const result = {
       ...response,
       data: responseData.user
     }
+    
+    // 同步更新本地存储中的用户信息，确保全局一致性
+    if (result.success && result.data) {
+      localStorage.setItem('user_info', JSON.stringify(result.data))
+      // 兼容某些地方直接使用 username 的情况
+      if (result.data.username) {
+        localStorage.setItem('username', result.data.username)
+      }
+    }
+    
+    return result
   } catch (error) {
     console.error('获取用户信息失败:', error)
     return {
@@ -104,18 +198,30 @@ export const updateUser = async (userData: Partial<UserInfo>): Promise<ApiRespon
     }
     
     // 调用真实API更新用户信息
-    const response = await request<UserInfo>('/users/current', {
+    const response = await request<ApiResponse<{user: UserInfo}>>('/auth/profile', {
       method: 'PUT',
       body: JSON.stringify(updateData)
     })
     
     // 处理双层嵌套结构 (Rule 5)
     if (response && response.success) {
-      const actualData = (response.data as any)?.data || response.data
-      return {
+      const responseData = (response.data as any)?.data || response.data
+      const actualUser = responseData.user || responseData
+      
+      const result = {
         ...response,
-        data: actualData
+        data: actualUser
       }
+
+      // 同步更新本地存储中的用户信息，确保全局一致性
+      if (result.success && result.data) {
+        localStorage.setItem('user_info', JSON.stringify(result.data))
+        if (result.data.username) {
+          localStorage.setItem('username', result.data.username)
+        }
+      }
+
+      return result
     }
     
     return response
@@ -242,18 +348,30 @@ export const savePersonalInfo = async (personalData: {
     }
     
     // 调用真实API保存个人信息
-    const response = await request<UserInfo>('/users/personal-info', {
-      method: 'POST',
+    const response = await request<ApiResponse<{user: UserInfo}>>('/auth/profile', {
+      method: 'PUT',
       body: JSON.stringify(saveData)
     })
     
     // 处理双层嵌套结构 (Rule 5)
     if (response && response.success) {
-      const actualData = (response.data as any)?.data || response.data
-      return {
+      const responseData = (response.data as any)?.data || response.data
+      const actualUser = responseData.user || responseData
+      
+      const result = {
         ...response,
-        data: actualData
+        data: actualUser
       }
+
+      // 同步更新本地存储中的用户信息，确保全局一致性
+      if (result.success && result.data) {
+        localStorage.setItem('user_info', JSON.stringify(result.data))
+        if (result.data.username) {
+          localStorage.setItem('username', result.data.username)
+        }
+      }
+
+      return result
     }
     
     return response
@@ -277,17 +395,29 @@ export const syncPersonalInfo = async (): Promise<ApiResponse<UserInfo>> => {
     console.log('调用同步个人信息API')
     
     // 调用真实API同步个人信息
-    const response = await request<UserInfo>('/users/personal-info/sync', {
+    const response = await request<ApiResponse<{user: UserInfo}>>('/users/personal-info/sync', {
       method: 'POST'
     })
     
     // 处理双层嵌套结构 (Rule 5)
     if (response && response.success) {
-      const actualData = (response.data as any)?.data || response.data
-      return {
+      const responseData = (response.data as any)?.data || response.data
+      const actualUser = responseData.user || responseData
+      
+      const result = {
         ...response,
-        data: actualData
+        data: actualUser
       }
+
+      // 同步更新本地存储中的用户信息，确保全局一致性
+      if (result.success && result.data) {
+        localStorage.setItem('user_info', JSON.stringify(result.data))
+        if (result.data.username) {
+          localStorage.setItem('username', result.data.username)
+        }
+      }
+
+      return result
     }
     
     return response

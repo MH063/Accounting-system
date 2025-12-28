@@ -6,6 +6,7 @@
 const BaseController = require('./BaseController');
 const UserService = require('../services/UserService');
 const logger = require('../config/logger');
+const { successResponse, errorResponse } = require('../middleware/response');
 
 class DeviceSessionController extends BaseController {
   constructor() {
@@ -43,7 +44,7 @@ class DeviceSessionController extends BaseController {
         deviceId: session.device_id
       }));
 
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         sessions: formattedSessions,
         count: formattedSessions.length
       }, '获取设备会话成功');
@@ -67,10 +68,10 @@ class DeviceSessionController extends BaseController {
       const success = await this.userService.revokeSession(userId, sessionId);
       
       if (!success) {
-        return this.sendError(res, '无法撤销会话或会话不存在', 404);
+        return errorResponse(res, '无法撤销会话或会话不存在', 404);
       }
 
-      return this.sendSuccess(res, null, '设备会话已撤销');
+      return successResponse(res, null, '设备会话已撤销');
     } catch (error) {
       logger.error('[DeviceSessionController] 撤销设备会话失败', { error: error.message });
       next(error);
@@ -95,12 +96,12 @@ class DeviceSessionController extends BaseController {
       const currentSessionId = currentSession ? currentSession.id : null;
       
       if (!currentSessionId) {
-        return this.sendError(res, '找不到当前会话，无法撤销其他会话', 400);
+        return errorResponse(res, '找不到当前会话，无法撤销其他会话', 400);
       }
       
       const count = await this.userService.revokeOtherSessions(userId, currentSessionId);
 
-      return this.sendSuccess(res, { revokedCount: count }, `已成功撤销 ${count} 个其他设备会话`);
+      return successResponse(res, { revokedCount: count }, `已成功撤销 ${count} 个其他设备会话`);
     } catch (error) {
       logger.error('[DeviceSessionController] 撤销其他设备会话失败', { error: error.message });
       next(error);

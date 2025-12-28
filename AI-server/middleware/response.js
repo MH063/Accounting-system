@@ -19,12 +19,19 @@ const successResponse = (res, data = null, message = '操作成功', statusCode 
   
   // 如果有数据，添加到响应中
   if (data !== null) {
-    response.data = data;
+    // 确保 data 始终是一个对象，处理双层嵌套结构 (Rule 5)
+    // 如果 data 是数组，自动包装成对象
+    if (Array.isArray(data)) {
+      response.data = { list: data };
+    } else {
+      response.data = data;
+    }
   }
   
   logger.info(`[RESPONSE] ${message}`, {
     statusCode,
-    success: true
+    success: true,
+    hasData: data !== null
   });
   
   return res.status(statusCode).json(response);
@@ -56,6 +63,10 @@ const errorResponse = (res, message = '操作失败', statusCode = 400, error = 
   
   return res.status(statusCode).json(response);
 };
+
+// 导出别名以增强兼容性
+const sendSuccess = successResponse;
+const sendError = errorResponse;
 
 /**
  * 包装路由处理器，确保成功响应状态码为200
@@ -94,5 +105,7 @@ const responseWrapper = (handler) => {
 module.exports = {
   successResponse,
   errorResponse,
+  sendSuccess,
+  sendError,
   responseWrapper
 };

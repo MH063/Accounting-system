@@ -7,6 +7,7 @@ const BaseController = require('./BaseController');
 const bcrypt = require('bcrypt');
 const logger = require('../config/logger');
 const { pool } = require('../config/database');
+const { successResponse, errorResponse } = require('../middleware/response');
 
 class SecurityQuestionController extends BaseController {
   constructor() {
@@ -22,6 +23,14 @@ class SecurityQuestionController extends BaseController {
         }
       }
     };
+    
+    // 确保方法正确绑定到类实例
+    this.getSecurityQuestionConfig = this.getSecurityQuestionConfig.bind(this);
+    this.getSecurityQuestionConfigForVerification = this.getSecurityQuestionConfigForVerification.bind(this);
+    this.saveSecurityQuestionConfig = this.saveSecurityQuestionConfig.bind(this);
+    this.verifySecurityQuestionAnswers = this.verifySecurityQuestionAnswers.bind(this);
+    this.checkSecurityQuestionsSetup = this.checkSecurityQuestionsSetup.bind(this);
+    this.logSecurityVerification = this.logSecurityVerification.bind(this);
   }
 
   /**
@@ -48,7 +57,7 @@ class SecurityQuestionController extends BaseController {
       const result = await this.db.query(query, [userId]);
 
       if (result.rows.length === 0) {
-        return this.sendSuccess(res, {
+        return successResponse(res, {
           hasSecurityQuestions: false,
           questions: []
         }, '用户未设置安全问题');
@@ -56,7 +65,7 @@ class SecurityQuestionController extends BaseController {
 
       const row = result.rows[0];
 
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         hasSecurityQuestions: true,
         questions: [
           { question: row.question1 },
@@ -102,12 +111,12 @@ class SecurityQuestionController extends BaseController {
       const result = await this.db.query(query, [userId]);
 
       if (result.rows.length === 0) {
-        return this.sendError(res, '用户未设置安全问题', 404);
+        return errorResponse(res, '用户未设置安全问题', 404);
       }
 
       const row = result.rows[0];
 
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         question1: row.question1,
         question2: row.question2,
         question3: row.question3,
@@ -139,7 +148,7 @@ class SecurityQuestionController extends BaseController {
       this.validateRequiredFields(req.body, ['question1', 'answer1', 'question2', 'answer2', 'question3', 'answer3']);
 
       if (question1 === question2 || question1 === question3 || question2 === question3) {
-        return this.sendError(res, '安全问题不能重复', 400);
+        return errorResponse(res, '安全问题不能重复', 400);
       }
 
       const answer1Hash = await bcrypt.hash(answer1.toLowerCase().trim(), 10);
@@ -186,7 +195,7 @@ class SecurityQuestionController extends BaseController {
 
       logger.audit(req, '用户设置安全问题', { userId });
 
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         hasSecurityQuestions: true
       }, '安全问题设置成功');
 
@@ -213,7 +222,7 @@ class SecurityQuestionController extends BaseController {
       this.validateRequiredFields(req.body, ['answers']);
 
       if (!Array.isArray(answers) || answers.length !== 3) {
-        return this.sendError(res, '必须提供3个答案', 400);
+        return errorResponse(res, '必须提供3个答案', 400);
       }
 
       const query = `
@@ -228,7 +237,7 @@ class SecurityQuestionController extends BaseController {
       const result = await this.db.query(query, [userId]);
 
       if (result.rows.length === 0) {
-        return this.sendError(res, '用户未设置安全问题', 404);
+        return errorResponse(res, '用户未设置安全问题', 404);
       }
 
       const row = result.rows[0];
@@ -256,14 +265,14 @@ class SecurityQuestionController extends BaseController {
 
         logger.audit(req, '安全问题验证成功', { userId });
 
-        return this.sendSuccess(res, {
+        return successResponse(res, {
           success: true,
           message: '验证成功'
         }, '安全问题验证成功');
       } else {
         logger.security(req, '安全问题验证失败', { userId });
 
-        return this.sendError(res, '答案不正确', 401);
+        return errorResponse(res, '答案不正确', 401);
       }
 
     } catch (error) {
@@ -298,7 +307,7 @@ class SecurityQuestionController extends BaseController {
       const result = await this.db.query(query, [userId]);
 
       if (result.rows.length === 0) {
-        return this.sendSuccess(res, {
+        return successResponse(res, {
           hasSecurityQuestions: false
         }, '用户未设置安全问题');
       }
@@ -306,7 +315,7 @@ class SecurityQuestionController extends BaseController {
       const row = result.rows[0];
       const hasQuestions = row.question1 && row.question2 && row.question3;
 
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         hasSecurityQuestions: hasQuestions && row.is_enabled
       }, '检查完成');
 
@@ -360,7 +369,7 @@ class SecurityQuestionController extends BaseController {
         success 
       });
 
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         logId: result.rows[0].id
       }, '安全验证日志记录成功');
 
@@ -426,7 +435,7 @@ class SecurityQuestionController extends BaseController {
 
       const result = await this.db.query(query, params);
 
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         logs: result.rows,
         total: result.rows.length
       }, '获取安全验证日志成功');
@@ -459,12 +468,12 @@ class SecurityQuestionController extends BaseController {
       const result = await this.db.query(query, [userId]);
 
       if (result.rows.length === 0) {
-        return this.sendError(res, '用户未设置安全问题', 404);
+        return errorResponse(res, '用户未设置安全问题', 404);
       }
 
       logger.audit(req, '用户删除安全问题', { userId });
 
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         deleted: true
       }, '安全问题删除成功');
 

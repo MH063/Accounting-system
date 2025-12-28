@@ -233,7 +233,7 @@
             class="member-item"
           >
             <div class="member-avatar">
-              <el-avatar :src="member.avatar" :size="40">
+              <el-avatar :src="getUserAvatar(member.avatar, '', member.name)" :size="40">
                 {{ member.name?.charAt(0) }}
               </el-avatar>
             </div>
@@ -459,7 +459,7 @@
             <el-table-column prop="name" label="成员姓名" width="120">
               <template #default="{ row }">
                 <div class="member-info-cell">
-                  <el-avatar :src="row.avatar" :size="32" class="member-avatar">
+                  <el-avatar :src="getUserAvatar(row.avatar, '', row.name)" :size="32" class="member-avatar">
                     {{ row.name?.charAt(0) }}
                   </el-avatar>
                   <span>{{ row.name }}</span>
@@ -747,6 +747,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, watch, shallowRef, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { getFullAvatarUrl, getDefaultAvatar, getUserAvatar } from '@/services/userService'
 import * as echarts from 'echarts'
 import { 
   Document, ArrowLeft, Edit, Money, Download, MoreFilled, CopyDocument, Share,

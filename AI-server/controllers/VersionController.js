@@ -4,8 +4,15 @@
  */
 
 const BaseController = require('./BaseController');
+const { successResponse } = require('../middleware/response');
 
 class VersionController extends BaseController {
+  constructor() {
+    super();
+    // 确保方法正确绑定到类实例
+    this.getLatestVersion = this.getLatestVersion.bind(this);
+    this.getVersionHistory = this.getVersionHistory.bind(this);
+  }
   /**
    * 获取最新版本信息
    * GET /api/version/latest
@@ -25,11 +32,7 @@ class VersionController extends BaseController {
         checksum: 'abc123def456'
       };
 
-      return res.json({
-        success: true,
-        data: latestVersion,
-        message: '获取最新版本信息成功'
-      });
+      return successResponse(res, latestVersion, '获取最新版本信息成功');
     } catch (error) {
       console.error('获取最新版本信息失败:', error);
       next(error);
@@ -63,11 +66,7 @@ class VersionController extends BaseController {
         }
       ];
 
-      return res.json({
-        success: true,
-        data: versionHistory,
-        message: '获取版本历史成功'
-      });
+      return successResponse(res, { versions: versionHistory }, '获取版本历史成功');
     } catch (error) {
       console.error('获取版本历史失败:', error);
       next(error);

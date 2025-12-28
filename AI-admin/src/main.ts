@@ -241,12 +241,35 @@ const router = createRouter({
 // 添加路由守卫
 router.beforeEach((to, from, next) => {
   // 获取Vuex中的用户状态
-  const isLoggedIn = store.getters['user/isLoggedIn']
-  const loginTime = store.state.user.loginTime
+  let isLoggedIn = store.getters['user/isLoggedIn']
+  let loginTime = store.state.user.loginTime
   
-  // 检查是否已登录超过7天
-  const sevenDaysInMillis = 7 * 24 * 60 * 60 * 1000
-  const isSessionExpired = loginTime && (Date.now() - loginTime > sevenDaysInMillis)
+  // 增加对 localStorage 的兜底检查，防止 Vuex 状态在刷新时丢失或未及时恢复
+  if (!isLoggedIn) {
+    const adminUser = localStorage.getItem('adminUser')
+    const adminToken = localStorage.getItem('adminToken')
+    if (adminUser && adminToken) {
+      try {
+        const userData = JSON.parse(adminUser)
+        // 只有当解析出的用户数据有效且包含令牌时，才认为可能已登录
+        if (userData && userData.token) {
+          isLoggedIn = true
+          loginTime = userData.loginTime || loginTime
+          
+          // 恢复 Vuex 状态，确保刷新页面后状态不丢失
+          if (!store.getters['user/isLoggedIn']) {
+            store.dispatch('user/login', userData)
+          }
+        }
+      } catch (e) {
+        console.error('解析本地存储的用户数据失败:', e)
+      }
+    }
+  }
+  
+  // 检查是否已登录超过30天 (对应 Refresh Token 的有效期)
+  const thirtyDaysInMillis = 30 * 24 * 60 * 60 * 1000
+  const isSessionExpired = loginTime && (Date.now() - loginTime > thirtyDaysInMillis)
   
   // 如果会话已过期，清除用户状态
   if (isSessionExpired) {
@@ -257,11 +280,8 @@ router.beforeEach((to, from, next) => {
   if (to.path !== '/login' && (!isLoggedIn || isSessionExpired)) {
     next('/login')
   } 
-  // 如果用户已登录且试图访问登录页，重定向到首页
-  else if (to.path === '/login' && isLoggedIn && !isSessionExpired) {
-    next('/')
-  } 
-  // 其他情况允许访问
+  // 移除已登录自动跳转首页的逻辑，允许已登录用户访问登录页（如需切换账号）
+  // 除非有明确的重定向要求，否则保持当前逻辑
   else {
     next()
   }

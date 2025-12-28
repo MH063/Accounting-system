@@ -8,11 +8,23 @@ const UserService = require('../services/UserService');
 const logger = require('../config/logger');
 const { generateTokenPair, refreshAccessToken, revokeTokenPair } = require('../config/jwtManager');
 const { logSecurityEvent, SECURITY_EVENTS } = require('../middleware/securityAudit');
+const { successResponse, errorResponse } = require('../middleware/response');
 
 class AuthController extends BaseController {
   constructor() {
     super();
     this.userService = new UserService();
+    
+    // 确保方法正确绑定到类实例
+    this.login = this.login.bind(this);
+    this.register = this.register.bind(this);
+    this.logout = this.logout.bind(this);
+    this.refreshToken = this.refreshToken.bind(this);
+    this.getProfile = this.getProfile.bind(this);
+    this.updateProfile = this.updateProfile.bind(this);
+    this.changePassword = this.changePassword.bind(this);
+    this.resetPassword = this.resetPassword.bind(this);
+    this.verifyEmail = this.verifyEmail.bind(this);
   }
 
   /**
@@ -35,7 +47,7 @@ class AuthController extends BaseController {
 
       if ((!username || username.toString().trim().length === 0) &&
           (!email || email.toString().trim().length === 0)) {
-        return this.sendError(res, '用户名或邮箱为必填项', 400);
+        return errorResponse(res, '用户名或邮箱为必填项', 400);
       }
 
       // 调用服务层进行登录验证（包含登录失败限制和账户锁定功能）
@@ -72,7 +84,7 @@ class AuthController extends BaseController {
         
         // 根据失败原因返回不同的状态码
         const statusCode = loginResult.message.includes('锁定') ? 423 : 401;
-        return this.sendError(res, loginResult.message, statusCode);
+        return errorResponse(res, loginResult.message, statusCode);
       }
 
       const { user, tokens, session } = loginResult.data;
@@ -98,7 +110,7 @@ class AuthController extends BaseController {
       });
 
       // 返回成功响应（包含双令牌和会话信息）
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         user: user,
         tokens: {
           accessToken: tokens.accessToken,
@@ -143,7 +155,7 @@ class AuthController extends BaseController {
           error: validationError.message,
           timestamp: new Date().toISOString()
         });
-        return this.sendError(res, validationError.message, 400);
+        return errorResponse(res, validationError.message, 400);
       }
 
       // 创建用户
@@ -168,7 +180,7 @@ class AuthController extends BaseController {
 
       // 过滤敏感数据并返回
       const filteredUser = this.filterSensitiveData(user);
-      return this.sendSuccess(res, filteredUser, '用户注册成功');
+      return successResponse(res, filteredUser, '用户注册成功');
 
     } catch (error) {
       // 记录注册失败审计日志
@@ -181,7 +193,7 @@ class AuthController extends BaseController {
       
       // 处理特定的业务错误
       if (error.message.includes('已存在')) {
-        return this.sendError(res, '用户名或邮箱已存在', 409);
+        return errorResponse(res, '用户名或邮箱已存在', 409);
       }
       
       // 其他错误传递给全局错误处理中间件
@@ -208,23 +220,19 @@ class AuthController extends BaseController {
       const user = result.data;
       
       if (!user) {
-        return this.sendError(res, '用户不存在', 404);
+        return errorResponse(res, '用户不存在', 404);
       }
 
       // 返回用户信息（不包含敏感数据）
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         user: {
-          id: user.id,
-          username: user.username,
-          email: user.email,
-          created_at: user.created_at,
-          updated_at: user.updated_at
+          ...user
         }
       });
 
     } catch (error) {
       logger.error('[AuthController] 获取用户资料失败', { error: error.message });
-      return this.sendError(res, '服务器内部错误', 500);
+      return errorResponse(res, '服务器内部错误', 500);
     }
   }
 
@@ -249,19 +257,15 @@ class AuthController extends BaseController {
       const updatedUser = result.data;
       
       if (!updatedUser) {
-        return this.sendError(res, '用户不存在', 404);
+        return errorResponse(res, '用户不存在', 404);
       }
 
       logger.auth('用户资料更新成功', { userId });
       
       // 返回更新后的用户信息
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         user: {
-          id: updatedUser.id,
-          username: updatedUser.username,
-          email: updatedUser.email,
-          created_at: updatedUser.created_at,
-          updated_at: updatedUser.updated_at
+          ...updatedUser
         }
       }, '资料更新成功');
 
@@ -283,7 +287,7 @@ class AuthController extends BaseController {
     try {
       this.validateRequiredFields(req.body, ['currentPassword', 'newPassword']);
     } catch (validationError) {
-      return this.sendError(res, validationError.message, 400);
+      return errorResponse(res, validationError.message, 400);
     }
 
     // 记录密码修改尝试
@@ -305,7 +309,7 @@ class AuthController extends BaseController {
         timestamp: new Date().toISOString()
       });
 
-      return this.sendSuccess(res, null, '密码修改成功');
+      return successResponse(res, null, '密码修改成功');
     } catch (error) {
       logger.warn('[AuthController] 修改密码失败', { 
         userId, 
@@ -315,7 +319,7 @@ class AuthController extends BaseController {
       
       // 使用错误对象中指定的状态码
       const statusCode = error.statusCode || 400;
-      return this.sendError(res, error.message, statusCode);
+      return errorResponse(res, error.message, statusCode);
     }
   }
 
@@ -345,14 +349,14 @@ class AuthController extends BaseController {
           userId: req.user?.id
         });
         const errorCode = result.message.includes('过期') ? 'TOKEN_EXPIRED' : 'INVALID_TOKEN';
-        return this.sendError(res, result.message, 401, errorCode);
+        return errorResponse(res, result.message, 401, errorCode);
       }
 
       const { accessToken, refreshToken: newRefreshToken } = result.data;
 
       logger.auth('令牌刷新成功', { userId: req.user?.id });
 
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         accessToken,
         refreshToken: newRefreshToken
       }, '令牌刷新成功');
@@ -360,7 +364,7 @@ class AuthController extends BaseController {
       logger.error('[AuthController] 刷新令牌失败', { error: error.message });
       
       const errorCode = error.message.includes('过期') ? 'TOKEN_EXPIRED' : 'REFRESH_FAILED';
-      return this.sendError(res, error.message, 401, errorCode);
+      return errorResponse(res, error.message, 401, errorCode);
     }
   }
 
@@ -374,7 +378,7 @@ class AuthController extends BaseController {
       
       // 验证输入
       if (!refreshToken) {
-        return this.sendError(res, '刷新令牌不能为空', 400, 'REFRESH_TOKEN_REQUIRED');
+        return errorResponse(res, '刷新令牌不能为空', 400, 'REFRESH_TOKEN_REQUIRED');
       }
 
       // 记录安全令牌刷新尝试
@@ -389,7 +393,7 @@ class AuthController extends BaseController {
         
         // 验证令牌类型
         if (decoded.type !== 'refresh') {
-          return this.sendError(res, '无效的刷新令牌类型', 401, 'INVALID_TOKEN_TYPE');
+          return errorResponse(res, '无效的刷新令牌类型', 401, 'INVALID_TOKEN_TYPE');
         }
         
         logger.info('[AuthController] 刷新令牌验证通过', { userId: decoded.userId });
@@ -408,7 +412,7 @@ class AuthController extends BaseController {
           message = '刷新令牌已过期';
         }
         
-        return this.sendError(res, message, statusCode, errorCode);
+        return errorResponse(res, message, statusCode, errorCode);
       }
 
       // 调用服务层安全刷新令牌
@@ -420,23 +424,23 @@ class AuthController extends BaseController {
       if (!result.success) {
         const statusCode = result.message.includes('过期') ? 401 : 400;
         const errorCode = result.message.includes('过期') ? 'TOKEN_EXPIRED' : 'INVALID_TOKEN';
-        return this.sendError(res, result.message, statusCode, errorCode);
+        return errorResponse(res, result.message, statusCode, errorCode);
       }
 
       // 记录安全令牌刷新成功
       logger.auth('安全令牌刷新成功', { userId: result.data.userId });
 
-      return this.sendSuccess(res, result.data, '令牌刷新成功');
+      return successResponse(res, result.data, '令牌刷新成功');
     } catch (error) {
       logger.error('[AuthController] 安全刷新令牌失败', { error: error.message });
       
       // 特殊处理并发刷新错误
       if (error.code === 'CONCURRENT_REFRESH') {
-        return this.sendError(res, error.message, 409, 'CONCURRENT_REFRESH', error.data);
+        return errorResponse(res, error.message, 409, 'CONCURRENT_REFRESH', error.data);
       }
       
       const errorCode = error.message.includes('过期') ? 'TOKEN_EXPIRED' : 'REFRESH_FAILED';
-      return this.sendError(res, error.message, 401, errorCode);
+      return errorResponse(res, error.message, 401, errorCode);
     }
   }
 
@@ -460,19 +464,19 @@ class AuthController extends BaseController {
 
       // 验证必填字段
       if (!sessionToken) {
-        return this.sendError(res, '会话令牌不能为空', 400);
+        return errorResponse(res, '会话令牌不能为空', 400);
       }
 
       // 调用服务层登出（更新会话状态并记录审计日志）
       const result = await this.userService.logout(userId, sessionToken, ipAddress, userAgent);
       
       if (!result.success) {
-        return this.sendError(res, result.message || '登出失败', 400);
+        return errorResponse(res, result.message || '登出失败', 400);
       }
 
       logger.auth('用户登出成功', { userId, sessionToken });
 
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         sessionToken: sessionToken,
         status: 'revoked'
       }, '登出成功');
@@ -493,19 +497,19 @@ class AuthController extends BaseController {
       
       // 验证输入
       if (!username || username.trim().length === 0) {
-        return this.sendError(res, '用户名不能为空', 400);
+        return errorResponse(res, '用户名不能为空', 400);
       }
 
       const isAvailable = await this.userService.checkUsernameAvailability(username.trim());
       
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         username,
         available: isAvailable
       });
 
     } catch (error) {
       logger.error('[AuthController] 检查用户名失败', { error: error.message });
-      return this.sendError(res, error.message, 500);
+      return errorResponse(res, error.message, 500);
     }
   }
 
@@ -519,19 +523,19 @@ class AuthController extends BaseController {
       
       // 验证输入
       if (!email || email.trim().length === 0) {
-        return this.sendError(res, '邮箱不能为空', 400);
+        return errorResponse(res, '邮箱不能为空', 400);
       }
 
       const isAvailable = await this.userService.checkEmailAvailability(email.trim());
       
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         email,
         available: isAvailable
       });
 
     } catch (error) {
       logger.error('[AuthController] 检查邮箱失败', { error: error.message });
-      return this.sendError(res, error.message, 500);
+      return errorResponse(res, error.message, 500);
     }
   }
 
@@ -545,7 +549,7 @@ class AuthController extends BaseController {
       
       const status = await this.userService.getAccountStatus(userId);
       
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         status: {
           isLocked: status.isLocked,
           lockUntil: status.lockUntil,
@@ -581,12 +585,12 @@ class AuthController extends BaseController {
       
       // 为安全考虑，即使失败也返回成功
       if (!result.success) {
-        return this.sendSuccess(res, null, result.message);
+        return successResponse(res, null, result.message);
       }
 
       logger.auth('邮箱验证码发送成功', { email });
 
-      return this.sendSuccess(res, result.data, result.message);
+      return successResponse(res, result.data, result.message);
 
     } catch (error) {
       logger.error('[AuthController] 发送邮箱验证码失败', { 
@@ -617,12 +621,12 @@ class AuthController extends BaseController {
       const result = await this.userService.verifyEmail(token);
       
       if (!result.success) {
-        return this.sendError(res, result.message, 400);
+        return errorResponse(res, result.message, 400);
       }
 
       logger.auth('邮箱验证成功', { token: token.substring(0, 8) + '...' });
 
-      return this.sendSuccess(res, null, result.message);
+      return successResponse(res, null, result.message);
 
     } catch (error) {
       logger.error('[AuthController] 邮箱验证失败', { 
@@ -653,14 +657,14 @@ class AuthController extends BaseController {
       const result = await this.userService.verifyEmailCode(email, code);
       
       if (!result.success) {
-        return this.sendError(res, result.message, 400);
+        return errorResponse(res, result.message, 400);
       }
 
       logger.auth('邮箱验证码验证成功', { 
         email: email.substring(0, 3) + '***' + email.substring(email.length - 3)
       });
 
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         email: email,
         verified: true
       }, result.message);
@@ -696,12 +700,12 @@ class AuthController extends BaseController {
       const result = await this.userService.updateQQNumber(userId, qqNumber);
       
       if (!result.success) {
-        return this.sendError(res, result.message, 400);
+        return errorResponse(res, result.message, 400);
       }
 
       logger.auth('QQ号码更新成功', { userId, qqNumber });
 
-      return this.sendSuccess(res, result.data, result.message);
+      return successResponse(res, result.data, result.message);
 
     } catch (error) {
       logger.error('[AuthController] 更新QQ号码失败', { 
@@ -733,12 +737,12 @@ class AuthController extends BaseController {
       const result = await this.userService.verifyQQ(userId, verificationCode);
       
       if (!result.success) {
-        return this.sendError(res, result.message, 400);
+        return errorResponse(res, result.message, 400);
       }
 
       logger.auth('QQ验证成功', { userId });
 
-      return this.sendSuccess(res, null, result.message);
+      return successResponse(res, null, result.message);
 
     } catch (error) {
       logger.error('[AuthController] QQ验证失败', { 
@@ -770,12 +774,12 @@ class AuthController extends BaseController {
       
       // 为安全考虑，即使失败也返回成功
       if (!result.success) {
-        return this.sendSuccess(res, null, result.message);
+        return successResponse(res, null, result.message);
       }
 
       logger.auth('密码重置邮件发送', { email });
 
-      return this.sendSuccess(res, result.data, result.message);
+      return successResponse(res, result.data, result.message);
 
     } catch (error) {
       logger.error('[AuthController] 请求密码重置失败', { 
@@ -783,7 +787,7 @@ class AuthController extends BaseController {
         email: req.body?.email 
       });
       // 为安全考虑，返回成功
-      return this.sendSuccess(res, null, '如果该邮箱地址已注册，您将收到密码重置邮件');
+      return successResponse(res, null, '如果该邮箱地址已注册，您将收到密码重置邮件');
     }
   }
 
@@ -808,12 +812,12 @@ class AuthController extends BaseController {
       
       // 为安全考虑，即使失败也返回成功
       if (!result.success) {
-        return this.sendSuccess(res, null, result.message);
+        return successResponse(res, null, result.message);
       }
 
       logger.auth('密码重置验证码发送', { email });
 
-      return this.sendSuccess(res, result.data, result.message);
+      return successResponse(res, result.data, result.message);
 
     } catch (error) {
       logger.error('[AuthController] 请求密码重置验证码失败', { 
@@ -821,7 +825,7 @@ class AuthController extends BaseController {
         email: req.body?.email 
       });
       // 为安全考虑，返回成功
-      return this.sendSuccess(res, null, '如果该邮箱地址已注册，您将收到密码重置验证码');
+      return successResponse(res, null, '如果该邮箱地址已注册，您将收到密码重置验证码');
     }
   }
 
@@ -845,12 +849,12 @@ class AuthController extends BaseController {
       const result = await this.userService.resetPassword(token, newPassword);
       
       if (!result.success) {
-        return this.sendError(res, result.message, 400);
+        return errorResponse(res, result.message, 400);
       }
 
       logger.auth('密码重置成功', { token: token.substring(0, 8) + '...' });
 
-      return this.sendSuccess(res, null, result.message);
+      return successResponse(res, null, result.message);
 
     } catch (error) {
       logger.error('[AuthController] 密码重置失败', { 
@@ -881,12 +885,12 @@ class AuthController extends BaseController {
       const result = await this.userService.resetPasswordWithCode(email, code, newPassword);
       
       if (!result.success) {
-        return this.sendError(res, result.message, 400);
+        return errorResponse(res, result.message, 400);
       }
 
       logger.auth('使用验证码密码重置成功', { email });
 
-      return this.sendSuccess(res, null, result.message);
+      return successResponse(res, null, result.message);
 
     } catch (error) {
       logger.error('[AuthController] 使用验证码重置密码失败', { 
@@ -916,12 +920,12 @@ class AuthController extends BaseController {
       const result = await this.userService.deactivateAccount(userId, reason);
       
       if (!result.success) {
-        return this.sendError(res, result.message, 400);
+        return errorResponse(res, result.message, 400);
       }
 
       logger.auth('账户停用成功', { userId, reason });
 
-      return this.sendSuccess(res, null, result.message);
+      return successResponse(res, null, result.message);
 
     } catch (error) {
       logger.error('[AuthController] 停用账户失败', { 
@@ -953,12 +957,12 @@ class AuthController extends BaseController {
       const result = await this.userService.deleteAccount(userId, password);
       
       if (!result.success) {
-        return this.sendError(res, result.message, 400);
+        return errorResponse(res, result.message, 400);
       }
 
       logger.auth('账户删除成功', { userId });
 
-      return this.sendSuccess(res, null, result.message);
+      return successResponse(res, null, result.message);
 
     } catch (error) {
       logger.error('[AuthController] 删除账户失败', { 
@@ -1004,7 +1008,7 @@ class AuthController extends BaseController {
           reason: verificationResult.message
         });
         
-        return this.sendError(res, verificationResult.message, 401);
+        return errorResponse(res, verificationResult.message, 401);
       }
 
       const { user, tokens, session } = verificationResult.data;
@@ -1016,7 +1020,7 @@ class AuthController extends BaseController {
       });
 
       // 返回成功响应（包含双令牌和会话信息）
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         user: {
           id: user.id,
           username: user.username,
@@ -1081,7 +1085,7 @@ class AuthController extends BaseController {
           error: result.message,
           timestamp: new Date().toISOString()
         });
-        return this.sendError(res, result.message, 400);
+        return errorResponse(res, result.message, 400);
       }
 
       // 记录启用成功审计日志
@@ -1090,7 +1094,7 @@ class AuthController extends BaseController {
         timestamp: new Date().toISOString()
       });
 
-      return this.sendSuccess(res, result.data, '两步验证已启用');
+      return successResponse(res, result.data, '两步验证已启用');
 
     } catch (error) {
       // 记录启用失败审计日志
@@ -1128,7 +1132,7 @@ class AuthController extends BaseController {
           error: result.message,
           timestamp: new Date().toISOString()
         });
-        return this.sendError(res, result.message, 400);
+        return errorResponse(res, result.message, 400);
       }
 
       // 记录禁用成功审计日志
@@ -1137,7 +1141,7 @@ class AuthController extends BaseController {
         timestamp: new Date().toISOString()
       });
 
-      return this.sendSuccess(res, result.data, '两步验证已禁用');
+      return successResponse(res, result.data, '两步验证已禁用');
 
     } catch (error) {
       // 记录禁用失败审计日志
@@ -1170,7 +1174,7 @@ class AuthController extends BaseController {
       const result = await this.userService.getTwoFactorStatus(userId);
       
       if (!result.success) {
-        return this.sendError(res, result.message, 400);
+        return errorResponse(res, result.message, 400);
       }
 
       logger.audit(req, '获取两步验证状态成功', { 
@@ -1178,7 +1182,7 @@ class AuthController extends BaseController {
         timestamp: new Date().toISOString()
       });
 
-      return this.sendSuccess(res, result.data, '获取两步验证状态成功');
+      return successResponse(res, result.data, '获取两步验证状态成功');
 
     } catch (error) {
       logger.error('[AuthController] 获取两步验证状态失败', { error: error.message });
@@ -1215,7 +1219,7 @@ class AuthController extends BaseController {
       });
       
       if (!result.success) {
-        return this.sendError(res, result.message, 400);
+        return errorResponse(res, result.message, 400);
       }
 
       logger.audit(req, '生成两步验证码成功', { 
@@ -1225,7 +1229,7 @@ class AuthController extends BaseController {
       });
 
       // 不返回实际的验证码，只返回相关信息
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         codeId: result.data.codeId,
         codeType: result.data.codeType,
         channel: result.data.channel,
@@ -1275,7 +1279,7 @@ class AuthController extends BaseController {
         
         // 根据失败原因返回不同的状态码
         const statusCode = loginResult.message.includes('锁定') ? 423 : 401;
-        return this.sendError(res, loginResult.message, statusCode);
+        return errorResponse(res, loginResult.message, statusCode);
       }
 
       const { user, tokens, session } = loginResult.data;
@@ -1288,7 +1292,7 @@ class AuthController extends BaseController {
       });
 
       // 返回成功响应（包含双令牌和会话信息）
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         user: user,
         tokens: {
           accessToken: tokens.accessToken,
@@ -1327,7 +1331,7 @@ class AuthController extends BaseController {
 
       // 验证输入
       if (!sessionToken) {
-        return this.sendError(res, '访问令牌为必填项', 400);
+        return errorResponse(res, '访问令牌为必填项', 400);
       }
 
       // 调用服务层进行令牌验证
@@ -1344,7 +1348,7 @@ class AuthController extends BaseController {
         
         // 根据失败原因返回不同的状态码
         const statusCode = validationResult.message.includes('过期') ? 401 : 401;
-        return this.sendError(res, validationResult.message, statusCode);
+        return errorResponse(res, validationResult.message, statusCode);
       }
 
       const { user, session } = validationResult.data;
@@ -1356,7 +1360,7 @@ class AuthController extends BaseController {
       });
 
       // 返回成功响应（包含用户信息和会话状态）
-      return this.sendSuccess(res, {
+      return successResponse(res, {
         user: {
           id: user.id,
           username: user.username,
@@ -1378,7 +1382,7 @@ class AuthController extends BaseController {
       // 如果是业务逻辑抛出的“令牌无效或已过期”错误，返回 401 而非 500
       if (error.message === '令牌无效或已过期') {
         logger.warn('[AuthController] 令牌验证未通过', { error: error.message });
-        return this.sendError(res, error.message, 401);
+        return errorResponse(res, error.message, 401);
       }
       
       logger.error('[AuthController] 令牌验证失败', { error: error.message });
@@ -1402,12 +1406,12 @@ class AuthController extends BaseController {
       const result = await this.userService.generateTotpSecret(userId);
       
       if (!result.success) {
-        return this.sendError(res, result.message, 400);
+        return errorResponse(res, result.message, 400);
       }
 
       logger.auth('TOTP密钥生成成功', { userId });
 
-      return this.sendSuccess(res, result.data, result.message);
+      return successResponse(res, result.data, result.message);
     } catch (error) {
       logger.error('[AuthController] 生成TOTP密钥失败', { 
         error: error.message,
@@ -1440,12 +1444,12 @@ class AuthController extends BaseController {
       });
       
       if (!result.success) {
-        return this.sendError(res, result.message, 400);
+        return errorResponse(res, result.message, 400);
       }
 
       logger.auth('TOTP两步验证启用成功', { userId });
 
-      return this.sendSuccess(res, result.data, result.message);
+      return successResponse(res, result.data, result.message);
     } catch (error) {
       logger.error('[AuthController] 启用TOTP两步验证失败', { 
         error: error.message,
@@ -1474,12 +1478,12 @@ class AuthController extends BaseController {
       const result = await this.userService.disableTotpAuth(userId, { code });
       
       if (!result.success) {
-        return this.sendError(res, result.message, 400);
+        return errorResponse(res, result.message, 400);
       }
 
       logger.auth('TOTP两步验证禁用成功', { userId });
 
-      return this.sendSuccess(res, result.data, result.message);
+      return successResponse(res, result.data, result.message);
     } catch (error) {
       logger.error('[AuthController] 禁用TOTP两步验证失败', { 
         error: error.message,
@@ -1508,12 +1512,12 @@ class AuthController extends BaseController {
       const result = await this.userService.verifyTotpCode(userId, code, secret);
       
       if (!result.success) {
-        return this.sendError(res, result.message, 400);
+        return errorResponse(res, result.message, 400);
       }
 
       logger.auth('TOTP两步验证码验证成功', { userId });
 
-      return this.sendSuccess(res, result.data, result.message);
+      return successResponse(res, result.data, result.message);
     } catch (error) {
       logger.error('[AuthController] 验证TOTP两步验证码失败', { 
         error: error.message,
@@ -1539,10 +1543,10 @@ class AuthController extends BaseController {
       const result = await this.userService.getTotpStatus(userId);
       
       if (!result.success) {
-        return this.sendError(res, result.message, 400);
+        return errorResponse(res, result.message, 400);
       }
 
-      return this.sendSuccess(res, result.data, result.message);
+      return successResponse(res, result.data, result.message);
     } catch (error) {
       logger.error('[AuthController] 获取TOTP两步验证状态失败', { 
         error: error.message,
@@ -1571,12 +1575,12 @@ class AuthController extends BaseController {
       const result = await this.userService.regenerateBackupCodes(userId, { code });
       
       if (!result.success) {
-        return this.sendError(res, result.message, 400);
+        return errorResponse(res, result.message, 400);
       }
 
       logger.auth('备用码重新生成成功', { userId });
 
-      return this.sendSuccess(res, result.data, result.message);
+      return successResponse(res, result.data, result.message);
     } catch (error) {
       logger.error('[AuthController] 重新生成备用码失败', { 
         error: error.message,
@@ -1625,7 +1629,7 @@ class AuthController extends BaseController {
         userAgent: req.get('User-Agent')
       });
 
-      return this.sendSuccess(res, { ip: clientIp }, '获取IP地址成功');
+      return successResponse(res, { ip: clientIp }, '获取IP地址成功');
     } catch (error) {
       logger.error('[AuthController] 获取客户端IP地址失败', { 
         error: error.message

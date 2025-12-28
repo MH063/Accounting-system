@@ -9,6 +9,8 @@ const { asyncHandler } = require('../middleware/errorHandling');
 const { responseWrapper } = require('../middleware/response');
 const logger = require('../config/logger');
 
+const { sendSuccess } = require('../middleware/response');
+
 const router = express.Router();
 
 /**
@@ -27,13 +29,7 @@ router.get('/stats', responseWrapper(asyncHandler(async (req, res) => {
     timestamp: new Date().toISOString()
   });
   
-  return res.json({
-    success: true,
-    message: '获取缓存统计信息成功',
-    data: {
-      stats
-    }
-  });
+  return sendSuccess(res, { stats }, '获取缓存统计信息成功');
 })));
 
 /**
@@ -52,10 +48,7 @@ router.post('/reset-stats', responseWrapper(asyncHandler(async (req, res) => {
     timestamp: new Date().toISOString()
   });
   
-  return res.json({
-    success: true,
-    message: '缓存统计重置成功'
-  });
+  return sendSuccess(res, null, '缓存统计重置成功');
 })));
 
 /**
@@ -68,16 +61,13 @@ router.post('/flush', responseWrapper(asyncHandler(async (req, res) => {
     timestamp: new Date().toISOString()
   });
   
-  flushCache();
+  await flushCache();
   
   logger.audit(req, '缓存清空成功', { 
     timestamp: new Date().toISOString()
   });
   
-  return res.json({
-    success: true,
-    message: '所有缓存已清空'
-  });
+  return sendSuccess(res, null, '所有缓存已清空');
 })));
 
 module.exports = router;

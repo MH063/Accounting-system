@@ -4,7 +4,7 @@
     <LoadingOverlay v-if="isInitializing" message="正在验证身份..." />
     <router-view v-else />
     <AutoLogoutWarning 
-      :show="showWarning.value"
+      :show="showWarning"
       :remaining-seconds="computedRemainingSeconds"
       @keep-alive="keepSessionAlive"
     />
@@ -54,11 +54,8 @@ onMounted(async () => {
     }
 
     if (authState.isAuthenticated) {
-      if (authStorageService.isTokenExpired() || authStorageService.isSessionExpired()) {
-        authStorageService.clearAuthData()
-        window.location.href = '/login?reason=session_expired'
-        return
-      }
+      // 移除硬编码的令牌过期检查，交给路由守卫和请求拦截器处理自动刷新
+      // 防止在刷新页面时因为令牌即将过期而直接登出
       
       initAutoLogout(router)
       console.log('[App] 自动登出已初始化，showWarning:', showWarning.value)
