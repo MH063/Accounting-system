@@ -49,13 +49,18 @@ class AdminAuthService {
         return this.handleFailedLogin(username, '用户不存在');
       }
 
-      // 3. 检查是否为管理员角色
+          // 3. 检查是否为管理员角色
+      // 从用户角色信息中检查是否有管理员权限
+      const userWithRoles = await this.userRepository.findUserWithRoles(username);
+      const hasAdminRole = userWithRoles && userWithRoles.role === 'admin';
+      
+      // 保留原有的检查逻辑作为备选
       const isAdminByUsername = username === 'admin' || username.includes('admin');
       const isAdminByStatus = user.role === 'admin';
       const isAdminByEmail = user.email === 'admin@example.com';
       
       // 只要满足任何一个管理员条件即可
-      const isAdmin = isAdminByUsername || isAdminByStatus || isAdminByEmail;
+      const isAdmin = hasAdminRole || isAdminByUsername || isAdminByStatus || isAdminByEmail;
       
       if (!isAdmin) {
         return this.handleFailedLogin(username, '权限不足，仅管理员可以登录');
@@ -199,7 +204,11 @@ class AdminAuthService {
       }
 
       // 检查是否为管理员
-      const isAdmin = user.username === 'admin' || user.email === 'admin@example.com' || user.role === 'admin';
+      // 使用用户角色信息检查管理员权限
+      const userWithRoles = await this.userRepository.findUserWithRoles(user.email);
+      const hasAdminRole = userWithRoles && userWithRoles.role === 'admin';
+      
+      const isAdmin = user.username === 'admin' || user.email === 'admin@example.com' || user.role === 'admin' || hasAdminRole;
       if (!isAdmin) {
         return {
           success: false,
@@ -251,7 +260,11 @@ class AdminAuthService {
       }
 
       // 检查是否为管理员
-      const isAdmin = user.username === 'admin' || user.email === 'admin@example.com' || user.role === 'admin';
+      // 使用用户角色信息检查管理员权限
+      const userWithRoles = await this.userRepository.findUserWithRoles(user.email);
+      const hasAdminRole = userWithRoles && userWithRoles.role === 'admin';
+      
+      const isAdmin = user.username === 'admin' || user.email === 'admin@example.com' || user.role === 'admin' || hasAdminRole;
       if (!isAdmin) {
         return false;
       }
@@ -287,7 +300,11 @@ class AdminAuthService {
       }
 
       // 检查是否为管理员
-      const isAdmin = user.username === 'admin' || user.email === 'admin@example.com' || user.role === 'admin';
+      // 使用用户角色信息检查管理员权限
+      const userWithRoles = await this.userRepository.findUserWithRoles(user.email);
+      const hasAdminRole = userWithRoles && userWithRoles.role === 'admin';
+      
+      const isAdmin = user.username === 'admin' || user.email === 'admin@example.com' || user.role === 'admin' || hasAdminRole;
       if (!isAdmin) {
         return [];
       }

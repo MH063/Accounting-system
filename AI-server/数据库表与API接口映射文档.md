@@ -117,7 +117,7 @@
 | notifications | 通知表 | id, user_id, title, content, type, is_read, created_at |
 | user_activity_logs | 用户活动日志表 | id, user_id, action, details, ip_address, created_at |
 | system_performance_metrics | 系统性能指标表 | id, metric_name, metric_value, recorded_at |
-| system_resource_usage | 系统资源使用表 | id, resource_type, usage_percentage, recorded_at |
+
 
 ### 5.2 API接口
 
@@ -131,7 +131,7 @@
 | /api/notifications/:notificationId | PUT | 标记通知已读 | notifications | 需要认证 |
 | /api/admin/logs/activity | GET | 获取活动日志 | user_activity_logs | 管理员权限 |
 | /api/admin/metrics/performance | GET | 获取性能指标 | system_performance_metrics | 管理员权限 |
-| /api/admin/metrics/resources | GET | 获取资源使用情况 | system_resource_usage | 管理员权限 |
+
 
 ## 6. 管理后台高级功能模块
 

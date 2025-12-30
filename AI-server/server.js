@@ -14,7 +14,7 @@ const { errorHandler } = require('./middleware/errorHandling');
 const { defaultRateLimiter } = require('./middleware/rateLimiter');
 const { responseWrapper } = require('./middleware/response');
 const { requestLogger } = require('./middleware/requestLogger');
-const { ipWhitelist, strictRateLimit, securityHeaders, sqlInjectionProtection, requestSizeLimit } = require('./middleware/security');
+const { ipWhitelist, strictRateLimit, securityHeaders, sqlInjectionProtection, requestSizeLimit, securityAuditMiddleware } = require('./middleware/security/index');
 // 直接从xssProtection.js导入以绕过索引问题
 const { xssProtection: xssProtectionMiddleware } = require('./middleware/security/xssProtection');
 // 导入csrfProtection
@@ -151,6 +151,14 @@ app.use(defaultRateLimiter);
 // 请求日志中间件
 app.use(requestLogger);
 
+// 安全审计中间件 - 记录所有API请求到审计日志
+if (typeof securityAuditMiddleware === 'function') {
+  app.use(securityAuditMiddleware());
+  console.log('已成功注册安全审计中间件');
+} else {
+  console.error('错误: securityAuditMiddleware 不是一个函数:', typeof securityAuditMiddleware);
+}
+
 // CSRF保护中间件 - 仅对API请求生效
 app.use(csrfProtectionMiddleware());
 
@@ -216,6 +224,14 @@ app.use('/api/quick-stats', require('./routes/quickStats'));
 
 // 初始化Swagger中间件（在路由注册后）
 initSwaggerMiddleware(app);
+
+// 管理端仪表板路由
+app.use('/api', require('./routes/adminDashboard'));
+
+// 系统状态评估路由
+app.use('/api/status', require('./routes/systemStatus'));
+
+// 健康检查路由
 app.use('/api/health', require('./routes/health'));
 app.use('/api/virus-scan', require('./routes/virusScan'));
 app.use('/api/cors', require('./routes/corsManagement'));

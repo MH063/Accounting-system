@@ -292,8 +292,8 @@ class VersionedRoutingMiddleware {
       });
     }));
 
-    // 获取版本统计信息
-    this.router.get('/stats', responseWrapper((req, res) => {
+    // 获取版本统计信息（重命名为/version-stats以避免与管理端stats路由冲突）
+    this.router.get('/version-stats', responseWrapper((req, res) => {
       const versions = apiVersionManager.getSupportedVersions();
       const stats = {
         total: versions.length,

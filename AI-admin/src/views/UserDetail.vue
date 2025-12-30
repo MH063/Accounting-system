@@ -284,8 +284,9 @@ const loadUserDetail = async () => {
     const response = await userApi.getUserById(parseInt(userId))
     console.log('✅ 用户详情响应:', response)
     
-    // 处理后端返回的数据结构
-    const userData = response?.data?.data || response?.data || {}
+    // 处理后端返回的数据结构 (符合规则 5: response.data.data.xxx)
+    // 此时 response 已经是拦截器返回的 response.data
+    const userData = response?.data || response
     userDetail.value = userData
     originalUserDetail.value = JSON.parse(JSON.stringify(userData)) // 深拷贝
     
@@ -310,9 +311,10 @@ const loadLoginLogs = async () => {
     })
     console.log('✅ 登录日志响应:', response)
     
-    // 处理后端返回的数据结构
-    const logsData = response?.data?.data || response?.data || []
-    const totalCount = response?.data?.total || response?.data?.count || logsData.length
+    // 处理后端返回的数据结构 (符合规则 5: response.data.data.xxx)
+    const innerData = response?.data || response
+    const logsData = innerData?.items || (Array.isArray(innerData) ? innerData : [])
+    const totalCount = innerData?.total || innerData?.count || (Array.isArray(innerData) ? innerData.length : 0)
     
     loginLogs.value = logsData
     logsTotal.value = totalCount
@@ -342,9 +344,10 @@ const loadPaymentRecords = async () => {
     })
     console.log('✅ 支付记录响应:', response)
     
-    // 处理后端返回的数据结构
-    const paymentsData = response?.data?.data || response?.data || []
-    const totalCount = response?.data?.total || response?.data?.count || paymentsData.length
+    // 处理后端返回的数据结构 (符合规则 5: response.data.data.xxx)
+    const innerData = response?.data || response
+    const paymentsData = innerData?.items || (Array.isArray(innerData) ? innerData : [])
+    const totalCount = innerData?.total || innerData?.count || (Array.isArray(innerData) ? innerData.length : 0)
     
     paymentRecords.value = paymentsData
     paymentsTotal.value = totalCount
@@ -371,9 +374,10 @@ const loadUserRoles = async () => {
     const response = await userApi.getUserRoles(parseInt(userId))
     console.log('✅ 用户权限角色响应:', response)
     
-    // 处理后端返回的数据结构
-    const rolesData = response?.data?.data || response?.data || []
-    const availableRolesData = response?.data?.availableRoles || []
+    // 处理后端返回的数据结构 (符合规则 5: response.data.data.xxx)
+    const innerData = response?.data || response
+    const rolesData = innerData?.roles || (Array.isArray(innerData) ? innerData : [])
+    const availableRolesData = innerData?.availableRoles || []
     
     currentRoles.value = rolesData
     availableRoles.value = availableRolesData
@@ -405,14 +409,14 @@ const loadUserDormitory = async () => {
     const response = await userApi.getUserDormitory(parseInt(userId))
     console.log('✅ 用户寝室信息响应:', response)
     
-    // 处理后端返回的数据结构
-    const dormitoryData = response?.data?.data || response?.data || {}
+    // 处理后端返回的数据结构 (符合规则 5: response.data.data.xxx)
+    const dormitoryData = response?.data || response
     userDormitory.value = dormitoryData
     
   } catch (error: any) {
     console.error('❌ 加载用户寝室信息失败:', error)
     ElMessage.error('加载用户寝室信息失败')
-    userDormitory.value = {}
+    userDormitory.value = null
   } finally {
     dormitoryLoading.value = false
   }

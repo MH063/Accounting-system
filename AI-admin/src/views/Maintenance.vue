@@ -921,7 +921,7 @@ const submitBackupForm = async () => {
         })
         
         // 检查API响应结构
-        if (response && response.data) {
+        if (response) {
           ElMessage.success('备份创建成功')
           backupDialogVisible.value = false
           backupForm.name = ''
@@ -948,7 +948,7 @@ const handleDownloadBackup = async (row: any) => {
     ElMessage.info('正在下载备份文件...')
     
     const response = await databaseApi.downloadBackup(row.id)
-    const blob = new Blob([response.data])
+    const blob = new Blob([response])
     const url = window.URL.createObjectURL(blob)
     
     const a = document.createElement('a')
@@ -984,13 +984,10 @@ const handleRestoreBackup = async (row: any) => {
     const response = await databaseApi.restoreDatabase(row.id)
     
     // 检查API响应结构
-    if (response && response.data) {
-      ElMessage.success('数据库恢复成功，系统将在30秒后重启')
-      
-      // 30秒后刷新页面
-      setTimeout(() => {
-        window.location.reload()
-      }, 30000)
+    if (response) {
+      ElMessage.success('数据库恢复成功')
+      // 移除自动刷新逻辑，改为手动或通过状态更新
+      await handleRefreshBackupList()
     } else {
       ElMessage.error('恢复失败，请稍后重试')
     }
@@ -1020,7 +1017,7 @@ const handleDeleteBackup = async (row: any) => {
     const response = await databaseApi.deleteBackup(row.id)
     
     // 检查API响应结构
-    if (response && response.data) {
+    if (response) {
       ElMessage.success('备份已删除')
       await handleRefreshBackupList()
     } else {
@@ -1056,10 +1053,10 @@ const fetchBackupList = async () => {
     }
     const response = await databaseApi.getBackupList(params)
     
-    // 检查API响应结构
-    if (response && response.data && response.data.data) {
-      backupList.value = response.data.data.list || []
-      backupTotal.value = response.data.data.total || 0
+    // 拦截器已处理双层嵌套，直接使用 response
+    if (response) {
+      backupList.value = response.list || []
+      backupTotal.value = response.total || 0
     } else {
       backupList.value = []
       backupTotal.value = 0
@@ -1184,7 +1181,7 @@ const enableMaintenanceMode = () => {
         })
         
         // 检查API响应是否成功
-        if (response && response.data) {
+        if (response) {
           // 获取最新的维护状态
           await fetchMaintenanceStatus()
           ElMessage.success('维护模式已启用')
@@ -1220,7 +1217,7 @@ const disableMaintenanceMode = () => {
       const response = await maintenanceApi.cancelMaintenance()
       
       // 检查API响应是否成功
-      if (response && response.data) {
+      if (response) {
         // 获取最新的维护状态
         await fetchMaintenanceStatus()
         ElMessage.success('维护模式已取消')
@@ -1242,7 +1239,7 @@ const disableMaintenanceMode = () => {
 const fetchMaintenanceStatus = async () => {
   try {
     const response = await maintenanceApi.getMaintenanceStatus()
-    const status = response.data // 从响应中提取数据
+    const status = response // 拦截器已提取 data 字段
     
     if (status && status.enabled) {
       isMaintenanceMode.value = true
@@ -1471,9 +1468,9 @@ const handlePerformHealthCheck = async () => {
   try {
     const response = await healthApi.performHealthCheck()
     
-    // 检查API响应结构
-    if (response && response.data && response.data.data) {
-      const healthData = response.data.data
+    // 拦截器已处理双层嵌套，直接使用 response
+    if (response) {
+      const healthData = response
       
       // 更新系统健康状态
       systemHealth.value = {
@@ -1507,10 +1504,10 @@ const fetchHealthResults = async () => {
     }
     const response = await healthApi.getHealthResults(params)
     
-    // 检查API响应结构
-    if (response && response.data && response.data.data) {
-      healthResults.value = response.data.data.list || []
-      healthTotal.value = response.data.data.total || 0
+    // 拦截器已处理双层嵌套，直接使用 response
+    if (response) {
+      healthResults.value = response.list || []
+      healthTotal.value = response.total || 0
     } else {
       healthResults.value = []
       healthTotal.value = 0
@@ -1606,9 +1603,9 @@ const fetchDataStats = async () => {
   try {
     const response = await dataApi.getDataStatistics()
     
-    // 检查API响应结构
-    if (response && response.data && response.data.data) {
-      dataStats.value = response.data.data
+    // 拦截器已处理双层嵌套，直接使用 response
+    if (response) {
+      dataStats.value = response
     }
   } catch (error) {
     console.error('获取数据统计失败:', error)
@@ -1648,8 +1645,8 @@ const handleCleanData = async () => {
       keepDays: dataCleanForm.keepDays
     })
     
-    // 检查API响应结构
-    if (response && response.data) {
+    // 拦截器已处理双层嵌套，直接使用 response
+    if (response) {
       ElMessage.success('数据清理完成')
       // 刷新数据统计
       fetchDataStats()
@@ -1672,9 +1669,9 @@ const fetchArchiveList = async () => {
   try {
     const response = await dataApi.getArchiveList()
     
-    // 检查API响应结构
-    if (response && response.data && response.data.data) {
-      archiveList.value = response.data.data.list || []
+    // 拦截器已处理双层嵌套，直接使用 response
+    if (response) {
+      archiveList.value = response.list || []
     } else {
       archiveList.value = []
     }
@@ -1702,8 +1699,8 @@ const submitArchiveForm = async () => {
       archiveDate: archiveForm.archiveDate
     })
     
-    // 检查API响应结构
-    if (response && response.data) {
+    // 拦截器已处理双层嵌套，直接使用 response
+    if (response) {
       ElMessage.success('归档任务已创建')
       archiveDialogVisible.value = false
       // 刷新归档列表
@@ -1727,7 +1724,7 @@ const handleDownloadArchive = async (row: any) => {
     const response = await dataApi.downloadArchive(row.id)
     
     // 创建下载链接
-    const url = window.URL.createObjectURL(new Blob([response.data]))
+    const url = window.URL.createObjectURL(new Blob([response]))
     const link = document.createElement('a')
     link.href = url
     link.setAttribute('download', `${row.name}.zip`)
@@ -1761,7 +1758,7 @@ const handleRestoreArchive = async (row: any) => {
     const response = await dataApi.restoreArchive(row.id)
     
     // 检查API响应结构
-    if (response && response.data) {
+    if (response) {
       ElMessage.success('归档恢复完成')
       // 刷新数据统计
       fetchDataStats()
@@ -1792,7 +1789,7 @@ const handleDeleteArchive = async (row: any) => {
     const response = await dataApi.deleteArchive(row.id)
     
     // 检查API响应结构
-    if (response && response.data) {
+    if (response) {
       ElMessage.success('归档删除成功')
       // 刷新归档列表
       fetchArchiveList()
@@ -1858,9 +1855,9 @@ const fetchCurrentVersion = async () => {
   try {
     const response = await versionApi.getCurrentVersion()
     
-    // 检查API响应结构
-    if (response && response.data && response.data.data) {
-      currentVersion.value = response.data.data
+    // 拦截器已处理双层嵌套，直接使用 response
+    if (response) {
+      currentVersion.value = response
     }
   } catch (error) {
     console.error('获取当前版本信息失败:', error)
@@ -1874,9 +1871,9 @@ const handleCheckUpdate = async () => {
   try {
     const response = await versionApi.checkUpdate()
     
-    // 检查API响应结构
-    if (response && response.data && response.data.data) {
-      const updates = response.data.data.updates || []
+    // 拦截器已处理双层嵌套，直接使用 response
+    if (response) {
+      const updates = response.updates || []
       
       if (updates.length > 0) {
         updateList.value = updates
@@ -1911,8 +1908,8 @@ const handleDownloadUpdate = async (row: any) => {
     
     const response = await versionApi.downloadUpdate(row.version)
     
-    // 检查API响应结构
-    if (response && response.data) {
+    // 拦截器已处理双层嵌套
+    if (response) {
       if (updateItem) {
         updateItem.status = 'downloaded'
       }
@@ -1958,8 +1955,8 @@ const handleInstallUpdate = async (row: any) => {
     
     const response = await versionApi.installUpdate(row.version)
     
-    // 检查API响应结构
-    if (response && response.data) {
+    // 拦截器已处理双层嵌套
+    if (response) {
       ElMessage.success('更新安装成功，系统将在5秒后重启')
       
       // 模拟系统重启
@@ -2065,10 +2062,10 @@ const fetchLogList = async () => {
     }
     const response = await logApi.getLogList(params)
     
-    // 检查API响应结构
-    if (response && response.data && response.data.data) {
-      logList.value = response.data.data.list || []
-      logTotal.value = response.data.data.total || 0
+    // 拦截器已处理双层嵌套，直接使用 response
+    if (response) {
+      logList.value = response.list || []
+      logTotal.value = response.total || 0
     } else {
       logList.value = []
       logTotal.value = 0
@@ -2129,7 +2126,8 @@ const handleCleanLogs = () => {
         keepDays: parseInt(value)
       })
       
-      if (response && response.data) {
+      // 拦截器已处理双层嵌套，直接使用 response
+      if (response) {
         ElMessage.success('日志清理完成')
         fetchLogList()
       } else {
@@ -2159,8 +2157,11 @@ const handleExportLogs = () => {
         endTime: logSearchForm.endTime
       })
       
+      // 拦截器已处理双层嵌套，直接使用 response (如果是二进制流则直接使用)
+      const data = response
+      
       // 创建下载链接
-      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const url = window.URL.createObjectURL(new Blob([data]))
       const link = document.createElement('a')
       link.href = url
       link.setAttribute('download', `logs_${new Date().toISOString().slice(0, 10)}.zip`)

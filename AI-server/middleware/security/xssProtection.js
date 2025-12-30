@@ -7,7 +7,7 @@
 const logger = require('../../config/logger');
 
 // 排除XSS清理的路径
-const EXCLUDED_PATHS = ['/api/docs', '/docs'];
+const EXCLUDED_PATHS = ['/api/docs', '/docs', '/api/client/restart', '/api/client/disconnect'];
 
 // 危险的HTML标签
 const DANGEROUS_TAGS = [

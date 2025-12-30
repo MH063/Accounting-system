@@ -384,7 +384,7 @@ const loadDormitoryDetail = async () => {
     const response = await dormitoryApi.getDormitoryDetail(dormitoryId.value)
     
     // 处理后端返回的数据结构
-    const detailData = response?.data?.data || response?.data || {}
+    const detailData = response || {}
     dormitoryInfo.value = { ...detailData }
     
     // 加载相关数据
@@ -404,7 +404,7 @@ const loadDormitoryList = async () => {
   try {
     console.log('🔄 加载寝室列表')
     const response = await dormitoryApi.getDormitoryList()
-    const listData = response?.data?.data || response?.data || []
+    const listData = response || []
     availableDormitories.value = listData
   } catch (error: any) {
     console.error('❌ 加载寝室列表失败:', error)

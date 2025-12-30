@@ -1982,7 +1982,7 @@ const handleExport = async () => {
     const response = await systemNotificationApi.exportSystemNotifications(exportParams)
     
     // 创建下载链接
-    const blob = new Blob([response.data], { 
+    const blob = new Blob([response], { 
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
     })
     const url = window.URL.createObjectURL(blob)
@@ -2299,7 +2299,7 @@ const handleExportHistory = async () => {
     const response = await notificationHistoryApi.exportNotificationHistories(exportParams)
     
     // 创建下载链接
-    const blob = new Blob([response.data], { 
+    const blob = new Blob([response], { 
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
     })
     const url = window.URL.createObjectURL(blob)

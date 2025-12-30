@@ -2,6 +2,53 @@ const cron = require('node-cron');
 const { logManager } = require('./logManager');
 const { logger } = require('../config/logger');
 const databaseOptimizer = require('./databaseOptimizer');
+const systemStatusService = require('../services/systemStatusService');
+
+/**
+ * 系统指标记录任务
+ * 每分钟执行一次，记录在线人数等关键指标
+ */
+const systemMetricsTask = cron.schedule('* * * * *', async () => {
+  try {
+    // 1. 获取客户端在线人数指标
+    const onlineData = await systemStatusService.getRealOnlineUserCount();
+    await systemStatusService.recordMetric(
+      'ACTIVE_USERS', 
+      'Real-time Online Users', 
+      onlineData.total, 
+      'count'
+    );
+
+    // 2. 获取后端响应时间指标
+    const backendData = await systemStatusService.evaluateBackendStatus();
+    if (backendData.success) {
+      await systemStatusService.recordMetric(
+        'API_RESPONSE_TIME',
+        'API Average Response Time',
+        backendData.metrics.apiResponseTime,
+        'ms'
+      );
+    }
+
+    // 3. 获取数据库连接指标
+    const dbData = await systemStatusService.evaluateDatabaseStatus();
+    if (dbData.success) {
+      await systemStatusService.recordMetric(
+        'DATABASE_CONNECTIONS',
+        'Database Active Connections',
+        dbData.metrics.activeConnections,
+        'count'
+      );
+    }
+
+    logger.debug('[CRON] 系统多维度指标记录成功');
+  } catch (error) {
+    logger.error(`[CRON] 系统指标记录异常: ${error.message}`);
+  }
+}, {
+  scheduled: false,
+  timezone: 'Asia/Shanghai'
+});
 
 /**
  * 数据库健康检查任务
@@ -54,6 +101,7 @@ const logCleanupTask = cron.schedule('0 2 * * *', () => {
 function startScheduledTasks() {
   logCleanupTask.start();
   dbHealthCheckTask.start();
+  systemMetricsTask.start();
   logger.info('[CRON] 所有定时任务已启动');
 }
 
@@ -63,6 +111,7 @@ function startScheduledTasks() {
 function stopScheduledTasks() {
   logCleanupTask.stop();
   dbHealthCheckTask.stop();
+  systemMetricsTask.stop();
   logger.info('[CRON] 所有定时任务已停止');
 }
 

@@ -338,6 +338,8 @@ const isTokenExpiredError = (error: any): boolean => {
 // 令牌刷新锁与排队机制
 let isRefreshing = false
 let requestsQueue: Array<(token: string) => void> = []
+let lastRefreshTime = 0 // 上次成功刷新的时间
+const REFRESH_COOLDOWN = 5000 // 5秒内不重复刷新
 
 /**
  * 检查是否正在刷新令牌
@@ -349,6 +351,9 @@ export const getIsRefreshing = (): boolean => isRefreshing
  */
 const finishRefresh = (token: string = '') => {
   isRefreshing = false
+  if (token) {
+    lastRefreshTime = Date.now()
+  }
   if (requestsQueue.length > 0) {
     console.log(`处理刷新等待队列，长度: ${requestsQueue.length}`)
     requestsQueue.forEach(callback => callback(token))
@@ -360,7 +365,12 @@ const finishRefresh = (token: string = '') => {
  * 等待刷新完成
  * 如果当前正在刷新或有全局锁，则等待完成；否则立即返回
  */
-export const waitForRefresh = async (): Promise<void> => {
+export const waitForRefresh = async (retryCount = 0): Promise<void> => {
+  if (retryCount > 3) {
+    console.warn('waitForRefresh: 超过最大重试次数')
+    return
+  }
+
   if (isRefreshing) {
     return new Promise((resolve) => {
       requestsQueue.push(() => resolve())
@@ -534,7 +544,20 @@ if (typeof window !== 'undefined') {
 /**
  * 刷新访问令牌
  */
-export const refreshAccessToken = async (): Promise<boolean> => {
+export const refreshAccessToken = async (retryCount = 0): Promise<boolean> => {
+  // 限制递归/重试深度
+  if (retryCount > 3) {
+    console.error('刷新令牌重试次数过多，停止重试')
+    return false
+  }
+
+  // 检查冷却时间
+  const now = Date.now()
+  if (now - lastRefreshTime < REFRESH_COOLDOWN) {
+    console.log('令牌刚刚刷新过，跳过本次刷新请求')
+    return true
+  }
+
   const refreshToken = getRefreshToken()
   if (!refreshToken) {
     console.error('刷新令牌不存在')
@@ -582,7 +605,7 @@ export const refreshAccessToken = async (): Promise<boolean> => {
         }
       }
 
-      const timeout = setTimeout(() => {
+      const timeout = setTimeout(async () => {
         console.warn('等待其他标签页刷新令牌超时')
         if (authChannel) {
           authChannel.removeEventListener('message', handleMessage as any)
@@ -594,7 +617,9 @@ export const refreshAccessToken = async (): Promise<boolean> => {
             const lockDataInner = JSON.parse(currentLock)
             if (lockDataInner.tabId) {
               isRefreshing = false
-              return resolve(refreshAccessToken())
+              // 延迟重试，避免紧凑循环
+              await new Promise(r => setTimeout(r, 1000))
+              return resolve(refreshAccessToken(retryCount + 1))
             }
           } catch (e) {}
         }
@@ -611,7 +636,7 @@ export const refreshAccessToken = async (): Promise<boolean> => {
       if (authChannel) {
         authChannel.addEventListener('message', handleMessage as any)
       } else {
-        const checkInterval = setInterval(() => {
+        const checkInterval = setInterval(async () => {
           const elapsed = Date.now() - startTime
           if (elapsed >= maxWaitTime) {
             clearInterval(checkInterval)
@@ -628,7 +653,9 @@ export const refreshAccessToken = async (): Promise<boolean> => {
               resolve(true)
             } else {
               isRefreshing = false
-              resolve(refreshAccessToken())
+              // 延迟重试
+              await new Promise(r => setTimeout(r, 500))
+              resolve(refreshAccessToken(retryCount + 1))
             }
           }
         }, pollInterval)
@@ -640,9 +667,10 @@ export const refreshAccessToken = async (): Promise<boolean> => {
   const myTabId = setGlobalRefreshLock()
 
   if (!myTabId) {
-    console.log('获取全局锁失败，进入等待模式')
+    console.log('获取全局锁失败，可能发生竞争，稍后重试')
     isRefreshing = false
-    return refreshAccessToken()
+    await new Promise(r => setTimeout(r, 500))
+    return refreshAccessToken(retryCount + 1)
   }
 
   console.log('开始刷新访问令牌 (持有全局锁)...')
@@ -801,7 +829,10 @@ export async function request<T = any>(
   // 避免对刷新令牌接口本身进行重试，防止循环调用
   const isRefreshTokenRequest = url.includes('/auth/refresh-token')
   
-  while (true) {
+  let refreshRetryCount = 0
+  const maxRefreshRetry = 2
+
+  while (refreshRetryCount < maxRefreshRetry) {
     try {
       // 合并配置
       const mergedConfig: RequestConfig = {
@@ -815,13 +846,18 @@ export async function request<T = any>(
   // 令牌预检测：如果即将过期且不是刷新令牌请求，则先刷新
   if (!isRefreshTokenRequest && isTokenExpiringSoon()) {
     console.log('检测到令牌即将过期，执行预刷新...')
-    const refreshSuccess = await refreshAccessToken()
-    if (!refreshSuccess) {
-      console.warn('预刷新令牌失败，尝试继续请求或跳转登录')
-      // 如果刷新失败且没有访问令牌，可能需要跳转
-      if (!getAuthToken()) {
-        clearAuthAndRedirect()
-        return null as unknown as T
+    refreshRetryCount++
+    if (refreshRetryCount >= maxRefreshRetry) {
+      console.warn('预刷新重试次数过多，停止预刷新尝试')
+    } else {
+      const refreshSuccess = await refreshAccessToken()
+      if (!refreshSuccess) {
+        console.warn('预刷新令牌失败，尝试继续请求或跳转登录')
+        // 如果刷新失败且没有访问令牌，可能需要跳转
+        if (!getAuthToken()) {
+          clearAuthAndRedirect()
+          return null as unknown as T
+        }
       }
     }
   }
@@ -935,10 +971,16 @@ export async function request<T = any>(
       const noAuthEndpoints = ['/auth/login', '/auth/register', '/auth/reset-password']
       const isNoAuthEndpoint = noAuthEndpoints.some(endpoint => url.includes(endpoint))
 
-      if (!isNoAuthEndpoint && !isRefreshTokenRequest && retryCount < maxRetryCount && isTokenExpiredError(error)) {
+      if (!isNoAuthEndpoint && !isRefreshTokenRequest && isTokenExpiredError(error)) {
         console.log('检测到令牌过期，尝试刷新令牌...')
-        retryCount++
+        refreshRetryCount++
         
+        if (refreshRetryCount >= maxRefreshRetry) {
+          console.error('达到最大刷新重试次数，跳转登录')
+          clearAuthAndRedirect()
+          return null as unknown as T
+        }
+
         // 尝试刷新令牌
         const refreshSuccess = await refreshAccessToken()
         if (refreshSuccess) {
@@ -950,7 +992,7 @@ export async function request<T = any>(
           console.log('刷新令牌失败，无法重试请求')
           // 清除认证信息并跳转到登录页
           clearAuthAndRedirect()
-          return
+          return null as unknown as T
         }
       }
       
@@ -958,6 +1000,9 @@ export async function request<T = any>(
       throw await handleResponseError(error)
     }
   }
+  
+  // 如果跳出了循环且没有返回，说明重试多次依然失败
+  throw new Error('请求失败: 令牌刷新多次仍无效')
 }
 
 /**

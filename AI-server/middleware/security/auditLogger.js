@@ -7,6 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const logger = require('../../config/logger');
+const { pool } = require('../../config/database');
 
 // 确保审计日志目录存在
 const auditLogDir = path.join(__dirname, '../../logs/audit');
@@ -27,6 +28,100 @@ const auditLogFile = path.join(auditLogDir, 'security-audit.log');
 const operationLogFile = path.join(auditLogDir, 'operation-audit.log');
 const loginLogFile = path.join(auditLogDir, 'login-audit.log');
 const anomalyLogFile = path.join(auditLogDir, 'anomaly-audit.log');
+
+/**
+ * 将审计日志持久化到数据库
+ * @param {Object} entry - 日志条目
+ */
+const persistToDatabase = async (entry) => {
+  try {
+    const {
+      userId,
+      operationType,
+      eventType,
+      anomalyType,
+      ip,
+      userAgent,
+      method,
+      url,
+      operationData,
+      loginData,
+      anomalyData,
+      eventData,
+      severity
+    } = entry;
+
+    // 提取状态码和响应时间，可能在顶层也可能在 nested data 中
+    const statusCode = entry.statusCode || (operationData?.statusCode) || (loginData?.statusCode) || (anomalyData?.statusCode) || (eventData?.statusCode);
+    const responseTime = entry.responseTime || (operationData?.responseTime) || (loginData?.responseTime) || (anomalyData?.responseTime) || (eventData?.responseTime);
+    const success = entry.success !== undefined ? entry.success : 
+                   (operationData?.success !== undefined ? operationData.success : 
+                   (loginData?.success !== undefined ? loginData.success : 
+                   (eventData?.success !== undefined ? eventData.success : undefined)));
+
+    // 确定动作名称：优先使用 operationType 或 anomalyType，如果没有则使用 url，最后才使用 eventType
+    const action = operationType || anomalyType || url || eventType;
+    const finalSuccess = success !== undefined ? success : (statusCode ? statusCode < 400 : true);
+    const finalSeverity = severity || (anomalyType ? 'warning' : 'info');
+
+    // 映射操作类型到数据库支持的 INSERT/UPDATE/DELETE
+    let dbOperation = 'INSERT'; // 默认
+    if (method === 'PUT' || method === 'PATCH') dbOperation = 'UPDATE';
+    if (method === 'DELETE') dbOperation = 'DELETE';
+
+    // 确定表名：尝试从 URL 中提取，默认为 system
+    let tableName = 'system';
+    const pathParts = url.split('/').filter(part => part && part !== 'api');
+    if (pathParts.length > 0) {
+      // 如果第一个部分是 auth，通常是 users 表
+      if (pathParts[0] === 'auth') {
+        tableName = 'users';
+      } else {
+        // 否则取第一个路径部分作为表名候选
+        tableName = pathParts[0];
+      }
+    }
+
+    const queryText = `
+      INSERT INTO audit_logs (
+        table_name,
+        operation,
+        record_id,
+        user_id,
+        ip_address,
+        user_agent,
+        action,
+        success,
+        response_status,
+        severity,
+        new_values,
+        response_time,
+        created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
+    `;
+
+    const values = [
+      tableName,
+      dbOperation,
+      0, // record_id
+      userId || null,
+      (ip && ip !== '::1' && ip !== '127.0.0.1') ? ip : null,
+      userAgent,
+      action,
+      finalSuccess,
+      statusCode || null,
+      finalSeverity,
+      JSON.stringify(operationData || loginData || anomalyData || eventData || {}),
+      responseTime || null
+    ];
+
+    await pool.query(queryText, values);
+    console.log(`[AUDIT_DB] 成功持久化审计日志: ${action}`);
+  } catch (error) {
+    // 这里的错误不应该影响主流程，但我们应该记录它
+    console.error('[AUDIT_DB] 持久化审计日志到数据库失败:', error.message);
+  }
+};
 
 /**
  * 记录关键操作日志
@@ -51,6 +146,9 @@ const logOperation = (req, operationType, operationData = {}) => {
 
     // 写入操作日志文件
     fs.appendFileSync(operationLogFile, JSON.stringify(operationEntry) + '\n');
+    
+    // 持久化到数据库
+    persistToDatabase(operationEntry);
     
     // 同时记录到常规日志
     logger.audit(req, `关键操作: ${operationType}`, operationData);
@@ -82,6 +180,9 @@ const logLogin = (req, eventType, loginData = {}) => {
     // 写入登录日志文件
     fs.appendFileSync(loginLogFile, JSON.stringify(loginEntry) + '\n');
     
+    // 持久化到数据库
+    persistToDatabase(loginEntry);
+    
     // 同时记录到认证日志
     logger.auth(`登录事件: ${eventType}`, loginData);
   } catch (error) {
@@ -112,6 +213,9 @@ const logAnomaly = (req, anomalyType, anomalyData = {}) => {
     // 写入异常日志文件
     fs.appendFileSync(anomalyLogFile, JSON.stringify(anomalyEntry) + '\n');
     
+    // 持久化到数据库
+    persistToDatabase({ ...anomalyEntry, severity: 'warning' });
+    
     // 同时记录到安全日志
     logger.security(req, `异常访问: ${anomalyType}`, anomalyData);
   } catch (error) {
@@ -141,6 +245,9 @@ const logSecurityEvent = (req, eventType, eventData = {}) => {
 
     // 写入审计日志文件
     fs.appendFileSync(auditLogFile, JSON.stringify(auditEntry) + '\n');
+    
+    // 持久化到数据库
+    persistToDatabase(auditEntry);
     
     // 同时记录到常规日志
     logger.security(req, `安全审计事件: ${eventType}`, eventData);
@@ -186,6 +293,11 @@ const detectAnomaly = (req) => {
  */
 const enhancedSecurityAuditMiddleware = () => {
   return (req, res, next) => {
+    // 忽略心跳请求的审计日志，因为 AuthController 已经手动记录了更精确的信息
+    if (req.path.includes('/heartbeat')) {
+      return next();
+    }
+
     // 记录请求开始时间
     const startTime = Date.now();
     
@@ -266,8 +378,8 @@ const operationLogger = (operationType) => {
  */
 const loginMonitor = () => {
   return (req, res, next) => {
-    // 如果是登录相关的请求
-    if (req.path.includes('/auth/') && ['POST', 'PUT'].includes(req.method)) {
+    // 如果是登录相关的请求，排除心跳
+    if (req.path.includes('/auth/') && !req.path.includes('/heartbeat') && ['POST', 'PUT'].includes(req.method)) {
       // 在响应后记录登录事件
       res.on('finish', () => {
         const eventType = req.path.includes('login') ? 'LOGIN_ATTEMPT' : 'AUTH_OPERATION';
@@ -289,7 +401,7 @@ module.exports = {
   logOperation,
   logLogin,
   logAnomaly,
-  enhancedSecurityAuditMiddleware,
+  securityAuditMiddleware: enhancedSecurityAuditMiddleware,
   operationLogger,
   loginMonitor,
   detectAnomaly

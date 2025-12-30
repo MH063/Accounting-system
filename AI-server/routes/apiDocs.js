@@ -19,6 +19,15 @@ const { swaggerMiddlewareOptions } = require('../middleware/swagger');
 const router = express.Router();
 
 /**
+ * 获取当前服务器的协议和主机
+ */
+function getServerBaseUrl(req) {
+  const protocol = req.protocol || 'http';
+  const host = req.get('host') || 'localhost:4000';
+  return `${protocol}://${host}`;
+}
+
+/**
  * 静态资源路由 - 提供Swagger UI的CSS、JS等静态文件
  * 必须放在HTML页面路由之前
  */
@@ -43,8 +52,20 @@ router.get('/', responseWrapper(async (req, res) => {
     // 覆盖全局JSON响应设置，确保返回HTML页面
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     
-    // 使用middleware中定义的Swagger UI选项
-    swaggerUi.setup(swaggerSpec, swaggerMiddlewareOptions)(req, res);
+    // 确保swagger-ui使用正确的协议（HTTP而非HTTPS）
+    const serverUrl = getServerBaseUrl(req);
+    
+    // 使用middleware中定义的Swagger UI选项，并覆盖url确保使用HTTP
+    const customOptions = {
+      ...swaggerMiddlewareOptions,
+      swaggerOptions: {
+        ...swaggerMiddlewareOptions.swaggerOptions,
+        url: `${serverUrl}/api/docs/json`
+      },
+      customJs: `${serverUrl}/api/docs/swagger-zh.js`
+    };
+    
+    swaggerUi.setup(swaggerSpec, customOptions)(req, res);
   } catch (error) {
     logger.error('Swagger UI路由错误:', error);
     return res.status(500).json({

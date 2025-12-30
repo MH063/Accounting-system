@@ -59,7 +59,6 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
-import store from '@/store'
 import { adminAuthApi } from '@/api/adminAuth'
 
 // 路由和状态管理实例
@@ -98,48 +97,59 @@ const handleLogin = async () => {
       
       try {
         // 调用管理员登录API
-        console.log('正在调用管理员登录接口...', { username: loginForm.username })
-        
         const response = await adminAuthApi.adminLogin({
           username: loginForm.username,
           password: loginForm.password
         })
         
-        console.log('管理员登录接口响应:', response)
-        
-        // 检查响应数据结构
-        if (response && response.user && response.tokens) {
-          const adminData = response
+        // 登录成功处理
+        const loginData = response?.data || response
+        if (loginData) {
+          console.log('✅ 登录成功，正在保存数据到 localStorage...')
           
-          // 构建管理员用户数据
-          const userData = {
-            id: adminData.id || adminData.userId,
-            name: adminData.username || adminData.name || loginForm.username,
-            role: 'admin',
-            permissions: adminData.permissions || ['*'],
-            avatar: adminData.avatar || '',
-            email: adminData.email || `${loginForm.username}@example.com`,
-            loginTime: Date.now(),
-            token: adminData.tokens.accessToken,
-            refreshToken: adminData.tokens.refreshToken
-          }
+          // 获取用户信息和令牌
+          const user = loginData.user || loginData
+          const tokens = loginData.tokens || loginData
+          const accessToken = tokens.accessToken || tokens.token
+          const refreshToken = tokens.refreshToken
           
-          console.log('管理员登录成功，用户数据:', userData)
-          
-          // 调用Vuex的login action
-          store.dispatch('user/login', userData)
-          
-          // 如果选择了记住我，保存用户名
-          if (rememberMe.value) {
-            localStorage.setItem('savedUsername', loginForm.username)
+          if (accessToken) {
+            // 保存到 localStorage
+            localStorage.setItem('adminToken', accessToken)
+            if (refreshToken) {
+              localStorage.setItem('adminRefreshToken', refreshToken)
+            }
+            
+            const userData = {
+              id: user.id || user.userId,
+              name: user.username || user.name || loginForm.username,
+              role: 'admin',
+              permissions: user.permissions || ['*'],
+              avatar: user.avatar || '',
+              email: user.email || `${loginForm.username}@example.com`,
+              isLoggedIn: true,
+              token: accessToken,
+              refreshToken: refreshToken,
+              loginTime: Date.now()
+            }
+            localStorage.setItem('adminUser', JSON.stringify(userData))
+            
+            // 如果选择了记住我，保存用户名
+            if (rememberMe.value) {
+              localStorage.setItem('savedUsername', loginForm.username)
+            } else {
+              localStorage.removeItem('savedUsername')
+            }
+            
+            ElMessage.success('登录成功')
+            
+            // 延迟跳转，确保状态已保存
+            setTimeout(() => {
+              router.push('/')
+            }, 100)
           } else {
-            localStorage.removeItem('savedUsername')
+            throw new Error('登录响应中缺失令牌')
           }
-          
-          ElMessage.success('管理员登录成功')
-          
-          // 跳转到首页
-          router.push('/')
         } else {
           throw new Error(response?.message || '登录失败')
         }

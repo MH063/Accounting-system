@@ -1,13 +1,27 @@
 {
-  "currentKeyId": "primary",
+  "currentKeyId": "69a0f567759da1b9a6256fa350453dd8",
   "keys": [
     {
       "id": "primary",
       "secret": "dev_jwt_secret_key_for_development_only",
       "createdAt": 1764485222861,
       "expiresAt": 1767077222861,
+      "isActive": false
+    },
+    {
+      "id": "fallback",
+      "secret": "your-development-jwt-fallback-secret-minimum-32-characters",
+      "createdAt": 1765780186472,
+      "expiresAt": 1768372186472,
+      "isActive": true
+    },
+    {
+      "id": "69a0f567759da1b9a6256fa350453dd8",
+      "secret": "ff06ff4e119deb096e188e2072dcf7f179ac2fba744c9a475721c388fd5dfa3ff2fe43a541523d2e71d0e7435fa983d117e8a758e3018da2d885a3207ec62d11",
+      "createdAt": 1767077223676,
+      "expiresAt": 1769669223676,
       "isActive": true
     }
   ],
-  "lastUpdated": 1764485222861
+  "lastUpdated": 1767077223676
 }

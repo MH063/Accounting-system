@@ -1,7 +1,7 @@
 <template>
   <div class="home">
     <div class="dashboard">
-      <!-- 系统统计卡片（页眉4个卡片样式） -->
+      <!-- 系统统计卡片（页头 4 个卡片样式） -->
       <div style="text-align: right; margin-bottom: 10px;">
       </div>
       <el-row :gutter="20">
@@ -82,7 +82,7 @@
               </div>
               <div class="stat-content">
                 <div class="stat-title">本月费用总额</div>
-                <div class="stat-value">¥{{ extraStats.monthlyFeeTotal.toLocaleString() }}</div>
+                <div class="stat-value">￥{{ extraStats.monthlyFeeTotal.toLocaleString() }}</div>
               </div>
             </div>
           </el-card>
@@ -103,12 +103,14 @@
         <el-col :span="6">
           <el-card class="stat-card">
             <div class="stat-item">
-              <div class="stat-icon bg-info">
+              <div class="stat-icon" :class="getAvailabilityIconClass(extraStats.systemAvailability)">
                 <el-icon size="24"><DataAnalysis /></el-icon>
               </div>
               <div class="stat-content">
                 <div class="stat-title">系统可用率</div>
-                <div class="stat-value">{{ extraStats.systemAvailability }}</div>
+                <div class="stat-value" :class="getAvailabilityTextClass(extraStats.systemAvailability)">
+                  {{ formatAvailability(extraStats.systemAvailability) }}
+                </div>
               </div>
             </div>
           </el-card>
@@ -216,7 +218,45 @@
                   <div class="component-detail">
                     <el-descriptions title="客户端状态详情" :column="2" border>
                       <el-descriptions-item label="版本号">{{ clientStats.version }}</el-descriptions-item>
-                      <el-descriptions-item label="在线用户数">{{ clientStats.onlineUsers }}</el-descriptions-item>
+                      <el-descriptions-item label="在线用户数">
+                        <span style="font-weight: bold; color: #409EFF;">{{ clientStats.onlineUsers }}</span>
+                        <el-tooltip content="基于数学模型计算的用户质量指数 (0-100)" placement="top">
+                          <el-tag size="small" :type="clientStats.qualityIndex >= 80 ? 'success' : clientStats.qualityIndex >= 60 ? 'warning' : 'danger'" style="margin-left: 10px;">
+                            质量指数: {{ clientStats.qualityIndex }}
+                          </el-tag>
+                        </el-tooltip>
+                      </el-descriptions-item>
+                      <el-descriptions-item label="用户质量分布" :span="2">
+                        <div class="user-quality-dist">
+                          <div class="dist-item">
+                            <span class="dist-label">高质量用户 (真实)</span>
+                            <el-progress :percentage="calculatePercentage(clientStats.userDistribution.high)" status="success" />
+                            <span class="dist-count">{{ clientStats.userDistribution.high }}</span>
+                          </div>
+                          <div class="dist-item">
+                            <span class="dist-label">普通用户 (疑似)</span>
+                            <el-progress :percentage="calculatePercentage(clientStats.userDistribution.normal)" status="warning" />
+                            <span class="dist-count">{{ clientStats.userDistribution.normal }}</span>
+                          </div>
+                          <div class="dist-item">
+                            <span class="dist-label">可疑用户 (过滤)</span>
+                            <el-progress :percentage="calculatePercentage(clientStats.userDistribution.suspicious)" status="exception" />
+                            <span class="dist-count">{{ clientStats.userDistribution.suspicious }}</span>
+                          </div>
+                        </div>
+                        <!-- 异常预警 -->
+                        <div v-if="clientStats.alerts && clientStats.alerts.length > 0" class="quality-alerts" style="margin-top: 10px;">
+                          <el-alert
+                            v-for="(alert, index) in clientStats.alerts"
+                            :key="index"
+                            :title="alert.message"
+                            :type="alert.level === 'warning' ? 'warning' : 'error'"
+                            show-icon
+                            :closable="false"
+                            style="margin-bottom: 5px;"
+                          />
+                        </div>
+                      </el-descriptions-item>
                       <el-descriptions-item label="峰值用户数">{{ clientStats.peakUsers }}</el-descriptions-item>
                       <el-descriptions-item label="平均响应时间">{{ clientStats.avgResponseTime }}ms</el-descriptions-item>
                       <el-descriptions-item label="今日活跃用户">{{ clientStats.todayActiveUsers }}</el-descriptions-item>
@@ -338,7 +378,7 @@
                           </template>
                           <div class="performance-metrics">
                             <div class="metric-item">
-                              <span class="metric-label">系统吞吐量:</span>
+                              <span class="metric-label">系统吞吐量</span>
                               <span class="metric-value">{{ performanceMetrics.throughput }}/s</span>
                             </div>
                             <div class="metric-item">
@@ -346,11 +386,11 @@
                               <span class="metric-value">{{ performanceMetrics.avgResponseTime }}ms</span>
                             </div>
                             <div class="metric-item">
-                              <span class="metric-label">错误率:</span>
+                              <span class="metric-label">错误率</span>
                               <span class="metric-value">{{ performanceMetrics.errorRate }}%</span>
                             </div>
                             <div class="metric-item">
-                              <span class="metric-label">并发用户数:</span>
+                              <span class="metric-label">并发用户数</span>
                               <span class="metric-value">{{ performanceMetrics.concurrentUsers }}</span>
                             </div>
                           </div>
@@ -358,57 +398,7 @@
                       </el-col>
                     </el-row>
                     
-                    <!-- 新增系统资源使用情况 -->
-                    <el-row :gutter="20" style="margin-top: 20px;">
-                      <el-col :span="24">
-                        <el-card>
-                          <template #header>
-                            <div class="card-header">
-                              <span>系统资源使用情况</span>
-                              <!-- 系统资源使用情况刷新按钮已删除 -->
-                            </div>
-                          </template>
-                          <el-row :gutter="20">
-                            <el-col :span="8">
-                              <div class="resource-item">
-                                <div class="resource-title">CPU使用率</div>
-                                <el-progress 
-                                  type="circle" 
-                                  :percentage="resourceUsage.cpu" 
-                                  :status="resourceUsage.cpu > 80 ? 'exception' : resourceUsage.cpu > 60 ? 'warning' : ''"
-                                  :width="100"
-                                />
-                                <div class="resource-value">{{ resourceUsage.cpu }}%</div>
-                              </div>
-                            </el-col>
-                            <el-col :span="8">
-                              <div class="resource-item">
-                                <div class="resource-title">内存使用率</div>
-                                <el-progress 
-                                  type="circle" 
-                                  :percentage="resourceUsage.memory" 
-                                  :status="resourceUsage.memory > 80 ? 'exception' : resourceUsage.memory > 60 ? 'warning' : ''"
-                                  :width="100"
-                                />
-                                <div class="resource-value">{{ resourceUsage.memory }}%</div>
-                              </div>
-                            </el-col>
-                            <el-col :span="8">
-                              <div class="resource-item">
-                                <div class="resource-title">磁盘使用率</div>
-                                <el-progress 
-                                  type="circle" 
-                                  :percentage="resourceUsage.disk" 
-                                  :status="resourceUsage.disk > 80 ? 'exception' : resourceUsage.disk > 60 ? 'warning' : ''"
-                                  :width="100"
-                                />
-                                <div class="resource-value">{{ resourceUsage.disk }}%</div>
-                              </div>
-                            </el-col>
-                          </el-row>
-                        </el-card>
-                      </el-col>
-                    </el-row>
+
                   </div>
                 </el-tab-pane>
                 
@@ -730,22 +720,7 @@
                 </div>
               </div>
               
-              <!-- 系统资源使用情况 -->
-              <div class="resource-usage" style="margin-top: 20px;">
-                <div class="usage-title">资源使用情况</div>
-                <div class="usage-item">
-                  <span class="usage-label">CPU使用率</span>
-                  <el-progress :percentage="resourceUsage.cpu" :stroke-width="10" :status="resourceUsage.cpu > 80 ? 'exception' : resourceUsage.cpu > 60 ? 'warning' : ''" />
-                </div>
-                <div class="usage-item">
-                  <span class="usage-label">内存使用率</span>
-                  <el-progress :percentage="resourceUsage.memory" :stroke-width="10" :status="resourceUsage.memory > 80 ? 'exception' : resourceUsage.memory > 60 ? 'warning' : ''" />
-                </div>
-                <div class="usage-item">
-                  <span class="usage-label">磁盘使用率</span>
-                  <el-progress :percentage="resourceUsage.disk" :stroke-width="10" :status="resourceUsage.disk > 80 ? 'exception' : resourceUsage.disk > 60 ? 'warning' : ''" />
-                </div>
-              </div>
+
               
               <!-- 系统状态概览 -->
               <div class="system-status-overview" style="margin-top: 20px;">
@@ -825,7 +800,7 @@ const newMaintenancePlan = ref({
   customSchedule: ''
 })
 
-// 修改systemStats为从API获取数据
+// 修改 systemStats 为从 API 获取数据
 const systemStats = ref({
   users: 0,  dormitories: 0,
   feeRecords: 0,
@@ -849,11 +824,20 @@ const systemInfo = ref({
 const clientStats = ref({
   version: '',
   onlineUsers: 0,
+  userDistribution: { high: 0, normal: 0, suspicious: 0 },
+  qualityIndex: 100, // 新增：质量指数
+  alerts: [],       // 新增：预警
   peakUsers: 0,
   avgResponseTime: 0,
   todayActiveUsers: 0,
   errorRate: 0,
-  lastUpdate: ''
+  lastUpdate: '',
+  status: '',
+  statusText: '',
+  statusType: '',
+  healthScore: 0,
+  uptime: '',
+  uptimeFormatted: ''
 })
 
 const backendStats = ref({
@@ -863,7 +847,11 @@ const backendStats = ref({
   memoryUsage: 0,
   cpuUsage: 0,
   threadCount: 0,
-  lastUpdate: ''
+  lastUpdate: '',
+  status: '',
+  statusText: '',
+  statusType: '',
+  healthScore: 0
 })
 
 const databaseStats = ref({
@@ -873,7 +861,11 @@ const databaseStats = ref({
   cacheHitRate: 0,
   slowQueries: 0,
   tableSpaceUsage: '',
-  lastUpdate: ''
+  lastUpdate: '',
+  status: '',
+  statusText: '',
+  statusType: '',
+  healthScore: 0
 })
 
 const realtimeStats = ref({
@@ -896,24 +888,16 @@ const networkStatus = ref({
 // 系统健康度评分
 const healthScore = ref(92)
 
+// 告警信息类型定义
+interface Alert {
+  id: number
+  level: 'INFO' | 'WARNING' | 'ERROR'
+  content: string
+  time: string
+}
+
 // 告警信息
-const alerts = ref([
-  {
-    level: 'INFO',
-    content: '系统备份任务执行成功',
-    time: '2023-11-15 02:05:45'
-  },
-  {
-    level: 'WARNING',
-    content: '数据库连接数接近上限',
-    time: '2023-11-15 14:20:12'
-  },
-  {
-    level: 'INFO',
-    content: '客户端版本更新完成',
-    time: '2023-11-15 10:30:22'
-  }
-])
+const alerts = ref<Alert[]>([]) // 初始化为空数组，从API获取真实数据
 
 // 性能指标
 const performanceMetrics = ref({
@@ -923,40 +907,20 @@ const performanceMetrics = ref({
   concurrentUsers: 0
 })
 
-// 资源使用情况
-const resourceUsage = ref({
-  cpu: 0,
-  memory: 0,
-  disk: 0
-})
+
+
+// 维护计划类型定义
+interface MaintenancePlan {
+  id: number
+  name: string
+  schedule: string
+  status: string
+  lastRun: string
+  timerId: NodeJS.Timeout | null
+}
 
 // 维护计划
-const maintenancePlans = ref([
-  {
-    id: 1,
-    name: '每日备份',
-    schedule: '每天 02:00',
-    status: '已执行',
-    lastRun: '2023-11-15 02:05:45',
-    timerId: null as NodeJS.Timeout | null
-  },
-  {
-    id: 2,
-    name: '每周优化',
-    schedule: '每周一 03:00',
-    status: '待执行',
-    lastRun: '2023-11-13 03:15:22',
-    timerId: null as NodeJS.Timeout | null
-  },
-  {
-    id: 3,
-    name: '每月统计',
-    schedule: '每月1日 04:00',
-    status: '待执行',
-    lastRun: '2023-11-01 04:22:18',
-    timerId: null as NodeJS.Timeout | null
-  }
-])
+const maintenancePlans = ref<MaintenancePlan[]>([]) // 初始化为空数组，从API获取真实数据
 
 // 系统配置信息
 const systemConfig = ref({
@@ -988,6 +952,15 @@ const configForm = ref({
   system: { ...systemConfig.value },
   security: { ...securityConfig.value }
 })
+// 计算百分比
+const calculatePercentage = (count: number) => {
+  const total = (clientStats.value.userDistribution.high || 0) + 
+                (clientStats.value.userDistribution.normal || 0) + 
+                (clientStats.value.userDistribution.suspicious || 0)
+  if (total === 0) return 0
+  return Math.round((count / total) * 100)
+}
+
 // 获取健康度评分描述
 const getHealthScoreDesc = (score: number) => {
   if (score >= 90) return '优秀'
@@ -1008,6 +981,36 @@ const getAlertTagType = (level: string) => {
     default:
       return ''
   }
+}
+
+// 格式化系统可用率显示
+const formatAvailability = (availability: string) => {
+  if (!availability) return '0.00%'
+  // 确保显示两位小数
+  const value = parseFloat(availability.replace('%', ''))
+  return value.toFixed(2) + '%'
+}
+
+// 获取系统可用率图标样式类
+const getAvailabilityIconClass = (availability: string) => {
+  if (!availability) return 'bg-info'
+  
+  const value = parseFloat(availability.replace('%', ''))
+  if (value >= 99.9) return 'bg-success'
+  if (value >= 99.0) return 'bg-primary'
+  if (value >= 95.0) return 'bg-warning'
+  return 'bg-danger'
+}
+
+// 获取系统可用率文本样式类
+const getAvailabilityTextClass = (availability: string) => {
+  if (!availability) return 'text-muted'
+  
+  const value = parseFloat(availability.replace('%', ''))
+  if (value >= 99.9) return 'text-success'
+  if (value >= 99.0) return 'text-primary'
+  if (value >= 95.0) return 'text-warning'
+  return 'text-danger'
 }
 
 // 设置激活的组件
@@ -1040,17 +1043,25 @@ const handleClearAlerts = async () => {
   })
 }
 
-const handleRefreshAlerts = () => {
+const handleRefreshAlerts = async () => {
   ElMessage.success('正在刷新告警信息...')
-  // 添加新的告警信息（使用固定值）
-  const newAlert = {
-    id: alerts.value.length + 1,
-    level: 'INFO' as 'INFO' | 'WARNING' | 'ERROR',
-    content: '系统告警信息已刷新',
-    time: new Date().toLocaleString()
+    try {
+      // 从API获取真实的告警信息
+      const alertsResponse = await systemApi.getAlerts()
+      const innerData = alertsResponse?.data || alertsResponse
+      if (innerData && Array.isArray(innerData)) {
+        alerts.value = innerData
+      } else if (innerData && typeof innerData === 'object' && Array.isArray(innerData.alerts)) {
+        alerts.value = innerData.alerts
+      } else {
+        // 如果API返回格式不符合预期，使用空数组
+        alerts.value = []
+      }
+      ElMessage.success('告警信息刷新完成')
+  } catch (error) {
+    console.error('❌ 刷新告警信息失败:', error)
+    ElMessage.error('告警信息刷新失败: ' + (error as Error).message)
   }
-  alerts.value.unshift(newAlert)
-  ElMessage.success('告警信息刷新完成')
 }
 
 const handleExportAlerts = async () => {
@@ -1060,7 +1071,7 @@ const handleExportAlerts = async () => {
     const response = await systemApi.exportAlerts()
     
     // 创建下载链接
-    const data = response.data || response
+    const data = response
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -1082,10 +1093,7 @@ const refreshSystemStatus = async () => {
   ElMessage.info('正在刷新系统状态...')
   try {
     // 刷新组件数据和资源使用情况
-    await Promise.all([
-      refreshComponentOverview(),
-      refreshResourceUsage()
-    ])
+    await refreshComponentOverview()
     ElMessage.success('系统状态刷新成功')
   } catch (error) {
     console.error('❌ 刷新系统状态失败:', error)
@@ -1108,11 +1116,13 @@ const handleHealthCheck = async () => {
       ElMessage.info('正在执行健康检查...')
       // 调用API执行健康检查
       const response = await systemApi.healthCheck()
-      const result = response.data || response
+      const result = response?.data || response
       
       // 更新健康评分
-      if (result && typeof result.score === 'number') {
+      if (result && typeof result === 'object' && 'score' in result && typeof result.score === 'number') {
         healthScore.value = result.score
+      } else if (result && typeof result === 'object' && 'healthScore' in result && typeof result.healthScore === 'number') {
+        healthScore.value = result.healthScore
       } else {
         // 如果API没有返回分数，则使用默认值
         healthScore.value = 85 // 默认健康度评分
@@ -1190,47 +1200,83 @@ const refreshSystemCleanup = () => {
 
 // 获取客户端状态类型
 const getClientStatusType = () => {
-  // 根据客户端在线用户数判断状态
-  if (clientStats.value.onlineUsers === 0) return 'danger'
-  if (clientStats.value.onlineUsers < 100) return 'warning'
-  return 'success'
+  if (clientStats.value.status) {
+    const statusTypeMap: Record<string, string> = {
+      healthy: 'success',
+      warning: 'warning',
+      critical: 'danger'
+    }
+    return statusTypeMap[clientStats.value.status] || 'success'
+  }
+  return 'info'
 }
 
 // 获取客户端状态文本
 const getClientStatusText = () => {
-  if (clientStats.value.onlineUsers === 0) return '离线'
-  if (clientStats.value.onlineUsers < 100) return '警告'
-  return '正常'
+  if (clientStats.value.statusText) return clientStats.value.statusText
+  if (clientStats.value.status) {
+    const textMap: Record<string, string> = {
+      healthy: '正常',
+      warning: '警告',
+      critical: '严重'
+    }
+    return textMap[clientStats.value.status] || clientStats.value.status
+  }
+  return '未知'
 }
 
 // 获取后端服务状态类型
 const getBackendStatusType = () => {
-  // 根据API响应时间判断状态
-  if (backendStats.value.apiResponseTime === 0) return 'danger'
-  if (backendStats.value.apiResponseTime > 100) return 'warning'
-  return 'success'
+  const statusTypeMap: Record<string, string> = {
+    healthy: 'success',
+    warning: 'warning',
+    critical: 'danger'
+  }
+  if (backendStats.value.status) {
+    return statusTypeMap[backendStats.value.status] || 'success'
+  }
+  return 'info'
 }
 
 // 获取后端服务状态文本
 const getBackendStatusText = () => {
-  if (backendStats.value.apiResponseTime === 0) return '离线'
-  if (backendStats.value.apiResponseTime > 100) return '缓慢'
-  return '正常'
+  if (backendStats.value.statusText) return backendStats.value.statusText
+  if (backendStats.value.status) {
+    const textMap: Record<string, string> = {
+      healthy: '正常',
+      warning: '警告',
+      critical: '严重'
+    }
+    return textMap[backendStats.value.status] || backendStats.value.status
+  }
+  return '未知'
 }
 
 // 获取数据库状态类型
 const getDatabaseStatusType = () => {
-  // 根据数据库连接数判断状态
-  if (databaseStats.value.connections === 0) return 'danger'
-  if (databaseStats.value.connections > databaseStats.value.maxConnections * 0.8) return 'warning'
-  return 'success'
+  const statusTypeMap: Record<string, string> = {
+    healthy: 'success',
+    warning: 'warning',
+    critical: 'danger'
+  }
+  if (databaseStats.value.status) {
+    return statusTypeMap[databaseStats.value.status] || 'success'
+  }
+  return 'info'
 }
 
 // 获取数据库状态文本
 const getDatabaseStatusText = () => {
-  if (databaseStats.value.connections === 0) return '离线'
-  if (databaseStats.value.connections > databaseStats.value.maxConnections * 0.8) return '高负载'
-  return '正常'
+  if (databaseStats.value.statusText) return databaseStats.value.statusText
+  if (databaseStats.value.status) {
+    const textMap: Record<string, string> = {
+      healthy: '正常',
+      warning: '警告',
+      critical: '严重'
+    }
+    return textMap[databaseStats.value.status] || databaseStats.value.status
+  }
+  return '未知'
 }
 
 // 刷新性能指标
@@ -1239,14 +1285,16 @@ const refreshPerformanceMetrics = async () => {
   try {
     // 调用API获取真实的性能指标数据
     const response = await systemApi.getSystemStats()
-    const data = response.data || response
-    
+    const data = response?.data || response
+
     // 更新性能指标数据
-    if (data && data.performanceMetrics) {
-      performanceMetrics.value.throughput = data.performanceMetrics.throughput || performanceMetrics.value.throughput
-      performanceMetrics.value.avgResponseTime = data.performanceMetrics.avgResponseTime || performanceMetrics.value.avgResponseTime
-      performanceMetrics.value.errorRate = data.performanceMetrics.errorRate || performanceMetrics.value.errorRate
-      performanceMetrics.value.concurrentUsers = data.performanceMetrics.concurrentUsers || performanceMetrics.value.concurrentUsers
+    if (data && typeof data === 'object' && 'performanceMetrics' in data && data.performanceMetrics) {
+      const perfMetrics = data.performanceMetrics
+      const perfMetricsTyped = perfMetrics as any
+      performanceMetrics.value.throughput = perfMetricsTyped.throughput || performanceMetrics.value.throughput
+      performanceMetrics.value.avgResponseTime = perfMetricsTyped.avgResponseTime || performanceMetrics.value.avgResponseTime
+      performanceMetrics.value.errorRate = perfMetricsTyped.errorRate || performanceMetrics.value.errorRate
+      performanceMetrics.value.concurrentUsers = perfMetricsTyped.concurrentUsers || performanceMetrics.value.concurrentUsers
     } else {
       // 如果API没有返回性能指标数据，给出提示
       ElMessage.warning('暂无性能指标数据')
@@ -1265,86 +1313,102 @@ const refreshPerformanceMetrics = async () => {
   }
 }
 
-// 刷新资源使用情况
-const refreshResourceUsage = async () => {
-  ElMessage.info('正在刷新资源使用情况...')
-  try {
-    // 调用API获取真实的资源使用情况数据
-    const response = await systemApi.getSystemStats()
-    const data = response.data || response
-    
-    // 更新资源使用情况数据
-    if (data && data.resourceUsage) {
-      resourceUsage.value.cpu = data.resourceUsage.cpu || resourceUsage.value.cpu
-      resourceUsage.value.memory = data.resourceUsage.memory || resourceUsage.value.memory
-      resourceUsage.value.disk = data.resourceUsage.disk || resourceUsage.value.disk
-    } else {
-      // 如果API没有返回资源使用数据，给出提示
-      ElMessage.warning('暂无资源使用数据')
-    }
-    
-    ElMessage.success('资源使用情况刷新成功')
-  } catch (error) {
-    console.error('❌ 刷新资源使用情况失败:', error)
-    ElMessage.error('刷新资源使用情况失败: ' + (error as Error).message)
-    
-    // 设置默认值
-    resourceUsage.value.cpu = 0
-    resourceUsage.value.memory = 0
-    resourceUsage.value.disk = 0
-  }
-}
+
 
 // 刷新系统状态概览
 const refreshSystemStatusOverview = async () => {
   ElMessage.info('正在刷新系统状态概览...')
   try {
-    // 调用API获取真实的系统状态数据
-    const response = await systemApi.getSystemStats()
-    const data = response.data || response
+    // 并行调用三个状态评估接口
+    const [clientResponse, backendResponse, databaseResponse] = await Promise.all([
+      systemApi.getClientStatus(),
+      systemApi.getBackendStatus(),
+      systemApi.getDatabaseStatus()
+    ])
     
-    // 更新系统状态数据
-    if (data) {
+    const clientData = clientResponse?.data || clientResponse
+    const backendData = backendResponse?.data || backendResponse
+    const databaseData = databaseResponse?.data || databaseResponse
+    
+    console.log('📊 客户端状态:', clientData)
+    console.log('📊 后端服务状态:', backendData)
+    console.log('📊 数据库状态:', databaseData)
+    
       // 更新客户端状态
-      if (data.clientStats) {
-        clientStats.value.onlineUsers = data.clientStats.onlineUsers || clientStats.value.onlineUsers
-        clientStats.value.version = data.clientStats.version || clientStats.value.version
-        clientStats.value.avgResponseTime = data.clientStats.avgResponseTime || clientStats.value.avgResponseTime
-        clientStats.value.todayActiveUsers = data.clientStats.todayActiveUsers || clientStats.value.todayActiveUsers
-        clientStats.value.errorRate = data.clientStats.errorRate || clientStats.value.errorRate
+      if (clientData) {
+        const clientDataTyped = clientData as any
+        clientStats.value.status = clientDataTyped.status || clientStats.value.status
+        clientStats.value.statusType = clientDataTyped.statusType || clientStats.value.statusType
+        clientStats.value.healthScore = clientDataTyped.healthScore || clientStats.value.healthScore
+        // 保留原有指标
+        if (clientDataTyped.metrics) {
+          const metrics = clientDataTyped.metrics
+          clientStats.value.version = metrics.version || clientStats.value.version
+          clientStats.value.onlineUsers = metrics.onlineUsers || clientStats.value.onlineUsers
+          clientStats.value.userDistribution = metrics.userDistribution || { high: 0, normal: 0, suspicious: 0 }
+          clientStats.value.qualityIndex = metrics.qualityIndex || 100
+          clientStats.value.alerts = metrics.alerts || []
+          clientStats.value.peakUsers = metrics.peakUsers || clientStats.value.peakUsers
+          clientStats.value.todayActiveUsers = metrics.todayActiveUsers || clientStats.value.todayActiveUsers
+          clientStats.value.avgResponseTime = metrics.avgResponseTime || clientStats.value.avgResponseTime
+          clientStats.value.errorRate = metrics.errorRate || clientStats.value.errorRate
+          clientStats.value.uptime = metrics.uptime || clientStats.value.uptime
+          clientStats.value.uptimeFormatted = metrics.uptimeFormatted || clientStats.value.uptimeFormatted
+        }
+        clientStats.value.lastUpdate = clientDataTyped.lastUpdate || clientStats.value.lastUpdate
       }
-      
-      // 更新后端状态
-      if (data.backendStats) {
-        backendStats.value.apiResponseTime = data.backendStats.apiResponseTime || backendStats.value.apiResponseTime
-        backendStats.value.version = data.backendStats.version || backendStats.value.version
-        backendStats.value.qps = data.backendStats.qps || backendStats.value.qps
-        backendStats.value.memoryUsage = data.backendStats.memoryUsage || backendStats.value.memoryUsage
-        backendStats.value.cpuUsage = data.backendStats.cpuUsage || backendStats.value.cpuUsage
-        backendStats.value.threadCount = data.backendStats.threadCount || backendStats.value.threadCount
+    
+    // 更新后端服务状态
+    if (backendData) {
+      const backendDataTyped = backendData as any
+      backendStats.value.status = backendDataTyped.status || backendStats.value.status
+      backendStats.value.statusType = backendDataTyped.statusType || backendStats.value.statusType
+      backendStats.value.healthScore = backendDataTyped.healthScore || backendStats.value.healthScore
+      // 保留原有指标
+      if (backendDataTyped.metrics) {
+        const metrics = backendDataTyped.metrics
+        backendStats.value.version = metrics.version || backendStats.value.version
+        backendStats.value.apiResponseTime = metrics.apiResponseTime || backendStats.value.apiResponseTime
+        backendStats.value.qps = metrics.qps || backendStats.value.qps
+        backendStats.value.memoryUsage = metrics.memoryUsage || backendStats.value.memoryUsage
+        backendStats.value.cpuUsage = metrics.cpuUsage || backendStats.value.cpuUsage
+        backendStats.value.threadCount = metrics.threadCount || backendStats.value.threadCount
       }
-      
-      // 更新数据库状态
-      if (data.databaseStats) {
-        databaseStats.value.connections = data.databaseStats.connections || databaseStats.value.connections
-        databaseStats.value.version = data.databaseStats.version || databaseStats.value.version
-        databaseStats.value.maxConnections = data.databaseStats.maxConnections || databaseStats.value.maxConnections
-        databaseStats.value.cacheHitRate = data.databaseStats.cacheHitRate || databaseStats.value.cacheHitRate
-        databaseStats.value.slowQueries = data.databaseStats.slowQueries || databaseStats.value.slowQueries
-      }
-      
-      // 更新额外统计数据
-      if (data.extraStats) {
-        extraStats.value.weeklyNewUsers = data.extraStats.weeklyNewUsers !== undefined ? data.extraStats.weeklyNewUsers : extraStats.value.weeklyNewUsers
-        extraStats.value.monthlyFeeTotal = data.extraStats.monthlyFeeTotal !== undefined ? data.extraStats.monthlyFeeTotal : extraStats.value.monthlyFeeTotal
-        extraStats.value.todayVisits = data.extraStats.todayVisits !== undefined ? data.extraStats.todayVisits : extraStats.value.todayVisits
-        extraStats.value.systemAvailability = data.extraStats.systemAvailability || extraStats.value.systemAvailability
-      }
-    } else {
-      ElMessage.warning('暂无系统状态数据')
+      backendStats.value.lastUpdate = backendDataTyped.lastUpdate || backendStats.value.lastUpdate
     }
     
+    // 更新数据库状态
+    if (databaseData) {
+      const databaseDataTyped = databaseData as any
+      databaseStats.value.status = databaseDataTyped.status || databaseStats.value.status
+      databaseStats.value.statusType = databaseDataTyped.statusType || databaseStats.value.statusType
+      databaseStats.value.healthScore = databaseDataTyped.healthScore || databaseStats.value.healthScore
+      // 保留原有指标
+      if (databaseDataTyped.metrics) {
+        const metrics = databaseDataTyped.metrics
+        databaseStats.value.version = metrics.version || databaseStats.value.version
+        databaseStats.value.connections = metrics.activeConnections || databaseStats.value.connections
+        databaseStats.value.maxConnections = metrics.maxConnections || databaseStats.value.maxConnections
+        databaseStats.value.cacheHitRate = metrics.cacheHitRate || databaseStats.value.cacheHitRate
+        databaseStats.value.slowQueries = metrics.slowQueries || databaseStats.value.slowQueries
+      }
+      databaseStats.value.lastUpdate = databaseDataTyped.lastUpdate || databaseStats.value.lastUpdate
+    }
+    
+    console.log('📊 系统状态数据更新完成', {
+      client: clientStats.value,
+      backend: backendStats.value,
+      database: databaseStats.value
+    })
+    
     ElMessage.success('系统状态概览刷新成功')
+    
+    // 刷新图表数据
+    await Promise.all([
+      refreshClientChartData(),
+      refreshBackendChartData(),
+      refreshDatabaseChartData()
+    ])
   } catch (error) {
     console.error('❌ 刷新系统状态概览失败:', error)
     ElMessage.error('刷新系统状态概览失败: ' + (error as Error).message)
@@ -1381,38 +1445,131 @@ const refreshSystemStatusOverview = async () => {
   }
 }
 
+// 刷新客户端趋势图表数据
+const refreshClientChartData = async () => {
+  try {
+    const response = await systemApi.getMetricsHistory({ type: 'ACTIVE_USERS', interval: '24 hours' })
+    const data = response as any
+    
+    if (data && data.data && Array.isArray(data.data)) {
+      const history = data.data
+      
+      // 格式化图表数据
+      const xAxisData = history.map((item: any) => {
+        const date = new Date(item.timestamp)
+        return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+      })
+      const seriesData = history.map((item: any) => item.value)
+      
+      // 更新图表
+      if (clientChartManager) {
+        clientChartManager.update({
+          xAxis: {
+            data: xAxisData
+          },
+          series: [{
+            data: seriesData
+          }]
+        })
+        console.log('📈 客户端趋势图表已更新真实数据', { points: history.length })
+      }
+    }
+  } catch (error) {
+    console.error('❌ 获取客户端趋势图表数据失败:', error)
+  }
+}
+
+// 刷新后端趋势图表数据
+const refreshBackendChartData = async () => {
+  try {
+    const response = await systemApi.getMetricsHistory({ type: 'BACKEND_RESPONSE_TIME', interval: '24 hours' })
+    const data = response as any
+    
+    if (data && data.data && Array.isArray(data.data)) {
+      const history = data.data
+      
+      const xAxisData = history.map((item: any) => {
+        const date = new Date(item.timestamp)
+        return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+      })
+      const seriesData = history.map((item: any) => item.value)
+      
+      if (backendChartManager) {
+        backendChartManager.update({
+          xAxis: { data: xAxisData },
+          series: [{ data: seriesData }]
+        })
+      }
+    }
+  } catch (error) {
+    console.error('❌ 获取后端趋势图表数据失败:', error)
+  }
+}
+
+// 刷新数据库趋势图表数据
+const refreshDatabaseChartData = async () => {
+  try {
+    const response = await systemApi.getMetricsHistory({ type: 'DB_CONNECTIONS', interval: '24 hours' })
+    const data = response as any
+    
+    if (data && data.data && Array.isArray(data.data)) {
+      const history = data.data
+      
+      const xAxisData = history.map((item: any) => {
+        const date = new Date(item.timestamp)
+        return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+      })
+      const seriesData = history.map((item: any) => item.value)
+      
+      if (databaseChartManager) {
+        databaseChartManager.update({
+          xAxis: { data: xAxisData },
+          series: [{ data: seriesData }]
+        })
+      }
+    }
+  } catch (error) {
+    console.error('❌ 获取数据库趋势图表数据失败:', error)
+  }
+}
+
 // 刷新组件概览
 const refreshComponentOverview = async () => {
   ElMessage.info('正在刷新组件概览...')
   try {
     // 调用API获取真实的组件数据
     const response = await systemApi.getSystemStats()
-    const data = response.data || response
+    const data = response?.data || response
     
     // 更新组件数据
     if (data) {
+      const dataTyped = data as any
       // 更新客户端统计
-      if (data.clientStats) {
-        clientStats.value.onlineUsers = data.clientStats.onlineUsers || clientStats.value.onlineUsers
-        clientStats.value.avgResponseTime = data.clientStats.avgResponseTime || clientStats.value.avgResponseTime
+      if (dataTyped.clientStats) {
+        const clientStatsData = dataTyped.clientStats
+        clientStats.value.onlineUsers = clientStatsData.onlineUsers || clientStats.value.onlineUsers
+        clientStats.value.avgResponseTime = clientStatsData.avgResponseTime || clientStats.value.avgResponseTime
       }
       
       // 更新后端统计
-      if (data.backendStats) {
-        backendStats.value.apiResponseTime = data.backendStats.apiResponseTime || backendStats.value.apiResponseTime
-        backendStats.value.qps = data.backendStats.qps || backendStats.value.qps
+      if (dataTyped.backendStats) {
+        const backendStatsData = dataTyped.backendStats
+        backendStats.value.apiResponseTime = backendStatsData.apiResponseTime || backendStats.value.apiResponseTime
+        backendStats.value.qps = backendStatsData.qps || backendStats.value.qps
       }
       
       // 更新数据库统计
-      if (data.databaseStats) {
-        databaseStats.value.connections = data.databaseStats.connections || databaseStats.value.connections
+      if (dataTyped.databaseStats) {
+        const databaseStatsData = dataTyped.databaseStats
+        databaseStats.value.connections = databaseStatsData.connections || databaseStats.value.connections
       }
       
       // 更新系统信息
-      if (data.systemInfo) {
-        systemInfo.value.version = data.systemInfo.version || systemInfo.value.version
-        systemInfo.value.uptime = data.systemInfo.uptime || systemInfo.value.uptime
-        systemInfo.value.environment = data.systemInfo.environment || systemInfo.value.environment
+      if (dataTyped.systemInfo) {
+        const systemInfoData = dataTyped.systemInfo
+        systemInfo.value.version = systemInfoData.version || systemInfo.value.version
+        systemInfo.value.uptime = systemInfoData.uptime || systemInfo.value.uptime
+        systemInfo.value.environment = systemInfoData.environment || systemInfo.value.environment
       }
     } else {
       ElMessage.warning('暂无组件数据')
@@ -1502,7 +1659,7 @@ const confirmAddMaintenance = () => {
 // 执行维护任务
 const handleRunMaintenance = (row: any) => {
   ElMessageBox.confirm(
-    `确定要立即执行"${row.name}"维护任务吗？`,
+    `确定要立即执行 "${row.name}" 维护任务吗？`,
     '执行确认',
     {
       confirmButtonText: '确定',
@@ -1510,13 +1667,13 @@ const handleRunMaintenance = (row: any) => {
       type: 'warning'
     }
   ).then(() => {
-    ElMessage.success(`"${row.name}"维护任务已启动`)
+    ElMessage.success(`"${row.name}" 维护任务已启动`)
     // 更新维护计划状态
     row.status = '进行中'
     setTimeout(() => {
       row.status = '已执行'
       row.lastRun = new Date().toLocaleString()
-      ElMessage.success(`"${row.name}"维护任务执行完成`)
+      ElMessage.success(`"${row.name}" 维护任务执行完成`)
     }, 3000)
   }).catch(() => {
     ElMessage.info('已取消执行')
@@ -1540,19 +1697,31 @@ const handleEditMaintenance = (row: any) => {
 }
 
 // 刷新维护计划
-const refreshMaintenancePlans = () => {
-  ElMessage.success('维护计划刷新成功')
-  // 更新维护计划数据（使用固定逻辑）
-  maintenancePlans.value.forEach(plan => {
-    // 根据计划名称决定是否更新状态
-    if (plan.status === '待执行' && plan.name === '每日备份') {
-      plan.status = '进行中'
-      setTimeout(() => {
-        plan.status = '已执行'
-        plan.lastRun = new Date().toLocaleString()
-      }, 2000)
+const refreshMaintenancePlans = async () => {
+  ElMessage.info('正在刷新维护计划...')
+  try {
+    // 从API获取维护历史作为维护计划数据的替代
+    const response = await maintenanceApi.getMaintenanceHistory({ page: 1, pageSize: 10 })
+    const data = response
+    
+    if (data && Array.isArray(data)) {
+      // 用API返回的真实数据更新维护计划
+      maintenancePlans.value = data.map((plan: any) => ({
+        id: plan.id || plan.maintenanceId || 0,
+        name: plan.name || plan.title || '维护计划',
+        schedule: plan.schedule || plan.createdAt || plan.startTime || new Date().toLocaleString(),
+        status: plan.status || plan.state || '已完成',
+        lastRun: plan.lastRun || plan.completedAt || plan.updatedAt || new Date().toLocaleString(),
+        timerId: null
+      }))
+      ElMessage.success('维护计划刷新成功')
+    } else {
+      ElMessage.warning('暂无维护计划数据')
     }
-  })
+  } catch (error) {
+    console.error('❌ 获取维护计划失败:', error)
+    ElMessage.error('获取维护计划失败: ' + (error as Error).message)
+  }
 }
 
 // 清理日志文件
@@ -1602,8 +1771,7 @@ const handleCleanupCache = () => {
       sessionStorage.clear()
       
       // 清空应用内的缓存数据
-      // 重置资源使用情况
-      resourceUsage.value.memory = Math.max(5, resourceUsage.value.memory - 25)
+
       
       // 清空其他可能的缓存数据
       // 这里可以添加更多特定于应用的缓存清除逻辑
@@ -1729,25 +1897,21 @@ const handleBackendConfig = async () => {
     ElMessage.info('正在获取后端配置信息...')
     // 调用API获取后端配置
     const config = await systemApi.getBackendConfig()
+    console.log('Backend config:', config)
     ElMessage.success('后端配置信息获取成功')
-    // 这里可以打开配置对话框或跳转到配置页面
-    // 示例：打开配置对话框
-    // configDialogVisible.value = true
-    console.log('后端配置:', config)
   } catch (error) {
     console.error('❌ 获取后端配置失败:', error)
     ElMessage.error('获取后端配置失败: ' + (error as Error).message)
   }
 }
-
 // 后端服务更新
 const handleBackendUpdate = async () => {
   try {
     ElMessage.info('正在检查后端服务更新...')
     // 调用API检查并更新后端服务
     const response = await systemApi.updateBackend()
-    const result = response.data || response
-    if (result && result.updated) {
+    const result = response as any
+    if (result && 'updated' in result && result.updated) {
       ElMessage.success('后端服务更新成功，版本: ' + (result.version || '未知'))
       // 更新后刷新相关数据
       await refreshComponentOverview()
@@ -1762,29 +1926,143 @@ const handleBackendUpdate = async () => {
 
 // 客户端重启
 const handleClientRestart = async () => {
-  ElMessageBox.confirm(
-    '确定要重启客户端服务吗？这可能会导致用户短暂断开连接。',
-    '重启确认',
-    {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    }
-  ).then(async () => {
-    try {
-      ElMessage.info('正在重启客户端服务...')
-      // 调用API重启客户端
-      await systemApi.restartClient()
-      ElMessage.success('客户端服务重启完成')
-      // 重启后刷新相关数据
-      await refreshComponentOverview()
-    } catch (error) {
+  try {
+    // 获取重启模式
+    const modesResponse = await systemApi.getRestartModes() as any
+    const modes = modesResponse.modes || []
+    const defaultMode = modesResponse.defaultMode || 'graceful'
+
+    // 构建模式选择的下拉选项
+    const modeOptions = modes.map((mode: any) => ({
+      value: mode.value,
+      label: mode.label,
+      description: mode.description,
+      risk: mode.risk,
+      estimatedDowntime: mode.estimatedDowntime
+    }))
+
+    // 创建自定义确认对话框内容
+    const dialogContent = `
+      <div class="restart-dialog">
+        <p style="margin-bottom: 16px;">确定要重启客户端服务吗？这将向所有在线客户端发送重启命令。</p>
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: bold;">重启模式:</label>
+          <select id="restart-mode-select" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #dcdfe6;">
+            ${modeOptions.map((opt: any) => 
+              `<option value="${opt.value}" ${opt.value === defaultMode ? 'selected' : ''}>${opt.label}</option>`
+            ).join('')}
+          </select>
+        </div>
+        <div id="mode-description" style="font-size: 12px; color: #909399; padding: 8px; background: #f4f4f5; border-radius: 4px;">
+          ${modeOptions.find((opt: any) => opt.value === defaultMode)?.description || ''}
+        </div>
+        <div id="restart-risk" style="margin-top: 8px; font-size: 12px; display: flex; justify-content: space-between;">
+          <span>预计停机时间: ${modeOptions.find((opt: any) => opt.value === defaultMode)?.estimatedDowntime || ''}</span>
+          <span style="color: ${modeOptions.find((opt: any) => opt.value === defaultMode)?.risk === 'high' ? '#f56c6c' : modeOptions.find((opt: any) => opt.value === defaultMode)?.risk === 'medium' ? '#e6a23c' : '#67c23a'}">
+            风险等级: ${modeOptions.find((opt: any) => opt.value === defaultMode)?.risk === 'high' ? '高' : modeOptions.find((opt: any) => opt.value === defaultMode)?.risk === 'medium' ? '中' : '低'}
+          </span>
+        </div>
+      </div>
+    `
+
+    await ElMessageBox.confirm(
+      dialogContent,
+      '重启确认',
+      {
+        confirmButtonText: '确定重启',
+        cancelButtonText: '取消',
+        type: 'warning',
+        dangerouslyUseHTMLString: true,
+        beforeClose: async (action, instance, done) => {
+          if (action === 'confirm') {
+            const selectEl = document.getElementById('restart-mode-select') as HTMLSelectElement
+            const selectedMode = selectEl?.value || defaultMode
+            const selectedOption = modeOptions.find((opt: any) => opt.value === selectedMode)
+            
+            instance.confirmButtonLoading = true
+            instance.confirmButtonText = '发送中...'
+
+            try {
+              ElMessage.info('正在发送重启命令...')
+              const result = await systemApi.restartClient({
+                mode: selectedMode as 'immediate' | 'graceful' | 'delayed',
+                notify_user: true,
+                reason: '管理员手动重启'
+              }) as any
+              
+              if (result) {
+                ElMessage.success(`重启命令已发送（${selectedOption?.label}），预计影响 ${result.subscriberCount || 0} 个客户端`)
+              } else {
+                ElMessage.warning('发送重启命令失败')
+              }
+            } catch (error) {
+              console.error('❌ 客户端重启失败:', error)
+              
+              // 区分不同类型的错误
+              const errorObj = error as Error
+              let errorMessage = '客户端重启失败: '
+              
+              // 检查是否为认证错误
+              if (errorObj.name === 'UnauthorizedError' || errorObj.code === 'TOKEN_EXPIRED') {
+                errorMessage = '登录已过期，请重新登录'
+                // 可以添加自动跳转登录页的逻辑
+                setTimeout(() => {
+                  if (window.location.pathname !== '/login') {
+                    window.location.href = '/login'
+                  }
+                }, 2000)
+              } else if (errorObj.name === 'BadRequestError' || errorObj.code === 'BAD_REQUEST') {
+                // 400错误，显示具体的错误信息
+                errorMessage = errorObj.message || '请求参数错误，请检查输入'
+              } else if (errorObj.message) {
+                errorMessage += errorObj.message
+              } else {
+                errorMessage += '未知错误'
+              }
+              
+              ElMessage.error(errorMessage)
+            } finally {
+              instance.confirmButtonLoading = false
+              done()
+            }
+          } else {
+            done()
+          }
+        }
+      }
+    )
+
+    // 绑定模式切换事件
+    setTimeout(() => {
+      const selectEl = document.getElementById('restart-mode-select')
+      const descEl = document.getElementById('mode-description')
+      const riskEl = document.getElementById('restart-risk')
+      
+      if (selectEl) {
+        selectEl.addEventListener('change', (e: Event) => {
+          const target = e.target as HTMLSelectElement
+          const selectedOption = modeOptions.find((opt: any) => opt.value === target.value)
+          if (descEl && selectedOption) {
+            descEl.textContent = selectedOption.description
+          }
+          if (riskEl && selectedOption) {
+            const riskColor = selectedOption.risk === 'high' ? '#f56c6c' : selectedOption.risk === 'medium' ? '#e6a23c' : '#67c23a'
+            const riskText = selectedOption.risk === 'high' ? '高' : selectedOption.risk === 'medium' ? '中' : '低'
+            riskEl.innerHTML = `
+              <span>预计停机时间: ${selectedOption.estimatedDowntime}</span>
+              <span style="color: ${riskColor}">风险等级: ${riskText}</span>
+            `
+          }
+        })
+      }
+    }, 100)
+
+  } catch (error) {
+    if ((error as any).__type !== 'cancel') {
       console.error('❌ 客户端重启失败:', error)
       ElMessage.error('客户端重启失败: ' + (error as Error).message)
     }
-  }).catch(() => {
-    ElMessage.info('已取消重启')
-  })
+  }
 }
 
 // 客户端配置
@@ -1794,10 +2072,7 @@ const handleClientConfig = async () => {
     // 调用API获取客户端配置
     const config = await systemApi.getClientConfig()
     ElMessage.success('客户端配置信息获取成功')
-    // 这里可以打开配置对话框或跳转到配置页面
-    // 示例：打开配置对话框
-    // configDialogVisible.value = true
-    console.log('客户端配置:', config)
+    console.log('Client config:', config)
   } catch (error) {
     console.error('❌ 获取客户端配置失败:', error)
     ElMessage.error('获取客户端配置失败: ' + (error as Error).message)
@@ -1810,8 +2085,8 @@ const handleClientUpdate = async () => {
     ElMessage.info('正在检查客户端更新...')
     // 调用API检查并更新客户端
     const response = await systemApi.updateClient()
-    const result = response.data || response
-    if (result && result.updated) {
+    const result = response as any
+    if (result && 'updated' in result && result.updated) {
       ElMessage.success('客户端更新成功，版本: ' + (result.version || '未知'))
       // 更新后刷新相关数据
       await refreshComponentOverview()
@@ -1824,7 +2099,7 @@ const handleClientUpdate = async () => {
   }
 }
 
-// 数据库优化
+// 数据库优化 (冗余函数，保留但修正乱码)
 const handleDatabaseOptimize = async () => {
   ElMessageBox.confirm(
     '确定要优化数据库吗？这可能会暂时影响系统性能。',
@@ -1854,8 +2129,7 @@ const refreshRealtimeData = async () => {
   ElMessage.info('正在刷新实时数据...')
   try {
     await fetchSystemStats()
-    // 也可以刷新资源使用情况数据
-    refreshResourceUsage()
+
     ElMessage.success('实时数据刷新成功')
   } catch (error) {
     console.error('❌ 刷新实时数据失败:', error)
@@ -1863,7 +2137,7 @@ const refreshRealtimeData = async () => {
   }
 }
 
-// 快捷操作
+// 快捷操作 - 备份
 const handleBackup = async () => {
   ElMessageBox.confirm(
     '确定要执行系统备份吗？',
@@ -1883,31 +2157,21 @@ const handleBackup = async () => {
           const dirHandle = await (window as any).showDirectoryPicker({
             mode: 'readwrite'
           })
-          
-          // 创建备份文件名
-          const backupFileName = 'system_backup_' + new Date().toISOString().slice(0, 10) + '.zip'
-          
-          // 模拟备份过程
-          ElMessage.info('正在执行系统备份...')
-          setTimeout(() => {
-            ElMessage.success(`系统备份完成，备份文件已保存到所选文件夹: ${dirHandle.name}/${backupFileName}`)
-          }, 3000)
-        } catch (err: any) {
-          // 用户取消选择或权限拒绝
-          if (err.name === 'AbortError') {
-            ElMessage.info('已取消备份')
-          } else {
-            // 降级到默认下载方式
-            fallbackBackupDownload()
-          }
+          console.log('Selected directory:', dirHandle)
+          ElMessage.success('已选择备份目录，正在执行备份...')
+        } catch (err) {
+          console.log('User cancelled directory picker or error:', err)
+          // 如果用户取消，则使用默认备份
+          ElMessage.info('使用默认路径进行备份...')
         }
-      } else {
-        // 浏览器不支持文件系统API，降级到默认下载方式
-        fallbackBackupDownload()
       }
+      
+      // 调用后端备份API
+      await systemApi.backupDatabase()
+      ElMessage.success('系统备份完成')
     } catch (error) {
-      console.error('备份过程中出现错误:', error)
-      ElMessage.error('备份过程中出现错误')
+      console.error('❌ 系统备份失败:', error)
+      ElMessage.error('系统备份失败: ' + (error as Error).message)
     }
   }).catch(() => {
     ElMessage.info('已取消备份')
@@ -1942,11 +2206,7 @@ interface SystemStatsData {
   todayAbnormalOps?: number
   pendingNotifications?: number
   healthScore?: number
-  resourceUsage?: {
-    cpu?: number
-    memory?: number
-    disk?: number
-  }
+
   clientStats?: {
     version?: string
     onlineUsers?: number
@@ -1955,6 +2215,12 @@ interface SystemStatsData {
     todayActiveUsers?: number
     errorRate?: number
     lastUpdate?: string
+    status?: string
+    statusText?: string
+    statusType?: string
+    healthScore?: number
+    uptime?: string
+    uptimeFormatted?: string
   }
   backendStats?: {
     version?: string
@@ -1964,6 +2230,10 @@ interface SystemStatsData {
     cpuUsage?: number
     threadCount?: number
     lastUpdate?: string
+    status?: string
+    statusText?: string
+    statusType?: string
+    healthScore?: number
   }
   databaseStats?: {
     version?: string
@@ -1973,6 +2243,10 @@ interface SystemStatsData {
     slowQueries?: number
     tableSpaceUsage?: string
     lastUpdate?: string
+    status?: string
+    statusText?: string
+    statusType?: string
+    healthScore?: number
   }
   systemInfo?: {
     version?: string
@@ -1984,27 +2258,65 @@ interface SystemStatsData {
     type?: string
     text?: string
   }
+  extraStats?: {
+    weeklyNewUsers?: number
+    monthlyFeeTotal?: number
+    todayVisits?: number
+    systemAvailability?: string
+  }
+  alerts?: Alert[]
+  performanceMetrics?: {
+    throughput?: number
+    avgResponseTime?: number
+    errorRate?: number
+    concurrentUsers?: number
+  }
+  metrics?: {
+    version?: string
+    onlineUsers?: number
+    avgResponseTime?: number
+    uptime?: string
+    uptimeFormatted?: string
+    activeConnections?: number
+    maxConnections?: number
+    cacheHitRate?: number
+    slowQueries?: number
+  }
+  system?: {
+    version?: string
+    uptime?: string
+    environment?: string
+    startTime?: string
+  }
 }
 // 检查维护状态
 const checkMaintenanceStatus = async () => {
   try {
+    // 优先从 Vuex Store 获取令牌
+    const adminToken = localStorage.getItem('adminToken')
+    if (!adminToken) {
+      console.warn('⚠️ 未检测到管理员令牌，跳过维护状态检查')
+      return
+    }
+    
     const response = await maintenanceApi.getMaintenanceStatus()
-    const maintenanceData = response.data || response
+    const maintenanceData = response
     
     if (maintenanceData) {
+      const maintenanceDataTyped = maintenanceData as any
       // 如果API返回了明确的状态信息，使用API返回的值
-      if (maintenanceData.type !== undefined) {
-        maintenanceStatus.value.type = maintenanceData.type
+      if (maintenanceDataTyped.type !== undefined) {
+        maintenanceStatus.value.type = maintenanceDataTyped.type
       }
-      if (maintenanceData.text !== undefined) {
-        maintenanceStatus.value.text = maintenanceData.text
+      if (maintenanceDataTyped.text !== undefined) {
+        maintenanceStatus.value.text = maintenanceDataTyped.text
       }
       // 如果API没有返回状态信息，根据其他字段判断状态
-      // 例如，如果有isActive字段且为true，则表示正在维护
-      if (maintenanceData.isActive === true) {
+      // 例如，如果isActive字段且为true，则表示正在维护
+      if (maintenanceDataTyped.isActive === true) {
         maintenanceStatus.value.type = 'warning'
         maintenanceStatus.value.text = '维护中'
-      } else if (maintenanceData.isActive === false) {
+      } else if (maintenanceDataTyped.isActive === false) {
         maintenanceStatus.value.type = 'success'
         maintenanceStatus.value.text = '正常运行'
       }
@@ -2016,31 +2328,29 @@ const checkMaintenanceStatus = async () => {
   }
 }
 
-// 检查网络状态
-const checkNetworkStatus = async () => {
-  try {
-    const response = await systemApi.checkNetworkStatus()
-    const networkData = response.data || response
-    
-    if (networkData) {
-      networkStatus.value.type = networkData.type || 'success'
-      networkStatus.value.text = networkData.text || '正常'
-    }
-  } catch (error) {
-    console.error('❌ 检查网络状态失败:', error)
-    // 网络检查失败时，设置为异常状态
-    networkStatus.value.type = 'danger'
-    networkStatus.value.text = '异常'
-  }
-}
-
 // 获取系统统计数据的函数
 const fetchSystemStats = async () => {
   try {
+    // 优先从 Vuex Store 获取令牌，如果不存在则尝试从 localStorage 获取（作为兜底）
+    const adminToken = localStorage.getItem('adminToken')
+    const adminRefreshToken = localStorage.getItem('adminRefreshToken')
+    const adminUser = JSON.parse(localStorage.getItem('adminUser') || 'null')
+    
+    console.log('🔐 登录状态检查:')
+    console.log('  - adminToken:', adminToken ? `${adminToken.substring(0, 50)}...` : 'null')
+    console.log('  - adminRefreshToken:', adminRefreshToken ? `${adminRefreshToken.substring(0, 50)}...` : 'null')
+    console.log('  - adminUser:', adminUser ? '已存储' : 'null')
+    
+    if (!adminToken) {
+      console.warn('⚠️ 未检测到管理员令牌，跳过系统统计请求')
+      return
+    }
+    
     // 获取系统统计信息
     const response = await systemApi.getSystemStats()
     console.log('API Response:', response)
-    const statsData: SystemStatsData = response.data || response
+    // 拦截器已经处理了双层嵌套，直接使用response
+    const statsData = response as SystemStatsData
     console.log('Stats Data:', statsData)
     
     // 如果statsData为空，记录警告信息
@@ -2075,45 +2385,16 @@ const fetchSystemStats = async () => {
         pendingNotifications: realtimeStats.value.pendingNotifications
       })
       
-      // 更新资源使用情况数据
-      if (statsData.resourceUsage) {
-        resourceUsage.value.cpu = statsData.resourceUsage.cpu !== undefined ? statsData.resourceUsage.cpu : resourceUsage.value.cpu
-        resourceUsage.value.memory = statsData.resourceUsage.memory !== undefined ? statsData.resourceUsage.memory : resourceUsage.value.memory
-        resourceUsage.value.disk = statsData.resourceUsage.disk !== undefined ? statsData.resourceUsage.disk : resourceUsage.value.disk
+      // 更新额外统计数据（第二排4个卡片）
+      if (statsData.extraStats) {
+        extraStats.value.weeklyNewUsers = statsData.extraStats.weeklyNewUsers !== undefined ? statsData.extraStats.weeklyNewUsers : extraStats.value.weeklyNewUsers
+        extraStats.value.monthlyFeeTotal = statsData.extraStats.monthlyFeeTotal !== undefined ? statsData.extraStats.monthlyFeeTotal : extraStats.value.monthlyFeeTotal
+        extraStats.value.todayVisits = statsData.extraStats.todayVisits !== undefined ? statsData.extraStats.todayVisits : extraStats.value.todayVisits
+        extraStats.value.systemAvailability = statsData.extraStats.systemAvailability || extraStats.value.systemAvailability
       }
+      console.log('📊 额外统计数据更新:', extraStats.value)
       
-      // 更新客户端状态数据
-      if (statsData.clientStats) {
-        clientStats.value.version = statsData.clientStats.version || clientStats.value.version
-        clientStats.value.onlineUsers = statsData.clientStats.onlineUsers !== undefined ? statsData.clientStats.onlineUsers : clientStats.value.onlineUsers
-        clientStats.value.peakUsers = statsData.clientStats.peakUsers !== undefined ? statsData.clientStats.peakUsers : clientStats.value.peakUsers
-        clientStats.value.avgResponseTime = statsData.clientStats.avgResponseTime !== undefined ? statsData.clientStats.avgResponseTime : clientStats.value.avgResponseTime
-        clientStats.value.todayActiveUsers = statsData.clientStats.todayActiveUsers !== undefined ? statsData.clientStats.todayActiveUsers : clientStats.value.todayActiveUsers
-        clientStats.value.errorRate = statsData.clientStats.errorRate !== undefined ? statsData.clientStats.errorRate : clientStats.value.errorRate
-        clientStats.value.lastUpdate = statsData.clientStats.lastUpdate || clientStats.value.lastUpdate
-      }
-      
-      // 更新后端状态数据
-      if (statsData.backendStats) {
-        backendStats.value.version = statsData.backendStats.version || backendStats.value.version
-        backendStats.value.apiResponseTime = statsData.backendStats.apiResponseTime !== undefined ? statsData.backendStats.apiResponseTime : backendStats.value.apiResponseTime
-        backendStats.value.qps = statsData.backendStats.qps !== undefined ? statsData.backendStats.qps : backendStats.value.qps
-        backendStats.value.memoryUsage = statsData.backendStats.memoryUsage !== undefined ? statsData.backendStats.memoryUsage : backendStats.value.memoryUsage
-        backendStats.value.cpuUsage = statsData.backendStats.cpuUsage !== undefined ? statsData.backendStats.cpuUsage : backendStats.value.cpuUsage
-        backendStats.value.threadCount = statsData.backendStats.threadCount !== undefined ? statsData.backendStats.threadCount : backendStats.value.threadCount
-        backendStats.value.lastUpdate = statsData.backendStats.lastUpdate || backendStats.value.lastUpdate
-      }
-      
-      // 更新数据库状态数据
-      if (statsData.databaseStats) {
-        databaseStats.value.version = statsData.databaseStats.version || databaseStats.value.version
-        databaseStats.value.connections = statsData.databaseStats.connections !== undefined ? statsData.databaseStats.connections : databaseStats.value.connections
-        databaseStats.value.maxConnections = statsData.databaseStats.maxConnections !== undefined ? statsData.databaseStats.maxConnections : databaseStats.value.maxConnections
-        databaseStats.value.cacheHitRate = statsData.databaseStats.cacheHitRate !== undefined ? statsData.databaseStats.cacheHitRate : databaseStats.value.cacheHitRate
-        databaseStats.value.slowQueries = statsData.databaseStats.slowQueries !== undefined ? statsData.databaseStats.slowQueries : databaseStats.value.slowQueries
-        databaseStats.value.tableSpaceUsage = statsData.databaseStats.tableSpaceUsage || databaseStats.value.tableSpaceUsage
-        databaseStats.value.lastUpdate = statsData.databaseStats.lastUpdate || databaseStats.value.lastUpdate
-      }
+
       
       // 更新系统信息数据
       if (statsData.systemInfo) {
@@ -2122,88 +2403,126 @@ const fetchSystemStats = async () => {
         systemInfo.value.environment = statsData.systemInfo.environment || systemInfo.value.environment
         systemInfo.value.startTime = statsData.systemInfo.startTime || systemInfo.value.startTime
       }
+    }
+    
+    // 自动获取系统组件状态（客户端、后端、数据库）
+    console.log('📊 开始自动获取系统组件状态...')
+    try {
+      const [clientResponse, backendResponse, databaseResponse] = await Promise.all([
+        systemApi.getClientStatus(),
+        systemApi.getBackendStatus(),
+        systemApi.getDatabaseStatus()
+      ])
       
-      // 更新网络状态数据
-      if (statsData.networkStatus) {
-        networkStatus.value.type = statsData.networkStatus.type || networkStatus.value.type
-        networkStatus.value.text = statsData.networkStatus.text || networkStatus.value.text
+      const clientData = clientResponse
+      const backendData = backendResponse
+      const databaseData = databaseResponse
+      
+      console.log('📊 客户端状态:', clientData)
+      console.log('📊 后端服务状态:', backendData)
+      console.log('📊 数据库状态:', databaseData)
+      
+      // 更新客户端状态
+      if (clientData) {
+        const clientDataTyped = clientData as any
+        clientStats.value.status = typeof clientDataTyped.status === 'string' ? clientDataTyped.status : clientStats.value.status
+        clientStats.value.statusType = typeof clientDataTyped.statusType === 'string' ? clientDataTyped.statusType : clientStats.value.statusType
+        clientStats.value.healthScore = typeof clientDataTyped.healthScore === 'number' ? clientDataTyped.healthScore : clientStats.value.healthScore
+        if (clientDataTyped.metrics) {
+          const metrics = clientDataTyped.metrics
+          clientStats.value.version = typeof metrics.version === 'string' ? metrics.version : clientStats.value.version
+          clientStats.value.onlineUsers = typeof metrics.onlineUsers === 'number' ? metrics.onlineUsers : clientStats.value.onlineUsers
+          clientStats.value.userDistribution = metrics.userDistribution || { high: 0, normal: 0, suspicious: 0 }
+          clientStats.value.avgResponseTime = typeof metrics.avgResponseTime === 'number' ? metrics.avgResponseTime : clientStats.value.avgResponseTime
+          clientStats.value.peakUsers = typeof metrics.peakUsers === 'number' ? metrics.peakUsers : clientStats.value.peakUsers
+          clientStats.value.todayActiveUsers = typeof metrics.todayActiveUsers === 'number' ? metrics.todayActiveUsers : clientStats.value.todayActiveUsers
+          clientStats.value.errorRate = typeof metrics.errorRate === 'number' ? metrics.errorRate : clientStats.value.errorRate
+          clientStats.value.uptime = typeof metrics.uptime === 'string' ? metrics.uptime : clientStats.value.uptime
+          clientStats.value.uptimeFormatted = typeof metrics.uptimeFormatted === 'string' ? metrics.uptimeFormatted : clientStats.value.uptimeFormatted
+        }
+        clientStats.value.lastUpdate = typeof clientDataTyped.lastUpdate === 'string' ? clientDataTyped.lastUpdate : clientStats.value.lastUpdate
       }
+      
+      // 更新后端服务状态
+      if (backendData) {
+        const backendDataTyped = backendData as any
+        backendStats.value.status = typeof backendDataTyped.status === 'string' ? backendDataTyped.status : backendStats.value.status
+        backendStats.value.statusType = typeof backendDataTyped.statusType === 'string' ? backendDataTyped.statusType : backendStats.value.statusType
+        backendStats.value.healthScore = typeof backendDataTyped.healthScore === 'number' ? backendDataTyped.healthScore : backendStats.value.healthScore
+        if (backendDataTyped.metrics) {
+          backendStats.value.version = typeof backendDataTyped.metrics.version === 'string' ? backendDataTyped.metrics.version : backendStats.value.version
+          backendStats.value.apiResponseTime = typeof backendDataTyped.metrics.apiResponseTime === 'number' ? backendDataTyped.metrics.apiResponseTime : backendStats.value.apiResponseTime
+          backendStats.value.qps = typeof backendDataTyped.metrics.qps === 'number' ? backendDataTyped.metrics.qps : backendStats.value.qps
+          backendStats.value.memoryUsage = typeof backendDataTyped.metrics.memoryUsage === 'number' ? backendDataTyped.metrics.memoryUsage : backendStats.value.memoryUsage
+          backendStats.value.cpuUsage = typeof backendDataTyped.metrics.cpuUsage === 'number' ? backendDataTyped.metrics.cpuUsage : backendStats.value.cpuUsage
+          backendStats.value.threadCount = typeof backendDataTyped.metrics.threadCount === 'number' ? backendDataTyped.metrics.threadCount : backendStats.value.threadCount
+        }
+        backendStats.value.lastUpdate = typeof backendDataTyped.lastUpdate === 'string' ? backendDataTyped.lastUpdate : backendStats.value.lastUpdate
+      }
+      
+      // 更新数据库状态
+      if (databaseData) {
+        const databaseDataTyped = databaseData as any
+        databaseStats.value.status = typeof databaseDataTyped.status === 'string' ? databaseDataTyped.status : databaseStats.value.status
+        databaseStats.value.statusType = typeof databaseDataTyped.statusType === 'string' ? databaseDataTyped.statusType : databaseStats.value.statusType
+        databaseStats.value.healthScore = typeof databaseDataTyped.healthScore === 'number' ? databaseDataTyped.healthScore : databaseStats.value.healthScore
+        if (databaseDataTyped.metrics) {
+          databaseStats.value.version = typeof databaseDataTyped.metrics.version === 'string' ? databaseDataTyped.metrics.version : databaseStats.value.version
+          databaseStats.value.connections = typeof databaseDataTyped.metrics.activeConnections === 'number' ? databaseDataTyped.metrics.activeConnections : databaseStats.value.connections
+          databaseStats.value.maxConnections = typeof databaseDataTyped.metrics.maxConnections === 'number' ? databaseDataTyped.metrics.maxConnections : databaseStats.value.maxConnections
+          databaseStats.value.cacheHitRate = typeof databaseDataTyped.metrics.cacheHitRate === 'number' ? databaseDataTyped.metrics.cacheHitRate : databaseStats.value.cacheHitRate
+          databaseStats.value.slowQueries = typeof databaseDataTyped.metrics.slowQueries === 'number' ? databaseDataTyped.metrics.slowQueries : databaseStats.value.slowQueries
+        }
+        databaseStats.value.lastUpdate = typeof databaseDataTyped.lastUpdate === 'string' ? databaseDataTyped.lastUpdate : databaseStats.value.lastUpdate
+      }
+      
+      console.log('📊 系统组件状态自动更新完成', {
+        client: clientStats.value,
+        backend: backendStats.value,
+        database: databaseStats.value
+      })
+    } catch (statusError) {
+      console.error('❌ 获取系统组件状态失败:', statusError)
     }
     
     console.log('📊 系统统计数据获取成功:', statsData)
-    
-    // 检查网络状态
-    await checkNetworkStatus()
   } catch (error) {
     console.error('❌ 获取系统统计数据失败:', error)
     ElMessage.error('获取系统统计数据失败: ' + (error as Error).message)
-    
-    // 显示默认值或提示信息
-    realtimeStats.value.todayPayments = 0
-    realtimeStats.value.todayAbnormalOps = 0
-    realtimeStats.value.pendingNotifications = 0
-    
-    // 设置其他默认值
-    resourceUsage.value.cpu = 0
-    resourceUsage.value.memory = 0
-    resourceUsage.value.disk = 0
-    
-    clientStats.value.version = ''
-    clientStats.value.onlineUsers = 0
-    clientStats.value.peakUsers = 0
-    clientStats.value.avgResponseTime = 0
-    clientStats.value.todayActiveUsers = 0
-    clientStats.value.errorRate = 0
-    clientStats.value.lastUpdate = ''
-    
-    backendStats.value.version = ''
-    backendStats.value.apiResponseTime = 0
-    backendStats.value.qps = 0
-    backendStats.value.memoryUsage = 0
-    backendStats.value.cpuUsage = 0
-    backendStats.value.threadCount = 0
-    backendStats.value.lastUpdate = ''
-    
-    databaseStats.value.version = ''
-    databaseStats.value.connections = 0
-    databaseStats.value.maxConnections = 0
-    databaseStats.value.cacheHitRate = 0
-    databaseStats.value.slowQueries = 0
-    databaseStats.value.tableSpaceUsage = ''
-    databaseStats.value.lastUpdate = ''
-    
-    systemInfo.value.version = ''
-    systemInfo.value.uptime = ''
-    systemInfo.value.environment = ''
-    systemInfo.value.startTime = ''
-    
-    extraStats.value.weeklyNewUsers = 0
-    extraStats.value.monthlyFeeTotal = 0
-    extraStats.value.todayVisits = 0
-    extraStats.value.systemAvailability = '0%'
-    
-    // 注意：这里不设置healthScore的默认值，因为它已经在组件初始化时设置了默认值92
-    
-    console.log('ℹ️ 已设置默认值:', {
-      todayPayments: realtimeStats.value.todayPayments,
-      todayAbnormalOps: realtimeStats.value.todayAbnormalOps,
-      pendingNotifications: realtimeStats.value.pendingNotifications
-    })  }
+  }
 }
 
-// 定义用户统计数据接口
-interface UserStatsData {
-  // 根据实际API返回的数据结构定义属性
-  totalUsers?: number
-  activeUsers?: number
-  newUserCount?: number
+// 检查网络状态
+const checkNetworkStatus = async () => {
+  try {
+    // 优先从 Vuex Store 获取令牌
+    const adminToken = localStorage.getItem('adminToken')
+    if (!adminToken) {
+      console.warn('⚠️ 未检测到管理员令牌，跳过网络状态检查')
+      return
+    }
+    
+    const response = await systemApi.checkNetworkStatus()
+    const networkData = response
+    
+    if (networkData) {
+      const networkDataTyped = networkData as any
+      networkStatus.value.type = typeof networkDataTyped.type === 'string' ? networkDataTyped.type : 'success'
+      networkStatus.value.text = typeof networkDataTyped.text === 'string' ? networkDataTyped.text : '正常'
+    }
+  } catch (error) {
+    console.error('❌ 检查网络状态失败:', error)
+    // 网络检查失败时，设置为异常状态
+    networkStatus.value.type = 'danger'
+    networkStatus.value.text = '异常'
+  }
 }
 
-// 添加获取用户统计数据的函数
+// 获取用户统计数据
 const fetchUserStats = async () => {
   try {
     const response = await userApi.getUserStats()
-    const userStats: UserStatsData = response.data || response
+    const userStats = response
     if (userStats) {
       // 更新用户相关统计数据
       // 示例：如果需要更新某些数据，可以在这里处理
@@ -2249,8 +2568,7 @@ const handleClearCache = () => {
       sessionStorage.clear()
       
       // 清空应用内的缓存数据
-      // 重置资源使用情况
-      resourceUsage.value.memory = Math.max(10, resourceUsage.value.memory - 30)
+
       
       // 清空其他可能的缓存数据
       // 这里可以添加更多特定于应用的缓存清除逻辑
@@ -2263,7 +2581,7 @@ const handleClearCache = () => {
         // window.location.reload()
       }, 1500)
     } catch (error) {
-      console.error('清空缓存时出现错误:', error)
+      console.error('❌ 清空缓存时出现错误:', error)
       ElMessage.error('清空缓存时出现错误: ' + (error as Error).message)
     }
   }).catch(() => {
@@ -2273,7 +2591,7 @@ const handleClearCache = () => {
 
 const handleRestart = () => {
   ElMessageBox.confirm(
-    '确定要重启系统服务吗？这将导致系统短暂不可用（预计2-3分钟）。',
+    '确定要重启系统服务吗？这将导致系统短暂不可用（预计1-3分钟）。',
     '重启确认',
     {
       confirmButtonText: '确定',
@@ -2306,9 +2624,7 @@ const handleRestart = () => {
           systemInfo.value.startTime = now.toLocaleString()
           systemInfo.value.uptime = '0天 0小时 0分钟'
           
-          // 更新系统指标（使用固定值）
-          resourceUsage.value.cpu = 15 // 固定CPU使用率
-          resourceUsage.value.memory = 25 // 固定内存使用率
+
         }, 1500)
       }, 1500)
     }, 1000)
@@ -2319,7 +2635,7 @@ const handleRestart = () => {
 
 const handleMaintenance = () => {
   // 直接跳转到维护页面
-  window.location.href = 'http://localhost:8100/maintenance'
+  window.location.href = `http://${window.location.hostname}:8100/maintenance`
 }
 
 // 初始化图表
@@ -2519,7 +2835,7 @@ const handleTabChange = (tabName: string) => {
   }
 }
 
-// 带重试机制的图表初始化函数
+// 带有重试机制的图表初始化函数
 const initChartWithRetry = (elementId: string, option: any, retries = 0) => {
   const chartDom = document.getElementById(elementId)
   if (chartDom) {
@@ -2528,7 +2844,7 @@ const initChartWithRetry = (elementId: string, option: any, retries = 0) => {
       return
     }
     
-    // 检查DOM元素是否有有效的宽高
+    // 检查DOM元素是否有有效的高宽
     if (chartDom.clientWidth === 0 || chartDom.clientHeight === 0) {
       // 特殊处理：检查父元素是否可见且具有尺寸
       const parent = chartDom.parentElement
@@ -2670,6 +2986,42 @@ const initChartWithRetry = (elementId: string, option: any, retries = 0) => {
 
 .stat-icon.bg-info {
   background-color: #909399;
+}
+
+.stat-icon.text-success {
+  color: #67C23A;
+}
+
+.stat-icon.text-primary {
+  color: #409EFF;
+}
+
+.stat-icon.text-warning {
+  color: #E6A23C;
+}
+
+.stat-icon.text-danger {
+  color: #F56C6C;
+}
+
+.text-success {
+  color: #67C23A !important;
+}
+
+.text-primary {
+  color: #409EFF !important;
+}
+
+.text-warning {
+  color: #E6A23C !important;
+}
+
+.text-danger {
+  color: #F56C6C !important;
+}
+
+.text-muted {
+  color: #909399 !important;
 }
 
 .stat-content {
@@ -2956,4 +3308,32 @@ const initChartWithRetry = (elementId: string, option: any, retries = 0) => {
   grid-template-columns: repeat(2, 1fr);
   gap: 10px;
 }
+.user-quality-dist {
+  padding: 10px 0;
+}
+
+.dist-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.dist-label {
+  width: 120px;
+  font-size: 13px;
+  color: #606266;
+}
+
+.dist-item .el-progress {
+  flex: 1;
+  margin: 0 15px;
+}
+
+.dist-count {
+  width: 40px;
+  text-align: right;
+  font-size: 13px;
+  color: #909399;
+}
+
 </style>

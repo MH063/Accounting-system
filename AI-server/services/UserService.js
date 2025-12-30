@@ -404,7 +404,8 @@ class UserService extends BaseService {
       // 创建用户会话(传入JWT refreshToken)
       const session = await this.createUserSession(user.id, ip, userAgent, {
         accessToken: tokenPair.accessToken,
-        refreshToken: tokenPair.refreshToken
+        refreshToken: tokenPair.refreshToken,
+        clientType: user.role === 'admin' || user.role === 'system_admin' ? 'admin' : 'client'
       });
 
       logger.info('[UserService] 用户登录成功', { 
@@ -2072,6 +2073,7 @@ class UserService extends BaseService {
       // 生成会话令牌
       const sessionToken = tokens?.accessToken || this.generateSecureToken();
       const refreshToken = tokens?.refreshToken || this.generateSecureToken();
+      const clientType = tokens?.clientType || (userAgent?.includes('Admin') ? 'admin' : 'client');
       
       // 解析用户代理信息
       const deviceInfo = this.parseUserAgent(userAgent);
@@ -2089,13 +2091,13 @@ class UserService extends BaseService {
           INSERT INTO user_sessions (
             user_id, session_token, refresh_token, device_info, 
             ip_address, user_agent, status, expires_at, last_accessed_at,
-            device_id
+            device_id, client_type
           ) VALUES (
             $1, $2, $3, $4, 
             $5, $6, 'active', $7, NOW(),
-            $8
+            $8, $9
           )
-          RETURNING id, user_id, session_token, refresh_token, device_info, ip_address, user_agent, status, expires_at, created_at, last_accessed_at
+          RETURNING id, user_id, session_token, refresh_token, device_info, ip_address, user_agent, status, expires_at, created_at, last_accessed_at, client_type
         `;
         
         params = [
@@ -2106,19 +2108,22 @@ class UserService extends BaseService {
           ip || '0.0.0.0',
           userAgent || '',
           expiresAt,
-          deviceTrack.deviceId
+          deviceTrack.deviceId,
+          clientType
         ];
       } else {
         // 如果没有deviceId，不包含device_id字段
         insertQuery = `
           INSERT INTO user_sessions (
             user_id, session_token, refresh_token, device_info, 
-            ip_address, user_agent, status, expires_at, last_accessed_at
+            ip_address, user_agent, status, expires_at, last_accessed_at,
+            client_type
           ) VALUES (
             $1, $2, $3, $4, 
-            $5, $6, 'active', $7, NOW()
+            $5, $6, 'active', $7, NOW(),
+            $8
           )
-          RETURNING id, user_id, session_token, refresh_token, device_info, ip_address, user_agent, status, expires_at, created_at, last_accessed_at
+          RETURNING id, user_id, session_token, refresh_token, device_info, ip_address, user_agent, status, expires_at, created_at, last_accessed_at, client_type
         `;
         
         params = [
@@ -2128,7 +2133,8 @@ class UserService extends BaseService {
           JSON.stringify(deviceInfo),
           ip || '0.0.0.0',
           userAgent || '',
-          expiresAt
+          expiresAt,
+          clientType
         ];
       }
       
@@ -2245,6 +2251,169 @@ class UserService extends BaseService {
     } catch (error) {
       logger.error('[UserService] 撤销其他会话失败', { error: error.message, userId, currentSessionId });
       throw error;
+    }
+  }
+
+  /**
+   * 更新用户会话心跳和交互计数
+   * @param {number} userId - 用户ID
+   * @param {string} sessionToken - 会话令牌
+   * @param {Object} data - 心跳数据 (interactionCount, deviceFingerprint, metrics, behaviorData)
+   * @returns {Promise<boolean>} 是否成功
+   */
+  async updateHeartbeat(userId, sessionToken, data = {}) {
+    try {
+      const { interactionCount, deviceFingerprint, metrics, behaviorData } = data;
+      logger.info('[UserService] 更新心跳参数', { userId, tokenSnippet: sessionToken?.substring(0, 20) });
+      const query = `
+        UPDATE user_sessions
+        SET 
+          updated_at = NOW(),
+          last_accessed_at = NOW(),
+          last_heartbeat_at = NOW(),
+          heartbeat_count = COALESCE(heartbeat_count, 0) + 1,
+          interaction_count = COALESCE(interaction_count, 0) + $1,
+          device_fingerprint = COALESCE($2, device_fingerprint),
+          client_metrics = COALESCE(client_metrics, '{}'::jsonb) || $3::jsonb,
+          behavior_data = COALESCE(behavior_data, '{}'::jsonb) || $4::jsonb
+        WHERE user_id = $5 AND session_token = $6 AND status = 'active'
+        RETURNING id
+      `;
+      const result = await this.userRepository.executeQuery(query, [
+        interactionCount || 0,
+        deviceFingerprint || null,
+        JSON.stringify(metrics || {}),
+        JSON.stringify(behaviorData || {}),
+        userId,
+        sessionToken
+      ]);
+
+      if (result.rowCount === 0) {
+        logger.warn('[UserService] 心跳更新失败: 未找到活跃会话', { userId, tokenSnippet: sessionToken?.substring(0, 20) });
+      } else {
+        const sessionId = result.rows[0].id;
+        logger.info('[UserService] 心跳更新成功', { userId, sessionId });
+        
+        // 异步更新真实性得分，不阻塞心跳响应
+        setImmediate(async () => {
+          try {
+            const sessionQuery = `SELECT * FROM user_sessions WHERE id = $1`;
+            const sessionResult = await this.userRepository.executeQuery(sessionQuery, [sessionId]);
+            if (sessionResult.rows.length > 0) {
+              const session = sessionResult.rows[0];
+              const score = this.calculateSessionScore(session);
+              await this.updateOnlineScore(userId, sessionToken, score);
+            }
+          } catch (err) {
+            logger.error('[UserService] 异步更新得分失败', { error: err.message, sessionId });
+          }
+        });
+      }
+
+      return result.rowCount > 0;
+    } catch (error) {
+      logger.error('[UserService] 更新心跳失败', { error: error.message, stack: error.stack, userId });
+      return false;
+    }
+  }
+
+  /**
+   * 计算会话真实性得分 (内部逻辑，与 systemStatusService 保持同步)
+   * @param {Object} session - 会话对象
+   * @returns {number} 得分
+   */
+  calculateSessionScore(session) {
+    let score = 0;
+    const now = new Date();
+    const lastAccess = new Date(session.last_accessed_at);
+    const lastHeartbeat = session.last_heartbeat_at ? new Date(session.last_heartbeat_at) : lastAccess;
+    const lastUpdate = session.updated_at ? new Date(session.updated_at) : lastAccess;
+    
+    // 1. 心跳质量分 (30分)
+    const timeSinceLastActivity = (now - lastUpdate) / 1000;
+    const timeSinceLastHeartbeat = (now - lastHeartbeat) / 1000;
+    const activityGap = Math.min(timeSinceLastActivity, timeSinceLastHeartbeat);
+    
+    if (activityGap <= 60) score += 20;
+    else if (activityGap <= 180) score += 10;
+    else if (activityGap <= 300) score += 5;
+    
+    const heartbeatCount = session.heartbeat_count || 0;
+    if (heartbeatCount > 20) score += 10;
+    else if (heartbeatCount > 5) score += 5;
+    
+    // 2. 交互行为分 (40分)
+    const interactionCount = session.interaction_count || 0;
+    if (interactionCount > 100) score += 40;
+    else if (interactionCount > 50) score += 30;
+    else if (interactionCount > 10) score += 20;
+    else if (interactionCount > 0) score += 10;
+    
+    // 3. 业务请求分 (20分)
+    const businessCount = session.business_request_count || 0;
+    if (businessCount > 10) score += 20;
+    else if (businessCount > 5) score += 15;
+    else if (businessCount > 0) score += 10;
+    
+    // 4. 环境验证分 (10分)
+    const hasUA = !!session.user_agent;
+    const hasIP = !!session.ip_address && session.ip_address !== '0.0.0.0';
+    const hasFingerprint = !!session.device_fingerprint;
+    
+    if (hasUA && hasIP) score += 5;
+    if (hasFingerprint) score += 5;
+    
+    return Math.min(100, score);
+  }
+
+  /**
+   * 更新在线真实性得分
+   * @param {number} userId - 用户ID
+   * @param {string} sessionToken - 会话令牌
+   * @param {number} score - 真实性得分 (0-100)
+   * @returns {Promise<boolean>} 是否成功
+   */
+  async updateOnlineScore(userId, sessionToken, score) {
+    try {
+      const query = `
+        UPDATE user_sessions
+        SET 
+          online_score = $1,
+          updated_at = NOW()
+        WHERE user_id = $2 AND session_token = $3 AND status = 'active'
+        RETURNING id
+      `;
+      const result = await this.userRepository.executeQuery(query, [score, userId, sessionToken]);
+      return result.rowCount > 0;
+    } catch (error) {
+      logger.error('[UserService] 更新真实性得分失败', { error: error.message, userId });
+      return false;
+    }
+  }
+
+  /**
+   * 增加业务请求计数
+   * @param {number} userId - 用户ID
+   * @param {string} sessionToken - 会话令牌
+   * @returns {Promise<boolean>} 是否成功
+   */
+  async incrementBusinessRequest(userId, sessionToken) {
+    try {
+      const query = `
+        UPDATE user_sessions
+        SET 
+          business_request_count = COALESCE(business_request_count, 0) + 1,
+          last_accessed_at = NOW(),
+          updated_at = NOW()
+        WHERE user_id = $1 AND session_token = $2 AND status = 'active'
+        RETURNING id
+      `;
+      
+      const result = await this.userRepository.executeQuery(query, [userId, sessionToken]);
+      return result.rowCount > 0;
+    } catch (error) {
+      logger.error('[UserService] 增加业务请求计数失败', { error: error.message, userId });
+      return false;
     }
   }
 

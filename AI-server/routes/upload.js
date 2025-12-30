@@ -8,7 +8,7 @@ const path = require('path');
 const { uploadSingle, uploadMultiple, getFileInfo, getFilesInfo } = require('../middleware/upload');
 const { asyncHandler } = require('../middleware/errorHandling');
 const { responseWrapper } = require('../middleware/response');
-const { strictRateLimit } = require('../middleware/security');
+const { strictRateLimit } = require('../middleware/security/index');
 const logger = require('../config/logger');
 
 const router = express.Router();

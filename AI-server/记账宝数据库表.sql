@@ -148,8 +148,19 @@ CREATE TABLE user_sessions (
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
     last_accessed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     
+    -- 在线真实性检测相关字段
+    online_score INTEGER DEFAULT 0,              -- 在线真实性得分 (0-100) 
+    heartbeat_count INTEGER DEFAULT 0,           -- 有效心跳累计次数 
+    interaction_count INTEGER DEFAULT 0,         -- 交互行为累计次数（点击、滚动等） 
+    business_request_count INTEGER DEFAULT 0,    -- 有效业务请求累计次数 
+    last_heartbeat_at TIMESTAMP WITH TIME ZONE,  -- 最后一次心跳时间 
+    device_fingerprint VARCHAR(255),             -- 设备唯一指纹 
+    behavior_data JSONB DEFAULT '{}'::jsonb,     -- 存储复杂的行为特征（如心跳间隔序列）
+    client_metrics JSONB DEFAULT '{}'::jsonb,    -- 客户端性能指标 (FPS, 内存等)
+    
     -- 时间戳
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     
     -- 外键约束
     CONSTRAINT fk_user_sessions_user_id 
@@ -170,6 +181,29 @@ COMMENT ON COLUMN user_sessions.user_agent IS '用户代理字符串';
 COMMENT ON COLUMN user_sessions.status IS '会话状态：active-活跃，expired-已过期，revoked-已撤销';
 COMMENT ON COLUMN user_sessions.expires_at IS '会话过期时间';
 COMMENT ON COLUMN user_sessions.last_accessed_at IS '最后访问时间';
+COMMENT ON COLUMN user_sessions.online_score IS '在线真实性得分 (0-100)'; 
+COMMENT ON COLUMN user_sessions.heartbeat_count IS '有效心跳累计次数'; 
+COMMENT ON COLUMN user_sessions.interaction_count IS '交互行为累计次数'; 
+COMMENT ON COLUMN user_sessions.business_request_count IS '有效业务请求累计次数'; 
+COMMENT ON COLUMN user_sessions.last_heartbeat_at IS '最后一次心跳时间'; 
+COMMENT ON COLUMN user_sessions.device_fingerprint IS '设备唯一指纹'; 
+COMMENT ON COLUMN user_sessions.behavior_data IS '存储复杂的行为特征数据'; 
+COMMENT ON COLUMN user_sessions.client_metrics IS '客户端上报的性能指标';
+COMMENT ON COLUMN user_sessions.updated_at IS '记录更新时间'; 
+
+-- 创建触发器以自动更新 updated_at 
+CREATE OR REPLACE FUNCTION update_updated_at_column() 
+RETURNS TRIGGER AS $$ 
+BEGIN 
+    NEW.updated_at = NOW(); 
+    RETURN NEW; 
+END; 
+$$ language 'plpgsql'; 
+
+CREATE TRIGGER update_user_sessions_updated_at 
+    BEFORE UPDATE ON user_sessions 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
 
 -- 3. 宿舍管理模块
 -- ============================================================

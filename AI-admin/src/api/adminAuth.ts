@@ -15,12 +15,18 @@ export const adminAuthApi = {
     api.get('/admin/profile'),
   
   // 刷新管理员令牌
-  refreshAdminToken: () =>
-    api.post('/admin/refresh-token'),
+  refreshAdminToken: (refreshToken?: string) => {
+    const token = refreshToken || localStorage.getItem('adminRefreshToken')
+    return api.post('/admin/refresh-token', { refreshToken: token })
+  },
   
   // 验证管理员令牌
   verifyAdminToken: () =>
-    api.get('/admin/verify')
+    api.get('/admin/verify'),
+  
+  // 管理员心跳上报
+  heartbeat: () =>
+    api.get('/admin/heartbeat')
 }
 
 export default adminAuthApi

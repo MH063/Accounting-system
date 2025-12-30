@@ -1409,7 +1409,7 @@ const roleFormRules = {
 const fetchStats = async () => {
   try {
     const response = await adminStatsApi.getAdminPermissionStats()
-    stats.value = response.data
+    stats.value = response
   } catch (error) {
     console.error('获取统计数据失败:', error)
     ElMessage.error('获取统计数据失败')
@@ -1427,8 +1427,8 @@ const fetchAdminList = async () => {
       status: adminSearchForm.status || undefined
     }
     const response = await adminAccountApi.getAdminAccounts(params)
-    adminList.value = response.data.list || []
-    adminTotal.value = response.data.total || 0
+    adminList.value = response.list || []
+    adminTotal.value = response.total || 0
   } catch (error) {
     console.error('获取管理员列表失败:', error)
     ElMessage.error('获取管理员列表失败')
@@ -1447,7 +1447,7 @@ const fetchRoleList = async () => {
       status: roleSearchForm.status || undefined
     }
     const response = await permissionRoleApi.getPermissionRoles(params)
-    roleList.value = response.data.list || []
+    roleList.value = response.list || []
   } catch (error) {
     console.error('获取角色列表失败:', error)
     ElMessage.error('获取角色列表失败')
@@ -1475,8 +1475,8 @@ const fetchHistoryList = async () => {
     }
     
     const response = await permissionHistoryApi.getPermissionChangeHistory(params)
-    historyList.value = response.data.list || []
-    historyTotal.value = response.data.total || 0
+    historyList.value = response.list || []
+    historyTotal.value = response.total || 0
   } catch (error) {
     console.error('获取权限变更历史失败:', error)
     ElMessage.error('获取权限变更历史失败')
@@ -1505,8 +1505,8 @@ const fetchApprovalList = async () => {
     }
     
     const response = await permissionApprovalApi.getPermissionApprovalProcesses(params)
-    approvalList.value = response.data.list || []
-    approvalTotal.value = response.data.total || 0
+    approvalList.value = response.list || []
+    approvalTotal.value = response.total || 0
   } catch (error) {
     console.error('获取权限审批流程失败:', error)
     ElMessage.error('获取权限审批流程失败')
@@ -1613,7 +1613,7 @@ const submitExport = async () => {
     }
     
     // 创建下载链接
-    const blob = new Blob([response.data], { 
+    const blob = new Blob([response], { 
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
     })
     const url = window.URL.createObjectURL(blob)
@@ -1705,7 +1705,7 @@ const handleViewAdmin = async (row: AdminAccount) => {
     try {
       if (adminAccountApi.getAdminLoginHistory) {
         const loginRecords = await adminAccountApi.getAdminLoginHistory(row.id)
-        loginHistory.value = loginRecords.data || []
+        loginHistory.value = loginRecords || []
       } else {
         // 如果没有登录历史API，提供模拟数据
         loginHistory.value = [

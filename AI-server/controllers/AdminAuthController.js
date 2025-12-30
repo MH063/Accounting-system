@@ -22,6 +22,39 @@ class AdminAuthController extends BaseController {
     this.adminLogout = this.adminLogout.bind(this);
     this.getAdminProfile = this.getAdminProfile.bind(this);
     this.refreshAdminToken = this.refreshAdminToken.bind(this);
+    this.heartbeat = this.heartbeat.bind(this);
+  }
+
+  /**
+   * 管理员心跳
+   * GET /api/admin/heartbeat
+   */
+  async heartbeat(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const username = req.user.username;
+
+      // 更新管理员最后在线时间（如果需要）
+      // await this.userService.updateLastActive(userId);
+
+      logger.debug('[AdminAuthController] 管理员心跳', { 
+        userId, 
+        username,
+        timestamp: new Date().toISOString()
+      });
+
+      return successResponse(res, {
+        timestamp: new Date().toISOString(),
+        status: 'active',
+        user: {
+          id: userId,
+          username: username
+        }
+      }, '心跳正常');
+    } catch (error) {
+      logger.error('[AdminAuthController] 管理员心跳失败', { error: error.message });
+      next(error);
+    }
   }
 
   /**
@@ -215,26 +248,46 @@ class AdminAuthController extends BaseController {
   async refreshAdminToken(req, res, next) {
     try {
       const { refreshToken } = req.body;
+      const ip = req.ip;
+      const ua = req.get('User-Agent');
+
+      console.log(`🔄 [AdminAuthController] 收到令牌刷新请求 | IP: ${ip} | UA: ${ua.substring(0, 30)}...`);
 
       if (!refreshToken) {
+        console.warn('⚠️ [AdminAuthController] 刷新令牌为空');
         return errorResponse(res, '刷新令牌不能为空', 400);
       }
 
-      // 刷新令牌
-      const newTokens = await refreshAccessToken(refreshToken);
+      // 使用UserService的refreshSecureToken方法处理安全令牌刷新
+      const result = await this.userService.refreshSecureToken(refreshToken, {
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      });
 
-      if (!newTokens) {
-        return errorResponse(res, '无效的刷新令牌', 401);
+      if (!result.success) {
+        return errorResponse(res, result.message || '令牌刷新失败', 401);
       }
 
-      logger.info('[AdminAuthController] 管理员令牌刷新成功');
+      logger.info('[AdminAuthController] 管理员令牌刷新成功', { userId: result.data.userId });
 
       return successResponse(res, {
-        tokens: newTokens
+        tokens: {
+          accessToken: result.data.accessToken,
+          refreshToken: result.data.refreshToken,
+          expiresIn: result.data.expiresIn
+        }
       }, '令牌刷新成功');
 
     } catch (error) {
       logger.error('[AdminAuthController] 管理员令牌刷新失败', { error: error.message });
+      
+      // 根据错误类型返回适当的HTTP状态码
+      if (error.message.includes('无效的刷新令牌') || error.message.includes('会话已过期')) {
+        return errorResponse(res, error.message, 401);
+      } else if (error.code === 'CONCURRENT_REFRESH') {
+        return errorResponse(res, error.message, 409);
+      }
+      
       next(error);
     }
   }

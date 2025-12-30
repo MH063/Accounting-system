@@ -99,8 +99,31 @@ export const systemApi = {
     api.get('/tables'),
   
   // 客户端相关操作
-  restartClient: () => 
-    api.post('/client/restart'),
+  restartClient: (params: {
+    mode?: 'immediate' | 'graceful' | 'delayed';
+    delay_seconds?: number;
+    notify_user?: boolean;
+    reason?: string;
+    disconnect_first?: boolean;
+  }) => api.post('/client/restart', params),
+  
+  getRestartModes: () => 
+    api.get('/client/restart/modes'),
+  
+  disconnectAllClients: (params: {
+    mode?: 'sync' | 'async';
+    reason?: string;
+    exclude_user_ids?: number[];
+    include_user_ids?: number[];
+  }) => api.post('/client/disconnect', params),
+  
+  getConnectionStats: () => 
+    api.get('/client/disconnect/stats'),
+  
+  disconnectByUsers: (params: {
+    user_ids: number[];
+    reason?: string;
+  }) => api.post('/client/disconnect/by-users', params),
   
   getClientConfig: () => 
     api.get('/client/config'),
@@ -139,11 +162,45 @@ export const systemApi = {
   checkNetworkStatus: () => 
     api.get('/network/status'),
   
+  // 获取告警信息
+  getAlerts: (params?: { page?: number; pageSize?: number; level?: string; status?: string }) => 
+    api.get('/alerts', { params }),
+  
+  // ==================== 系统状态评估接口 ====================
+  
+  // 综合评估系统整体状态
+  getOverallStatus: () => 
+    api.get('/status/overall'),
+  
+  // 评估客户端状态
+  getClientStatus: () => 
+    api.get('/status/client'),
+  
+  // 评估后端服务状态
+  getBackendStatus: () => 
+    api.get('/status/backend'),
+  
+  // 评估数据库状态
+  getDatabaseStatus: () => 
+    api.get('/status/database'),
+  
+  // 快速健康检查
+  quickHealthCheck: () => 
+    api.get('/status/health'),
+  
   // 导出用户数据
   exportUsers: (params?: { format: 'excel' | 'csv', keyword?: string, role?: string, status?: string, dormitory?: string }) => 
     api.get('/users/export', { params, responseType: 'blob' }),
   
   // 下载模板文件
   downloadTemplate: (type: string) => 
-    api.get(`/templates/${type}`, { responseType: 'blob' })
+    api.get(`/templates/${type}`, { responseType: 'blob' }),
+  
+  // 获取系统可用率详细分析
+  getSystemAvailabilityDetailed: () => 
+    api.get('/system/availability-detailed'),
+
+  // 获取指标历史数据
+  getMetricsHistory: (params: { type: string, interval?: string }) => 
+    api.get('/status/metrics/history', { params })
 }

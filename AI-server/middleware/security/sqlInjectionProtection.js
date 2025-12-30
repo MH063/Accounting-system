@@ -5,6 +5,9 @@
 
 const logger = require('../../config/logger');
 
+// 排除SQL注入检查的路径
+const EXCLUDED_PATHS = ['/api/docs', '/docs', '/api/client/restart', '/api/client/disconnect'];
+
 // 允许的字符模式（白名单）
 const ALLOWED_PATTERNS = {
   // 数字
@@ -117,6 +120,11 @@ const sqlInjectionProtection = () => {
   };
   
   return (req, res, next) => {
+    // 检查是否在排除名单中
+    if (EXCLUDED_PATHS.some(path => req.path.startsWith(path))) {
+      return next();
+    }
+
     try {
       // 检查查询参数
       if (checkValue(req.query)) {

@@ -417,7 +417,7 @@ const loadAuditRecords = async () => {
     
     // 调用API获取审计记录
     const response = await operationAuditApi.getAuditRecords(params)
-    const data = response.data || response
+    const data = response
     
     auditRecords.value = data.records || []
     total.value = data.total || 0
@@ -436,7 +436,7 @@ const loadAuditStats = async () => {
   try {
     // 调用API获取审计统计
     const response = await operationAuditApi.getAuditStats()
-    const data = response.data || response
+    const data = response
     
     auditStats.value = data
     

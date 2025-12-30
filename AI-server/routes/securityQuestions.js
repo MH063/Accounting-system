@@ -8,7 +8,7 @@ const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
 const { asyncHandler } = require('../middleware/errorHandling');
 const { responseWrapper } = require('../middleware/response');
-const { strictRateLimit } = require('../middleware/security');
+const { strictRateLimit } = require('../middleware/security/index');
 const SecurityQuestionController = require('../controllers/SecurityQuestionController');
 
 const router = express.Router();

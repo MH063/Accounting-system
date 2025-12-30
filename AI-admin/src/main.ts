@@ -11,9 +11,6 @@ import Login from './views/Login.vue'
 import NotFound from './views/NotFound.vue'
 import './style.css'
 
-// 导入Vuex store
-import store from './store'
-
 // 路由配置
 const routes: RouteRecordRaw[] = [
   {
@@ -239,51 +236,49 @@ const router = createRouter({
 })
 
 // 添加路由守卫
-router.beforeEach((to, from, next) => {
-  // 获取Vuex中的用户状态
-  let isLoggedIn = store.getters['user/isLoggedIn']
-  let loginTime = store.state.user.loginTime
-  
-  // 增加对 localStorage 的兜底检查，防止 Vuex 状态在刷新时丢失或未及时恢复
-  if (!isLoggedIn) {
-    const adminUser = localStorage.getItem('adminUser')
+router.beforeEach(async (to, from, next) => {
+  try {
+    // 仅使用 localStorage 检查登录状态
     const adminToken = localStorage.getItem('adminToken')
-    if (adminUser && adminToken) {
+    const adminUserStr = localStorage.getItem('adminUser')
+    let isLoggedIn = !!adminToken
+    let loginTime = 0
+
+    if (adminUserStr) {
       try {
-        const userData = JSON.parse(adminUser)
-        // 只有当解析出的用户数据有效且包含令牌时，才认为可能已登录
-        if (userData && userData.token) {
-          isLoggedIn = true
-          loginTime = userData.loginTime || loginTime
-          
-          // 恢复 Vuex 状态，确保刷新页面后状态不丢失
-          if (!store.getters['user/isLoggedIn']) {
-            store.dispatch('user/login', userData)
-          }
-        }
+        const adminUser = JSON.parse(adminUserStr)
+        loginTime = adminUser.loginTime || 0
       } catch (e) {
         console.error('解析本地存储的用户数据失败:', e)
       }
     }
-  }
-  
-  // 检查是否已登录超过30天 (对应 Refresh Token 的有效期)
-  const thirtyDaysInMillis = 30 * 24 * 60 * 60 * 1000
-  const isSessionExpired = loginTime && (Date.now() - loginTime > thirtyDaysInMillis)
-  
-  // 如果会话已过期，清除用户状态
-  if (isSessionExpired) {
-    store.dispatch('user/logout')
-  }
-  
-  // 如果目标路由需要认证且用户未登录或会话已过期，重定向到登录页
-  if (to.path !== '/login' && (!isLoggedIn || isSessionExpired)) {
-    next('/login')
-  } 
-  // 移除已登录自动跳转首页的逻辑，允许已登录用户访问登录页（如需切换账号）
-  // 除非有明确的重定向要求，否则保持当前逻辑
-  else {
-    next()
+    
+    // 检查是否已登录超过30天
+    const thirtyDaysInMillis = 30 * 24 * 60 * 60 * 1000
+    const isSessionExpired = !!(loginTime && (Date.now() - Number(loginTime) > thirtyDaysInMillis))
+    
+    // 如果目标路由需要认证且用户未登录或会话已过期
+    if (to.path !== '/login' && (!isLoggedIn || isSessionExpired)) {
+      if (isSessionExpired) {
+        console.warn('⚠️ [Router Guard] 会话已过期，正在强制登出')
+        localStorage.removeItem('adminToken')
+        localStorage.removeItem('adminRefreshToken')
+        localStorage.removeItem('adminUser')
+      } else {
+        console.warn('⚠️ [Router Guard] 未登录或状态无效，重定向至登录页', { path: to.path })
+      }
+      return next('/login')
+    } else if (to.path === '/login' && isLoggedIn && !isSessionExpired) {
+      // 已登录状态访问登录页，重定向到首页
+      console.log('ℹ️ [Router Guard] 已登录，从登录页重定向至首页')
+      return next('/')
+    } else {
+      return next()
+    }
+  } catch (error) {
+    console.error('❌ [Router Guard] 发生未处理错误:', error)
+    if (to.path === '/login') return next()
+    return next('/login')
   }
 })
 
@@ -296,9 +291,6 @@ app.use(ElementPlus)
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
   app.component(key, component)
 }
-
-// 注册Vuex store
-app.use(store)
 
 app.use(router)
 app.mount('#app')

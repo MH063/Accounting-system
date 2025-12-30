@@ -73,22 +73,32 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useStore } from 'vuex'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
-// 获取store实例
-const store = useStore()
+// 响应式状态，用于替代 Vuex
+const theme = ref(localStorage.getItem('adminTheme') || 'light')
+const isSidebarCollapsed = ref(localStorage.getItem('adminSidebarCollapsed') === 'true')
+const language = ref('中文')
+const notifications = ref([])
 
-// 计算属性 - 从store中获取状态
-const isLoggedIn = computed(() => store.getters['user/isLoggedIn'])
-const currentUser = computed(() => store.getters['user/currentUser'])
-const theme = computed(() => store.getters['system/theme'])
-const language = computed(() => store.getters['system/language'])
-const isSidebarCollapsed = computed(() => store.getters['system/isSidebarCollapsed'])
-const notifications = computed(() => store.getters['system/notifications'])
+// 计算属性 - 从 localStorage 获取用户信息
+const adminUser = computed(() => {
+  const userStr = localStorage.getItem('adminUser')
+  if (userStr) {
+    try {
+      return JSON.parse(userStr)
+    } catch (e) {
+      return null
+    }
+  }
+  return null
+})
 
-// 方法 - dispatch actions
+const isLoggedIn = computed(() => !!localStorage.getItem('adminToken'))
+const currentUser = computed(() => adminUser.value || { id: '-', name: '-', role: '-', permissions: [] })
+
+// 方法
 const handleLogout = () => {
   ElMessageBox.confirm(
     '确定要退出登录吗？',
@@ -99,22 +109,23 @@ const handleLogout = () => {
       type: 'warning',
     }
   ).then(() => {
-    store.dispatch('user/logout')
+    localStorage.removeItem('adminToken')
+    localStorage.removeItem('adminRefreshToken')
+    localStorage.removeItem('adminUser')
     ElMessage.success('已退出登录')
-  }).catch(() => {
-    // 取消退出
-  })
+    window.location.href = '/login'
+  }).catch(() => {})
 }
 
 const toggleTheme = () => {
-  const newTheme = theme.value === 'light' ? 'dark' : 'light'
-  store.dispatch('system/setTheme', newTheme)
-  ElMessage.success(`主题已切换为${newTheme === 'dark' ? '深色' : '浅色'}`)
+  theme.value = theme.value === 'light' ? 'dark' : 'light'
+  localStorage.setItem('adminTheme', theme.value)
+  ElMessage.success(`已切换到${theme.value === 'dark' ? '深色' : '浅色'}主题`)
 }
 
 const toggleSidebar = () => {
-  store.dispatch('system/toggleSidebar')
-  ElMessage.success(`侧边栏已${isSidebarCollapsed.value ? '展开' : '收起'}`)
+  isSidebarCollapsed.value = !isSidebarCollapsed.value
+  localStorage.setItem('adminSidebarCollapsed', String(isSidebarCollapsed.value))
 }
 </script>
 

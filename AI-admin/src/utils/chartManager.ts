@@ -42,7 +42,14 @@ export class ChartManager {
       this.dispose()
     }
     
-    this.chart = echarts.init(this.container, this.theme)
+    // 检查 DOM 上是否已经存在 ECharts 实例
+    const existingInstance = echarts.getInstanceByDom(this.container)
+    if (existingInstance) {
+      this.chart = existingInstance
+    } else {
+      this.chart = echarts.init(this.container, this.theme)
+    }
+    
     this.render()
   }
 

@@ -21,7 +21,7 @@
             <el-avatar :size="32" src="https://picsum.photos/seed/user-avatar/32/32.jpg" class="avatar">
               <el-icon><User /></el-icon>
             </el-avatar>
-            管理员
+            {{ userName }}
             <el-icon class="el-icon--right"><arrow-down /></el-icon>
           </span>
           <template #dropdown>
@@ -111,16 +111,29 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { ArrowDown, Bell, Close, User } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '@/api'
-import { useStore } from 'vuex'
 import { useRouter } from 'vue-router'
 
-// 获取store实例和router实例
-const store = useStore()
+// 获取 router 实例
 const router = useRouter()
+
+// 从 localStorage 获取用户信息
+const adminUser = computed(() => {
+  const userStr = localStorage.getItem('adminUser')
+  if (userStr) {
+    try {
+      return JSON.parse(userStr)
+    } catch (e) {
+      return null
+    }
+  }
+  return null
+})
+
+const userName = computed(() => adminUser.value?.name || '管理员')
 
 // 响应式数据
 const showNotificationPanel = ref(false)
@@ -285,8 +298,11 @@ const handleLogout = () => {
       type: 'warning',
     }
   ).then(() => {
-    // 调用store的logout action
-    store.dispatch('user/logout')
+    // 清除本地存储
+    localStorage.removeItem('adminToken')
+    localStorage.removeItem('adminRefreshToken')
+    localStorage.removeItem('adminUser')
+    
     ElMessage.success('已退出登录')
     
     // 跳转到登录页面

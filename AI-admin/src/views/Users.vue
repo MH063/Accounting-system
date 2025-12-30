@@ -277,9 +277,15 @@ const router = useRouter()
 const { paginationState, dataList, loadData, handleSizeChange: pagerHandleSizeChange, handleCurrentChange: pagerHandleCurrentChange, refresh } = createPaginationManager<any>(
   async (params) => {
     const response = await userApi.getUsers(params)
-    // 处理后端返回的数据结构
-    const usersData = response?.data?.users || response?.data || []
-    const totalCount = response?.data?.total || response?.data?.count || usersData.length
+    console.log('👥 [Users View] 获取用户列表响应:', response)
+    
+    // 处理后端返回的数据结构 (符合规则 5: response.data.data.xxx)
+    // 此时 response 已经是拦截器返回的 response.data，所以我们需要访问 response.data.users
+    const innerData = response?.data || response
+    const usersData = innerData?.users || (Array.isArray(innerData) ? innerData : [])
+    const totalCount = innerData?.total || innerData?.count || (Array.isArray(innerData) ? innerData.length : 0)
+    
+    console.log('📊 [Users View] 处理后的数据:', { count: usersData.length, total: totalCount })
     
     return {
       data: usersData,
@@ -435,7 +441,7 @@ const handleSubmitAdd = async () => {
     console.log('✅ 用户创建成功:', response)
     
     // 检查API响应结构
-    if (response && response.data) {
+    if (response) {
       ElMessage.success('用户创建成功')
       addDialogVisible.value = false
       resetAddForm()
@@ -582,7 +588,7 @@ const handleExportCommand = async (command: 'excel' | 'csv') => {
     })
     
     // 创建下载链接
-    const blob = new Blob([response.data], { type: command === 'excel' ? 'application/vnd.ms-excel' : 'text/csv' })
+    const blob = new Blob([response], { type: command === 'excel' ? 'application/vnd.ms-excel' : 'text/csv' })
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url

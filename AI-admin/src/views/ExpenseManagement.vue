@@ -675,6 +675,7 @@ import {
   CreditCard, ChatLineRound, Money as BankIcon, SuccessFilled, Picture, Close, InfoFilled
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { feeApi } from '@/api/fee'
 // 暂时注释掉支付服务导入，后续需要创建对应的管理端支付服务
 // import { confirmPayment, getQRCodes } from '@/services/paymentService'
 

@@ -8,7 +8,7 @@ const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
 const { asyncHandler } = require('../middleware/errorHandling');
 const { responseWrapper } = require('../middleware/response');
-const { strictRateLimit } = require('../middleware/security');
+const { strictRateLimit } = require('../middleware/security/index');
 const AuthController = require('../controllers/AuthController');
 
 const router = express.Router();
@@ -499,6 +499,18 @@ router.get('/totp/status',
   authenticateToken, 
   responseWrapper(asyncHandler(async (req, res, next) => {
     return await authController.getTotpStatus(req, res, next);
+  }))
+);
+
+/**
+ * 用户心跳上报路由
+ * POST /api/auth/heartbeat
+ * 需要有效的JWT令牌
+ */
+router.post('/heartbeat',
+  authenticateToken,
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await authController.heartbeat(req, res);
   }))
 );
 

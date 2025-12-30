@@ -7,7 +7,10 @@
  */
 
 const tokenService = require('../services/TokenService');
+const UserService = require('../services/UserService');
 const logger = require('../config/logger');
+
+const userService = new UserService();
 
 /**
  * 验证JWT令牌的中间件
@@ -47,6 +50,18 @@ const authenticateToken = async (req, res, next) => {
       tokenType: user.type,
       timestamp: new Date().toISOString()
     });
+
+    // 增加业务请求计数（排除心跳请求，避免重复计数）
+    if (!req.originalUrl.includes('/auth/heartbeat')) {
+      setImmediate(() => {
+        userService.incrementBusinessRequest(user.id, token)
+          .catch(err => logger.debug('[AuthMiddleware] 增加业务请求计数失败', { 
+            userId: user.id,
+            error: err.message 
+          }));
+      });
+    }
+
     next();
   } else {
     logger.security(req, 'JWT认证失败', { 
@@ -105,8 +120,78 @@ const canRefreshToken = (user) => {
   return user && user.type === 'refresh';
 };
 
+/**
+ * 授权中间件 - 仅限管理员访问
+ */
+const authorizeAdmin = (req, res, next) => {
+  // 检查用户是否存在
+  if (!req.user) {
+    logger.security(req, '授权失败', { 
+      reason: '用户未认证',
+      timestamp: new Date().toISOString()
+    });
+    return res.status(401).json({
+      success: false,
+      message: '请先登录'
+    });
+  }
+  
+  // 兼容两种角色标识方式：
+  // 1. role 字段：role === 'admin' 或 role 数组包含 'admin'
+  // 2. isAdmin 字段：isAdmin === true
+  const isAdminRole = req.user.role === 'admin' || 
+    (Array.isArray(req.user.role) && req.user.role.includes('admin'));
+  const isAdminFlag = req.user.isAdmin === true;
+  
+  if (isAdminRole || isAdminFlag) {
+    next();
+  } else {
+    logger.security(req, '授权失败', { 
+      reason: '需要管理员权限',
+      userId: req.user?.id,
+      role: req.user?.role,
+      isAdmin: req.user?.isAdmin,
+      timestamp: new Date().toISOString()
+    });
+    return res.status(403).json({
+      success: false,
+      message: '权限不足，需要管理员权限'
+    });
+  }
+};
+
+/**
+ * 角色授权中间件
+ * @param {string|string[]} roles - 允许访问的角色
+ */
+const requireRole = (roles) => {
+  const allowedRoles = Array.isArray(roles) ? roles : [roles];
+  return (req, res, next) => {
+    const userRole = req.user?.role;
+    const hasRole = Array.isArray(userRole) 
+      ? userRole.some(r => allowedRoles.includes(r))
+      : allowedRoles.includes(userRole);
+
+    if (req.user && hasRole) {
+      next();
+    } else {
+      logger.security(req, '授权失败', { 
+        reason: `需要以下角色之一: ${allowedRoles.join(', ')}`,
+        userId: req.user?.id,
+        role: userRole
+      });
+      return res.status(403).json({
+        success: false,
+        message: '权限不足'
+      });
+    }
+  };
+};
+
 module.exports = {
   authenticateToken,
+  authorizeAdmin,
+  requireRole,
   generateTokenPair: createTokenPair,
   getTokenExpirationTime,
   canRefreshToken

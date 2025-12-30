@@ -401,7 +401,7 @@ const loadUsers = async () => {
     console.log('✅ 用户列表响应:', response)
     
     // 处理后端返回的数据结构
-    const usersData = response?.data?.users || response?.data || []
+    const usersData = response?.users || response || []
     usersList.value = usersData
     
   } catch (error: any) {
@@ -433,7 +433,7 @@ const handleFileChange = (file: any) => {
 const handleUploadSuccess = (response: any) => {
   console.log('✅ 文件上传成功:', response)
   ElMessage.success('文件上传成功')
-  importResult.value = response.data
+  importResult.value = response
 }
 
 // 上传失败处理
@@ -466,7 +466,7 @@ const submitImport = async () => {
     console.log('✅ 导入响应:', response)
     
     // 处理导入结果
-    const result = response?.data || {}
+    const result = response || {}
     importResult.value = {
       successCount: result.successCount || 0,
       failedCount: result.failedCount || 0,
@@ -495,7 +495,7 @@ const downloadTemplate = async () => {
     const response = await systemApi.downloadTemplate('user')
     
     // 创建下载链接
-    const blob = new Blob([response.data], { 
+    const blob = new Blob([response], { 
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
     })
     const url = window.URL.createObjectURL(blob)
@@ -536,7 +536,7 @@ const exportUsers = async () => {
     const response = await systemApi.exportUsers(params)
     
     // 创建下载链接
-    const blob = new Blob([response.data], { 
+    const blob = new Blob([response], { 
       type: exportForm.value.format === 'excel' 
         ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
         : 'text/csv'

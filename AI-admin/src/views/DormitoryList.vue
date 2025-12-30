@@ -312,9 +312,11 @@ const loadDormitoryList = async () => {
     const response = await dormitoryApi.getDormitoryList(params)
     console.log('✅ 寝室列表响应:', response)
     
-    // 处理后端返回的数据结构
-    const dormitoryData = response?.data?.dormitories || response?.data || []
-    const totalCount = response?.data?.total || response?.data?.count || dormitoryData.length
+    // 处理后端返回的数据结构 (符合规则 5: response.data.data.xxx)
+    // 此时 response 已经是拦截器返回的 response.data
+    const innerData = response?.data || response
+    const dormitoryData = innerData?.items || (Array.isArray(innerData) ? innerData : [])
+    const totalCount = innerData?.total || innerData?.count || (Array.isArray(innerData) ? innerData.length : 0)
     
     tableData.value = dormitoryData
     total.value = totalCount
@@ -350,9 +352,9 @@ const loadBuildings = async () => {
     const response = await dormitoryApi.getBuildings()
     console.log('✅ 楼栋列表响应:', response)
     
-    // 处理后端返回的数据结构
-    const buildingsData = response?.data?.data || response?.data || []
-    buildings.value = buildingsData
+    // 处理后端返回的数据结构 (符合规则 5: response.data.data.xxx)
+    const buildingsData = response?.data || response || []
+    buildings.value = Array.isArray(buildingsData) ? buildingsData : []
     
   } catch (error: any) {
     console.error('❌ 加载楼栋列表失败:', error)

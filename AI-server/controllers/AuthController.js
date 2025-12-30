@@ -25,6 +25,57 @@ class AuthController extends BaseController {
     this.changePassword = this.changePassword.bind(this);
     this.resetPassword = this.resetPassword.bind(this);
     this.verifyEmail = this.verifyEmail.bind(this);
+    this.heartbeat = this.heartbeat.bind(this);
+  }
+
+  /**
+   * 用户心跳上报
+   * POST /api/auth/heartbeat
+   */
+  async heartbeat(req, res) {
+    try {
+      const userId = req.user.id;
+      // 从请求头中提取原始令牌，作为 session_token
+      const authHeader = req.headers.authorization;
+      const sessionToken = authHeader && authHeader.split(' ')[1];
+      
+      const { interactionCount, deviceFingerprint, metrics, behaviorData } = req.body;
+      if (!sessionToken) {
+        return errorResponse(res, '未提供会话令牌', 401);
+      }
+
+      const success = await this.userService.updateHeartbeat(userId, sessionToken, {
+        interactionCount,
+        deviceFingerprint,
+        metrics,
+        behaviorData
+      });
+
+      // 实时记录心跳到审计日志，确保管理后台在线人数实时更新
+      try {
+        const { pool } = require('../config/database');
+        console.log('[HEARTBEAT_DEBUG] 准备写入审计日志:', { userId, ip: req.ip, userAgent: req.get('User-Agent') });
+        const insertResult = await pool.query(
+          'INSERT INTO audit_logs (user_id, action, ip_address, user_agent, success, severity, record_id, operation, table_name, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW()) RETURNING id',
+          [userId, 'HEARTBEAT', req.ip, req.get('User-Agent'), true, 'info', 0, 'INSERT', 'users']
+        );
+        console.log('[HEARTBEAT_DEBUG] 审计日志写入成功, ID:', insertResult.rows[0].id);
+      } catch (logError) {
+        console.error('[HEARTBEAT_DEBUG] 心跳日志持久化失败:', logError.message, logError.stack);
+        logger.error('[AuthController] 心跳日志持久化失败', { error: logError.message });
+      }
+
+      if (success) {
+        return successResponse(res, {
+          timestamp: new Date().toISOString()
+        }, '心跳上报成功');
+      } else {
+        return errorResponse(res, '会话已过期或不存在', 401);
+      }
+    } catch (error) {
+      logger.error('[AuthController] 心跳上报失败', { error: error.message, userId: req.user?.id });
+      return errorResponse(res, '心跳上报处理失败', 500);
+    }
   }
 
   /**

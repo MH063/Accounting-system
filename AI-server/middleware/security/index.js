@@ -10,6 +10,7 @@ const xssProtectionModule = require('./xssProtection');
 const csrfProtection = require('./csrfProtection');
 const requestSizeLimit = require('./requestSizeLimit');
 const strictRateLimit = require('./strictRateLimit');
+const { securityAuditMiddleware } = require('./auditLogger');
 
 module.exports = {
   ipWhitelist,
@@ -19,6 +20,7 @@ module.exports = {
   csrfProtection,
   requestSizeLimit,
   strictRateLimit,
+  securityAuditMiddleware,
   // 导出常量以防其他模块需要
   DANGEROUS_TAGS: xssProtectionModule.DANGEROUS_TAGS,
   DANGEROUS_ATTRS: xssProtectionModule.DANGEROUS_ATTRS,
