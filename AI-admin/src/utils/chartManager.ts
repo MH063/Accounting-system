@@ -77,7 +77,8 @@ export class ChartManager {
    * @param newOptions 新的图表配置
    */
   public update(newOptions: any): void {
-    if (!this.chart) return
+    // 检查图表实例是否存在且未被销毁
+    if (!this.chart || !this.container || !document.contains(this.container)) return
     
     this.options = { ...this.options, ...newOptions }
     this.render()
@@ -87,7 +88,8 @@ export class ChartManager {
    * 重置图表
    */
   public reset(): void {
-    if (!this.chart) return
+    // 检查图表实例是否存在且未被销毁
+    if (!this.chart || !this.container || !document.contains(this.container)) return
     
     this.chart.clear()
     this.render()
@@ -97,28 +99,42 @@ export class ChartManager {
    * 重置图表尺寸
    */
   public resize(): void {
+    // 双重检查：确保图表实例存在且容器仍在文档中
     if (!this.chart) return
     
-    this.chart.resize()
+    try {
+      // 验证容器是否仍然有效
+      if (this.container && document.contains(this.container)) {
+        this.chart.resize()
+      }
+    } catch (error) {
+      // 图表可能已被销毁，忽略错误
+    }
   }
 
   /**
    * 销毁图表
    */
   public dispose(): void {
-    if (this.chart) {
-      this.chart.dispose()
-      this.chart = null
-    }
+    // 设置销毁标记，防止后续操作
+    this.chart = null
     
-    // 清理观察器
+    // 清理观察器（先于图表销毁）
     if (this.resizeObserver) {
-      this.resizeObserver.disconnect()
+      try {
+        this.resizeObserver.disconnect()
+      } catch (e) {
+        // 忽略错误
+      }
       this.resizeObserver = null
     }
     
     if (this.mutationObserver) {
-      this.mutationObserver.disconnect()
+      try {
+        this.mutationObserver.disconnect()
+      } catch (e) {
+        // 忽略错误
+      }
       this.mutationObserver = null
     }
   }

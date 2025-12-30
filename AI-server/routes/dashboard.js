@@ -129,6 +129,7 @@ router.get('/statistics', authenticateToken, async (req, res) => {
         e.title,
         e.amount,
         e.expense_date,
+        e.created_at,
         e.status,
         ec.category_name,
         u.username as applicant_name

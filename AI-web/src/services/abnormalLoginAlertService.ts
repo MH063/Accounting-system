@@ -20,7 +20,7 @@ export const sendAbnormalLoginAlert = async (
     // 构造通知内容
     const notification = {
       title: '异常登录提醒',
-      message: `检测到您的账户在 ${new Date(loginTime).toLocaleString()} 从 ${ipAddress} (${deviceInfo.browser} on ${deviceInfo.device}) 登录。如果不是您本人操作，请立即修改密码。`,
+      message: `检测到您的账户在 ${new Date(loginTime).toLocaleString('zh-CN', { hour12: false })} 从 ${ipAddress} (${deviceInfo.browser} on ${deviceInfo.device}) 登录。如果不是您本人操作，请立即修改密码。`,
       type: 'security',
       isRead: false,
       isImportant: true,

@@ -107,25 +107,33 @@ export const getActivityHistory = async (limit: number = 10): Promise<ApiRespons
       const recentMaintenance = actualData.recentMaintenance || []
       
       // 转换费用记录为活动历史格式
-      const expenseActivities: ActivityRecord[] = recentExpenses.map((expense: any, index: number) => ({
-        id: `expense-${index}`,
-        title: '费用记录',
-        description: `${expense.description || '费用支出'} - ¥${expense.amount || 0}`,
-        type: 'expense' as const,
-        time: new Date(expense.createdAt || Date.now()),
-        userId: expense.userId || 'system',
-        userName: expense.userName || '系统'
-      }))
+      const expenseActivities: ActivityRecord[] = recentExpenses.map((expense: any, index: number) => {
+        // 优先使用 expense_date，如果为空对象则使用 created_at
+        let expenseDate = expense.expense_date
+        if (expenseDate && typeof expenseDate === 'object' && Object.keys(expenseDate).length === 0) {
+          expenseDate = expense.created_at
+        }
+        
+        return {
+          id: `expense-${index}`,
+          title: '费用记录',
+          description: `${expense.category_name || expense.title || '费用支出'} - ¥${expense.amount || 0}`,
+          type: 'expense' as const,
+          time: new Date(expenseDate || Date.now()),
+          userId: expense.applicant_name || 'system',
+          userName: expense.applicant_name || '系统'
+        }
+      })
       
       // 转换报修记录为活动历史格式
       const maintenanceActivities: ActivityRecord[] = recentMaintenance.map((maintenance: any, index: number) => ({
         id: `maintenance-${index}`,
         title: '报修记录',
-        description: `${maintenance.description || '维修请求'} - ${maintenance.status || '待处理'}`,
+        description: `${maintenance.dorm_name || maintenance.title || '维修请求'} - ${maintenance.status || '待处理'}`,
         type: 'bill' as const,
-        time: new Date(maintenance.createdAt || Date.now()),
-        userId: maintenance.userId || 'system',
-        userName: maintenance.userName || '系统'
+        time: new Date(maintenance.created_at || Date.now()),
+        userId: maintenance.requester_name || 'system',
+        userName: maintenance.requester_name || '系统'
       }))
       
       // 合并并排序活动记录

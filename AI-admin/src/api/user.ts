@@ -153,10 +153,10 @@ export const systemApi = {
   
   // 告警信息相关操作
   exportAlerts: () => 
-    api.get('/alerts/export'),
+    api.get('/status/alerts/export'),
   
   clearAlerts: () => 
-    api.delete('/alerts'),
+    api.delete('/status/alerts'),
   
   // 检查网络状态
   checkNetworkStatus: () => 
@@ -164,7 +164,7 @@ export const systemApi = {
   
   // 获取告警信息
   getAlerts: (params?: { page?: number; pageSize?: number; level?: string; status?: string }) => 
-    api.get('/alerts', { params }),
+    api.get('/status/alerts', { params }),
   
   // ==================== 系统状态评估接口 ====================
   

@@ -85,22 +85,13 @@ export const register = async (registerData: RegisterRequest): Promise<ApiRespon
       const actualData = (response.data as any).data || response.data;
       
       if (actualData.token) {
-        localStorage.setItem('access_token', actualData.token)
-        localStorage.setItem('refresh_token', actualData.refreshToken)
-        
-        // 尝试解析令牌过期时间，否则默认24小时
-        let tokenExpires = Date.now() + 24 * 60 * 60 * 1000
-        try {
-          const payload = JSON.parse(atob(actualData.token.split('.')[1]))
-          if (payload && typeof payload.exp === 'number') {
-            tokenExpires = payload.exp * 1000
-          }
-        } catch (e) {
-          console.warn('解析注册令牌过期时间失败:', e)
-        }
-        
-        localStorage.setItem('token_expires', tokenExpires.toString())
-        localStorage.setItem('user_info', JSON.stringify(actualData.user))
+        // 使用身份验证存储服务保存信息
+        authStorageService.saveUserInfo(actualData.user)
+        authStorageService.saveTokenInfo({
+          accessToken: actualData.token,
+          refreshToken: actualData.refreshToken,
+          expiresIn: 24 * 60 * 60 // 默认24小时，saveTokenInfo会尝试从JWT解析更准确的时间
+        })
       }
       
       // 返回处理后的数据以符合接口期望
@@ -345,20 +336,15 @@ export const logout = async (): Promise<ApiResponse<LogoutResponse>> => {
   try {
     console.log('用户登出')
     
-    // 获取sessionToken
-    const sessionInfo = localStorage.getItem('session_info')
-    let sessionToken = ''
+    // 获取会话信息
+    const sessionInfo = authStorageService.getSessionInfo()
+    const sessionToken = sessionInfo?.sessionToken || ''
     
-    if (sessionInfo) {
-      try {
-        const sessionData = JSON.parse(sessionInfo)
-        sessionToken = sessionData.sessionToken || ''
-      } catch (error) {
-        console.error('解析会话信息失败:', error)
-      }
+    // 如果没有sessionToken，打印警告日志但继续尝试（后端会返回400，我们在catch中处理）
+    if (!sessionToken) {
+      console.warn('未找到会话令牌，可能用户已在本地登出或会话已过期')
     }
     
-    // 如果没有sessionToken，使用默认的空字符串
     const logoutData = {
       sessionToken: sessionToken
     }
@@ -374,25 +360,17 @@ export const logout = async (): Promise<ApiResponse<LogoutResponse>> => {
     console.log('登出API返回响应:', response)
     
     // 清除本地存储的认证信息
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('refresh_token')
-    localStorage.removeItem('token_expires')
-    localStorage.removeItem('user_info')
-    localStorage.removeItem('session_info')
+    authStorageService.clearAuthData()
     
     return response
   } catch (error) {
     console.error('登出失败:', error)
     // 即使API调用失败，也要清除本地存储
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('refresh_token')
-    localStorage.removeItem('token_expires')
-    localStorage.removeItem('user_info')
-    localStorage.removeItem('session_info')
+    authStorageService.clearAuthData()
     
     return {
       success: true,
-      data: { sessionToken: '', status: 'revoked' },
+      data: { sessionToken: '', status: 'revoked' } as LogoutResponse,
       message: '登出成功'
     }
   }
@@ -414,7 +392,7 @@ export const getCurrentAuthUser = async (): Promise<ApiResponse<AuthUser>> => {
     
     // 更新本地存储的用户信息
     if (response.success && actualData) {
-      localStorage.setItem('user_info', JSON.stringify(actualData))
+      authStorageService.saveUserInfo(actualData)
     }
     
     return {
@@ -442,7 +420,7 @@ export const refreshToken = async (refreshTokenData?: RefreshTokenRequest): Prom
     console.log('刷新访问令牌')
     
     // 如果没有提供刷新令牌，从本地存储获取
-    const token = refreshTokenData?.refreshToken || localStorage.getItem('refresh_token')
+    const token = refreshTokenData?.refreshToken || authStorageService.getTokenInfo()?.refreshToken
     
     if (!token) {
       return {
@@ -464,9 +442,12 @@ export const refreshToken = async (refreshTokenData?: RefreshTokenRequest): Prom
     
     // 更新本地存储的令牌信息
     if (response.success && actualData) {
-      localStorage.setItem('access_token', actualData.accessToken)
-      localStorage.setItem('refresh_token', actualData.refreshToken)
-      localStorage.setItem('token_expires', (Date.now() + actualData.expiresIn * 1000).toString())
+      authStorageService.saveTokenInfo({
+        accessToken: actualData.accessToken,
+        refreshToken: actualData.refreshToken,
+        expiresIn: actualData.expiresIn,
+        refreshExpiresIn: actualData.refreshExpiresIn
+      })
     }
     
     return {

@@ -287,9 +287,7 @@
                       <el-descriptions-item label="版本号">{{ backendStats.version }}</el-descriptions-item>
                       <el-descriptions-item label="API响应时间">{{ backendStats.apiResponseTime }}ms</el-descriptions-item>
                       <el-descriptions-item label="QPS">{{ backendStats.qps }}</el-descriptions-item>
-                      <el-descriptions-item label="内存使用率">{{ backendStats.memoryUsage }}%</el-descriptions-item>
-                      <el-descriptions-item label="CPU使用率">{{ backendStats.cpuUsage }}%</el-descriptions-item>
-                      <el-descriptions-item label="线程数">{{ backendStats.threadCount }}</el-descriptions-item>
+                      <el-descriptions-item label="运行时长">{{ backendStats.uptimeFormatted }}</el-descriptions-item>
                       <el-descriptions-item label="最后更新">{{ backendStats.lastUpdate }}</el-descriptions-item>
                       <el-descriptions-item label="状态">
                         <el-tag :type="getBackendStatusType()">{{ getBackendStatusText() }}</el-tag>
@@ -770,6 +768,7 @@ import { useRouter } from 'vue-router'
 import { User, House, Coin, CreditCard, Monitor, Setting, CoffeeCup, DataAnalysis } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 import { createChartManager } from '@/utils/chartManager'
+import { formatRelativeTime } from '@/utils/timeUtils'
 import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 // 添加API导入
 import api from '../api/index'
@@ -844,9 +843,8 @@ const backendStats = ref({
   version: '',
   apiResponseTime: 0,
   qps: 0,
-  memoryUsage: 0,
-  cpuUsage: 0,
-  threadCount: 0,
+  uptime: 0,
+  uptimeFormatted: '',
   lastUpdate: '',
   status: '',
   statusText: '',
@@ -971,15 +969,20 @@ const getHealthScoreDesc = (score: number) => {
 
 // 获取告警标签类型
 const getAlertTagType = (level: string) => {
-  switch (level) {
-    case 'ERROR':
+  const l = level?.toLowerCase()
+  switch (l) {
+    case 'critical':
+    case 'error':
       return 'danger'
-    case 'WARNING':
+    case 'warning':
+    case 'warn':
       return 'warning'
-    case 'INFO':
+    case 'info':
       return 'info'
+    case 'success':
+      return 'success'
     default:
-      return ''
+      return 'info'
   }
 }
 
@@ -1048,16 +1051,52 @@ const handleRefreshAlerts = async () => {
     try {
       // 从API获取真实的告警信息
       const alertsResponse = await systemApi.getAlerts()
+      
+      // API拦截器已经处理了双层嵌套，alertsResponse 应该是 { alerts: [...], total: x } 格式
       const innerData = alertsResponse?.data || alertsResponse
-      if (innerData && Array.isArray(innerData)) {
-        alerts.value = innerData
-      } else if (innerData && typeof innerData === 'object' && Array.isArray(innerData.alerts)) {
-        alerts.value = innerData.alerts
-      } else {
-        // 如果API返回格式不符合预期，使用空数组
-        alerts.value = []
+      let rawAlerts: any[] = []
+      
+      if (innerData && typeof innerData === 'object') {
+        // 直接从 innerData 获取 alerts 数组
+        if (Array.isArray(innerData)) {
+          rawAlerts = innerData
+        } else if (Array.isArray(innerData.alerts)) {
+          rawAlerts = innerData.alerts
+        } else if (innerData.result && Array.isArray(innerData.result)) {
+          // 备选：检查 result 字段
+          rawAlerts = innerData.result
+        }
+      } else if (Array.isArray(alertsResponse)) {
+        rawAlerts = alertsResponse
       }
-      ElMessage.success('告警信息刷新完成')
+      
+      // 转换数据格式以适应表格显示
+      alerts.value = rawAlerts.map((item: any) => {
+        // 调试：打印原始数据
+        console.log('📊 原始occur_time:', item.occur_time, '类型:', typeof item.occur_time)
+        
+        // 优先使用 formatRelativeTime，如果解析失败则回退到原始时间显示
+        let timeDisplay = '-'
+        if (item.occur_time) {
+          const relativeTime = formatRelativeTime(item.occur_time)
+          if (relativeTime !== '-') {
+            timeDisplay = relativeTime
+          } else {
+            // 回退方案：直接显示原始时间
+            timeDisplay = String(item.occur_time)
+          }
+        }
+        
+        return {
+          ...item,
+          // 使用 formatRelativeTime 安全地格式化时间
+          time: timeDisplay,
+          // 如果有 title，可以显示为 title: content
+          content: item.title ? `${item.title}: ${item.content}` : item.content
+        }
+      })
+      
+      ElMessage.success(`告警信息刷新完成，共 ${alerts.value.length} 条`)
   } catch (error) {
     console.error('❌ 刷新告警信息失败:', error)
     ElMessage.error('告警信息刷新失败: ' + (error as Error).message)
@@ -1182,7 +1221,7 @@ const refreshSystemConfig = () => {
   ElMessage.success('系统配置刷新成功')
   // 模拟更新配置数据
   systemConfig.value.version = 'v' + (parseFloat(systemConfig.value.version.slice(1)) + 0.1).toFixed(1)
-  systemConfig.value.lastUpdate = new Date().toLocaleString()
+  systemConfig.value.lastUpdate = new Date().toLocaleString('zh-CN', { hour12: false })
 }
 
 // 刷新安全配置
@@ -1334,66 +1373,81 @@ const refreshSystemStatusOverview = async () => {
     console.log('📊 后端服务状态:', backendData)
     console.log('📊 数据库状态:', databaseData)
     
-      // 更新客户端状态
-      if (clientData) {
-        const clientDataTyped = clientData as any
-        clientStats.value.status = clientDataTyped.status || clientStats.value.status
-        clientStats.value.statusType = clientDataTyped.statusType || clientStats.value.statusType
-        clientStats.value.healthScore = clientDataTyped.healthScore || clientStats.value.healthScore
-        // 保留原有指标
-        if (clientDataTyped.metrics) {
-          const metrics = clientDataTyped.metrics
-          clientStats.value.version = metrics.version || clientStats.value.version
-          clientStats.value.onlineUsers = metrics.onlineUsers || clientStats.value.onlineUsers
-          clientStats.value.userDistribution = metrics.userDistribution || { high: 0, normal: 0, suspicious: 0 }
-          clientStats.value.qualityIndex = metrics.qualityIndex || 100
-          clientStats.value.alerts = metrics.alerts || []
-          clientStats.value.peakUsers = metrics.peakUsers || clientStats.value.peakUsers
-          clientStats.value.todayActiveUsers = metrics.todayActiveUsers || clientStats.value.todayActiveUsers
-          clientStats.value.avgResponseTime = metrics.avgResponseTime || clientStats.value.avgResponseTime
-          clientStats.value.errorRate = metrics.errorRate || clientStats.value.errorRate
-          clientStats.value.uptime = metrics.uptime || clientStats.value.uptime
-          clientStats.value.uptimeFormatted = metrics.uptimeFormatted || clientStats.value.uptimeFormatted
-        }
-        clientStats.value.lastUpdate = clientDataTyped.lastUpdate || clientStats.value.lastUpdate
-      }
-    
-    // 更新后端服务状态
-    if (backendData) {
-      const backendDataTyped = backendData as any
-      backendStats.value.status = backendDataTyped.status || backendStats.value.status
-      backendStats.value.statusType = backendDataTyped.statusType || backendStats.value.statusType
-      backendStats.value.healthScore = backendDataTyped.healthScore || backendStats.value.healthScore
-      // 保留原有指标
-      if (backendDataTyped.metrics) {
-        const metrics = backendDataTyped.metrics
-        backendStats.value.version = metrics.version || backendStats.value.version
-        backendStats.value.apiResponseTime = metrics.apiResponseTime || backendStats.value.apiResponseTime
-        backendStats.value.qps = metrics.qps || backendStats.value.qps
-        backendStats.value.memoryUsage = metrics.memoryUsage || backendStats.value.memoryUsage
-        backendStats.value.cpuUsage = metrics.cpuUsage || backendStats.value.cpuUsage
-        backendStats.value.threadCount = metrics.threadCount || backendStats.value.threadCount
-      }
-      backendStats.value.lastUpdate = backendDataTyped.lastUpdate || backendStats.value.lastUpdate
+    // 更新客户端状态
+    if (clientData) {
+      const clientDataTyped = clientData as any
+      console.log('🔍 [DEBUG] 客户端原始响应:', clientDataTyped)
+      
+      clientStats.value.status = clientDataTyped.status || clientStats.value.status
+      clientStats.value.statusType = clientDataTyped.statusType || clientStats.value.statusType
+      clientStats.value.healthScore = clientDataTyped.healthScore || clientStats.value.healthScore
+      
+      // 优先从 metrics 获取指标
+      const metrics = clientDataTyped.metrics || {}
+      console.log('🔍 [DEBUG] 客户端指标(metrics):', metrics)
+      
+      clientStats.value.version = metrics.version || clientDataTyped.version || clientStats.value.version
+      clientStats.value.onlineUsers = metrics.onlineUsers || clientDataTyped.onlineUsers || clientStats.value.onlineUsers
+      clientStats.value.userDistribution = metrics.userDistribution || clientDataTyped.userDistribution || { high: 0, normal: 0, suspicious: 0 }
+      clientStats.value.qualityIndex = metrics.qualityIndex || clientDataTyped.qualityIndex || 100
+      clientStats.value.alerts = metrics.alerts || clientDataTyped.alerts || []
+      clientStats.value.peakUsers = metrics.peakUsers || clientDataTyped.peakUsers || clientStats.value.peakUsers
+      clientStats.value.todayActiveUsers = metrics.todayActiveUsers || clientDataTyped.todayActiveUsers || clientStats.value.todayActiveUsers
+      clientStats.value.avgResponseTime = metrics.avgResponseTime || clientDataTyped.avgResponseTime || clientStats.value.avgResponseTime
+      clientStats.value.errorRate = metrics.errorRate || clientDataTyped.errorRate || clientStats.value.errorRate
+      clientStats.value.uptime = metrics.uptime || clientDataTyped.uptime || clientStats.value.uptime
+      clientStats.value.uptimeFormatted = metrics.uptimeFormatted || clientDataTyped.uptimeFormatted || clientStats.value.uptimeFormatted
+      
+      clientStats.value.lastUpdate = clientDataTyped.lastUpdate || clientStats.value.lastUpdate
+      console.log('✅ [DEBUG] 客户端状态更新后:', JSON.parse(JSON.stringify(clientStats.value)))
     }
     
-    // 更新数据库状态
-    if (databaseData) {
-      const databaseDataTyped = databaseData as any
-      databaseStats.value.status = databaseDataTyped.status || databaseStats.value.status
-      databaseStats.value.statusType = databaseDataTyped.statusType || databaseStats.value.statusType
-      databaseStats.value.healthScore = databaseDataTyped.healthScore || databaseStats.value.healthScore
-      // 保留原有指标
-      if (databaseDataTyped.metrics) {
-        const metrics = databaseDataTyped.metrics
-        databaseStats.value.version = metrics.version || databaseStats.value.version
-        databaseStats.value.connections = metrics.activeConnections || databaseStats.value.connections
-        databaseStats.value.maxConnections = metrics.maxConnections || databaseStats.value.maxConnections
-        databaseStats.value.cacheHitRate = metrics.cacheHitRate || databaseStats.value.cacheHitRate
-        databaseStats.value.slowQueries = metrics.slowQueries || databaseStats.value.slowQueries
+      // 更新后端服务状态
+      if (backendData) {
+        const backendDataTyped = backendData as any
+        console.log('🔍 [DEBUG] 后端服务原始响应:', backendDataTyped)
+        
+        backendStats.value.status = backendDataTyped.status || backendStats.value.status
+        backendStats.value.statusType = backendDataTyped.statusType || backendStats.value.statusType
+        backendStats.value.healthScore = backendDataTyped.healthScore || backendStats.value.healthScore
+        
+        // 优先从 metrics 获取指标
+        const metrics = backendDataTyped.metrics || {}
+        console.log('🔍 [DEBUG] 后端指标(metrics):', metrics)
+        
+        backendStats.value.version = metrics.version || backendDataTyped.version || backendStats.value.version
+        backendStats.value.apiResponseTime = metrics.apiResponseTime || backendDataTyped.apiResponseTime || backendStats.value.apiResponseTime
+        backendStats.value.qps = metrics.qps ?? backendDataTyped.qps ?? backendStats.value.qps
+        backendStats.value.uptime = metrics.uptime ?? backendDataTyped.uptime ?? backendStats.value.uptime
+        backendStats.value.uptimeFormatted = metrics.uptimeFormatted || backendDataTyped.uptimeFormatted || backendStats.value.uptimeFormatted
+        
+        backendStats.value.lastUpdate = backendDataTyped.lastUpdate || backendStats.value.lastUpdate
+        console.log('✅ [DEBUG] 后端状态更新后:', JSON.parse(JSON.stringify(backendStats.value)))
       }
-      databaseStats.value.lastUpdate = databaseDataTyped.lastUpdate || databaseStats.value.lastUpdate
-    }
+      
+      // 更新数据库状态
+      if (databaseData) {
+        const databaseDataTyped = databaseData as any
+        console.log('🔍 [DEBUG] 数据库原始响应:', databaseDataTyped)
+        
+        databaseStats.value.status = databaseDataTyped.status || databaseStats.value.status
+        databaseStats.value.statusType = databaseDataTyped.statusType || databaseStats.value.statusType
+        databaseStats.value.healthScore = databaseDataTyped.healthScore || databaseStats.value.healthScore
+        
+        // 优先从 metrics 获取指标
+        const metrics = databaseDataTyped.metrics || {}
+        console.log('🔍 [DEBUG] 数据库指标(metrics):', metrics)
+        
+        databaseStats.value.version = metrics.version || databaseDataTyped.version || databaseStats.value.version
+        databaseStats.value.connections = metrics.activeConnections || databaseDataTyped.activeConnections || databaseStats.value.connections
+        databaseStats.value.maxConnections = metrics.maxConnections || databaseDataTyped.maxConnections || databaseStats.value.maxConnections
+        databaseStats.value.cacheHitRate = metrics.cacheHitRate || databaseDataTyped.cacheHitRate || databaseStats.value.cacheHitRate
+        databaseStats.value.slowQueries = metrics.slowQueries || databaseDataTyped.slowQueries || databaseStats.value.slowQueries
+        databaseStats.value.tableSpaceUsage = metrics.tableSpaceUsage || databaseDataTyped.tableSpaceUsage || databaseStats.value.tableSpaceUsage
+        
+        databaseStats.value.lastUpdate = databaseDataTyped.lastUpdate || databaseStats.value.lastUpdate
+        console.log('✅ [DEBUG] 数据库状态更新后:', JSON.parse(JSON.stringify(databaseStats.value)))
+      }
     
     console.log('📊 系统状态数据更新完成', {
       client: clientStats.value,
@@ -1425,9 +1479,8 @@ const refreshSystemStatusOverview = async () => {
     backendStats.value.version = ''
     backendStats.value.apiResponseTime = 0
     backendStats.value.qps = 0
-    backendStats.value.memoryUsage = 0
-    backendStats.value.cpuUsage = 0
-    backendStats.value.threadCount = 0
+    backendStats.value.uptime = 0
+    backendStats.value.uptimeFormatted = ''
     backendStats.value.lastUpdate = ''
     
     databaseStats.value.version = ''
@@ -1672,7 +1725,7 @@ const handleRunMaintenance = (row: any) => {
     row.status = '进行中'
     setTimeout(() => {
       row.status = '已执行'
-      row.lastRun = new Date().toLocaleString()
+      row.lastRun = new Date().toLocaleString('zh-CN', { hour12: false })
       ElMessage.success(`"${row.name}" 维护任务执行完成`)
     }, 3000)
   }).catch(() => {
@@ -1709,9 +1762,9 @@ const refreshMaintenancePlans = async () => {
       maintenancePlans.value = data.map((plan: any) => ({
         id: plan.id || plan.maintenanceId || 0,
         name: plan.name || plan.title || '维护计划',
-        schedule: plan.schedule || plan.createdAt || plan.startTime || new Date().toLocaleString(),
+        schedule: plan.schedule || plan.createdAt || plan.startTime || new Date().toLocaleString('zh-CN', { hour12: false }),
         status: plan.status || plan.state || '已完成',
-        lastRun: plan.lastRun || plan.completedAt || plan.updatedAt || new Date().toLocaleString(),
+        lastRun: plan.lastRun || plan.completedAt || plan.updatedAt || new Date().toLocaleString('zh-CN', { hour12: false }),
         timerId: null
       }))
       ElMessage.success('维护计划刷新成功')
@@ -2425,56 +2478,61 @@ const fetchSystemStats = async () => {
       // 更新客户端状态
       if (clientData) {
         const clientDataTyped = clientData as any
-        clientStats.value.status = typeof clientDataTyped.status === 'string' ? clientDataTyped.status : clientStats.value.status
-        clientStats.value.statusType = typeof clientDataTyped.statusType === 'string' ? clientDataTyped.statusType : clientStats.value.statusType
-        clientStats.value.healthScore = typeof clientDataTyped.healthScore === 'number' ? clientDataTyped.healthScore : clientStats.value.healthScore
-        if (clientDataTyped.metrics) {
-          const metrics = clientDataTyped.metrics
-          clientStats.value.version = typeof metrics.version === 'string' ? metrics.version : clientStats.value.version
-          clientStats.value.onlineUsers = typeof metrics.onlineUsers === 'number' ? metrics.onlineUsers : clientStats.value.onlineUsers
-          clientStats.value.userDistribution = metrics.userDistribution || { high: 0, normal: 0, suspicious: 0 }
-          clientStats.value.qualityIndex = typeof metrics.qualityIndex === 'number' ? metrics.qualityIndex : clientStats.value.qualityIndex
-          clientStats.value.avgResponseTime = typeof metrics.avgResponseTime === 'number' ? metrics.avgResponseTime : clientStats.value.avgResponseTime
-          clientStats.value.peakUsers = typeof metrics.peakUsers === 'number' ? metrics.peakUsers : clientStats.value.peakUsers
-          clientStats.value.todayActiveUsers = typeof metrics.todayActiveUsers === 'number' ? metrics.todayActiveUsers : clientStats.value.todayActiveUsers
-          clientStats.value.errorRate = typeof metrics.errorRate === 'number' ? metrics.errorRate : clientStats.value.errorRate
-          clientStats.value.uptime = typeof metrics.uptime === 'string' ? metrics.uptime : clientStats.value.uptime
-          clientStats.value.uptimeFormatted = typeof metrics.uptimeFormatted === 'string' ? metrics.uptimeFormatted : clientStats.value.uptimeFormatted
-        }
-        clientStats.value.lastUpdate = typeof clientDataTyped.lastUpdate === 'string' ? clientDataTyped.lastUpdate : clientStats.value.lastUpdate
+        clientStats.value.status = clientDataTyped.status || clientStats.value.status
+        clientStats.value.statusType = clientDataTyped.statusType || clientStats.value.statusType
+        clientStats.value.healthScore = clientDataTyped.healthScore || clientStats.value.healthScore
+        
+        // 优先从 metrics 获取指标
+        const metrics = clientDataTyped.metrics || {}
+        clientStats.value.version = metrics.version || clientDataTyped.version || clientStats.value.version
+        clientStats.value.onlineUsers = metrics.onlineUsers || clientDataTyped.onlineUsers || clientStats.value.onlineUsers
+        clientStats.value.userDistribution = metrics.userDistribution || clientDataTyped.userDistribution || { high: 0, normal: 0, suspicious: 0 }
+        clientStats.value.qualityIndex = metrics.qualityIndex || clientDataTyped.qualityIndex || 100
+        clientStats.value.avgResponseTime = metrics.avgResponseTime || clientDataTyped.avgResponseTime || clientStats.value.avgResponseTime
+        clientStats.value.peakUsers = metrics.peakUsers || clientDataTyped.peakUsers || clientStats.value.peakUsers
+        clientStats.value.todayActiveUsers = metrics.todayActiveUsers || clientDataTyped.todayActiveUsers || clientStats.value.todayActiveUsers
+        clientStats.value.errorRate = metrics.errorRate || clientDataTyped.errorRate || clientStats.value.errorRate
+        clientStats.value.uptime = metrics.uptime || clientDataTyped.uptime || clientStats.value.uptime
+        clientStats.value.uptimeFormatted = metrics.uptimeFormatted || clientDataTyped.uptimeFormatted || clientStats.value.uptimeFormatted
+        
+        clientStats.value.lastUpdate = clientDataTyped.lastUpdate || clientStats.value.lastUpdate
       }
       
       // 更新后端服务状态
       if (backendData) {
         const backendDataTyped = backendData as any
-        backendStats.value.status = typeof backendDataTyped.status === 'string' ? backendDataTyped.status : backendStats.value.status
-        backendStats.value.statusType = typeof backendDataTyped.statusType === 'string' ? backendDataTyped.statusType : backendStats.value.statusType
-        backendStats.value.healthScore = typeof backendDataTyped.healthScore === 'number' ? backendDataTyped.healthScore : backendStats.value.healthScore
-        if (backendDataTyped.metrics) {
-          backendStats.value.version = typeof backendDataTyped.metrics.version === 'string' ? backendDataTyped.metrics.version : backendStats.value.version
-          backendStats.value.apiResponseTime = typeof backendDataTyped.metrics.apiResponseTime === 'number' ? backendDataTyped.metrics.apiResponseTime : backendStats.value.apiResponseTime
-          backendStats.value.qps = typeof backendDataTyped.metrics.qps === 'number' ? backendDataTyped.metrics.qps : backendStats.value.qps
-          backendStats.value.memoryUsage = typeof backendDataTyped.metrics.memoryUsage === 'number' ? backendDataTyped.metrics.memoryUsage : backendStats.value.memoryUsage
-          backendStats.value.cpuUsage = typeof backendDataTyped.metrics.cpuUsage === 'number' ? backendDataTyped.metrics.cpuUsage : backendStats.value.cpuUsage
-          backendStats.value.threadCount = typeof backendDataTyped.metrics.threadCount === 'number' ? backendDataTyped.metrics.threadCount : backendStats.value.threadCount
-        }
-        backendStats.value.lastUpdate = typeof backendDataTyped.lastUpdate === 'string' ? backendDataTyped.lastUpdate : backendStats.value.lastUpdate
+        backendStats.value.status = backendDataTyped.status || backendStats.value.status
+        backendStats.value.statusType = backendDataTyped.statusType || backendStats.value.statusType
+        backendStats.value.healthScore = backendDataTyped.healthScore || backendStats.value.healthScore
+        
+        // 优先从 metrics 获取指标
+        const metrics = backendDataTyped.metrics || {}
+        backendStats.value.version = metrics.version || backendDataTyped.version || backendStats.value.version
+        backendStats.value.apiResponseTime = metrics.apiResponseTime || backendDataTyped.apiResponseTime || backendStats.value.apiResponseTime
+        backendStats.value.qps = metrics.qps ?? backendDataTyped.qps ?? backendStats.value.qps
+        backendStats.value.uptime = metrics.uptime ?? backendDataTyped.uptime ?? backendStats.value.uptime
+        backendStats.value.uptimeFormatted = metrics.uptimeFormatted || backendDataTyped.uptimeFormatted || backendStats.value.uptimeFormatted
+        
+        backendStats.value.lastUpdate = backendDataTyped.lastUpdate || backendStats.value.lastUpdate
       }
       
       // 更新数据库状态
       if (databaseData) {
         const databaseDataTyped = databaseData as any
-        databaseStats.value.status = typeof databaseDataTyped.status === 'string' ? databaseDataTyped.status : databaseStats.value.status
-        databaseStats.value.statusType = typeof databaseDataTyped.statusType === 'string' ? databaseDataTyped.statusType : databaseStats.value.statusType
-        databaseStats.value.healthScore = typeof databaseDataTyped.healthScore === 'number' ? databaseDataTyped.healthScore : databaseStats.value.healthScore
-        if (databaseDataTyped.metrics) {
-          databaseStats.value.version = typeof databaseDataTyped.metrics.version === 'string' ? databaseDataTyped.metrics.version : databaseStats.value.version
-          databaseStats.value.connections = typeof databaseDataTyped.metrics.activeConnections === 'number' ? databaseDataTyped.metrics.activeConnections : databaseStats.value.connections
-          databaseStats.value.maxConnections = typeof databaseDataTyped.metrics.maxConnections === 'number' ? databaseDataTyped.metrics.maxConnections : databaseStats.value.maxConnections
-          databaseStats.value.cacheHitRate = typeof databaseDataTyped.metrics.cacheHitRate === 'number' ? databaseDataTyped.metrics.cacheHitRate : databaseStats.value.cacheHitRate
-          databaseStats.value.slowQueries = typeof databaseDataTyped.metrics.slowQueries === 'number' ? databaseDataTyped.metrics.slowQueries : databaseStats.value.slowQueries
-        }
-        databaseStats.value.lastUpdate = typeof databaseDataTyped.lastUpdate === 'string' ? databaseDataTyped.lastUpdate : databaseStats.value.lastUpdate
+        databaseStats.value.status = databaseDataTyped.status || databaseStats.value.status
+        databaseStats.value.statusType = databaseDataTyped.statusType || databaseStats.value.statusType
+        databaseStats.value.healthScore = databaseDataTyped.healthScore || databaseStats.value.healthScore
+        
+        // 优先从 metrics 获取指标
+        const metrics = databaseDataTyped.metrics || {}
+        databaseStats.value.version = metrics.version || databaseDataTyped.version || databaseStats.value.version
+        databaseStats.value.connections = metrics.activeConnections || databaseDataTyped.activeConnections || databaseStats.value.connections
+        databaseStats.value.maxConnections = metrics.maxConnections || databaseDataTyped.maxConnections || databaseStats.value.maxConnections
+        databaseStats.value.cacheHitRate = metrics.cacheHitRate || databaseDataTyped.cacheHitRate || databaseStats.value.cacheHitRate
+        databaseStats.value.slowQueries = metrics.slowQueries || databaseDataTyped.slowQueries || databaseStats.value.slowQueries
+        databaseStats.value.tableSpaceUsage = metrics.tableSpaceUsage || databaseDataTyped.tableSpaceUsage || databaseStats.value.tableSpaceUsage
+        
+        databaseStats.value.lastUpdate = databaseDataTyped.lastUpdate || databaseStats.value.lastUpdate
       }
       
       console.log('📊 系统组件状态自动更新完成', {
@@ -2573,7 +2631,7 @@ const fetchClientRealtimeData = async () => {
         clientStats.value.uptimeFormatted = metrics.uptimeFormatted || clientStats.value.uptimeFormatted
       }
 
-      clientStats.value.lastUpdate = new Date().toLocaleString()
+      clientStats.value.lastUpdate = new Date().toLocaleString('zh-CN', { hour12: false })
 
       console.log('✅ 客户端实时数据获取成功:', {
         onlineUsers: clientStats.value.onlineUsers,
@@ -2675,7 +2733,7 @@ const handleRestart = () => {
           
           // 更新系统运行时间
           const now = new Date()
-          systemInfo.value.startTime = now.toLocaleString()
+          systemInfo.value.startTime = now.toLocaleString('zh-CN', { hour12: false })
           systemInfo.value.uptime = '0天 0小时 0分钟'
           
 
@@ -2918,7 +2976,7 @@ const handleTabChange = async (tabName: string) => {
   }
 
   // 当切换到包含图表的选项卡时，重新初始化图表
-  if (tabName === 'client' || tabName === 'backend' || tabName === 'database') {
+  if (tabName === 'client' || tabName === 'backend' || tabName === 'database' || tabName === 'monitor') {
     // 先重置图表初始化状态
     resetChartInitialization()
     // 延迟一段时间确保选项卡内容完全激活和渲染完成
@@ -2932,6 +2990,11 @@ const handleTabChange = async (tabName: string) => {
       isClientTabActive.value = true
       await fetchClientRealtimeData()
       startClientDataTimer()
+    }
+    
+    // 如果切换到系统监控tab，刷新告警信息
+    if (tabName === 'monitor') {
+      await handleRefreshAlerts()
     }
   }
 }

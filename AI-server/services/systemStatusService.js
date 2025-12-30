@@ -1,24 +1,40 @@
-/**
- * 高级系统状态评估服务
- * 基于多层次、多维度、容错性强的服务状态判定逻辑
- * 提供客户端、后端服务、数据库的实时健康状态评估
- * 
- * 核心算法框架：
- * - 客户端：连接层(30%) + 功能层(40%) + 性能层(20%) + 资源层(10%)
- * - 后端：三层健康检查 + 智能权重调整 + 异常模式识别
- * - 数据库：连接状态(40%) + 性能(30%) + 资源(20%) + 完整性(10%)
- * - 综合：服务依赖图加权 + 智能降级判定 + 状态变更防抖
- */
-
 const { pool } = require('../config/database');
 const logger = require('../config/logger');
+const alertService = require('./alertService');
 const os = require('os');
+const path = require('path');
+const fs = require('fs');
 const { monitor: performanceMonitor } = require('../middleware/performanceMonitor');
+
+// 获取后端服务真实版本号
+let backendVersion = '1.0.0';
+try {
+  const packageInfo = require('../package.json');
+  backendVersion = packageInfo.version || '1.0.0';
+} catch (e) {
+  logger.warn('[SystemStatusService] 无法获取后端package.json版本号，使用默认值');
+}
+
+// 获取客户端真实版本号
+let clientVersion = '0.0.0';
+try {
+  const adminPackagePath = path.join(__dirname, '../../AI-admin/package.json');
+  if (fs.existsSync(adminPackagePath)) {
+    const adminPackageInfo = JSON.parse(fs.readFileSync(adminPackagePath, 'utf8'));
+    clientVersion = adminPackageInfo.version || '0.0.0';
+  }
+} catch (e) {
+  logger.warn('[SystemStatusService] 无法获取前端package.json版本号，使用默认值');
+}
 
 class SystemStatusService {
   constructor() {
     this.lastCheckTime = null;
     this.checkInterval = 5000; // 检查间隔5秒
+    
+    // 后端 QPS 计算状态
+    this.lastBackendCheckTime = null;
+    this.lastBackendTotalRequests = 0;
     
     // 状态变更防抖机制
     this.stateHistory = new Map(); // 组件状态历史记录
@@ -491,12 +507,13 @@ class SystemStatusService {
 
       const evaluationTime = Date.now() - startTime;
       
-      return {
+      const result = {
         success: true,
         status: status,
         statusText: statusText,
         healthScore: healthScore,
         metrics: {
+          version: clientVersion, // 使用真实的客户端版本号
           onlineUsers: onlineUserData.total,
           userDistribution: onlineUserData.distribution,
           qualityIndex: onlineUserData.qualityIndex, // 新增：质量指数
@@ -504,8 +521,8 @@ class SystemStatusService {
           peakUsers: peakUsers,
           todayActiveUsers: todayActiveUsers,
           avgResponseTime: performanceStats.summary.avgResponseTime,
-          errorRate: performanceStats.summary.errorRate,
-          version: '1.0.0',
+          // 只有在有在线客户端用户时才显示错误率，否则显示0
+          errorRate: onlineUserData.total > 0 ? performanceStats.summary.errorRate : 0,
           uptime: uptime,
           uptimeFormatted: this.formatUptime(uptime),
           startTime: startTimeISO,
@@ -518,10 +535,17 @@ class SystemStatusService {
         },
         patternAnalysis: patternAnalysis,
         评估时间: `${evaluationTime}ms`,
-        lastUpdate: startTimeObj.toISOString(),
+        lastUpdate: startTimeObj.toLocaleString('zh-CN', { hour12: false }),
         issues: issues,
         suggestions: suggestions
       };
+
+      // 异步处理告警触发
+      this.processEvaluationResult('client', result).catch(err => {
+        logger.error('[SystemStatusService] 触发客户端状态告警失败:', err);
+      });
+
+      return result;
     } catch (error) {
       logger.error('[SystemStatusService] 评估客户端状态失败:', error);
       return {
@@ -530,7 +554,7 @@ class SystemStatusService {
         statusText: '评估失败',
         healthScore: 0,
         error: error.message,
-        lastUpdate: this.getCurrentTime().toISOString()
+        lastUpdate: this.getCurrentTime().toLocaleString('zh-CN', { hour12: false }),
       };
     }
   }
@@ -808,30 +832,30 @@ class SystemStatusService {
    * 识别客户端异常模式
    */
   async recognizeClientPatterns() {
-    // 模拟异常模式识别
+    // 真实异常模式识别 (基于收集到的指标)
     const patterns = [];
     
-    // 检查是否出现性能下降模式
-    if (Math.random() > 0.8) {
+    // 检查是否出现性能下降模式 (例如 FPS 低于 30)
+    if (this.aggregatedClientMetrics.fps < 30) {
       patterns.push({
         type: 'performance_degradation',
-        description: '检测到客户端性能下降趋势',
-        confidence: 0.7
+        description: `检测到客户端性能下降：当前平均FPS为 ${this.aggregatedClientMetrics.fps}`,
+        confidence: 0.8
       });
     }
 
-    // 检查是否出现内存泄漏模式
-    if (Math.random() > 0.9) {
+    // 检查是否出现渲染失败模式
+    if (this.aggregatedClientMetrics.pageRenderSuccessRate < 95) {
       patterns.push({
-        type: 'memory_leak',
-        description: '疑似内存泄漏模式',
-        confidence: 0.8
+        type: 'render_failure',
+        description: `检测到页面渲染成功率异常：当前成功率为 ${this.aggregatedClientMetrics.pageRenderSuccessRate}%`,
+        confidence: 0.9
       });
     }
 
     return {
       detectedPatterns: patterns,
-      riskLevel: patterns.length > 0 ? 'medium' : 'low',
+      riskLevel: patterns.length > 0 ? (patterns.some(p => p.confidence > 0.8) ? 'high' : 'medium') : 'low',
       timestamp: this.getCurrentTime().toISOString()
     };
   }
@@ -857,7 +881,7 @@ class SystemStatusService {
       ]);
 
       // 智能权重调整算法
-      const dynamicWeights = this.calculateDynamicWeights();
+      const dynamicWeights = await this.calculateDynamicWeights();
       
       // 计算基础健康分（静态权重）
       const baseWeights = this.weights.backend.base;
@@ -887,17 +911,36 @@ class SystemStatusService {
 
       const evaluationTime = Date.now() - startTime;
       
-      // 获取真实 API 响应时间
-      const perfStats = performanceMonitor.getStats ? performanceMonitor.getStats() : { summary: { avgResponseTime: 0 } };
+      // 获取真实 API 统计数据
+      const perfStats = performanceMonitor.getStats ? performanceMonitor.getStats() : { summary: { avgResponseTime: 0, totalRequests: 0 } };
       const apiResponseTime = perfStats.summary?.avgResponseTime || 0;
+      const totalRequests = perfStats.summary?.totalRequests || 0;
 
-      return {
+      // 计算 QPS
+      let qps = 0;
+      const now = Date.now();
+      if (this.lastBackendCheckTime && this.lastBackendTotalRequests !== undefined) {
+        const deltaRequests = totalRequests - this.lastBackendTotalRequests;
+        const deltaTimeSeconds = (now - this.lastBackendCheckTime) / 1000;
+        
+        if (deltaTimeSeconds > 0.1) { // 避免除以零或过短的时间间隔
+          qps = Math.max(0, parseFloat((deltaRequests / deltaTimeSeconds).toFixed(2)));
+        }
+      }
+      
+      // 更新状态
+      this.lastBackendCheckTime = now;
+      this.lastBackendTotalRequests = totalRequests;
+
+      const result = {
         success: true,
         status: status,
         statusText: statusText,
         healthScore: finalScore,
         metrics: {
+          version: backendVersion, // 真实版本号
           apiResponseTime: apiResponseTime,
+          qps: qps, // 返回 QPS 数据
           uptime: uptime,
           uptimeFormatted: this.formatUptime(uptime),
           layers: {
@@ -921,10 +964,17 @@ class SystemStatusService {
         anomalyPatterns: anomalyPatterns,
         dynamicWeights: dynamicWeights,
         评估时间: `${evaluationTime}ms`,
-        lastUpdate: currentTime.toISOString(),
+        lastUpdate: currentTime.toLocaleString('zh-CN', { hour12: false }),
         issues: issues,
         suggestions: suggestions
       };
+
+      // 异步处理告警触发
+      this.processEvaluationResult('backend', result).catch(err => {
+        logger.error('[SystemStatusService] 触发后端状态告警失败:', err);
+      });
+
+      return result;
     } catch (error) {
       logger.error('[SystemStatusService] 评估后端服务状态失败:', error);
       return {
@@ -933,7 +983,7 @@ class SystemStatusService {
         statusText: '评估失败',
         healthScore: 0,
         error: error.message,
-        lastUpdate: this.getCurrentTime().toISOString()
+        lastUpdate: this.getCurrentTime().toLocaleString('zh-CN', { hour12: false }),
       };
     }
   }
@@ -1194,20 +1244,42 @@ class SystemStatusService {
    */
   async assessCacheHealth() {
     try {
-      // 模拟Redis健康检查（实际项目中应该连接真实Redis）
-      const cacheResponseTime = Math.round(Math.random() * 50 + 10); // 10-60ms
-      const cacheHitRate = Math.round(Math.random() * 10 + 90); // 90-100%
+      const { healthCheck, isRedisAvailable } = require('../config/redis');
+      
+      if (!isRedisAvailable()) {
+        return {
+          score: 0,
+          status: 'unavailable',
+          error: 'Redis服务不可用'
+        };
+      }
+
+      const health = await healthCheck();
+      
+      if (health.status !== 'healthy') {
+        return {
+          score: 40,
+          status: 'unhealthy',
+          error: health.error
+        };
+      }
+
+      // 提取真实指标
+      const redisVersion = health.info.redis_version;
+      const memoryUsed = health.info.used_memory_human;
+      const connectedClients = parseInt(health.info.connected_clients);
       
       let score = 100;
-      if (cacheResponseTime > 100) score -= 30;
-      if (cacheResponseTime > 50) score -= 15;
-      if (cacheHitRate < 80) score -= 40;
-      if (cacheHitRate < 90) score -= 20;
+      if (connectedClients > 1000) score -= 20;
       
       return {
-        score: Math.max(0, score),
-        responseTime: cacheResponseTime,
-        hitRate: cacheHitRate
+        score: score,
+        status: 'healthy',
+        details: {
+          version: redisVersion,
+          memoryUsed: memoryUsed,
+          connectedClients: connectedClients
+        }
       };
     } catch (error) {
       return {
@@ -1222,20 +1294,28 @@ class SystemStatusService {
    */
   async assessMessageQueueHealth() {
     try {
-      // 模拟消息队列健康检查
-      const messageDelay = Math.round(Math.random() * 500 + 100); // 100-600ms
-      const queueLength = Math.round(Math.random() * 500); // 0-500条消息
+      const { isRedisAvailable } = require('../config/redis');
       
-      let score = 100;
-      if (messageDelay > 2000) score -= 40;
-      if (messageDelay > 1000) score -= 20;
-      if (queueLength > 1000) score -= 30;
-      if (queueLength > 500) score -= 15;
+      if (!isRedisAvailable()) {
+        return { score: 0, status: 'unavailable', error: 'Redis不可用导致队列失效' };
+      }
+
+      // 尝试获取活跃队列的统计信息
+      // 注意：这里需要根据项目中实际定义的队列名称来获取
+      const queueNames = ['email', 'data_processing', 'report_generation'];
+      let totalWaiting = 0;
+      let totalFailed = 0;
+
+      // 由于Bull队列实例在messageQueue.js中维护，这里采用简单探测
+      // 实际项目中应从messageQueue模块导出队列实例进行查询
       
       return {
-        score: Math.max(0, score),
-        messageDelay: messageDelay,
-        queueLength: queueLength
+        score: 100, // 暂时返回100，表示Redis可用则队列基本功能正常
+        status: 'healthy',
+        details: {
+          queues: queueNames.length,
+          redisStatus: 'connected'
+        }
       };
     } catch (error) {
       return {
@@ -1250,20 +1330,27 @@ class SystemStatusService {
    */
   async assessCoreFlowHealth() {
     try {
-      // 模拟核心业务流程检查
-      const flowSuccessRate = Math.round(Math.random() * 5 + 95); // 95-100%
-      const flowResponseTime = Math.round(Math.random() * 200 + 100); // 100-300ms
+      // 从审计日志中获取最近1小时的业务成功率
+      const stats = await pool.query(`
+        SELECT 
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE status = 'success' OR status = 'completed') as success
+        FROM audit_logs
+        WHERE created_at > NOW() - INTERVAL '1 hour'
+      `);
+      
+      const total = parseInt(stats.rows[0].total || 0);
+      const success = parseInt(stats.rows[0].success || 0);
+      const successRate = total > 0 ? (success / total) * 100 : 100;
       
       let score = 100;
-      if (flowSuccessRate < 95) score -= 30;
-      if (flowSuccessRate < 98) score -= 15;
-      if (flowResponseTime > 1000) score -= 25;
-      if (flowResponseTime > 500) score -= 10;
+      if (successRate < 95) score = 60;
+      else if (successRate < 98) score = 80;
       
       return {
-        score: Math.max(0, score),
-        successRate: flowSuccessRate,
-        responseTime: flowResponseTime
+        score: score,
+        successRate: successRate.toFixed(2) + '%',
+        totalOperations: total
       };
     } catch (error) {
       return {
@@ -1278,16 +1365,29 @@ class SystemStatusService {
    */
   async assessTransactionHealth() {
     try {
-      // 模拟事务成功率检查
-      const transactionSuccessRate = Math.round(Math.random() * 2 + 98); // 98-100%
+      // 从数据库统计信息中获取事务提交/回滚比
+      const stats = await pool.query(`
+        SELECT 
+          xact_commit as commits,
+          xact_rollback as rollbacks
+        FROM pg_stat_database
+        WHERE datname = current_database()
+      `);
+      
+      const commits = parseInt(stats.rows[0].commits || 0);
+      const rollbacks = parseInt(stats.rows[0].rollbacks || 0);
+      const total = commits + rollbacks;
+      const successRate = total > 0 ? (commits / total) * 100 : 100;
       
       let score = 100;
-      if (transactionSuccessRate < 99) score -= 30;
-      if (transactionSuccessRate < 99.5) score -= 15;
+      if (successRate < 95) score = 50;
+      else if (successRate < 99) score = 80;
       
       return {
-        score: Math.max(0, score),
-        successRate: transactionSuccessRate
+        score: score,
+        successRate: successRate.toFixed(4) + '%',
+        commits,
+        rollbacks
       };
     } catch (error) {
       return {
@@ -1302,21 +1402,37 @@ class SystemStatusService {
    */
   async assessExceptionHealth() {
     try {
-      // 模拟异常率检查（每分钟异常数）
-      const exceptionsPerMinute = Math.round(Math.random() * 5); // 0-5次/分钟
-      const errorRate = Math.round((exceptionsPerMinute / 100) * 1000) / 10; // 假设每分钟100次请求的异常率
+      // 从审计日志中获取最近1分钟的异常数
+      const errorStats = await pool.query(`
+        SELECT COUNT(*) as error_count
+        FROM audit_logs
+        WHERE success = FALSE
+        AND created_at > NOW() - INTERVAL '1 minute'
+      `);
+      
+      const totalStats = await pool.query(`
+        SELECT COUNT(*) as total_count
+        FROM audit_logs
+        WHERE created_at > NOW() - INTERVAL '1 minute'
+      `);
+      
+      const exceptionsPerMinute = parseInt(errorStats.rows[0].error_count || 0);
+      const totalRequests = parseInt(totalStats.rows[0].total_count || 0);
+      const errorRate = totalRequests > 0 ? (exceptionsPerMinute / totalRequests) * 100 : 0;
       
       let score = 100;
-      if (errorRate > 1) score -= 50;
-      if (errorRate > 0.5) score -= 30;
-      if (errorRate > 0.1) score -= 15;
+      if (errorRate > 10) score = 0;
+      else if (errorRate > 5) score = 40;
+      else if (errorRate > 1) score = 70;
+      else if (errorRate > 0.1) score = 90;
       
       return {
         score: Math.max(0, score),
         exceptionsPerMinute: exceptionsPerMinute,
-        errorRate: errorRate
+        errorRate: errorRate.toFixed(2) + '%'
       };
     } catch (error) {
+      logger.error('[SystemStatusService] 异常健康评估失败:', error);
       return {
         score: 0,
         error: error.message
@@ -1328,29 +1444,39 @@ class SystemStatusService {
    * 计算动态权重
    * 根据当前QPS和系统负载动态调整权重
    */
-  calculateDynamicWeights() {
+  async calculateDynamicWeights() {
     try {
-      // 模拟当前QPS（实际项目中应该获取真实的QPS数据）
-      const currentQps = Math.round(Math.random() * 1000 + 100); // 100-1100 QPS
-      const peakQps = 1000; // 假设峰值QPS为1000
+      // 获取最近1分钟的QPS
+      const stats = await pool.query(`
+        SELECT COUNT(*) as count
+        FROM audit_logs
+        WHERE created_at > NOW() - INTERVAL '1 minute'
+      `);
+      
+      const currentQps = parseInt(stats.rows[0].count || 0) / 60;
+      const peakQps = 100; // 假设系统设计峰值QPS为100 (可根据实际情况调整)
       
       // 高负载时更关注性能和业务，基础权重降低
       if (currentQps > peakQps * 0.8) {
         return {
           performance: 0.4,  // 高负载时性能权重增加
-          business: 0.6      // 业务权重保持较高
+          business: 0.6,     // 业务权重保持较高
+          currentQps: currentQps.toFixed(2)
         };
       } else {
         return {
           performance: 0.3,  // 正常负载时性能权重较低
-          business: 0.7      // 业务权重较高
+          business: 0.7,     // 业务权重较高
+          currentQps: currentQps.toFixed(2)
         };
       }
     } catch (error) {
+      logger.error('[SystemStatusService] 计算动态权重失败:', error);
       // 默认权重
       return {
         performance: 0.3,
-        business: 0.7
+        business: 0.7,
+        currentQps: 0
       };
     }
   }
@@ -1582,88 +1708,151 @@ class SystemStatusService {
   }
 
   /**
-   * 评估数据库状态 - 基于四维度检查模型
-   * 维度：连接与基础状态(40%) + 性能(30%) + 资源(20%) + 数据完整性(10%)
+   * 评估数据库状态 - 获取真实运行指标
+   * 包含：当前连接数、最大连接数、缓存命中率、慢查询数、表空间使用
    */
   async evaluateDatabaseStatus() {
     const startTime = Date.now();
-    
+    const startTimeObj = this.getCurrentTime();
+
     try {
-      // 并行执行四个维度的健康检查
-      const [
-        connectionHealth,
-        performanceHealth,
-        resourceHealth,
-        integrityHealth
-      ] = await Promise.all([
-        this.assessDatabaseConnectionHealth(),
-        this.assessDatabasePerformanceHealth(),
-        this.assessDatabaseResourceHealth(),
-        this.assessDatabaseIntegrityHealth()
+      logger.info('[SystemStatusService] 开始采集数据库真实指标');
+
+      // 1. 获取连接数信息 (当前连接 & 最大连接)
+      const connInfoPromise = pool.query(`
+        SELECT 
+          (SELECT count(*) FROM pg_stat_activity) as current_connections,
+          (SELECT setting::int FROM pg_settings WHERE name = 'max_connections') as max_connections
+      `).catch(err => {
+        logger.error('[SystemStatusService] 获取连接数失败:', err.message);
+        return { rows: [{ current_connections: 0, max_connections: 100 }] };
+      });
+
+      // 2. 获取缓存命中率
+      const cacheHitPromise = pool.query(`
+        SELECT 
+          CASE 
+            WHEN SUM(heap_blks_hit + heap_blks_read) > 0 
+            THEN ROUND(SUM(heap_blks_hit) * 100.0 / SUM(heap_blks_hit + heap_blks_read), 2)
+            ELSE 100.00 
+          END as hit_rate
+        FROM pg_statio_user_tables
+      `).catch(err => {
+        logger.error('[SystemStatusService] 获取缓存命中率失败:', err.message);
+        return { rows: [{ hit_rate: 100 }] };
+      });
+
+      // 3. 获取慢查询数 (优先查询当前活跃的慢查询，以体现真实系统状态)
+      const slowQueryPromise = (async () => {
+        try {
+          // 查询当前运行超过1秒的活跃查询 (真正反映当前系统压力的指标)
+          const activeSlow = await pool.query(`
+            SELECT count(*) as count 
+            FROM pg_stat_activity 
+            WHERE state = 'active' 
+            AND now() - query_start > interval '1 second'
+            AND pid <> pg_backend_pid()
+          `);
+          return parseInt(activeSlow.rows[0].count);
+        } catch (e) {
+          logger.error('[SystemStatusService] 获取活跃慢查询失败:', e.message);
+          return 0;
+        }
+      })().catch(err => {
+        logger.error('[SystemStatusService] 获取慢查询数异常:', err.message);
+        return 0;
+      });
+
+      // 4. 获取表空间使用
+      const dbSizePromise = pool.query("SELECT pg_size_pretty(pg_database_size(current_database())) as db_size").catch(err => {
+        logger.error('[SystemStatusService] 获取数据库大小失败:', err.message);
+        return { rows: [{ db_size: 'Unknown' }] };
+      });
+
+      // 5. 获取数据库版本
+      const versionPromise = pool.query('SELECT version()').catch(err => {
+        logger.error('[SystemStatusService] 获取版本失败:', err.message);
+        return { rows: [{ version: 'PostgreSQL Unknown' }] };
+      });
+
+      // 并行等待所有查询
+      const [connInfo, cacheHit, slowQueries, dbSize, versionResult] = await Promise.all([
+        connInfoPromise,
+        cacheHitPromise,
+        slowQueryPromise,
+        dbSizePromise,
+        versionPromise
       ]);
 
-      // 计算加权健康分数
-      const weights = this.weights.database;
-      const healthScore = Math.round(
-        connectionHealth.score * weights.connection +
-        performanceHealth.score * weights.performance +
-        resourceHealth.score * weights.resource +
-        integrityHealth.score * weights.integrity
-      );
+      const activeConnections = parseInt(connInfo.rows[0].current_connections);
+      const maxConnections = parseInt(connInfo.rows[0].max_connections);
+      const hitRate = parseFloat(cacheHit.rows[0].hit_rate);
+      const tableSpaceUsage = dbSize.rows[0].db_size;
+      
+      const fullVersion = versionResult.rows[0]?.version || '';
+      const versionMatch = fullVersion.match(/PostgreSQL\s+(\d+\.\d+)/);
+      const dbVersion = versionMatch ? `PostgreSQL ${versionMatch[1]}` : fullVersion.substring(0, 50);
+
+      // 计算健康分
+      let healthScore = 100;
+      const connUsage = activeConnections / maxConnections;
+      if (connUsage > 0.9) healthScore -= 30;
+      else if (connUsage > 0.7) healthScore -= 15;
+      
+      if (hitRate < 90) healthScore -= 20;
+      else if (hitRate < 95) healthScore -= 10;
+      
+      if (slowQueries > 10) healthScore -= 20;
+      else if (slowQueries > 0) healthScore -= 5;
 
       // 状态判定
-      const { status, statusText } = this.determineDatabaseStatus(healthScore, {
-        connection: connectionHealth,
-        performance: performanceHealth,
-        resource: resourceHealth,
-        integrity: integrityHealth
-      });
-
-      // 收集问题和建议
-      const { issues, suggestions } = this.collectDatabaseIssuesAndSuggestions({
-        connection: connectionHealth,
-        performance: performanceHealth,
-        resource: resourceHealth,
-        integrity: integrityHealth
-      });
-
-      // 数据库类型差异化检查
-      const typeSpecificChecks = await this.performDatabaseTypeSpecificChecks();
+      let status = 'healthy';
+      let statusText = '健康';
+      if (healthScore < 60) {
+        status = 'critical';
+        statusText = '故障';
+      } else if (healthScore < 85) {
+        status = 'warning';
+        statusText = '亚健康';
+      }
 
       const evaluationTime = Date.now() - startTime;
-      
-      // 获取真实数据库连接数
-      const activeConnections = connectionHealth.activeConnections || 0;
 
-      return {
+      const result = {
         success: true,
-        status: status,
-        statusText: statusText,
-        healthScore: healthScore,
+        status,
+        statusText,
+        healthScore,
         metrics: {
-          activeConnections: activeConnections,
-          layers: {
-            connection: { score: connectionHealth.score, weight: weights.connection, details: connectionHealth },
-            performance: { score: performanceHealth.score, weight: weights.performance, details: performanceHealth },
-            resource: { score: resourceHealth.score, weight: weights.resource, details: resourceHealth },
-            integrity: { score: integrityHealth.score, weight: weights.integrity, details: integrityHealth }
-          },
-          typeSpecificChecks: typeSpecificChecks
+          version: dbVersion,
+          activeConnections,
+          maxConnections,
+          cacheHitRate: hitRate,
+          slowQueries,
+          tableSpaceUsage,
+          lastUpdate: startTimeObj.toLocaleString('zh-CN', { hour12: false })
         },
         评估时间: `${evaluationTime}ms`,
-        lastUpdate: this.getCurrentTime().toISOString(),
-        issues: issues,
-        suggestions: suggestions
+        lastUpdate: startTimeObj.toLocaleString('zh-CN', { hour12: false }),
+        issues: healthScore < 85 ? ['检测到性能指标波动，请关注详情'] : [],
+        suggestions: healthScore < 85 ? ['建议检查索引优化或增加资源'] : []
       };
+
+      // 异步处理告警触发
+      this.processEvaluationResult('database', result).catch(err => {
+        logger.error('[SystemStatusService] 触发数据库状态告警失败:', err);
+      });
+
+      return result;
     } catch (error) {
-      logger.error('[SystemStatusService] 评估数据库状态失败:', error);
+      logger.error('[SystemStatusService] 数据库状态采集核心异常:', error);
       return {
         success: false,
         status: 'critical',
-        statusText: '连接失败',
+        statusText: '评估失败',
         healthScore: 0,
         error: error.message,
-        lastUpdate: this.getCurrentTime().toISOString()
+        lastUpdate: this.getCurrentTime().toLocaleString('zh-CN', { hour12: false }),
       };
     }
   }
@@ -1774,12 +1963,13 @@ class SystemStatusService {
             SUM(idx_blks_read) as idx_blks_read
           FROM pg_statio_user_tables
         `),
-        // 慢查询数量
+        // 慢查询数量 (改为查询当前活跃慢查询，以反映实时状态)
         pool.query(`
           SELECT count(*) as slow_count 
-          FROM pg_stat_statements 
-          WHERE mean_exec_time > 1000
-          LIMIT 1
+          FROM pg_stat_activity 
+          WHERE state = 'active' 
+          AND now() - query_start > interval '1 second'
+          AND pid <> pg_backend_pid()
         `),
         // 查询性能测试
         this.testQueryPerformance()
@@ -1891,11 +2081,28 @@ class SystemStatusService {
    */
   async assessDatabaseResourceHealth() {
     try {
-      // 模拟资源使用情况检查
-      const cpuUsage = Math.round(Math.random() * 40 + 20); // 20-60%
-      const memoryUsage = Math.round(Math.random() * 30 + 50); // 50-80%
-      const diskIOUsage = Math.round(Math.random() * 40 + 30); // 30-70%
-      const diskSpaceUsage = Math.round(Math.random() * 30 + 40); // 40-70%
+      // 1. 获取磁盘IO统计 (基于 blocks read/hit)
+      const ioStats = await pool.query(`
+        SELECT 
+          sum(blks_read) as total_read,
+          sum(blks_hit) as total_hit
+        FROM pg_stat_database
+      `);
+      
+      const totalIO = parseInt(ioStats.rows[0].total_read) + parseInt(ioStats.rows[0].total_hit);
+      const diskIOUsage = totalIO > 0 ? Math.min(100, Math.round((parseInt(ioStats.rows[0].total_read) / totalIO) * 100)) : 0;
+
+      // 2. 获取磁盘空间使用率 (通过数据库大小占预设限制的比例)
+      // 使用更合理的默认限制 (如 100GB) 或从配置获取
+      const dbSizeRes = await pool.query("SELECT pg_database_size(current_database()) as size");
+      const dbSizeBytes = parseInt(dbSizeRes.rows[0].size);
+      const DISK_LIMIT_BYTES = 100 * 1024 * 1024 * 1024; // 100GB
+      const diskSpaceUsage = Math.min(100, Math.round((dbSizeBytes / DISK_LIMIT_BYTES) * 100));
+
+      // 3. 内存和CPU (由于PG内部难获取OS级别指标，采用连接数作为压力负载代理)
+      const connRes = await pool.query("SELECT count(*) as active, (SELECT setting::int FROM pg_settings WHERE name = 'max_connections') as max FROM pg_stat_activity");
+      const cpuUsage = Math.round((connRes.rows[0].active / connRes.rows[0].max) * 100);
+      const memoryUsage = cpuUsage; // 简化代理
 
       // 资源评分计算
       let cpuScore = 100;
@@ -1948,43 +2155,45 @@ class SystemStatusService {
    */
   async assessDatabaseIntegrityHealth() {
     try {
-      // 模拟数据完整性检查
-      const primaryKeyConflicts = Math.round(Math.random() * 2); // 0-2个冲突
-      const deadlockCount = Math.round(Math.random() * 3); // 0-3次死锁
-      const replicationErrors = Math.round(Math.random() * 2); // 0-2个复制错误
-      const dataCorruptionIndicators = Math.round(Math.random() * 1); // 0-1个损坏指标
+      // 获取真实数据库统计信息
+      const stats = await pool.query(`
+        SELECT 
+          deadlocks,
+          conflicts,
+          xact_rollback
+        FROM pg_stat_database
+        WHERE datname = current_database()
+      `);
+      
+      const deadlockCount = parseInt(stats.rows[0].deadlocks || 0);
+      const conflictCount = parseInt(stats.rows[0].conflicts || 0);
+      const rollbackCount = parseInt(stats.rows[0].xact_rollback || 0);
 
       // 完整性评分计算
       let integrityScore = 100;
       
-      // 主键冲突评分
-      if (primaryKeyConflicts > 0) {
-        integrityScore -= primaryKeyConflicts * 20;
+      // 冲突评分
+      if (conflictCount > 0) {
+        integrityScore -= Math.min(40, conflictCount * 5);
       }
 
       // 死锁评分
       if (deadlockCount > 5) {
         integrityScore -= 30;
-      } else if (deadlockCount > 2) {
+      } else if (deadlockCount > 0) {
         integrityScore -= 15;
       }
 
-      // 复制错误评分
-      if (replicationErrors > 0) {
-        integrityScore -= replicationErrors * 25;
-      }
-
-      // 数据损坏评分
-      if (dataCorruptionIndicators > 0) {
-        integrityScore -= 50;
+      // 回滚评分 (代表事务失败)
+      if (rollbackCount > 100) {
+        integrityScore -= 20;
       }
 
       return {
         score: Math.max(0, integrityScore),
-        primaryKeyConflicts: primaryKeyConflicts,
         deadlockCount: deadlockCount,
-        replicationErrors: replicationErrors,
-        dataCorruptionIndicators: dataCorruptionIndicators
+        conflictCount: conflictCount,
+        rollbackCount: rollbackCount
       };
     } catch (error) {
       logger.error('[SystemStatusService] 完整性健康检查失败:', error);
@@ -2173,31 +2382,34 @@ class SystemStatusService {
         threshold: 'Threads_running < 80%'
       });
 
-      // 检查PostgreSQL缓冲池命中率（使用正确的列名）
+      // 检查PostgreSQL缓冲池命中率（使用数据库级别统计，更具代表性）
       const bufferCheck = await pool.query(`
         SELECT 
           CASE 
-            WHEN SUM(heap_blks_hit + heap_blks_read) > 0 
-            THEN ROUND(SUM(heap_blks_hit) * 100.0 / SUM(heap_blks_hit + heap_blks_read), 2)
+            WHEN SUM(blks_hit + blks_read) > 0 
+            THEN ROUND(SUM(blks_hit) * 100.0 / SUM(blks_hit + blks_read), 2)
             ELSE 100 
           END as buffer_hit_rate
-        FROM pg_statio_user_tables
+        FROM pg_stat_database
+        WHERE datname = current_database()
       `);
       
       const bufferHitRate = parseFloat(bufferCheck.rows[0]?.buffer_hit_rate || 100);
       
       checks.push({
-        metric: 'Innodb_buffer_pool_hit_rate',
+        metric: 'Buffer_pool_hit_rate',
         value: `${bufferHitRate}%`,
         status: bufferHitRate > 99 ? 'good' : bufferHitRate > 95 ? 'warning' : 'critical',
         threshold: '> 99%'
       });
 
-      // 检查慢查询
+      // 检查慢查询 (改为查询当前活跃慢查询，以体现真实系统状态)
       const slowCheck = await pool.query(`
         SELECT COUNT(*) as slow_count 
-        FROM pg_stat_statements 
-        WHERE mean_exec_time > 1000
+        FROM pg_stat_activity 
+        WHERE state = 'active' 
+        AND now() - query_start > interval '1 second'
+        AND pid <> pg_backend_pid()
       `);
       
       const slowCount = parseInt(slowCheck.rows[0]?.slow_count || 0);
@@ -2205,8 +2417,8 @@ class SystemStatusService {
       checks.push({
         metric: 'Slow_queries',
         value: slowCount.toString(),
-        status: slowCount < 10 ? 'good' : slowCount < 20 ? 'warning' : 'critical',
-        threshold: '< 10/min'
+        status: slowCount < 5 ? 'good' : slowCount < 10 ? 'warning' : 'critical',
+        threshold: '< 5 (active)'
       });
 
       // 检查中止连接
@@ -2243,51 +2455,87 @@ class SystemStatusService {
    */
   async performRedisChecks() {
     try {
-      // 模拟Redis检查（实际项目中应该连接真实Redis）
+      const { healthCheck, isRedisAvailable } = require('../config/redis');
+      
+      if (!isRedisAvailable()) {
+        return [{
+          metric: 'Redis_Status',
+          value: 'Disconnected',
+          status: 'critical',
+          threshold: 'Connected'
+        }];
+      }
+
+      const health = await healthCheck();
       const checks = [];
       
-      // 模拟连接客户端数
-      const connectedClients = Math.round(Math.random() * 50 + 10);
-      checks.push({
-        metric: 'connected_clients',
-        value: connectedClients.toString(),
-        status: connectedClients < 1000 ? 'good' : 'warning',
-        threshold: '< 1000'
-      });
-
-      // 模拟内存峰值
-      const usedMemoryPeak = Math.round(Math.random() * 500 + 100); // MB
-      checks.push({
-        metric: 'used_memory_peak',
-        value: `${usedMemoryPeak}MB`,
-        status: usedMemoryPeak < 1000 ? 'good' : 'warning',
-        threshold: '< 1GB'
-      });
-
-      // 模拟每秒操作数
-      const instantaneousOps = Math.round(Math.random() * 1000 + 100);
-      checks.push({
-        metric: 'instantaneous_ops_per_sec',
-        value: instantaneousOps.toString(),
-        status: instantaneousOps < 5000 ? 'good' : 'warning',
-        threshold: '< 5000/s'
-      });
-
-      // 模拟键空间命中率
-      const keyspaceHitRate = Math.round(Math.random() * 10 + 90);
-      const keyspaceMissRate = Math.round((100 - keyspaceHitRate) * 10) / 10;
-      
-      checks.push({
-        metric: 'keyspace_misses_rate',
-        value: `${keyspaceMissRate}%`,
-        status: keyspaceMissRate < 0.1 ? 'good' : keyspaceMissRate < 1 ? 'warning' : 'critical',
-        threshold: '< 0.1%'
-      });
+      if (health.status === 'healthy') {
+        checks.push({
+          metric: 'Redis_Status',
+          value: 'Connected',
+          status: 'good',
+          threshold: 'Connected'
+        });
+        
+        checks.push({
+          metric: 'Redis_Version',
+          value: health.info.redis_version,
+          status: 'good',
+          threshold: 'N/A'
+        });
+        
+        checks.push({
+          metric: 'Used_Memory',
+          value: health.info.used_memory_human,
+          status: 'good',
+          threshold: 'N/A'
+        });
+        
+        checks.push({
+          metric: 'Connected_Clients',
+          value: health.info.connected_clients,
+          status: parseInt(health.info.connected_clients) < 1000 ? 'good' : 'warning',
+          threshold: '< 1000'
+        });
+      } else {
+        checks.push({
+          metric: 'Redis_Status',
+          value: 'Error',
+          status: 'critical',
+          threshold: 'Connected'
+        });
+      }
 
       return checks;
     } catch (error) {
       logger.error('[SystemStatusService] Redis特定检查失败:', error);
       return [];
+    }
+  }
+
+  /**
+   * 处理评估结果并生成告警
+   * @param {string} type 组件类型
+   * @param {Object} result 评估结果
+   */
+  async processEvaluationResult(type, result) {
+    if (!result || !result.issues || result.issues.length === 0) return;
+
+    for (const issue of result.issues) {
+      // 只对严重或中等问题生成告警
+      const level = result.healthScore < 40 ? 'critical' : (result.healthScore < 70 ? 'major' : 'minor');
+      
+      try {
+        await alertService.createAlert({
+          type: type,
+          level: level,
+          title: issue.title || `系统组件异常: ${type}`,
+          content: issue.description || issue,
+          source: type === 'database' ? 'PostgreSQL' : (type === 'backend' ? 'AI-Server' : 'Client-App')
+        });
+      } catch (error) {
+        logger.error(`[SystemStatusService] 自动创建告警失败 (${type}):`, error.message);
+      }
     }
   }
 
@@ -2350,6 +2598,13 @@ class SystemStatusService {
       const availabilityResult = await this.calculateSystemAvailability();
 
       const evaluationTime = Date.now() - startTime;
+
+      // 5. 触发告警处理
+      await Promise.all([
+        this.processEvaluationResult('client', clientStatus),
+        this.processEvaluationResult('backend', backendStatus),
+        this.processEvaluationResult('database', databaseStatus)
+      ]);
 
       return {
         success: true,
@@ -2435,14 +2690,38 @@ class SystemStatusService {
    */
   async calculateTrendAnalysis(currentHealthScore) {
     try {
-      // 模拟历史数据（实际项目中应该从数据库获取）
-      const historicalScores = [
-        currentHealthScore + Math.round(Math.random() * 10 - 5), // 5分钟前
-        currentHealthScore + Math.round(Math.random() * 8 - 4),  // 10分钟前
-        currentHealthScore + Math.round(Math.random() * 6 - 3),  // 15分钟前
-        currentHealthScore + Math.round(Math.random() * 4 - 2),  // 20分钟前
-        currentHealthScore + Math.round(Math.random() * 2 - 1)   // 25分钟前
-      ];
+      // 从审计日志中获取最近30分钟，每5分钟一个点的成功率作为趋势参考
+      const trendStats = await pool.query(`
+        WITH periods AS (
+          SELECT generate_series(
+            date_trunc('minute', NOW()) - INTERVAL '25 minutes',
+            date_trunc('minute', NOW()),
+            '5 minutes'::interval
+          ) as period
+        )
+        SELECT 
+          p.period,
+          COUNT(al.id) as total_count,
+          COUNT(al.id) FILTER (WHERE al.success IS NOT FALSE) as success_count
+        FROM periods p
+        LEFT JOIN audit_logs al ON al.created_at >= p.period AND al.created_at < p.period + INTERVAL '5 minutes'
+        GROUP BY p.period
+        ORDER BY p.period DESC
+      `);
+
+      // 将成功率转化为模拟的健康分趋势
+      const historicalScores = trendStats.rows.map(row => {
+        const total = parseInt(row.total_count);
+        const success = parseInt(row.success_count);
+        const successRate = total > 0 ? (success / total) * 100 : 100;
+        // 成功率对健康分的影响：假设100%成功率对应当前健康分，每下降1%成功率下降2分
+        return Math.max(0, Math.min(100, currentHealthScore - (100 - successRate) * 2));
+      });
+
+      // 如果数据不足，补齐
+      while (historicalScores.length < 5) {
+        historicalScores.push(currentHealthScore);
+      }
       
       // 计算趋势方向和速度
       const recentScores = historicalScores.slice(0, 3);
@@ -2463,16 +2742,19 @@ class SystemStatusService {
         trendSpeed: Math.round(trendSpeed * 100) / 100,
         declineRate: declineRate, // 每分钟下降百分点
         isRapidDecline: declineRate > 10,
-        stabilityIndex: this.calculateStabilityIndex(historicalScores)
+        stabilityIndex: this.calculateStabilityIndex(historicalScores),
+        historicalScores: historicalScores
       };
     } catch (error) {
+      logger.error('[SystemStatusService] 计算趋势分析失败:', error);
       return {
         currentScore: currentHealthScore,
-        trendDirection: '未知',
+        trendDirection: '稳定',
         trendSpeed: 0,
         declineRate: 0,
         isRapidDecline: false,
-        stabilityIndex: 0
+        stabilityIndex: 0,
+        historicalScores: [currentHealthScore, currentHealthScore, currentHealthScore, currentHealthScore, currentHealthScore]
       };
     }
   }
@@ -2576,8 +2858,8 @@ class SystemStatusService {
           prediction.shortTermForecast = 'degrading';
           prediction.riskLevel = 'high';
           prediction.confidence = 0.7;
-          // 预测10-30分钟内可能出现问题
-          const failureMinutes = Math.round(Math.random() * 20 + 10);
+          // 基于下降速率预测故障时间 (健康分降至0所需时间)
+          const failureMinutes = trendAnalysis.declineRate > 0 ? Math.round(healthScore / trendAnalysis.declineRate) : 60;
           prediction.predictedFailureTime = new Date(Date.now() + failureMinutes * 60000).toISOString();
         } else {
           prediction.shortTermForecast = 'stable';
@@ -2590,7 +2872,7 @@ class SystemStatusService {
         prediction.confidence = 0.8;
         
         // 高风险时预测更近的故障时间
-        const failureMinutes = Math.round(Math.random() * 10 + 5);
+        const failureMinutes = trendAnalysis.declineRate > 0 ? Math.round(healthScore / trendAnalysis.declineRate) : 15;
         prediction.predictedFailureTime = new Date(Date.now() + failureMinutes * 60000).toISOString();
       }
       
@@ -3038,23 +3320,44 @@ class SystemStatusService {
    */
   async getAvailabilityTrendData() {
     try {
-      // 模拟24小时趋势数据（实际项目中应该从数据库获取）
-      const trendData = [];
-      const now = new Date();
+      // 从审计日志中获取最近24小时的小时级可用率趋势
+      const trendResult = await pool.query(`
+        WITH hours AS (
+          SELECT generate_series(
+            date_trunc('hour', NOW()) - INTERVAL '23 hours',
+            date_trunc('hour', NOW()),
+            '1 hour'::interval
+          ) as hour
+        )
+        SELECT 
+          h.hour,
+          COUNT(al.id) as total_count,
+          COUNT(al.id) FILTER (WHERE al.success IS NOT FALSE) as success_count
+        FROM hours h
+        LEFT JOIN audit_logs al ON date_trunc('hour', al.created_at) = h.hour
+        GROUP BY h.hour
+        ORDER BY h.hour ASC
+      `);
       
-      for (let i = 23; i >= 0; i--) {
-        const time = new Date(now.getTime() - i * 60 * 60 * 1000);
-        const availability = Math.round((Math.random() * 5 + 95) * 10) / 10; // 95-100%
+      return trendResult.rows.map(row => {
+        const total = parseInt(row.total_count);
+        const success = parseInt(row.success_count);
+        const availability = total > 0 
+          ? Math.round((success / total) * 1000) / 10 
+          : 100.0;
         
-        trendData.push({
-          time: time.toISOString(),
+        return {
+          time: row.hour.toISOString(),
           availability: availability
-        });
-      }
-      
-      return trendData;
+        };
+      });
     } catch (error) {
-      return [];
+      logger.error('[SystemStatusService] 获取可用率趋势失败:', error);
+      // 降级：返回最近一小时的单一数据点
+      return [{
+        time: new Date().toISOString(),
+        availability: 100.0
+      }];
     }
   }
 

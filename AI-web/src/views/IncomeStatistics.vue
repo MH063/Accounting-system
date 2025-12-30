@@ -1121,7 +1121,7 @@ const createReportContent = (reportData: TrendReportData) => {
 ${anomalies.length > 0 ? `注意: 检测到${anomalies.length}个异常收入来源，建议进一步调查。` : '收入来源正常，未发现异常波动。'}
 ${forecast.length > 0 ? `预测显示未来${forecast.length}个周期内收入将呈现${trendDirection}趋势。` : '数据不足，无法提供预测分析。'}
 
-报告生成时间: ${new Date().toLocaleString()}
+报告生成时间: ${new Date().toLocaleString('zh-CN', { hour12: false })}
 `
   
   return content

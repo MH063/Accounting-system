@@ -8,7 +8,81 @@ const router = express.Router();
 const { responseWrapper } = require('../middleware/response');
 const { authenticateToken, authorizeAdmin } = require('../middleware/auth');
 const systemStatusService = require('../services/systemStatusService');
+const alertService = require('../services/alertService');
 const logger = require('../config/logger');
+
+/**
+ * GET /api/status/alerts
+ * 获取系统告警列表
+ */
+router.get('/alerts', authenticateToken, authorizeAdmin, responseWrapper(async (req, res) => {
+  const { type, level, status, limit, offset } = req.query;
+  const result = await alertService.getAlerts({ 
+    type, 
+    level, 
+    status, 
+    limit: limit ? parseInt(limit) : 10, 
+    offset: offset ? parseInt(offset) : 0 
+  });
+  
+  res.json({
+    success: true,
+    data: result
+  });
+}));
+
+/**
+ * GET /api/status/alerts/stats
+ * 获取系统告警统计信息
+ */
+router.get('/alerts/stats', authenticateToken, authorizeAdmin, responseWrapper(async (req, res) => {
+  const stats = await alertService.getAlertStats();
+  res.json({
+    success: true,
+    data: stats
+  });
+}));
+
+/**
+ * PUT /api/status/alerts/:id
+ * 更新告警状态
+ */
+router.put('/alerts/:id', authenticateToken, authorizeAdmin, responseWrapper(async (req, res) => {
+  const { id } = req.params;
+  const { status, handler, result } = req.body;
+  
+  const updated = await alertService.updateAlertStatus(id, { status, handler, result });
+  res.json({
+    success: true,
+    message: '告警状态更新成功',
+    data: updated
+  });
+}));
+
+/**
+ * DELETE /api/status/alerts
+ * 清空所有告警信息
+ */
+router.delete('/alerts', authenticateToken, authorizeAdmin, responseWrapper(async (req, res) => {
+  const count = await alertService.clearAlerts();
+  res.json({
+    success: true,
+    message: `成功清空 ${count} 条告警信息`,
+    data: { count }
+  });
+}));
+
+/**
+ * GET /api/status/alerts/export
+ * 导出告警信息
+ */
+router.get('/alerts/export', authenticateToken, authorizeAdmin, responseWrapper(async (req, res) => {
+  const alerts = await alertService.exportAlerts();
+  res.json({
+    success: true,
+    data: alerts
+  });
+}));
 
 /**
  * GET /api/status/overall
@@ -86,7 +160,7 @@ router.get('/metrics/history', authenticateToken, authorizeAdmin, responseWrappe
  * 评估后端服务状态
  * 评估指标：CPU使用率、内存使用率、事件循环延迟、堆内存
  */
-router.get('/backend', authenticateToken, authorizeAdmin, responseWrapper(async (req, res) => {
+router.get('/backend', responseWrapper(async (req, res) => {
   logger.info('[SystemStatus] 后端服务状态评估请求');
   const result = await systemStatusService.evaluateBackendStatus();
   
@@ -111,7 +185,7 @@ router.get('/backend', authenticateToken, authorizeAdmin, responseWrapper(async 
  * 评估数据库状态
  * 评估指标：连接池状态、查询延迟、慢查询、缓存命中率
  */
-router.get('/database', authenticateToken, authorizeAdmin, responseWrapper(async (req, res) => {
+router.get('/database', responseWrapper(async (req, res) => {
   logger.info('[SystemStatus] 数据库状态评估请求');
   const result = await systemStatusService.evaluateDatabaseStatus();
   

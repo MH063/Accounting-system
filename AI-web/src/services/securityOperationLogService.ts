@@ -125,7 +125,7 @@ export const exportSecurityOperationLogs = async (userId: string): Promise<Blob>
     const csvContent = [
       ['时间', '类型', 'IP地址', 'User-Agent', '资源', '操作', '结果', '严重程度'],
       ...logs.map(log => [
-        new Date(log.timestamp).toLocaleString(),
+        new Date(log.timestamp).toLocaleString('zh-CN', { hour12: false }),
         log.type,
         log.sourceIp,
         log.userAgent,

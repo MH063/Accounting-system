@@ -1464,7 +1464,7 @@ const clientInfo = reactive({
   language: '正在检测...',
   timezone: '正在检测...',
   isSecure: true,
-  lastCheck: new Date().toLocaleString()
+  lastCheck: new Date().toLocaleString('zh-CN', { hour12: false })
 })
 
 // 解析 User Agent 获取浏览器和操作系统
@@ -2876,7 +2876,7 @@ const copyAllNewBackupCodes = async (): Promise<void> => {
  */
 const downloadNewBackupCodes = (): void => {
   try {
-    const codesText = `两步验证备用验证码 (生成时间: ${new Date().toLocaleString()})\n\n` + 
+    const codesText = `两步验证备用验证码 (生成时间: ${new Date().toLocaleString('zh-CN', { hour12: false })})\n\n` + 
                      newBackupCodes.value.map((code, index) => `${index + 1}. ${code}`).join('\n') + 
                      '\n\n请妥善保管这些验证码。每个验证码只能使用一次。'
     

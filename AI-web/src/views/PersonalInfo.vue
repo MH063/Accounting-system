@@ -1466,7 +1466,7 @@ const restoreDataBackup = (): void => {
               phoneVerified.value = data.verifiedStatus.phone || false
               emailVerified.value = data.verifiedStatus.email || false
             }
-            ElMessage.success(`备份恢复成功 (备份时间: ${new Date(data.backupTime).toLocaleString()})`)
+            ElMessage.success(`备份恢复成功 (备份时间: ${new Date(data.backupTime).toLocaleString('zh-CN', { hour12: false })})`)
             addDataOperationHistory('backup_restore', 'success', '备份恢复成功')
             hasUnsavedChanges.value = true
           } else {
@@ -1500,7 +1500,7 @@ const showSyncStatus = (type: 'success' | 'warning' | 'error' | 'info', title: s
 // 添加同步历史记录
 const addSyncHistory = (type: 'manual' | 'auto', status: 'success' | 'failed', message: string): void => {
   syncHistory.value.unshift({
-    time: new Date().toLocaleString(),
+    time: new Date().toLocaleString('zh-CN', { hour12: false }),
     type,
     status,
     message
@@ -1515,7 +1515,7 @@ const addSyncHistory = (type: 'manual' | 'auto', status: 'success' | 'failed', m
 // 添加数据操作历史
 const addDataOperationHistory = (operation: string, status: string, message: string): void => {
   dataOperationHistory.value.unshift({
-    time: new Date().toLocaleString(),
+    time: new Date().toLocaleString('zh-CN', { hour12: false }),
     operation,
     status,
     message

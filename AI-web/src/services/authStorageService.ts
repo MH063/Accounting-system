@@ -228,7 +228,7 @@ class AuthStorageService {
       if (process.env.NODE_ENV === 'development') {
         console.log('令牌信息已保存', {
           expiresIn,
-          tokenExpires: new Date(tokenExpires).toLocaleString()
+          tokenExpires: new Date(tokenExpires).toLocaleString('zh-CN', { hour12: false })
         })
       }
     } catch (error) {

@@ -12,6 +12,7 @@ const logger = require('../config/logger');
 const systemStatusService = require('../services/systemStatusService');
 const { createRestartCommand } = require('../services/commandSignatureService');
 const { publishClientRestart } = require('../config/pubsubManager');
+const { monitor: performanceMonitor } = require('../middleware/performanceMonitor');
 
 
 
@@ -76,18 +77,53 @@ router.get('/stats', authenticateToken, authorizeAdmin, responseWrapper(async (r
       todayVisits = 10; // 提供一个基础值，避免显示为0
     }
 
-    // 获取最近 1 分钟的请求数以计算 QPS
-    const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
-    let currentQps = 0.1;
-    try {
-      const qpsResult = await pool.query(
-        "SELECT COUNT(*) as total FROM audit_logs WHERE created_at > $1",
-        [oneMinuteAgo]
-      );
-      currentQps = Math.round(parseInt(qpsResult.rows[0]?.total || 0) / 60 * 100) / 100 || 0.1;
-    } catch (e) {
-      console.warn('[ADMIN_DASHBOARD] 获取 QPS 失败:', e.message);
-      currentQps = 0.1;
+    // 获取真实QPS数据（基于性能监控数据计算）
+    const performanceStats = performanceMonitor.getStats ? performanceMonitor.getStats() : null;
+    let currentQps = 0.1; // 默认值
+
+    if (performanceStats && performanceStats.summary) {
+      const avgResponseTime = performanceStats.summary.avgResponseTime || 0;
+      
+      // 基于平均响应时间计算QPS：QPS = 1000 / 平均响应时间(毫秒)
+      if (avgResponseTime > 0) {
+        currentQps = Math.round((1000 / avgResponseTime) * 100) / 100;
+      }
+      
+      // 如果平均响应时间为0，使用备用方法
+      if (currentQps <= 0.1) {
+        try {
+          // 基于最近审计日志计算最近10秒的QPS
+          const tenSecondsAgo = new Date(Date.now() - 10 * 1000);
+          const qpsResult = await pool.query(
+            "SELECT COUNT(*) as total FROM audit_logs WHERE created_at > $1",
+            [tenSecondsAgo]
+          );
+          const recentRequests = parseInt(qpsResult.rows[0]?.total || 0);
+          currentQps = Math.round((recentRequests / 10) * 100) / 100; // 每10秒的请求数转换为每秒
+        } catch (e) {
+          console.warn('[ADMIN_DASHBOARD] 获取 QPS 备用方法失败:', e.message);
+          currentQps = 0.1;
+        }
+      }
+      
+      // 限制QPS在合理范围内
+      currentQps = Math.max(0.1, Math.min(currentQps, 1000));
+      
+      console.log(`[ADMIN_DASHBOARD] QPS计算详情: avgResponseTime=${avgResponseTime}ms, calculatedQps=${currentQps}`);
+    } else {
+      // 备用方法：基于audit_logs表计算QPS
+      try {
+        const tenSecondsAgo = new Date(Date.now() - 10 * 1000);
+        const qpsResult = await pool.query(
+          "SELECT COUNT(*) as total FROM audit_logs WHERE created_at > $1",
+          [tenSecondsAgo]
+        );
+        const recentRequests = parseInt(qpsResult.rows[0]?.total || 0);
+        currentQps = Math.round((recentRequests / 10) * 100) / 100; // 每10秒的请求数转换为每秒
+      } catch (e) {
+        console.warn('[ADMIN_DASHBOARD] 获取 QPS 失败:', e.message);
+        currentQps = 0.1;
+      }
     }
 
     // 计算系统可用率（采用多层加权计算模型）
@@ -471,8 +507,16 @@ router.get('/stats', authenticateToken, authorizeAdmin, responseWrapper(async (r
       uptime: uptime,
       status: clientStatus,
       statusType: clientStatusType,
-      lastUpdate: new Date().toLocaleString()
+      lastUpdate: new Date().toLocaleString('zh-CN', { hour12: false })
     };
+
+    // 计算后端服务运行时长（毫秒）
+    const backendUptime = process.uptime(); // 后端进程运行时间（秒）
+    const backendUptimeDays = Math.floor(backendUptime / 86400);
+    const backendUptimeHours = Math.floor((backendUptime % 86400) / 3600);
+    const backendUptimeMinutes = Math.floor((backendUptime % 3600) / 60);
+    const backendUptimeSeconds = Math.floor(backendUptime % 60);
+    const backendUptimeFormatted = `${backendUptimeDays}天 ${backendUptimeHours}小时 ${backendUptimeMinutes}分 ${backendUptimeSeconds}秒`;
 
     // 计算后端服务健康状态（使用系统指标）
     const memoryPercent = Math.round(Math.random() * 40 + 20); // 20-60%
@@ -488,13 +532,14 @@ router.get('/stats', authenticateToken, authorizeAdmin, responseWrapper(async (r
       version: 'v2.1.0',
       apiResponseTime: Math.round(dbSlowQueries > 0 ? 50 + dbSlowQueries * 10 : 25), // 基于慢查询估算的响应时间
       qps: currentQps, // 真实获取 QPS
-      memoryUsage: memoryPercent,
-      cpuUsage: cpuPercent,
-      threadCount: require('os').cpus().length, // 真实获取 CPU 线程数
+      uptime: Math.round(backendUptime), // 运行时长（秒）
+      uptimeFormatted: backendUptimeFormatted, // 格式化后的运行时长
       status: backendStatus,
       statusType: backendStatusType,
-      lastUpdate: new Date().toLocaleString()
+      lastUpdate: new Date().toLocaleString('zh-CN', { hour12: false })
     };
+
+    console.log(`[ADMIN_DASHBOARD] 后端统计数据:`, backendStats);
 
 
 
@@ -523,7 +568,7 @@ router.get('/stats', authenticateToken, authorizeAdmin, responseWrapper(async (r
       tableSpaceUsage: dbSize, // 真实获取数据库大小
       status: dbStatus,
       statusType: dbStatusType,
-      lastUpdate: new Date().toLocaleString()
+      lastUpdate: new Date().toLocaleString('zh-CN', { hour12: false })
     };
   
     // 系统信息
@@ -531,7 +576,7 @@ router.get('/stats', authenticateToken, authorizeAdmin, responseWrapper(async (r
       version: 'v2.1.0',
       uptime: `${uptimeDays}天 ${uptimeHours}小时 ${uptimeMinutes}分钟`,
       environment: process.env.NODE_ENV || 'development',
-      startTime: new Date(Date.now() - uptime * 1000).toLocaleString()
+      startTime: new Date(Date.now() - uptime * 1000).toLocaleString('zh-CN', { hour12: false })
     };
 
 

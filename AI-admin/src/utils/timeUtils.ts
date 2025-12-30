@@ -9,6 +9,7 @@
  * @returns 解析后的Date对象，如果解析失败返回null
  */
 const parseDate = (dateInput: any): Date | null => {
+  // 处理 null、undefined
   if (dateInput === null || dateInput === undefined) return null
   
   // 处理空字符串
@@ -19,6 +20,21 @@ const parseDate = (dateInput: any): Date | null => {
   
   // 处理数字 0
   if (typeof dateInput === 'number' && dateInput === 0) return null
+  
+  // 处理空对象 {}
+  if (typeof dateInput === 'object' && !Array.isArray(dateInput)) {
+    // 检查是否是空对象
+    if (Object.keys(dateInput).length === 0) {
+      return null
+    }
+    // 如果是 Date 对象
+    if (dateInput instanceof Date) {
+      if (!isNaN(dateInput.getTime())) {
+        return dateInput
+      }
+      return null
+    }
+  }
   
   try {
     // 如果已经是Date对象且有效，直接返回
@@ -74,35 +90,20 @@ const parseDate = (dateInput: any): Date | null => {
 
 /**
  * 格式化相对时间（如：刚刚、5分钟前、2小时前、3天前）
- * 支持处理负时间差（未来时间）
  * @param dateInput 日期字符串、时间戳或Date对象
  * @returns 相对时间字符串
  */
-export const formatRelativeTime = (dateInput: any): string => {
+const formatRelativeTime = (dateInput: any): string => {
   const date = parseDate(dateInput)
   if (!date) return '-'
   
   const now = new Date()
   const diffMs = now.getTime() - date.getTime()
-  const diffSeconds = Math.floor(Math.abs(diffMs) / 1000)
+  const diffSeconds = Math.floor(diffMs / 1000)
   const diffMinutes = Math.floor(diffSeconds / 60)
   const diffHours = Math.floor(diffMinutes / 60)
   const diffDays = Math.floor(diffHours / 24)
   
-  // 如果是未来时间，显示为"即将"
-  if (diffMs < 0) {
-    if (diffSeconds < 60) {
-      return '即将'
-    } else if (diffMinutes < 60) {
-      return `${diffMinutes}分钟后`
-    } else if (diffHours < 24) {
-      return `${diffHours}小时后`
-    } else {
-      return `${diffDays}天后`
-    }
-  }
-  
-  // 过去时间
   if (diffSeconds < 60) {
     return '刚刚'
   } else if (diffMinutes < 60) {
@@ -128,7 +129,7 @@ export const formatRelativeTime = (dateInput: any): string => {
  * @param dateInput 日期字符串、时间戳或Date对象
  * @returns 格式化后的日期时间字符串
  */
-export const formatLocalTime = (dateInput: string | number | Date | undefined | null): string => {
+const formatLocalTime = (dateInput: string | number | Date | undefined | null): string => {
   const date = parseDate(dateInput)
   if (!date) return '-'
   
@@ -147,7 +148,7 @@ export const formatLocalTime = (dateInput: string | number | Date | undefined | 
  * @param dateInput 日期字符串、时间戳或Date对象
  * @returns 格式化后的日期字符串
  */
-export const formatLocalDate = (dateInput: string | number | Date | undefined | null): string => {
+const formatLocalDate = (dateInput: string | number | Date | undefined | null): string => {
   const date = parseDate(dateInput)
   if (!date) return '-'
   
@@ -163,7 +164,7 @@ export const formatLocalDate = (dateInput: string | number | Date | undefined | 
  * @param dateInput 日期字符串、时间戳或Date对象
  * @returns 格式化后的时间字符串
  */
-export const formatLocalTimeOnly = (dateInput: string | number | Date | undefined | null): string => {
+const formatLocalTimeOnly = (dateInput: string | number | Date | undefined | null): string => {
   const date = parseDate(dateInput)
   if (!date) return '-'
   
@@ -180,7 +181,7 @@ export const formatLocalTimeOnly = (dateInput: string | number | Date | undefine
  * @param dateInput 日期字符串、时间戳或Date对象
  * @returns 友好日期字符串
  */
-export const formatFriendlyDate = (dateInput: string | number | Date | undefined | null): string => {
+const formatFriendlyDate = (dateInput: string | number | Date | undefined | null): string => {
   const date = parseDate(dateInput)
   if (!date) return '-'
   
@@ -209,7 +210,7 @@ export const formatFriendlyDate = (dateInput: string | number | Date | undefined
  * @param minutes 分钟数
  * @returns 格式化后的时长字符串
  */
-export const formatDuration = (minutes: number | undefined | null): string => {
+const formatDuration = (minutes: number | undefined | null): string => {
   if (minutes === undefined || minutes === null) return '-'
   
   if (minutes < 60) {
@@ -231,7 +232,7 @@ export const formatDuration = (minutes: number | undefined | null): string => {
  * @param totalSeconds 总秒数
  * @returns 格式化后的时长字符串
  */
-export const formatTimeDuration = (totalSeconds: number | undefined | null): string => {
+const formatTimeDuration = (totalSeconds: number | undefined | null): string => {
   if (totalSeconds === undefined || totalSeconds === null) return '00:00:00'
   
   const hours = Math.floor(totalSeconds / 3600)
@@ -246,7 +247,7 @@ export const formatTimeDuration = (totalSeconds: number | undefined | null): str
  * @param dateInput 日期字符串、时间戳或Date对象
  * @returns ISO格式字符串，如果解析失败返回空字符串
  */
-export const formatToISODate = (dateInput: string | number | Date | undefined | null): string => {
+const formatToISODate = (dateInput: string | number | Date | undefined | null): string => {
   const date = parseDate(dateInput)
   if (!date) return ''
   
@@ -259,7 +260,7 @@ export const formatToISODate = (dateInput: string | number | Date | undefined | 
  * @param date2 第二个日期
  * @returns 相差的毫秒数
  */
-export const getTimeDiff = (
+const getTimeDiff = (
   date1: string | number | Date | undefined | null,
   date2: string | number | Date | undefined | null
 ): number => {
@@ -276,7 +277,7 @@ export const getTimeDiff = (
  * @param dateInput 日期字符串、时间戳或Date对象
  * @returns 是否是今天
  */
-export const isToday = (dateInput: string | number | Date | undefined | null): boolean => {
+const isToday = (dateInput: string | number | Date | undefined | null): boolean => {
   const date = parseDate(dateInput)
   if (!date) return false
   
@@ -293,7 +294,7 @@ export const isToday = (dateInput: string | number | Date | undefined | null): b
  * @param dateInput 日期字符串、时间戳或Date对象
  * @returns 是否是昨天
  */
-export const isYesterday = (dateInput: string | number | Date | undefined | null): boolean => {
+const isYesterday = (dateInput: string | number | Date | undefined | null): boolean => {
   const date = parseDate(dateInput)
   if (!date) return false
   
@@ -308,12 +309,12 @@ export const isYesterday = (dateInput: string | number | Date | undefined | null
 }
 
 /**
- * 安全的日期计算（防止无效日期导致错误）
+ * 安全s的日期计算（防止无效日期导致错误）
  * @param dateInput 初始日期
  * @param offsetDays 要增加或减少的天数
  * @returns 计算后的日期字符串（ISO格式），失败返回空字符串
  */
-export const addDays = (
+const addDays = (
   dateInput: string | number | Date | undefined | null,
   offsetDays: number
 ): string => {
@@ -331,7 +332,7 @@ export const addDays = (
  * @param amount 金额
  * @returns 格式化后的金额字符串
  */
-export const formatAmount = (amount: number | undefined | null): string => {
+const formatAmount = (amount: number | undefined | null): string => {
   if (amount === undefined || amount === null) return '-'
   
   return amount.toFixed(2)
@@ -343,7 +344,7 @@ export const formatAmount = (amount: number | undefined | null): string => {
  * @param decimals 小数位数
  * @returns 格式化后的百分比字符串
  */
-export const formatPercentage = (
+const formatPercentage = (
   value: number | undefined | null,
   decimals: number = 1
 ): string => {
@@ -351,3 +352,20 @@ export const formatPercentage = (
   
   return `${(value * 100).toFixed(decimals)}%`
 }
+
+export {
+  formatRelativeTime,
+  formatLocalTime,
+  formatLocalDate,
+  formatLocalTimeOnly,
+  formatFriendlyDate,
+  formatDuration,
+  formatTimeDuration,
+  formatToISODate,
+  getTimeDiff,
+  isToday,
+  isYesterday,
+  addDays,
+  formatAmount,
+  formatPercentage
+};

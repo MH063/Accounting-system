@@ -14,13 +14,21 @@ const auditLogDir = path.join(__dirname, '../../logs/audit');
 const logsDir = path.join(__dirname, '../../logs');
 
 // 确保主日志目录存在
-if (!fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir, { recursive: true });
+try {
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+  }
+} catch (error) {
+  console.error('[AUDIT] 创建主日志目录失败:', error);
 }
 
 // 确保审计日志目录存在
-if (!fs.existsSync(auditLogDir)) {
-  fs.mkdirSync(auditLogDir, { recursive: true });
+try {
+  if (!fs.existsSync(auditLogDir)) {
+    fs.mkdirSync(auditLogDir, { recursive: true });
+  }
+} catch (error) {
+  console.error('[AUDIT] 创建审计日志目录失败:', error);
 }
 
 // 审计日志文件路径
