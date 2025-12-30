@@ -2067,39 +2067,43 @@ class UserService extends BaseService {
    */
   async createUserSession(userId, ip, userAgent, tokens = null) {
     try {
+      console.log('[UserService] createUserSession 被调用', { userId, ip, userAgent: userAgent?.substring(0, 50) });
+
       // 识别并跟踪设备
       const deviceTrack = await this.identifyAndTrackDevice(ip || '0.0.0.0', userId);
-      
+      console.log('[UserService] 设备识别结果', { deviceId: deviceTrack.deviceId, conflictDetected: deviceTrack.conflictDetected });
+
       // 生成会话令牌
       const sessionToken = tokens?.accessToken || this.generateSecureToken();
       const refreshToken = tokens?.refreshToken || this.generateSecureToken();
       const clientType = tokens?.clientType || (userAgent?.includes('Admin') ? 'admin' : 'client');
-      
+      console.log('[UserService] 会话令牌生成', { sessionToken: sessionToken.substring(0, 20) + '...', clientType });
+
       // 解析用户代理信息
       const deviceInfo = this.parseUserAgent(userAgent);
-      
+
       // 设置会话过期时间（默认7天）
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 7);
-      
+
       // 插入到数据库的 user_sessions 表
       let insertQuery, params;
-      
+
       if (deviceTrack.deviceId) {
         // 如果有deviceId，包含device_id字段
         insertQuery = `
           INSERT INTO user_sessions (
-            user_id, session_token, refresh_token, device_info, 
+            user_id, session_token, refresh_token, device_info,
             ip_address, user_agent, status, expires_at, last_accessed_at,
             device_id, client_type
           ) VALUES (
-            $1, $2, $3, $4, 
+            $1, $2, $3, $4,
             $5, $6, 'active', $7, NOW(),
             $8, $9
           )
           RETURNING id, user_id, session_token, refresh_token, device_info, ip_address, user_agent, status, expires_at, created_at, last_accessed_at, client_type
         `;
-        
+
         params = [
           userId,
           sessionToken,
@@ -2115,17 +2119,17 @@ class UserService extends BaseService {
         // 如果没有deviceId，不包含device_id字段
         insertQuery = `
           INSERT INTO user_sessions (
-            user_id, session_token, refresh_token, device_info, 
+            user_id, session_token, refresh_token, device_info,
             ip_address, user_agent, status, expires_at, last_accessed_at,
             client_type
           ) VALUES (
-            $1, $2, $3, $4, 
+            $1, $2, $3, $4,
             $5, $6, 'active', $7, NOW(),
             $8
           )
           RETURNING id, user_id, session_token, refresh_token, device_info, ip_address, user_agent, status, expires_at, created_at, last_accessed_at, client_type
         `;
-        
+
         params = [
           userId,
           sessionToken,
@@ -2137,31 +2141,35 @@ class UserService extends BaseService {
           clientType
         ];
       }
-      
+
+      console.log('[UserService] 执行SQL插入', { query: insertQuery.substring(0, 100), params: params.map((p, i) => i === 1 || i === 2 ? p?.substring(0, 20) + '...' : p) });
+
       const result = await this.userRepository.executeQuery(insertQuery, params);
       const session = result.rows[0];
-      
+      console.log('[UserService] 会话创建成功', { sessionId: session.id, userId: session.user_id, clientType: session.client_type });
+
       // 如果检测到冲突，将会话标记中包含冲突信息
       if (deviceTrack.conflictDetected) {
         session.ip_conflict = true;
         session.conflict_with_user_id = deviceTrack.conflictWithUserId;
       }
-      
-      logger.info('[UserService] 创建用户会话', { 
+
+      logger.info('[UserService] 创建用户会话', {
         userId,
         sessionId: session.id,
         ip,
         deviceId: deviceTrack.deviceId,
         conflict: deviceTrack.conflictDetected
       });
-      
+
       return session;
     } catch (error) {
-      logger.error('[UserService] 创建用户会话失败', { 
+      logger.error('[UserService] 创建用户会话失败', {
         error: error.message,
         userId,
         ip
       });
+      console.error('[UserService] 创建用户会话失败', { error: error.message, stack: error.stack });
       return null;
     }
   }

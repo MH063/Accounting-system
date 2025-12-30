@@ -82,6 +82,7 @@ class AdminAuthService {
         username: user.username,
         email: user.email,
         status: user.isActive ? 'active' : 'inactive',
+        role: 'admin',
         isAdmin: true
       });
 

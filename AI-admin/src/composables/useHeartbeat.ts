@@ -38,9 +38,22 @@ export function useHeartbeat() {
       await adminAuthApi.heartbeat()
       console.log('💓 管理员心跳上报成功')
     } catch (error) {
-      console.warn('💔 管理员心跳上报失败:', error)
-      // 如果是 401 错误，可能令牌已过期，停止心跳
-      if ((error as any).response?.status === 401) {
+      const axiosError = error as any
+      const status = axiosError.response?.status
+      const message = axiosError.response?.data?.message || axiosError.message
+
+      console.warn('💔 管理员心跳上报失败:', message, `(${status})`)
+
+      if (status === 401) {
+        console.log('💔 心跳停止: 未授权 (401)')
+        stopHeartbeat()
+      } else if (status === 403) {
+        const code = axiosError.response?.data?.code
+        if (code === 'NO_TOKEN') {
+          console.log('💔 心跳停止: 缺少认证令牌')
+        } else {
+          console.log('💔 心跳停止: 权限不足 (403)')
+        }
         stopHeartbeat()
       }
     }

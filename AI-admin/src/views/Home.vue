@@ -2433,6 +2433,7 @@ const fetchSystemStats = async () => {
           clientStats.value.version = typeof metrics.version === 'string' ? metrics.version : clientStats.value.version
           clientStats.value.onlineUsers = typeof metrics.onlineUsers === 'number' ? metrics.onlineUsers : clientStats.value.onlineUsers
           clientStats.value.userDistribution = metrics.userDistribution || { high: 0, normal: 0, suspicious: 0 }
+          clientStats.value.qualityIndex = typeof metrics.qualityIndex === 'number' ? metrics.qualityIndex : clientStats.value.qualityIndex
           clientStats.value.avgResponseTime = typeof metrics.avgResponseTime === 'number' ? metrics.avgResponseTime : clientStats.value.avgResponseTime
           clientStats.value.peakUsers = typeof metrics.peakUsers === 'number' ? metrics.peakUsers : clientStats.value.peakUsers
           clientStats.value.todayActiveUsers = typeof metrics.todayActiveUsers === 'number' ? metrics.todayActiveUsers : clientStats.value.todayActiveUsers
@@ -2530,6 +2531,59 @@ const fetchUserStats = async () => {
     }
   } catch (error) {
     console.error('❌ 获取用户统计数据失败:', error)
+  }
+}
+
+/**
+ * 获取客户端实时数据
+ * 在线用户数、用户质量分布等实时时间点的数据
+ */
+const fetchClientRealtimeData = async () => {
+  try {
+    const adminToken = localStorage.getItem('adminToken')
+    if (!adminToken) {
+      console.warn('⚠️ 未检测到管理员令牌，跳过客户端实时数据获取')
+      return
+    }
+
+    console.log('📊 开始获取客户端实时数据...')
+
+    // 获取客户端状态数据
+    const clientResponse = await systemApi.getClientStatus()
+    const clientData = clientResponse as any
+
+    if (clientData) {
+      // 更新客户端状态数据
+      clientStats.value.status = clientData.status || clientStats.value.status
+      clientStats.value.statusType = clientData.statusType || clientStats.value.statusType
+      clientStats.value.healthScore = clientData.healthScore || clientStats.value.healthScore
+
+      if (clientData.metrics) {
+        const metrics = clientData.metrics
+        clientStats.value.version = metrics.version || clientStats.value.version
+        clientStats.value.onlineUsers = metrics.onlineUsers ?? clientStats.value.onlineUsers
+        clientStats.value.userDistribution = metrics.userDistribution || clientStats.value.userDistribution
+        clientStats.value.qualityIndex = metrics.qualityIndex ?? clientStats.value.qualityIndex
+        clientStats.value.alerts = metrics.alerts || clientStats.value.alerts
+        clientStats.value.peakUsers = metrics.peakUsers ?? clientStats.value.peakUsers
+        clientStats.value.avgResponseTime = metrics.avgResponseTime ?? clientStats.value.avgResponseTime
+        clientStats.value.todayActiveUsers = metrics.todayActiveUsers ?? clientStats.value.todayActiveUsers
+        clientStats.value.errorRate = metrics.errorRate ?? clientStats.value.errorRate
+        clientStats.value.uptime = metrics.uptime || clientStats.value.uptime
+        clientStats.value.uptimeFormatted = metrics.uptimeFormatted || clientStats.value.uptimeFormatted
+      }
+
+      clientStats.value.lastUpdate = new Date().toLocaleString()
+
+      console.log('✅ 客户端实时数据获取成功:', {
+        onlineUsers: clientStats.value.onlineUsers,
+        userDistribution: clientStats.value.userDistribution,
+        qualityIndex: clientStats.value.qualityIndex,
+        lastUpdate: clientStats.value.lastUpdate
+      })
+    }
+  } catch (error) {
+    console.error('❌ 获取客户端实时数据失败:', error)
   }
 }
 
@@ -2649,6 +2703,37 @@ const initCharts = () => {
 
 // 定时器引用
 let statusCheckTimer: NodeJS.Timeout | null = null
+let clientDataTimer: NodeJS.Timeout | null = null
+
+// 是否正在显示客户端详情tab
+const isClientTabActive = ref(false)
+
+/**
+ * 启动客户端数据定时刷新
+ * 当用户在客户端详情页面时，每10秒刷新一次数据
+ */
+const startClientDataTimer = () => {
+  if (clientDataTimer) {
+    clearInterval(clientDataTimer)
+  }
+
+  clientDataTimer = setInterval(async () => {
+    if (isClientTabActive.value) {
+      console.log('⏰ 定时刷新客户端实时数据...')
+      await fetchClientRealtimeData()
+    }
+  }, 10000) // 每10秒刷新一次
+}
+
+/**
+ * 停止客户端数据定时刷新
+ */
+const stopClientDataTimer = () => {
+  if (clientDataTimer) {
+    clearInterval(clientDataTimer)
+    clientDataTimer = null
+  }
+}
 
 // 组件挂载时获取真实数据
 onMounted(async () => {
@@ -2684,17 +2769,20 @@ onMounted(async () => {
 // 组件卸载前清理事件监听器
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
-  
+
   // 清理图表管理器
   if (clientChartManager) clientChartManager.dispose()
   if (backendChartManager) backendChartManager.dispose()
   if (databaseChartManager) databaseChartManager.dispose()
-  
+
   // 清理定时器
   if (statusCheckTimer) {
     clearInterval(statusCheckTimer)
     statusCheckTimer = null
   }
+
+  // 清理客户端数据定时器
+  stopClientDataTimer()
 })
 
 // 处理窗口大小改变事件
@@ -2822,7 +2910,13 @@ const getChartOptionsById = (id: string) => {
 }
 
 // 处理选项卡切换事件
-const handleTabChange = (tabName: string) => {
+const handleTabChange = async (tabName: string) => {
+  // 如果离开客户端详情tab，停止定时刷新
+  if (activeComponentTab.value === 'client' && tabName !== 'client') {
+    isClientTabActive.value = false
+    stopClientDataTimer()
+  }
+
   // 当切换到包含图表的选项卡时，重新初始化图表
   if (tabName === 'client' || tabName === 'backend' || tabName === 'database') {
     // 先重置图表初始化状态
@@ -2832,6 +2926,13 @@ const handleTabChange = (tabName: string) => {
       // 使用Intersection Observer确保图表容器可见时才初始化
       initChartsWhenVisible()
     }, 600)  // 增加延迟时间确保选项卡完全激活
+
+    // 如果切换到客户端详情tab，立即获取实时数据并启动定时刷新
+    if (tabName === 'client') {
+      isClientTabActive.value = true
+      await fetchClientRealtimeData()
+      startClientDataTimer()
+    }
   }
 }
 

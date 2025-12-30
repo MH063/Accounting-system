@@ -175,12 +175,28 @@ class SystemStatusService {
       const result = await pool.query(query);
       const sessions = result.rows;
 
+      console.log('[SystemStatusService] 在线用户查询结果:', {
+        sessionCount: sessions.length,
+        sessions: sessions.map(s => ({
+          id: s.id,
+          user_id: s.user_id,
+          status: s.status,
+          client_type: s.client_type,
+          expires_at: s.expires_at,
+          updated_at: s.updated_at,
+          last_accessed_at: s.last_accessed_at
+        }))
+      });
+
       const distribution = { high: 0, normal: 0, suspicious: 0 };
       const totalOnline = sessions.length;
 
       if (totalOnline === 0) {
+        console.log('[SystemStatusService] 无在线用户会话');
         return { total: 0, distribution, qualityIndex: 100, alerts: [] };
       }
+
+      console.log('[SystemStatusService] 存在在线用户会话，开始计算质量分布');
 
       // 2. 应用数学模型进行分类
       let totalQualityScore = 0;

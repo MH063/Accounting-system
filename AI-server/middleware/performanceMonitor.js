@@ -26,18 +26,6 @@ class PerformanceMonitor {
    * 记录请求
    */
   recordRequest(route, responseTime, statusCode, req = null) {
-    // 检查是否是管理端请求
-    const isAdminRequest = req && (
-      route.startsWith('/api/admin') || 
-      route.startsWith('/api/status') ||
-      (req.user && req.user.role === 'admin')
-    );
-
-    // 如果是管理端请求，不计入性能指标（确保指标只反映客户端性能）
-    if (isAdminRequest) {
-      return;
-    }
-
     this.metrics.requests++;
     this.metrics.totalResponseTime += responseTime;
     

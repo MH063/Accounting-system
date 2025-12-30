@@ -44,3 +44,8 @@ backup/
 *.rdb
 *.db
 dump.rdb
+
+# Sensitive data files
+data/jwt-keys.json
+data/virus-total-usage.json
+login_test.json

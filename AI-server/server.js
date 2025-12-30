@@ -151,6 +151,10 @@ app.use(defaultRateLimiter);
 // 请求日志中间件
 app.use(requestLogger);
 
+// 性能监控中间件 - 在路由之前记录请求性能
+const { performanceMonitorMiddleware } = require('./middleware/performanceMonitor');
+app.use(performanceMonitorMiddleware());
+
 // 安全审计中间件 - 记录所有API请求到审计日志
 if (typeof securityAuditMiddleware === 'function') {
   app.use(securityAuditMiddleware());

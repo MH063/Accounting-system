@@ -28,28 +28,39 @@ class AdminAuthController extends BaseController {
   /**
    * 管理员心跳
    * GET /api/admin/heartbeat
+   * @access Public (无需认证)
    */
   async heartbeat(req, res, next) {
     try {
-      const userId = req.user.id;
-      const username = req.user.username;
+      const userId = req.user?.id;
+      const username = req.user?.username;
 
-      // 更新管理员最后在线时间（如果需要）
-      // await this.userService.updateLastActive(userId);
+      if (userId && username) {
+        logger.debug('[AdminAuthController] 管理员心跳', {
+          userId,
+          username,
+          timestamp: new Date().toISOString()
+        });
 
-      logger.debug('[AdminAuthController] 管理员心跳', { 
-        userId, 
-        username,
+        return successResponse(res, {
+          timestamp: new Date().toISOString(),
+          status: 'active',
+          authenticated: true,
+          user: {
+            id: userId,
+            username: username
+          }
+        }, '心跳正常');
+      }
+
+      logger.debug('[AdminAuthController] 服务心跳', {
         timestamp: new Date().toISOString()
       });
 
       return successResponse(res, {
         timestamp: new Date().toISOString(),
         status: 'active',
-        user: {
-          id: userId,
-          username: username
-        }
+        authenticated: false
       }, '心跳正常');
     } catch (error) {
       logger.error('[AdminAuthController] 管理员心跳失败', { error: error.message });
