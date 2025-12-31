@@ -27,7 +27,12 @@ function encryptValue(value) {
   
   try {
     const algorithm = 'aes-256-gcm';
-    const key = crypto.scryptSync(process.env.SESSION_SECRET || 'default-secret', 'salt', 32);
+    const secret = process.env.SESSION_SECRET;
+    if (!secret) {
+      console.error('未设置 SESSION_SECRET，加密功能受限');
+      return value;
+    }
+    const key = crypto.scryptSync(secret, 'salt', 32);
     const iv = crypto.randomBytes(16);
     const cipher = crypto.createCipher(algorithm, key);
     
@@ -56,7 +61,12 @@ function decryptValue(encryptedValue) {
     if (parts.length !== 3) return encryptedValue;
     
     const algorithm = 'aes-256-gcm';
-    const key = crypto.scryptSync(process.env.SESSION_SECRET || 'default-secret', 'salt', 32);
+    const secret = process.env.SESSION_SECRET;
+    if (!secret) {
+      console.error('未设置 SESSION_SECRET，解密功能受限');
+      return encryptedValue;
+    }
+    const key = crypto.scryptSync(secret, 'salt', 32);
     const iv = Buffer.from(parts[0], 'hex');
     const authTag = Buffer.from(parts[1], 'hex');
     const encrypted = parts[2];

@@ -10,7 +10,11 @@ const SIGNATURE_ALGORITHM = 'sha256';
 const HMAC_ALGORITHM = 'sha256';
 const COMMAND_TTL = 300000;
 
-const SIGNATURE_SECRET = process.env.COMMAND_SIGNATURE_SECRET || 'jzb_client_restart_secret_2024';
+const SIGNATURE_SECRET = process.env.COMMAND_SIGNATURE_SECRET;
+
+if (!SIGNATURE_SECRET) {
+  logger.error('[CommandSignature] 错误: 未设置 COMMAND_SIGNATURE_SECRET 环境变量');
+}
 
 /**
  * 生成重启指令签名
