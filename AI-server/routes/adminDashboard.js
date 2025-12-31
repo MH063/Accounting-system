@@ -416,26 +416,45 @@ router.get('/stats', authenticateToken, authorizeAdmin, responseWrapper(async (r
     let clientStatus = '正常';
     let clientStatusType = 'success';
     
-    // 获取在线用户数（使用系统状态服务获取真实统计数据）
+    // 获取在线用户数（客户端 + 管理端）
     let onlineUsers = 0;
     let onlineUserData = { total: 0, distribution: { high: 0, normal: 0, suspicious: 0 }, qualityIndex: 100 };
+    
+    // 1. 获取客户端在线用户数
+    let clientOnlineUsers = 0;
     try {
       onlineUserData = await systemStatusService.getRealOnlineUserCount();
-      onlineUsers = onlineUserData.total;
-      console.log(`[ADMIN_DASHBOARD] 实时在线用户数统计结果: ${onlineUsers}, 质量指数: ${onlineUserData.qualityIndex}`);
+      clientOnlineUsers = onlineUserData.total;
+      console.log(`[ADMIN_DASHBOARD] 客户端在线用户数: ${clientOnlineUsers}, 质量指数: ${onlineUserData.qualityIndex}`);
     } catch (e) {
-      console.warn('[ADMIN_DASHBOARD] 获取在线用户数失败，尝试回退到基础统计:', e.message);
-      // 回退到基础统计
-      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-      const onlineUsersResult = await pool.query(`
-        SELECT COUNT(DISTINCT user_id) as total FROM (
-          SELECT user_id FROM audit_logs WHERE created_at > $1 AND user_id IS NOT NULL
-          UNION
-          SELECT user_id FROM security_verification_logs WHERE created_at > $1 AND user_id IS NOT NULL
-        ) as active_users
-      `, [fiveMinutesAgo]);
-      onlineUsers = parseInt(onlineUsersResult.rows[0]?.total || 0);
+      console.warn('[ADMIN_DASHBOARD] 获取客户端在线用户数失败:', e.message);
+      clientOnlineUsers = 0;
     }
+    
+    // 2. 获取管理端在线用户数
+    let adminOnlineUsers = 0;
+    try {
+      const adminOnlineResult = await pool.query(`
+        SELECT COUNT(DISTINCT s.user_id) as total
+        FROM user_sessions s
+        INNER JOIN users u ON s.user_id = u.id
+        INNER JOIN user_roles ur ON u.id = ur.user_id AND ur.is_active = TRUE
+        INNER JOIN roles r ON ur.role_id = r.id
+        WHERE s.status = 'active' 
+        AND s.client_type = 'admin'
+        AND r.role_name = 'admin'
+        AND s.expires_at > NOW()
+        AND (s.updated_at > (NOW() - INTERVAL '5 minutes') OR s.last_accessed_at > (NOW() - INTERVAL '5 minutes'))
+      `);
+      adminOnlineUsers = parseInt(adminOnlineResult.rows[0]?.total || 0);
+      console.log(`[ADMIN_DASHBOARD] 管理端在线用户数: ${adminOnlineUsers}`);
+    } catch (e) {
+      console.warn('[ADMIN_DASHBOARD] 获取管理端在线用户数失败:', e.message);
+    }
+    
+    // 3. 计算总并发用户数
+    onlineUsers = clientOnlineUsers + adminOnlineUsers;
+    console.log(`[ADMIN_DASHBOARD] 总并发用户数: ${onlineUsers} (客户端: ${clientOnlineUsers}, 管理端: ${adminOnlineUsers})`);
 
     // 获取今日活跃用户数（真实统计今日有操作的用户）
     let todayActiveUsers = 0;
@@ -497,7 +516,7 @@ router.get('/stats', authenticateToken, authorizeAdmin, responseWrapper(async (r
     
     const clientStats = {
       version: 'v2.1.0',
-      onlineUsers: onlineUsers,
+      onlineUsers: clientOnlineUsers, // 客户端在线用户数（排除管理端）
       onlineDistribution: onlineUserData.distribution,
       qualityIndex: onlineUserData.qualityIndex,
       peakUsers: peakUsers,
@@ -581,11 +600,56 @@ router.get('/stats', authenticateToken, authorizeAdmin, responseWrapper(async (r
 
 
 
+    // 获取管理端响应时间统计
+    let adminResponseTime = 25; // 默认值
+    try {
+      const adminResponseResult = await pool.query(`
+        SELECT AVG(response_time) as avg_response_time
+        FROM audit_logs
+        WHERE created_at > NOW() - INTERVAL '5 minutes'
+          AND action LIKE '%admin%'
+          AND response_time IS NOT NULL
+      `);
+      adminResponseTime = Math.round(parseFloat(adminResponseResult.rows[0]?.avg_response_time || 25));
+    } catch (e) {
+      console.warn('[ADMIN_DASHBOARD] 获取管理端响应时间失败:', e.message);
+    }
+
+    // 计算整体平均响应时间（客户端、管理端、后端三者平均）
+    const avgResponseTime = Math.round(
+      (clientStats.avgResponseTime + adminResponseTime + backendStats.apiResponseTime) / 3
+    );
+
+    // 计算整体平均错误率（客户端、管理端、后端三者平均）
+    // 管理端错误率从审计日志计算
+    let adminErrorCount = 0;
+    let adminTotalCount = 1;
+    try {
+      const adminErrorResult = await pool.query(`
+        SELECT 
+          COUNT(*) FILTER (WHERE severity = 'error') as error_count,
+          COUNT(*) as total_count
+        FROM audit_logs
+        WHERE created_at > NOW() - INTERVAL '5 minutes'
+          AND action LIKE '%admin%'
+      `);
+      adminErrorCount = parseInt(adminErrorResult.rows[0]?.error_count || 0);
+      adminTotalCount = parseInt(adminErrorResult.rows[0]?.total_count || 1);
+    } catch (e) {
+      console.warn('[ADMIN_DASHBOARD] 获取管理端错误率失败:', e.message);
+    }
+    const adminErrorRate = adminTotalCount > 0 ? (adminErrorCount / adminTotalCount) * 100 : 0;
+
+    // 计算整体平均错误率
+    const avgErrorRate = parseFloat(
+      ((clientStats.errorRate + adminErrorRate + 0) / 3).toFixed(2)
+    );
+
     // 性能指标统计
     const performanceMetrics = {
-      throughput: currentQps * 60, // 吞吐量 (每分钟请求数)
-      avgResponseTime: backendStats.apiResponseTime,
-      errorRate: clientStats.errorRate,
+      throughput: parseFloat((currentQps * 60).toFixed(2)), // 吞吐量 (每分钟请求数)，保留两位小数
+      avgResponseTime: avgResponseTime, // 整体平均响应时间
+      errorRate: avgErrorRate, // 整体平均错误率
       concurrentUsers: clientStats.onlineUsers
     };
 

@@ -187,6 +187,15 @@ app.use('/api/system', routeConfigManager.getRouter());
 // 系统管理路由（包含时间同步等）
 app.use('/api/system', require('./routes/system'));
 
+// 系统配置管理路由
+app.use('/api/system', require('./routes/systemConfig'));
+
+// 环境配置管理路由
+app.use('/api/system', require('./routes/environmentConfig'));
+
+// 环境切换路由（真正的环境切换，自动重启服务）
+app.use('/api/system', require('./routes/environmentSwitch'));
+
 // 向后兼容：现有路由保持不变，但增加版本支持
 // 这些路由将通过版本化中间件自动支持版本识别
 app.use('/api/auth', authRoutes);
@@ -195,11 +204,11 @@ app.use('/api/db', dbRoutes);
 app.use('/api/db', require('./routes/dbHealth'));
 app.use('/api/upload', uploadRoutes);
 
-// 注册版本化用户管理路由示例
-app.use('/api/users', require('./routes/versioned-users'));
-
 // 现有用户路由（向后兼容）
 app.use('/api/users', require('./routes/users'));
+
+// 注册版本化用户管理路由示例
+app.use('/api/users', require('./routes/versioned-users'));
 
 app.use('/api/logs', require('./routes/logs'));
 app.use('/api/logs', require('./routes/logManagement'));

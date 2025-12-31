@@ -4,39 +4,79 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" href="/admin-avatar.png" id="favicon" />
-    <title>记账管理系统</title>
+    <title id="page-title">记账管理系统 - 管理端</title>
     <script>
-      // 动态生成圆形 favicon
-      window.addEventListener('DOMContentLoaded', () => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const size = 64;
-          canvas.width = size;
-          canvas.height = size;
-          const ctx = canvas.getContext('2d');
-          
-          // 绘制圆形裁剪路径
-          ctx.beginPath();
-          ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
-          ctx.closePath();
-          ctx.clip();
-          
-          // 计算居中裁剪（假设头像在图片中心区域）
-          const sourceSize = Math.min(img.width, img.height);
-          const sx = (img.width - sourceSize) / 2;
-          const sy = (img.height - sourceSize) / 2;
-          
-          // 绘制图片
-          ctx.drawImage(img, sx, sy, sourceSize, sourceSize, 0, 0, size, size);
-          
-          // 更新 favicon
-          const favicon = document.getElementById('favicon');
-          favicon.href = canvas.toDataURL('image/png');
+      (async function() {
+        let systemName = '记账管理系统';
+        let systemVersion = '1.0.0';
+        let environment = 'development';
+
+        try {
+          const stored = localStorage.getItem('system_config');
+          if (stored) {
+            const savedConfig = JSON.parse(stored);
+            systemName = savedConfig.name || systemName;
+            systemVersion = savedConfig.version || systemVersion;
+            environment = savedConfig.environment || environment;
+          }
+
+          try {
+            const response = await fetch('/version.json');
+            if (response.ok) {
+              const data = await response.json();
+              systemVersion = data.version || systemVersion;
+              if (!localStorage.getItem('system_config')) {
+                systemName = data.name || systemName;
+              }
+            }
+          } catch (e) {
+            console.warn('无法从version.json获取版本信息，使用默认值');
+          }
+        } catch (e) {
+          console.warn('读取配置出错:', e);
+        }
+
+        document.getElementById('page-title').textContent = systemName + ' - 管理端';
+
+        window.SYSTEM_CONFIG = {
+          name: systemName,
+          version: systemVersion,
+          environment: environment,
+          updateTitle: function() {
+            const title = document.getElementById('page-title');
+            if (title && window.SYSTEM_CONFIG.name) {
+              title.textContent = window.SYSTEM_CONFIG.name + ' - 管理端';
+            }
+          }
         };
-        img.src = '/admin-avatar.png';
-      });
+
+        window.addEventListener('DOMContentLoaded', () => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const size = 64;
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+
+            ctx.beginPath();
+            ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.clip();
+
+            const sourceSize = Math.min(img.width, img.height);
+            const sx = (img.width - sourceSize) / 2;
+            const sy = (img.height - sourceSize) / 2;
+
+            ctx.drawImage(img, sx, sy, sourceSize, sourceSize, 0, 0, size, size);
+
+            const favicon = document.getElementById('favicon');
+            favicon.href = canvas.toDataURL('image/png');
+          };
+          img.src = '/admin-avatar.png';
+        });
+      })();
     </script>
   </head>
   <body>

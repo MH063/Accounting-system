@@ -3,7 +3,7 @@
     <div class="header-left">
       <div class="logo-container">
         <img src="../assets/admin-avatar.png" alt="Logo" class="logo" />
-        <span class="title">记账管理系统</span>
+        <span class="title">{{ systemName }}</span>
       </div>
     </div>
     <div class="header-right">
@@ -111,11 +111,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ArrowDown, Bell, Close, User } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '@/api'
 import { useRouter } from 'vue-router'
+import { getSystemConfig } from '@/utils/systemConfig'
+
+// 从全局配置获取系统名称
+const systemConfig = getSystemConfig()
+const systemName = computed(() => systemConfig.name || '记账管理系统')
 
 // 获取 router 实例
 const router = useRouter()

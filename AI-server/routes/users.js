@@ -48,30 +48,102 @@ const upload = multer({
   }
 });
 
-/**
- * GET /api/users
- * 获取所有用户列表
- */
+// 获取所有用户列表 (带搜索、分页、排序、过滤)
 router.get('/', authenticateToken, responseWrapper(async (req, res) => {
   try {
-    const users = UserManager.getAllUsers();
-    const usersWithRoles = users.map(user => ({
+    const { pool } = require('../config/database');
+    const { page = 1, pageSize = 10, keyword, role, status, dormitory } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(pageSize);
+    
+    // 构建查询条件
+    let whereConditions = [];
+    let queryParams = [];
+    let paramIndex = 1;
+
+    if (keyword) {
+      whereConditions.push(`(u.username ILIKE $${paramIndex} OR u.email ILIKE $${paramIndex})`);
+      queryParams.push(`%${keyword}%`);
+      paramIndex++;
+    }
+
+    if (role) {
+      if (role === 'admin') {
+        whereConditions.push(`EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON ur.role_id = r.id WHERE ur.user_id = u.id AND r.role_name IN ('system_admin', 'admin'))`);
+      } else if (role === 'user') {
+        whereConditions.push(`NOT EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON ur.role_id = r.id WHERE ur.user_id = u.id AND r.role_name IN ('system_admin', 'admin'))`);
+      }
+    }
+
+    if (status) {
+      whereConditions.push(`u.status = $${paramIndex}`);
+      queryParams.push(status);
+      paramIndex++;
+    }
+
+    if (dormitory) {
+      whereConditions.push(`EXISTS (
+        SELECT 1 FROM user_dorms ud 
+        JOIN dorms d ON ud.dorm_id = d.id 
+        WHERE ud.user_id = u.id AND (d.dorm_name ILIKE $${paramIndex} OR d.room_number ILIKE $${paramIndex})
+      )`);
+      queryParams.push(`%${dormitory}%`);
+      paramIndex++;
+    }
+
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+    // 查询用户列表
+    const countQuery = `SELECT COUNT(*) as total FROM users u ${whereClause}`;
+    const countResult = await pool.query(countQuery, queryParams);
+    const total = parseInt(countResult.rows[0].total);
+
+    const listQuery = `
+      SELECT 
+        u.id,
+        u.username,
+        u.email,
+        u.phone,
+        u.status,
+        u.created_at,
+        u.last_login_at,
+        u.updated_at,
+        (SELECT json_agg(json_build_object('id', r.id, 'name', r.role_name)) 
+         FROM user_roles ur 
+         JOIN roles r ON ur.role_id = r.id 
+         WHERE ur.user_id = u.id) as roles,
+        (SELECT d.dorm_name 
+         FROM user_dorms ud 
+         JOIN dorms d ON ud.dorm_id = d.id 
+         WHERE ud.user_id = u.id 
+         LIMIT 1) as dormitory
+      FROM users u
+      ${whereClause}
+      ORDER BY u.created_at DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+
+    const usersResult = await pool.query(listQuery, [...queryParams, parseInt(pageSize), offset]);
+    const users = usersResult.rows.map(user => ({
       id: user.id,
       username: user.username,
       email: user.email,
-      roles: user.roles || [],
+      phone: user.phone || '',
       status: user.status || 'active',
-      createdAt: user.createdAt || new Date().toISOString(),
-      lastLogin: user.lastLogin || null,
-      isActive: user.isActive !== false
+      role: (user.roles && user.roles.length > 0) ? 
+        (user.roles.some(r => ['system_admin', 'admin'].includes(r.name)) ? 'admin' : 'user') : 'user',
+      dormitory: user.dormitory || '',
+      lastLoginTime: user.last_login_at,
+      createdAt: user.created_at,
+      updatedAt: user.updated_at,
+      isActive: user.status === 'active'
     }));
 
     res.json({
       success: true,
       message: '获取用户列表成功',
       data: {
-        users: usersWithRoles,
-        total: usersWithRoles.length
+        users,
+        total
       }
     });
   } catch (error) {
@@ -90,30 +162,65 @@ router.get('/', authenticateToken, responseWrapper(async (req, res) => {
  */
 router.get('/:userId', authenticateToken, responseWrapper(async (req, res) => {
   try {
+    const { pool } = require('../config/database');
     const { userId } = req.params;
-    const user = UserManager.getUserById(userId);
     
-    if (!user) {
+    const query = `
+      SELECT 
+        u.id,
+        u.username,
+        u.email,
+        u.phone,
+        u.nickname,
+        u.real_name,
+        u.gender,
+        u.status,
+        u.created_at,
+        u.last_login_at,
+        u.updated_at,
+        (SELECT json_agg(json_build_object('id', r.id, 'name', r.role_name)) 
+         FROM user_roles ur 
+         JOIN roles r ON ur.role_id = r.id 
+         WHERE ur.user_id = u.id) as roles,
+        (SELECT d.dorm_name 
+         FROM user_dorms ud 
+         JOIN dorms d ON ud.dorm_id = d.id 
+         WHERE ud.user_id = u.id 
+         LIMIT 1) as dormitory
+      FROM users u
+      WHERE u.id = $1
+    `;
+
+    const result = await pool.query(query, [userId]);
+    
+    if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: '用户不存在'
       });
     }
 
+    const user = result.rows[0];
     res.json({
       success: true,
       message: '获取用户信息成功',
       data: {
-        user: {
-          id: user.id,
-          username: user.username,
-          email: user.email,
-          roles: user.roles || [],
-          status: user.status || 'active',
-          createdAt: user.createdAt || new Date().toISOString(),
-          lastLogin: user.lastLogin || null,
-          isActive: user.isActive !== false
-        }
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        phone: user.phone || '',
+        nickname: user.nickname || '',
+        realName: user.real_name || '',
+        gender: user.gender || '',
+        status: user.status || 'active',
+        role: (user.roles && user.roles.length > 0) ? 
+          (user.roles.some(r => ['system_admin', 'admin'].includes(r.name)) ? 'admin' : 'user') : 'user',
+        roles: user.roles || [],
+        dormitory: user.dormitory || '',
+        createdAt: user.created_at,
+        lastLoginTime: user.last_login_at,
+        updatedAt: user.updated_at,
+        isActive: user.status === 'active'
       }
     });
   } catch (error) {
@@ -121,6 +228,175 @@ router.get('/:userId', authenticateToken, responseWrapper(async (req, res) => {
     res.status(500).json({
       success: false,
       message: '获取用户信息失败',
+      error: error.message
+    });
+  }
+}));
+
+/**
+ * GET /api/users/:userId/login-logs
+ * 获取用户登录日志
+ */
+router.get('/:userId/login-logs', authenticateToken, responseWrapper(async (req, res) => {
+  try {
+    const { pool } = require('../config/database');
+    const { userId } = req.params;
+    const { page = 1, pageSize = 10 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(pageSize);
+
+    const countQuery = 'SELECT COUNT(*) FROM user_sessions WHERE user_id = $1';
+    const countResult = await pool.query(countQuery, [userId]);
+    const total = parseInt(countResult.rows[0].count);
+
+    const logsQuery = `
+      SELECT 
+        id,
+        ip_address as ip,
+        device_info->>'browser' as browser,
+        device_info->>'os' as os,
+        created_at as "loginTime",
+        status
+      FROM user_sessions 
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT $2 OFFSET $3
+    `;
+    const logsResult = await pool.query(logsQuery, [userId, parseInt(pageSize), offset]);
+
+    res.json({
+      success: true,
+      message: '获取登录日志成功',
+      data: {
+        items: logsResult.rows,
+        total
+      }
+    });
+  } catch (error) {
+    console.error('获取登录日志失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '获取登录日志失败',
+      error: error.message
+    });
+  }
+}));
+
+/**
+ * GET /api/users/:userId/payments
+ * 获取用户支付记录
+ */
+router.get('/:userId/payments', authenticateToken, responseWrapper(async (req, res) => {
+  try {
+    const { pool } = require('../config/database');
+    const { userId } = req.params;
+    const { page = 1, pageSize = 10 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(pageSize);
+
+    const countQuery = 'SELECT COUNT(*) FROM expenses WHERE applicant_id = $1 OR payer_id = $1';
+    const countResult = await pool.query(countQuery, [userId]);
+    const total = parseInt(countResult.rows[0].count);
+
+    const paymentsQuery = `
+      SELECT 
+        id,
+        title,
+        amount,
+        currency,
+        status,
+        payment_method as "paymentMethod",
+        expense_date as "paymentTime",
+        created_at as "createdAt"
+      FROM expenses
+      WHERE applicant_id = $1 OR payer_id = $1
+      ORDER BY expense_date DESC
+      LIMIT $2 OFFSET $3
+    `;
+    const paymentsResult = await pool.query(paymentsQuery, [userId, parseInt(pageSize), offset]);
+
+    res.json({
+      success: true,
+      message: '获取支付记录成功',
+      data: {
+        items: paymentsResult.rows,
+        total
+      }
+    });
+  } catch (error) {
+    console.error('获取支付记录失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '获取支付记录失败',
+      error: error.message
+    });
+  }
+}));
+
+/**
+ * GET /api/users/:userId/roles
+ * 获取用户权限角色
+ */
+router.get('/:userId/roles', authenticateToken, responseWrapper(async (req, res) => {
+  try {
+    const { pool } = require('../config/database');
+    const { userId } = req.params;
+
+    const rolesQuery = `
+      SELECT r.id, r.role_name as name, r.description
+      FROM user_roles ur
+      JOIN roles r ON ur.role_id = r.id
+      WHERE ur.user_id = $1
+    `;
+    const rolesResult = await pool.query(rolesQuery, [userId]);
+
+    const allRolesQuery = 'SELECT id, role_name as name, description FROM roles';
+    const allRolesResult = await pool.query(allRolesQuery);
+
+    res.json({
+      success: true,
+      message: '获取用户角色成功',
+      data: {
+        roles: rolesResult.rows,
+        availableRoles: allRolesResult.rows
+      }
+    });
+  } catch (error) {
+    console.error('获取用户角色失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '获取用户角色失败',
+      error: error.message
+    });
+  }
+}));
+
+/**
+ * GET /api/users/:userId/dormitory
+ * 获取用户所属寝室信息
+ */
+router.get('/:userId/dormitory', authenticateToken, responseWrapper(async (req, res) => {
+  try {
+    const { pool } = require('../config/database');
+    const { userId } = req.params;
+
+    const dormQuery = `
+      SELECT d.id, d.dorm_name as "dormName", d.room_number as "roomNumber", d.building
+      FROM user_dorms ud
+      JOIN dorms d ON ud.dorm_id = d.id
+      WHERE ud.user_id = $1
+      LIMIT 1
+    `;
+    const dormResult = await pool.query(dormQuery, [userId]);
+
+    res.json({
+      success: true,
+      message: '获取用户寝室信息成功',
+      data: dormResult.rows[0] || null
+    });
+  } catch (error) {
+    console.error('获取用户寝室信息失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '获取用户寝室信息失败',
       error: error.message
     });
   }
@@ -601,3 +877,251 @@ router.post('/avatar', authenticateToken, (req, res, next) => {
 }));
 
 module.exports = router;
+
+/**
+ * PUT /api/users/batch/enable
+ * 批量启用用户
+ */
+router.put('/batch/enable', PermissionChecker.requireAdmin(), responseWrapper(async (req, res) => {
+  try {
+    const { userIds } = req.body;
+
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: '请提供有效的用户ID列表'
+      });
+    }
+
+    const enabledUsers = [];
+    const notFoundUsers = [];
+
+    for (const userId of userIds) {
+      const user = UserManager.getUserById(userId);
+      if (user) {
+        UserManager.setUserActive(userId, true);
+        enabledUsers.push(userId);
+      } else {
+        notFoundUsers.push(userId);
+      }
+    }
+
+    logger.info('批量启用用户', { enabledUsers, notFoundUsers, operatorId: req.user?.id });
+
+    res.json({
+      success: true,
+      message: `成功启用 ${enabledUsers.length} 个用户${notFoundUsers.length > 0 ? `，${notFoundUsers.length} 个用户不存在` : ''}`,
+      data: {
+        enabledCount: enabledUsers.length,
+        notFoundCount: notFoundUsers.length,
+        enabledUserIds: enabledUsers,
+        notFoundUserIds: notFoundUsers
+      }
+    });
+  } catch (error) {
+    console.error('批量启用用户失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '批量启用用户失败',
+      error: error.message
+    });
+  }
+}));
+
+/**
+ * PUT /api/users/batch/disable
+ * 批量禁用用户
+ */
+router.put('/batch/disable', PermissionChecker.requireAdmin(), responseWrapper(async (req, res) => {
+  try {
+    const { userIds } = req.body;
+
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: '请提供有效的用户ID列表'
+      });
+    }
+
+    const disabledUsers = [];
+    const notFoundUsers = [];
+
+    for (const userId of userIds) {
+      const user = UserManager.getUserById(userId);
+      if (user) {
+        UserManager.setUserActive(userId, false);
+        disabledUsers.push(userId);
+      } else {
+        notFoundUsers.push(userId);
+      }
+    }
+
+    logger.info('批量禁用用户', { disabledUsers, notFoundUsers, operatorId: req.user?.id });
+
+    res.json({
+      success: true,
+      message: `成功禁用 ${disabledUsers.length} 个用户${notFoundUsers.length > 0 ? `，${notFoundUsers.length} 个用户不存在` : ''}`,
+      data: {
+        disabledCount: disabledUsers.length,
+        notFoundCount: notFoundUsers.length,
+        disabledUserIds: disabledUsers,
+        notFoundUserIds: notFoundUsers
+      }
+    });
+  } catch (error) {
+    console.error('批量禁用用户失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '批量禁用用户失败',
+      error: error.message
+    });
+  }
+}));
+
+/**
+ * DELETE /api/users/batch
+ * 批量删除用户
+ */
+router.delete('/batch', PermissionChecker.requireAdmin(), responseWrapper(async (req, res) => {
+  try {
+    const { userIds } = req.body;
+
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: '请提供有效的用户ID列表'
+      });
+    }
+
+    const deletedUsers = [];
+    const notFoundUsers = [];
+
+    for (const userId of userIds) {
+      const user = UserManager.getUserById(userId);
+      if (user) {
+        UserManager.removeUser(userId);
+        deletedUsers.push(userId);
+      } else {
+        notFoundUsers.push(userId);
+      }
+    }
+
+    logger.info('批量删除用户', { deletedUsers, notFoundUsers, operatorId: req.user?.id });
+
+    res.json({
+      success: true,
+      message: `成功删除 ${deletedUsers.length} 个用户${notFoundUsers.length > 0 ? `，${notFoundUsers.length} 个用户不存在` : ''}`,
+      data: {
+        deletedCount: deletedUsers.length,
+        notFoundCount: notFoundUsers.length,
+        deletedUserIds: deletedUsers,
+        notFoundUserIds: notFoundUsers
+      }
+    });
+  } catch (error) {
+    console.error('批量删除用户失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '批量删除用户失败',
+      error: error.message
+    });
+  }
+}));
+
+/**
+ * GET /api/users/export
+ * 导出用户数据
+ */
+router.get('/export', authenticateToken, responseWrapper(async (req, res) => {
+  try {
+    const { format = 'csv', keyword, role, status, dormitory } = req.query;
+
+    let users = UserManager.getAllUsers();
+
+    // 过滤条件
+    if (keyword) {
+      const lowerKeyword = keyword.toLowerCase();
+      users = users.filter(u => 
+        (u.username && u.username.toLowerCase().includes(lowerKeyword)) ||
+        (u.email && u.email.toLowerCase().includes(lowerKeyword))
+      );
+    }
+
+    if (role) {
+      users = users.filter(u => {
+        const roles = u.roles || [];
+        return roles.includes(role) || (role === 'user' && roles.length === 0);
+      });
+    }
+
+    if (status) {
+      users = users.filter(u => {
+        if (status === 'active') return u.isActive !== false;
+        if (status === 'inactive') return u.isActive === false;
+        return true;
+      });
+    }
+
+    if (dormitory) {
+      users = users.filter(u => u.dormitory && u.dormitory.includes(dormitory));
+    }
+
+    // 格式化导出数据
+    const exportData = users.map(u => ({
+      id: u.id,
+      username: u.username || '',
+      email: u.email || '',
+      role: (u.roles && u.roles.length > 0) ? u.roles.join(', ') : 'user',
+      phone: u.phone || '',
+      dormitory: u.dormitory || '',
+      status: u.isActive !== false ? 'active' : 'inactive',
+      lastLoginTime: u.lastLogin ? new Date(u.lastLogin).toLocaleString() : '',
+      createdAt: u.createdAt ? new Date(u.createdAt).toLocaleString() : ''
+    }));
+
+    logger.info('导出用户数据', { 
+      count: exportData.length, 
+      format, 
+      operatorId: req.user?.id 
+    });
+
+    if (format === 'excel') {
+      // 生成简单的Excel兼容CSV (带BOM)
+      const headers = ['ID', '用户名', '邮箱', '角色', '手机号', '寝室号', '状态', '最后登录时间', '创建时间'];
+      const csvContent = [
+        '\uFEFF' + headers.join(','),
+        ...exportData.map(row => 
+          [row.id, row.username, row.email, row.role, row.phone, row.dormitory, row.status, row.lastLoginTime, row.createdAt]
+            .map(cell => `"${String(cell).replace(/"/g, '""')}"`)
+            .join(',')
+        )
+      ].join('\n');
+
+      res.setHeader('Content-Type', 'application/vnd.ms-excel; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename=用户数据_${Date.now()}.csv`);
+      res.send(csvContent);
+    } else {
+      // 默认CSV格式
+      const headers = ['ID', '用户名', '邮箱', '角色', '手机号', '寝室号', '状态', '最后登录时间', '创建时间'];
+      const csvContent = [
+        '\uFEFF' + headers.join(','),
+        ...exportData.map(row => 
+          [row.id, row.username, row.email, row.role, row.phone, row.dormitory, row.status, row.lastLoginTime, row.createdAt]
+            .map(cell => `"${String(cell).replace(/"/g, '""')}"`)
+            .join(',')
+        )
+      ].join('\n');
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename=用户数据_${Date.now()}.csv`);
+      res.send(csvContent);
+    }
+  } catch (error) {
+    console.error('导出用户数据失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '导出用户数据失败',
+      error: error.message
+    });
+  }
+}));

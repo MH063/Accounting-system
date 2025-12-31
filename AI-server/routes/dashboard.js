@@ -159,6 +159,28 @@ router.get('/statistics', authenticateToken, async (req, res) => {
     `;
     const recentMaintenanceResult = await query(recentMaintenanceQuery);
     
+    // 处理时间字段，确保序列化正确
+    const processTimestamp = (timestamp) => {
+      if (!timestamp) return null
+      if (typeof timestamp === 'object' && timestamp.toISOString) {
+        return timestamp.toISOString()
+      }
+      return timestamp
+    }
+    
+    // 转换最近费用记录的时间字段
+    const recentExpenses = recentExpensesResult.rows.map(row => ({
+      ...row,
+      expense_date: processTimestamp(row.expense_date),
+      created_at: processTimestamp(row.created_at)
+    }))
+    
+    // 转换最近报修记录的时间字段
+    const recentMaintenance = recentMaintenanceResult.rows.map(row => ({
+      ...row,
+      created_at: processTimestamp(row.created_at)
+    }))
+    
     // 计算支出趋势（相比上月）
     const totalMonthlyExpense = parseFloat(expenseStats.total_monthly_expense);
     let expenseTrend = 0;
@@ -214,8 +236,8 @@ router.get('/statistics', authenticateToken, async (req, res) => {
       },
       
       // 最近记录
-      recentExpenses: recentExpensesResult.rows,      // 最近费用记录
-      recentMaintenance: recentMaintenanceResult.rows // 最近报修记录
+      recentExpenses,      // 最近费用记录
+      recentMaintenance // 最近报修记录
     };
     
     console.log('仪表盘统计数据获取完成');

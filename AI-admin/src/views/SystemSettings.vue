@@ -519,13 +519,16 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
+import { userApi } from '@/api/user'
+import { updateGlobalSystemConfig, getSystemConfig } from '@/utils/systemConfig'
 
 // 响应式数据
 const activeTab = ref('basic')
 const notificationActiveTab = ref('rules')
 
+const globalConfig = getSystemConfig()
 const basicForm = ref({
-  systemName: 'AI管理系统',
+  systemName: globalConfig.name || '记账管理系统',
   systemDescription: '基于Vue3的现代化管理平台',
   logoUrl: 'https://picsum.photos/seed/system-logo/100/100.jpg',
   theme: 'default',
@@ -606,11 +609,11 @@ const adminList = ref([
 ])
 
 const systemInfo = ref({
-  name: 'AI管理系统',
-  version: 'v1.2.0',
-  environment: '生产环境',
-  startTime: '2023-10-01 08:00:00',
-  uptime: '45天12小时35分钟'
+  name: globalConfig.name || '记账管理系统',
+  version: globalConfig.version || '1.0.0',
+  environment: globalConfig.environment === 'production' ? '生产环境' : globalConfig.environment === 'development' ? '开发环境' : '测试环境',
+  startTime: '',
+  uptime: ''
 })
 
 const serviceStatus = ref([
@@ -682,17 +685,36 @@ const testEmailConnection = () => {
 }
 
 // 保存设置
-const handleSave = () => {
-  console.log('💾 保存系统设置:', {
-    basic: basicForm.value,
-    payment: paymentForm.value,
-    email: emailForm.value,
-    security: securityForm.value,
-    notification: notificationForm.value,
-    businessRules: businessRulesForm.value,
-    log: logForm.value
-  })
-  ElMessage.success('系统设置保存成功')
+const handleSave = async () => {
+  try {
+    console.log('💾 保存系统设置:', {
+      basic: basicForm.value,
+      payment: paymentForm.value,
+      email: emailForm.value,
+      security: securityForm.value,
+      notification: notificationForm.value,
+      businessRules: businessRulesForm.value,
+      log: logForm.value
+    })
+    
+    // 构建配置对象
+    const configs: Record<string, any> = {}
+    configs['system.name'] = basicForm.value.systemName
+    configs['system.environment'] = systemInfo.value.environment === '开发环境' ? 'development' : 
+                                     systemInfo.value.environment === '测试环境' ? 'testing' : 'production'
+    
+    // 调用API保存配置
+    const response = await userApi.setConfig({ configs })
+    console.log('✅ 配置保存响应:', response)
+    
+    // 保存成功后刷新systemInfo
+    await fetchSystemConfigForSettings()
+    
+    ElMessage.success('系统设置保存成功')
+  } catch (error) {
+    console.error('❌ 保存系统设置失败:', error)
+    ElMessage.error('保存系统设置失败: ' + (error as Error).message)
+  }
 }
 
 // 刷新服务状态
@@ -765,9 +787,77 @@ const saveTemplate = () => {
   ElMessage.success('模板保存成功')
 }
 
+// 从API获取系统配置并同步到systemInfo
+const fetchSystemConfigForSettings = async () => {
+  try {
+    console.log('🔄 SystemSettings: 开始获取系统配置...')
+    
+    const response = await userApi.getSystemConfigs()
+    console.log('📡 SystemSettings API响应:', response)
+    
+    // 标准化数据解析
+    let data = response
+    if (response && response.success === true && response.data) {
+      data = response.data
+    }
+    
+    if (data && data.configs) {
+      const configs = data.configs
+      
+      const getConfigValue = (key1: string, key2: string) => {
+        const item = configs[key1] || configs[key2]
+        return item?.value !== undefined ? item.value : null
+      }
+      
+      const name = getConfigValue('system.name', 'system_name') || '记账管理系统'
+      const version = getConfigValue('system.version', 'system_version') || '1.0.0'
+      const environment = getConfigValue('system.environment', 'system_environment') || '生产环境'
+      const startTime = getConfigValue('system.deploy_time', 'system_deploy_time') || new Date().toLocaleString('zh-CN', { hour12: false })
+      
+      // 更新 systemInfo
+      systemInfo.value = {
+        name,
+        version,
+        environment,
+        startTime,
+        uptime: calculateUptime(startTime)
+      }
+      
+      // 同时更新 basicForm 中的系统名称
+      basicForm.value.systemName = name
+      
+      // 同步更新全局配置（用于所有页面显示）
+      updateGlobalSystemConfig({ name, version, environment })
+      
+      console.log('✅ SystemSettings: 系统配置获取完成', { name, version, environment })
+    }
+  } catch (error) {
+    console.error('❌ SystemSettings: 获取系统配置失败:', error)
+  }
+}
+
+// 计算运行时长
+const calculateUptime = (startTimeStr: string): string => {
+  try {
+    const startTime = new Date(startTimeStr)
+    if (isNaN(startTime.getTime())) {
+      return '未知'
+    }
+    const now = new Date()
+    const diffMs = now.getTime() - startTime.getTime()
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+    const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
+    return `${diffDays}天${diffHours}小时${diffMinutes}分钟`
+  } catch {
+    return '未知'
+  }
+}
+
 // 组件挂载
-onMounted(() => {
+onMounted(async () => {
   console.log('⚙️ 系统设置页面加载完成')
+  await fetchSystemConfigForSettings()
 })
 
 /**

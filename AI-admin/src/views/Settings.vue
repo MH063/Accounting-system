@@ -95,16 +95,17 @@
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
+import { updateGlobalSystemConfig, getSystemConfig } from '@/utils/systemConfig'
 
 // 当前激活的标签页
 const activeTab = ref('basic')
 
-// 基本设置表单
+const globalConfig = getSystemConfig()
 const basicForm = ref({
-  systemName: 'AI管理系统',
+  systemName: globalConfig.name || '记账管理系统',
   systemDesc: '基于Vue3的现代化管理平台',
   systemLogo: 'https://picsum.photos/seed/system-logo/100/100.jpg',
-  systemVersion: 'v2.1.0'
+  systemVersion: globalConfig.version || '1.0.0'
 })
 
 // 邮件设置表单
@@ -126,6 +127,10 @@ const securityForm = ref({
 
 // 操作方法
 const saveBasicSettings = () => {
+  updateGlobalSystemConfig({
+    name: basicForm.value.systemName,
+    version: basicForm.value.systemVersion
+  })
   ElMessage.success('基本设置保存成功')
 }
 

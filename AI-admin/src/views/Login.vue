@@ -3,7 +3,7 @@
     <div class="login-box">
       <div class="login-header">
         <h2>管理系统登录</h2>
-        <p>欢迎使用记账管理系统</p>
+        <p>欢迎使用{{ systemName }}</p>
       </div>
       
       <el-form 
@@ -55,11 +55,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
 import { adminAuthApi } from '@/api/adminAuth'
+import { getSystemConfig } from '@/utils/systemConfig'
+
+// 从全局配置获取系统名称
+const systemConfig = getSystemConfig()
+const systemName = computed(() => systemConfig.name || '记账管理系统')
 
 // 路由和状态管理实例
 const router = useRouter()

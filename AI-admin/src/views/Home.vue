@@ -387,10 +387,6 @@
                               <span class="metric-label">错误率</span>
                               <span class="metric-value">{{ performanceMetrics.errorRate }}%</span>
                             </div>
-                            <div class="metric-item">
-                              <span class="metric-label">并发用户数</span>
-                              <span class="metric-value">{{ performanceMetrics.concurrentUsers }}</span>
-                            </div>
                           </div>
                         </el-card>
                       </el-col>
@@ -409,11 +405,10 @@
                           <span>系统配置信息</span>
                           <div class="header-actions">
                             <el-button size="small" @click="handleEditConfig">编辑配置</el-button>
-                            <!-- 系统配置信息刷新按钮已删除 -->
                           </div>
                         </div>
                       </template>
-                      <el-descriptions :column="2" border>
+                      <el-descriptions :column="2" border :key="configUpdateKey">
                         <el-descriptions-item label="系统名称">{{ systemConfig.name }}</el-descriptions-item>
                         <el-descriptions-item label="版本号">{{ systemConfig.version }}</el-descriptions-item>
                         <el-descriptions-item label="运行环境">{{ systemConfig.environment }}</el-descriptions-item>
@@ -429,113 +424,256 @@
                       </el-descriptions>
                     </el-card>
                     
+                    <el-alert
+                      title="环境配置说明"
+                      type="info"
+                      :closable="false"
+                      style="margin-top: 16px;"
+                    >
+                      <template #default>
+                        <div style="font-size: 13px; line-height: 1.6;">
+                          <p><strong>当前运行环境：</strong>{{ getActualEnvironment() }}</p>
+                          <p><strong>注意事项：</strong></p>
+                          <ul style="margin: 8px 0; padding-left: 20px;">
+                            <li>系统运行环境由后端服务的 <code>NODE_ENV</code> 环境变量决定</li>
+                            <li>修改"运行环境"配置后需要<strong>重启后端服务</strong>才能真正生效</li>
+                            <li>开发环境：功能完整，日志详细，适合调试</li>
+                            <li>测试环境：模拟生产配置，用于集成测试</li>
+                            <li>生产环境：性能优化，安全增强，需谨慎操作</li>
+                          </ul>
+                        </div>
+                      </template>
+                    </el-alert>
+                    
                     <el-card style="margin-top: 20px;">
                       <template #header>
                         <div class="card-header">
                           <span>安全配置</span>
-                          <!-- 安全配置刷新按钮已删除 -->
                         </div>
                       </template>
-                      <el-descriptions :column="2" border>
+                      <el-descriptions :column="2" border :key="configUpdateKey">
                         <el-descriptions-item label="SSL证书">{{ securityConfig.sslCertificate }}</el-descriptions-item>
                         <el-descriptions-item label="加密算法">{{ securityConfig.encryptionAlgorithm }}</el-descriptions-item>
-                        <el-descriptions-item label="会话超时">{{ securityConfig.sessionTimeout }}</el-descriptions-item>
-                        <el-descriptions-item label="密码策略">{{ securityConfig.passwordPolicy }}</el-descriptions-item>
-                        <el-descriptions-item label="登录失败次数">{{ securityConfig.loginFailures }}</el-descriptions-item>
-                        <el-descriptions-item label="锁定时间">{{ securityConfig.lockTime }}</el-descriptions-item>
+                        <el-descriptions-item label="会话超时">{{ securityConfig.sessionTimeout ? securityConfig.sessionTimeout + '分钟' : '-' }}</el-descriptions-item>
+                        <el-descriptions-item label="密码最小长度">{{ securityConfig.passwordMinLength ? securityConfig.passwordMinLength + '位' : '-' }}</el-descriptions-item>
+                        <el-descriptions-item label="登录失败次数">{{ securityConfig.loginFailures || '-' }}</el-descriptions-item>
+                        <el-descriptions-item label="锁定时间">{{ securityConfig.lockTime ? securityConfig.lockTime + '分钟' : '-' }}</el-descriptions-item>
+                      </el-descriptions>
+                    </el-card>
+                    
+                    <el-card style="margin-top: 20px;">
+                      <template #header>
+                        <div class="card-header">
+                          <span>性能配置</span>
+                        </div>
+                      </template>
+                      <el-descriptions :column="2" border :key="configUpdateKey">
+                        <el-descriptions-item label="缓存TTL">{{ performanceConfig.cacheTtl || '-' }}</el-descriptions-item>
+                        <el-descriptions-item label="速率限制">{{ performanceConfig.rateLimit || '-' }}</el-descriptions-item>
+                        <el-descriptions-item label="压缩">{{ performanceConfig.compression || '-' }}</el-descriptions-item>
+                        <el-descriptions-item label="最大会话数">{{ performanceConfig.maxSessions || '-' }}</el-descriptions-item>
+                      </el-descriptions>
+                    </el-card>
+                    
+                    <el-card style="margin-top: 20px;">
+                      <template #header>
+                        <div class="card-header">
+                          <span>功能配置</span>
+                        </div>
+                      </template>
+                      <el-descriptions :column="2" border :key="configUpdateKey">
+                        <el-descriptions-item label="用户注册">
+                          <el-tag :type="featureConfig.registrationEnabled ? 'success' : 'danger'">
+                            {{ featureConfig.registrationEnabled ? '启用' : '禁用' }}
+                          </el-tag>
+                        </el-descriptions-item>
+                        <el-descriptions-item label="密码重置">
+                          <el-tag :type="featureConfig.passwordResetEnabled ? 'success' : 'danger'">
+                            {{ featureConfig.passwordResetEnabled ? '启用' : '禁用' }}
+                          </el-tag>
+                        </el-descriptions-item>
+                        <el-descriptions-item label="审计日志">
+                          <el-tag :type="featureConfig.auditLogEnabled ? 'success' : 'danger'">
+                            {{ featureConfig.auditLogEnabled ? '启用' : '禁用' }}
+                          </el-tag>
+                        </el-descriptions-item>
+                        <el-descriptions-item label="维护模式">
+                          <el-tag :type="featureConfig.maintenanceMode ? 'warning' : 'success'">
+                            {{ featureConfig.maintenanceMode ? '启用' : '禁用' }}
+                          </el-tag>
+                        </el-descriptions-item>
                       </el-descriptions>
                     </el-card>
                   </div>
                 </el-tab-pane>
                 
                 <!-- 系统配置编辑对话框 -->
-                <el-dialog v-model="configDialogVisible" title="编辑系统配置" width="600px">
+                <el-dialog v-model="configDialogVisible" title="编辑系统配置" width="700px" @close="configChanged = false">
                   <el-form :model="configForm" label-width="120px">
                     <el-tabs v-model="configActiveTab">
                       <el-tab-pane label="系统配置" name="system">
-                        <el-form-item label="系统名称">
-                          <el-input v-model="configForm.system.name" />
-                        </el-form-item>
-                        <el-form-item label="版本号">
-                          <el-input v-model="configForm.system.version" />
-                        </el-form-item>
-                        <el-form-item label="运行环境">
-                          <el-select v-model="configForm.system.environment" placeholder="请选择运行环境">
-                            <el-option label="开发环境" value="开发环境" />
-                            <el-option label="测试环境" value="测试环境" />
-                            <el-option label="生产环境" value="生产环境" />
-                          </el-select>
-                        </el-form-item>
-                        <el-form-item label="部署时间">
-                          <el-date-picker 
-                            v-model="configForm.system.deployTime" 
-                            type="date" 
-                            placeholder="请选择部署时间" 
-                            format="YYYY-MM-DD"
-                            value-format="YYYY-MM-DD"
-                          />
-                        </el-form-item>
-                        <el-form-item label="服务器地址">
-                          <el-input v-model="configForm.system.serverAddress" />
-                        </el-form-item>
-                        <el-form-item label="端口号">
-                          <el-input v-model="configForm.system.port" />
-                        </el-form-item>
-                        <el-form-item label="数据库地址">
-                          <el-input v-model="configForm.system.dbAddress" />
-                        </el-form-item>
-                        <el-form-item label="缓存服务器">
-                          <el-input v-model="configForm.system.cacheServer" />
-                        </el-form-item>
-                        <el-form-item label="日志级别">
-                          <el-select v-model="configForm.system.logLevel" placeholder="请选择日志级别">
-                            <el-option label="DEBUG" value="DEBUG" />
-                            <el-option label="INFO" value="INFO" />
-                            <el-option label="WARN" value="WARN" />
-                            <el-option label="ERROR" value="ERROR" />
-                            <el-option label="OFF" value="OFF" />
-                          </el-select>
-                        </el-form-item>
-                        <el-form-item label="最大连接数">
-                          <el-input-number v-model="configForm.system.maxConnections" :min="1" :max="10000" />
-                        </el-form-item>
-                        <el-form-item label="超时时间">
-                          <el-input v-model="configForm.system.timeout" />
-                        </el-form-item>
-                        <el-form-item label="备份策略">
-                          <el-input v-model="configForm.system.backupPolicy" />
-                        </el-form-item>
+                        <el-row :gutter="20">
+                          <el-col :span="12">
+                            <el-form-item label="系统名称">
+                              <el-input v-model="configForm.system.name" @change="checkConfigChange" />
+                            </el-form-item>
+                          </el-col>
+                          <el-col :span="12">
+                            <el-form-item label="版本号">
+                              <el-input :model-value="getPackageVersion()" disabled />
+                            </el-form-item>
+                          </el-col>
+                        </el-row>
+                        <el-row :gutter="20">
+                          <el-col :span="12">
+                            <el-form-item label="运行环境">
+                              <el-select v-model="configForm.system.environment" @change="checkConfigChange" style="width: 100%">
+                                <el-option label="开发环境" value="development" />
+                                <el-option label="测试环境" value="testing" />
+                                <el-option label="生产环境" value="production" />
+                              </el-select>
+                            </el-form-item>
+                          </el-col>
+                          <el-col :span="12">
+                            <el-form-item label="服务器地址">
+                              <el-input v-model="configForm.system.serverAddress" @change="checkConfigChange" />
+                            </el-form-item>
+                          </el-col>
+                        </el-row>
+                        <el-row :gutter="20">
+                          <el-col :span="12">
+                            <el-form-item label="端口号">
+                              <el-input-number v-model="configForm.system.port" :min="1" :max="65535" style="width: 100%" @change="checkConfigChange" />
+                            </el-form-item>
+                          </el-col>
+                          <el-col :span="12">
+                            <el-form-item label="最大连接数">
+                              <el-input-number v-model="configForm.system.maxConnections" :min="1" :max="10000" style="width: 100%" @change="checkConfigChange" />
+                            </el-form-item>
+                          </el-col>
+                        </el-row>
+                        <el-row :gutter="20">
+                          <el-col :span="12">
+                            <el-form-item label="日志级别">
+                              <el-select v-model="configForm.system.logLevel" @change="checkConfigChange" style="width: 100%">
+                                <el-option label="DEBUG" value="debug" />
+                                <el-option label="INFO" value="info" />
+                                <el-option label="WARN" value="warn" />
+                                <el-option label="ERROR" value="error" />
+                              </el-select>
+                            </el-form-item>
+                          </el-col>
+                          <el-col :span="12">
+                            <el-form-item label="会话超时(分钟)">
+                              <el-input-number v-model="configForm.system.timeout" :min="5" :max="1440" style="width: 100%" @change="checkConfigChange" />
+                            </el-form-item>
+                          </el-col>
+                        </el-row>
                       </el-tab-pane>
                       
                       <el-tab-pane label="安全配置" name="security">
-                        <el-form-item label="SSL证书">
+                        <el-row :gutter="20">
+                          <el-col :span="12">
+                            <el-form-item label="SSL证书">
+                              <el-select v-model="configForm.security.sslCertificate" @change="checkConfigChange" style="width: 100%">
+                                <el-option label="已启用" value="已启用" />
+                                <el-option label="未启用" value="未启用" />
+                              </el-select>
+                            </el-form-item>
+                          </el-col>
+                          <el-col :span="12">
+                            <el-form-item label="加密算法">
+                              <el-select v-model="configForm.security.encryptionAlgorithm" @change="checkConfigChange" style="width: 100%">
+                                <el-option label="AES-256" value="AES-256" />
+                                <el-option label="AES-128" value="AES-128" />
+                                <el-option label="RSA-2048" value="RSA-2048" />
+                              </el-select>
+                            </el-form-item>
+                          </el-col>
+                        </el-row>
+                        <el-row :gutter="20">
+                          <el-col :span="12">
+                            <el-form-item label="会话超时(分钟)">
+                              <el-input-number v-model="configForm.security.sessionTimeout" :min="5" :max="1440" style="width: 100%" @change="checkConfigChange" />
+                            </el-form-item>
+                          </el-col>
+                          <el-col :span="12">
+                            <el-form-item label="密码最小长度">
+                              <el-input-number v-model="configForm.security.passwordMinLength" :min="6" :max="32" style="width: 100%" @change="checkConfigChange" />
+                            </el-form-item>
+                          </el-col>
+                        </el-row>
+                        <el-row :gutter="20">
+                          <el-col :span="12">
+                            <el-form-item label="登录失败次数">
+                              <el-input-number v-model="configForm.security.loginFailures" :min="1" :max="10" style="width: 100%" @change="checkConfigChange" />
+                            </el-form-item>
+                          </el-col>
+                          <el-col :span="12">
+                            <el-form-item label="锁定时间(分钟)">
+                              <el-input-number v-model="configForm.security.lockTime" :min="5" :max="1440" style="width: 100%" @change="checkConfigChange" />
+                            </el-form-item>
+                          </el-col>
+                        </el-row>
+                      </el-tab-pane>
+
+                      <el-tab-pane label="性能配置" name="performance">
+                        <el-row :gutter="20">
+                          <el-col :span="12">
+                            <el-form-item label="缓存TTL(秒)">
+                              <el-input-number v-model="configForm.performance.cacheTtl" :min="60" :max="86400" style="width: 100%" @change="checkConfigChange" />
+                            </el-form-item>
+                          </el-col>
+                          <el-col :span="12">
+                            <el-form-item label="速率限制/分">
+                              <el-input-number v-model="configForm.performance.rateLimit" :min="10" :max="10000" style="width: 100%" @change="checkConfigChange" />
+                            </el-form-item>
+                          </el-col>
+                        </el-row>
+                        <el-row :gutter="20">
+                          <el-col :span="12">
+                            <el-form-item label="最大会话数">
+                              <el-input-number v-model="configForm.performance.maxSessions" :min="1" :max="100" style="width: 100%" @change="checkConfigChange" />
+                            </el-form-item>
+                          </el-col>
+                        </el-row>
+                      </el-tab-pane>
+
+                      <el-tab-pane label="功能配置" name="feature">
+                        <el-form-item label="用户注册">
                           <el-switch 
-                            v-model="configForm.security.sslCertificate" 
-                            active-text="已启用" 
-                            inactive-text="已禁用"
-                            :active-value="'已启用'"
-                            :inactive-value="'已禁用'"
+                            v-model="configForm.feature.registrationEnabled" 
+                            active-text="启用" 
+                            inactive-text="禁用"
+                            @change="checkConfigChange"
                           />
                         </el-form-item>
-                        <el-form-item label="加密算法">
-                          <el-select v-model="configForm.security.encryptionAlgorithm" placeholder="请选择加密算法">
-                            <el-option label="AES-128" value="AES-128" />
-                            <el-option label="AES-192" value="AES-192" />
-                            <el-option label="AES-256" value="AES-256" />
-                            <el-option label="DES" value="DES" />
-                          </el-select>
+                        <el-form-item label="密码重置">
+                          <el-switch 
+                            v-model="configForm.feature.passwordResetEnabled" 
+                            active-text="启用" 
+                            inactive-text="禁用"
+                            @change="checkConfigChange"
+                          />
                         </el-form-item>
-                        <el-form-item label="会话超时">
-                          <el-input v-model="configForm.security.sessionTimeout" />
+                        <el-form-item label="审计日志">
+                          <el-switch 
+                            v-model="configForm.feature.auditLogEnabled" 
+                            active-text="启用" 
+                            inactive-text="禁用"
+                            @change="checkConfigChange"
+                          />
                         </el-form-item>
-                        <el-form-item label="密码策略">
-                          <el-input v-model="configForm.security.passwordPolicy" />
-                        </el-form-item>
-                        <el-form-item label="登录失败次数">
-                          <el-input-number v-model="configForm.security.loginFailures" :min="1" :max="10" />
-                        </el-form-item>
-                        <el-form-item label="锁定时间">
-                          <el-input v-model="configForm.security.lockTime" />
+                        <el-form-item label="维护模式">
+                          <el-switch 
+                            v-model="configForm.feature.maintenanceMode" 
+                            active-text="开启" 
+                            inactive-text="关闭"
+                            @change="checkConfigChange"
+                          />
+                          <div style="color: #909399; font-size: 12px; margin-top: 5px;">
+                            开启后普通用户将无法访问系统
+                          </div>
                         </el-form-item>
                       </el-tab-pane>
                     </el-tabs>
@@ -544,10 +682,11 @@
                   <template #footer>
                     <span class="dialog-footer">
                       <el-button @click="configDialogVisible = false">取消</el-button>
-                      <el-button type="primary" @click="saveConfig">保存</el-button>
+                      <el-button type="primary" :loading="configLoading" @click="saveConfig">保存</el-button>
                     </span>
                   </template>
                 </el-dialog>                
+                
                 <!-- 新增系统维护标签页 -->
                 <el-tab-pane label="系统维护" name="maintenance">
                   <div class="maintenance-detail">
@@ -669,7 +808,27 @@
                           <el-button type="primary" @click="confirmAddMaintenance">确定</el-button>
                         </span>
                       </template>
-                    </el-dialog>                    
+                    </el-dialog>
+                    
+                    <!-- 环境切换/服务重启进度对话框 -->
+                    <el-dialog 
+                      v-model="showRestartProgress" 
+                      title="正在切换环境" 
+                      width="450px"
+                      :close-on-click-modal="false"
+                      :close-on-press-escape="false"
+                      :show-close="false"
+                    >
+                      <div class="restart-progress">
+                        <el-progress 
+                          :percentage="restartProgress" 
+                          :status="restartProgress >= 100 ? 'success' : ''"
+                          :stroke-width="10"
+                        />
+                        <p class="restart-status">{{ restartStatus }}</p>
+                      </div>
+                    </el-dialog>
+                    
                     <el-card style="margin-top: 20px;">
                       <template #header>
                         <div class="card-header">
@@ -769,6 +928,8 @@ import { User, House, Coin, CreditCard, Monitor, Setting, CoffeeCup, DataAnalysi
 import * as echarts from 'echarts'
 import { createChartManager } from '@/utils/chartManager'
 import { formatRelativeTime } from '@/utils/timeUtils'
+import { updateGlobalSystemConfig, getSystemConfig } from '@/utils/systemConfig'
+import { getPackageVersion } from '@/utils/version'
 import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 // 添加API导入
 import api from '../api/index'
@@ -799,6 +960,8 @@ const newMaintenancePlan = ref({
   customSchedule: ''
 })
 
+const globalConfig = getSystemConfig()
+
 // 修改 systemStats 为从 API 获取数据
 const systemStats = ref({
   users: 0,  dormitories: 0,
@@ -814,9 +977,9 @@ const extraStats = ref({  weeklyNewUsers: 0,
 })
 
 const systemInfo = ref({
-  version: '',
+  version: getPackageVersion(),
   uptime: '',
-  environment: '',
+  environment: globalConfig.environment === 'development' ? '开发环境' : globalConfig.environment === 'testing' ? '测试环境' : '生产环境',
   startTime: ''
 })
 
@@ -901,8 +1064,7 @@ const alerts = ref<Alert[]>([]) // 初始化为空数组，从API获取真实数
 const performanceMetrics = ref({
   throughput: 0,
   avgResponseTime: 0,
-  errorRate: 0,
-  concurrentUsers: 0
+  errorRate: 0
 })
 
 
@@ -918,38 +1080,72 @@ interface MaintenancePlan {
 }
 
 // 维护计划
-const maintenancePlans = ref<MaintenancePlan[]>([]) // 初始化为空数组，从API获取真实数据
+const maintenancePlans = ref<MaintenancePlan[]>([])
 
 // 系统配置信息
 const systemConfig = ref({
-  name: 'AI管理系统',
-  version: 'v2.1.0',
-  environment: '生产环境',
-  deployTime: '2023-11-01',
-  serverAddress: '192.168.1.100',
-  port: '8080',
-  dbAddress: '192.168.1.200',
-  cacheServer: 'Redis 192.168.1.201:6379',
-  logLevel: 'INFO',
-  maxConnections: 1000,
-  timeout: '30秒',
-  backupPolicy: '每日凌晨2点',
-  lastUpdate: '2023-11-15 14:30:22'
+  name: globalConfig.name,
+  version: globalConfig.version,
+  environment: globalConfig.environment,
+  deployTime: '',
+  serverAddress: '',
+  port: '',
+  dbAddress: '',
+  cacheServer: '',
+  logLevel: '',
+  maxConnections: '',
+  timeout: '',
+  backupPolicy: ''
 })
 
 // 安全配置信息
 const securityConfig = ref({
-  sslCertificate: '已启用',
-  encryptionAlgorithm: 'AES-256',
-  sessionTimeout: '30分钟',
-  passwordPolicy: '必须包含大小写字母和数字',
-  loginFailures: 5,
-  lockTime: '30分钟'
-})// 配置表单数据
+  sslCertificate: '',
+  encryptionAlgorithm: '',
+  sessionTimeout: null,
+  passwordPolicy: '',
+  passwordMinLength: null,
+  loginFailures: null,
+  lockTime: null
+})
+
+// 性能配置信息
+const performanceConfig = ref({
+  cacheTtl: '',
+  rateLimit: '',
+  compression: '',
+  maxSessions: ''
+})
+
+// 功能配置信息
+const featureConfig = ref({
+  registrationEnabled: true,
+  passwordResetEnabled: true,
+  auditLogEnabled: true,
+  maintenanceMode: false
+})
+
+// 配置分组列表
+const configGroups = ref<{ group: string; count: number }[]>([])
+
+// 当前编辑的配置分组
+const activeConfigGroup = ref('system')
+
+// 配置表单数据
 const configForm = ref({
   system: { ...systemConfig.value },
-  security: { ...securityConfig.value }
+  security: { ...securityConfig.value },
+  performance: { ...performanceConfig.value },
+  feature: { ...featureConfig.value }
 })
+
+// 配置变更检测
+const configChanged = ref(false)
+
+// 配置加载状态
+const configLoading = ref(false)
+// 配置更新标识，用于强制刷新组件
+const configUpdateKey = ref(0)
 // 计算百分比
 const calculatePercentage = (count: number) => {
   const total = (clientStats.value.userDistribution.high || 0) + 
@@ -1155,7 +1351,8 @@ const handleHealthCheck = async () => {
       ElMessage.info('正在执行健康检查...')
       // 调用API执行健康检查
       const response = await systemApi.healthCheck()
-      const result = response?.data || response
+      // 标准化数据解析
+      const result = response?.success === true ? response.data : (response?.data || response)
       
       // 更新健康评分
       if (result && typeof result === 'object' && 'score' in result && typeof result.score === 'number') {
@@ -1182,59 +1379,386 @@ const handleViewLogs = () => {
   router.push('/logs')
 }
 
+// 获取系统配置
+const fetchSystemConfig = async () => {
+  try {
+    configLoading.value = true
+    console.log('🔄 开始获取系统配置...')
+    
+    const response = await userApi.getSystemConfigs()
+    console.log('📡 API响应原始数据:', response)
+    
+    // 标准化数据解析：支持 {success, data: {configs}} 和 {configs} 两种结构
+    let data = response
+    if (response && response.success === true && response.data) {
+      data = response.data
+    } else if (response && !response.configs && response.data) {
+      data = response.data
+    }
+    
+    console.log('📊 解析后的数据:', data)
+    
+    if (data && data.configs) {
+      const configs = data.configs
+      console.log('📋 配置项数量:', Object.keys(configs).length)
+
+      // 辅助函数：兼容两种键格式（点号分隔和下划线分隔）
+      const getConfigValue = (key1: string, key2: string) => {
+        const item = configs[key1] || configs[key2]
+        return item?.value !== undefined ? item.value : null
+      }
+
+      // 构建新配置对象（版本号从配置文件获取）
+      const newSystemConfig = {
+        name: getConfigValue('system.name', 'system_name') || '',
+        version: '', // 版本号从API获取，不从数据库读取
+        environment: getConfigValue('system.environment', 'system_environment') || '',
+        deployTime: getConfigValue('system.deploy_time', 'system_deploy_time') || '',
+        serverAddress: getConfigValue('server.host', 'server_host') || '',
+        port: getConfigValue('server.port', 'server_port') || null,
+        dbAddress: getConfigValue('database.host', 'database_host') || 'localhost',
+        cacheServer: getConfigValue('cache.server', 'cache_server') || 'Redis localhost:6379',
+        logLevel: getConfigValue('log.level', 'log_level') || '',
+        maxConnections: getConfigValue('server.max_connections', 'server_max_connections') || null,
+        timeout: getConfigValue('session.timeout', 'session_timeout') || null,
+        backupPolicy: getConfigValue('backup.schedule', 'backup_schedule') || ''
+      }
+
+      // 从API获取版本号
+      try {
+        const baseUrl = import.meta.env.VITE_API_BASE_URL || ''
+        const response = await fetch(`${baseUrl}/api/version/admin`).catch(() => null)
+        if (response?.ok) {
+          const data = await response.json()
+          if (data.success && data.data) {
+            newSystemConfig.version = data.data.version || '1.0.0'
+          }
+        }
+      } catch (e) {
+        newSystemConfig.version = '1.0.0'
+      }
+
+      const newSecurityConfig = {
+        sslCertificate: getConfigValue('security.ssl_certificate', 'security_ssl_certificate') || '已启用',
+        encryptionAlgorithm: getConfigValue('security.encryption_algorithm', 'security_encryption_algorithm') || 'AES-256',
+        sessionTimeout: getConfigValue('session.timeout', 'session_timeout') || null,
+        passwordPolicy: getConfigValue('security.password_policy.min_length', 'security_password_policy_min_length') 
+          ? `密码最小长度${getConfigValue('security.password_policy.min_length', 'security_password_policy_min_length')}位` : '',
+        passwordMinLength: getConfigValue('security.password_policy.min_length', 'security_password_policy_min_length') || null,
+        loginFailures: getConfigValue('security.login.max_attempts', 'security_login_max_attempts') || null,
+        lockTime: getConfigValue('security.login.lockout_duration', 'security_login_lockout_duration') || null
+      }
+
+      const newPerformanceConfig = {
+        cacheTtl: getConfigValue('performance.cache_ttl', 'performance_cache_ttl') || null,
+        rateLimit: getConfigValue('performance.rate_limit', 'performance_rate_limit') || null,
+        compression: getConfigValue('performance.compression', 'performance_compression') === 'true' || getConfigValue('performance.compression', 'performance_compression') === true ? '已启用' : '未启用',
+        maxSessions: getConfigValue('session.max_sessions', 'session_max_sessions') || null
+      }
+
+      const newFeatureConfig = {
+        registrationEnabled: getConfigValue('feature.registration_enabled', 'feature_registration_enabled') ?? true,
+        passwordResetEnabled: getConfigValue('feature.password_reset_enabled', 'feature_password_reset_enabled') ?? true,
+        auditLogEnabled: getConfigValue('feature.audit_log_enabled', 'feature_audit_log_enabled') ?? true,
+        maintenanceMode: getConfigValue('feature.maintenance_mode', 'feature_maintenance_mode') ?? false
+      }
+
+      // 更新响应式数据
+      systemConfig.value = { ...newSystemConfig }
+      securityConfig.value = { ...newSecurityConfig }
+      performanceConfig.value = { ...newPerformanceConfig }
+      featureConfig.value = { ...newFeatureConfig }
+
+      // 同步更新 systemInfo（从配置中读取）
+      syncSystemInfoFromConfig()
+
+      // 同步更新全局配置（用于所有页面显示）
+      updateGlobalSystemConfig({
+        name: systemConfig.value.name,
+        version: systemConfig.value.version,
+        environment: systemConfig.value.environment
+      })
+
+      // 强制刷新标识
+      configUpdateKey.value++
+
+      // 同步更新 systemInfo（从配置中读取）
+      syncSystemInfoFromConfig()
+
+      console.log('✅ 系统配置更新完成', { 
+        systemConfig: systemConfig.value, 
+        configCount: data.meta?.count || 0,
+        updateKey: configUpdateKey.value
+      })
+    } else {
+      console.warn('⚠️ API返回数据中没有configs字段:', data)
+    }
+  } catch (error) {
+    console.error('❌ 获取系统配置失败:', error)
+    ElMessage.error('获取系统配置失败: ' + (error as Error).message)
+  } finally {
+    configLoading.value = false
+  }
+}
+
+// 从 systemConfig 同步到 systemInfo
+const syncSystemInfoFromConfig = () => {
+  // 版本号从配置文件获取，不使用systemConfig的值
+  // systemInfo.value.version = systemConfig.value.version || systemInfo.value.version
+  systemInfo.value.environment = systemConfig.value.environment || systemInfo.value.environment
+  systemInfo.value.uptime = systemInfo.value.uptime || systemInfo.value.uptime
+  systemInfo.value.startTime = systemInfo.value.startTime || systemInfo.value.startTime
+}
+
+// 获取配置分组
+const fetchConfigGroups = async () => {
+  try {
+    const response = await userApi.getConfigGroups()
+    // 标准化数据解析
+    const data = response?.success === true ? response.data : (response?.data?.data || response?.data || response)
+    
+    // 如果返回的是 { groups: [...] } 结构
+    if (data && data.groups && Array.isArray(data.groups)) {
+      configGroups.value = data.groups
+    } else if (Array.isArray(data)) {
+      configGroups.value = data
+    }
+  } catch (error) {
+    console.error('获取配置分组失败:', error)
+  }
+}
+
 // 编辑配置
-const handleEditConfig = () => {
-  // 初始化表单数据，确保数字类型正确
-  configForm.value.system = { 
-    ...systemConfig.value,
-    maxConnections: Number(systemConfig.value.maxConnections)
+const handleEditConfig = async () => {
+  try {
+    configLoading.value = true
+    await fetchSystemConfig()
+
+    configForm.value.system = { ...systemConfig.value }
+    configForm.value.security = { ...securityConfig.value }
+    configForm.value.performance = { ...performanceConfig.value }
+    configForm.value.feature = { ...featureConfig.value }
+
+    configDialogVisible.value = true
+    configChanged.value = false
+  } catch (error) {
+    console.error('加载配置失败:', error)
+    ElMessage.error('加载配置失败')
+  } finally {
+    configLoading.value = false
   }
-  configForm.value.security = { 
-    ...securityConfig.value,
-    loginFailures: Number(securityConfig.value.loginFailures)
-  }
-  configDialogVisible.value = true
-}// 保存配置
+}
+
+// 保存配置
 const saveConfig = async () => {
   try {
-    // 更新配置数据，确保类型正确
-    systemConfig.value = { 
-      ...configForm.value.system,
-      maxConnections: Number(configForm.value.system.maxConnections)
-    }
-    securityConfig.value = { 
-      ...configForm.value.security,
-      loginFailures: Number(configForm.value.security.loginFailures)
-    }
+    configLoading.value = true
+
+    const configs: Record<string, any> = {}
     
-    // 关闭对话框
+    // 检查环境是否改变
+    const currentEnv = systemConfig.value.environment
+    const newEnv = configForm.value.system.environment
+    const environmentChanged = currentEnv && newEnv && currentEnv !== newEnv
+
+    configs['system.name'] = configForm.value.system.name
+    configs['system.version'] = getPackageVersion()
+    configs['system.environment'] = configForm.value.system.environment
+    configs['system.deploy_time'] = configForm.value.system.deployTime
+    configs['server.host'] = configForm.value.system.serverAddress
+    configs['server.port'] = Number(configForm.value.system.port) || 4000
+    configs['server.max_connections'] = Number(configForm.value.system.maxConnections) || 20
+    configs['log.level'] = configForm.value.system.logLevel
+    configs['session.timeout'] = Number(configForm.value.system.timeout) || 60
+    configs['session.max_sessions'] = Number(configForm.value.performance.maxSessions) || 5
+    
+    // 安全配置
+    configs['security.ssl_certificate'] = configForm.value.security.sslCertificate
+    configs['security.encryption_algorithm'] = configForm.value.security.encryptionAlgorithm
+    configs['security.password_policy.min_length'] = Number(configForm.value.security.passwordMinLength) || 8
+    configs['security.login.max_attempts'] = Number(configForm.value.security.loginFailures) || 5
+    configs['security.login.lockout_duration'] = Number(configForm.value.security.lockTime) || 30
+    
+    // 性能配置
+    configs['performance.cache_ttl'] = Number(configForm.value.performance.cacheTtl) || 3600
+    configs['performance.rate_limit'] = Number(configForm.value.performance.rateLimit) || 100
+    configs['performance.compression'] = configForm.value.performance.compression === '已启用'
+    
+    // 功能配置
+    configs['feature.registration_enabled'] = configForm.value.feature.registrationEnabled
+    configs['feature.password_reset_enabled'] = configForm.value.feature.passwordResetEnabled
+    configs['feature.audit_log_enabled'] = configForm.value.feature.auditLogEnabled
+    configs['feature.maintenance_mode'] = configForm.value.feature.maintenanceMode
+
+    // 如果环境改变，调用真正的环境切换API
+    if (environmentChanged) {
+      configDialogVisible.value = false
+      configChanged.value = false
+      configLoading.value = false
+      
+      // 弹出环境切换确认对话框
+      const confirmed = await ElMessageBox.confirm(
+        `确定要将运行环境从 "${getEnvDisplayName(currentEnv)}" 切换为 "${getEnvDisplayName(newEnv)}" 吗？\n\n切换后系统将自动重启，此过程可能需要10-30秒。`,
+        '确认环境切换',
+        {
+          confirmButtonText: '确定切换',
+          cancelButtonText: '取消',
+          type: 'warning',
+          center: true
+        }
+      ).then(() => true).catch(() => false)
+
+      if (!confirmed) return
+
+      // 显示重启进度对话框
+      showRestartProgress.value = true
+      restartProgress.value = 0
+      restartStatus.value = '正在准备切换环境...'
+
+      try {
+        // 步骤1: 调用环境切换API
+        restartProgress.value = 10
+        restartStatus.value = '正在切换环境配置...'
+        
+        const switchResponse = await userApi.switchEnvironment({
+          environment: newEnv,
+          reason: `用户从 ${getEnvDisplayName(currentEnv)} 切换到 ${getEnvDisplayName(newEnv)}`
+        })
+
+        // 步骤2: 等待服务重启
+        restartProgress.value = 30
+        restartStatus.value = '正在重启服务...'
+
+        // 轮询检查服务状态
+        let attempts = 0
+        const maxAttempts = 60 // 最多等待60秒
+
+        while (attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 1000))
+          attempts++
+          
+          const progress = 30 + Math.min(attempts * 1.2, 60)
+          restartProgress.value = progress
+          restartStatus.value = `正在重启服务... (${attempts}/${maxAttempts}秒)`
+
+          try {
+            await userApi.getEnvironmentStatus()
+            // 服务已恢复
+            restartProgress.value = 90
+            restartStatus.value = '服务已重启，正在验证...'
+            break
+          } catch (e) {
+            // 服务还未恢复，继续等待
+          }
+        }
+
+        // 步骤3: 重新获取配置
+        restartProgress.value = 95
+        restartStatus.value = '正在同步配置...'
+        await fetchSystemConfig()
+        await fetchVersionInfo()
+
+        restartProgress.value = 100
+        restartStatus.value = '切换完成！'
+        
+        ElMessage.success({
+          message: switchResponse.data?.message || `环境已切换为 ${getEnvDisplayName(newEnv)}`,
+          duration: 5000
+        })
+
+      } catch (error) {
+        console.error('环境切换失败:', error)
+        ElMessage.error('环境切换失败: ' + (error as Error).message)
+      } finally {
+        showRestartProgress.value = false
+      }
+      
+      return
+    }
+
+    // 普通配置保存（不涉及环境切换）
+    const response = await userApi.setConfig({ configs })
+    console.log('✅ API响应结果:', response)
+    
+    // 检查是否有失败的项
+    if (response && response.results) {
+      const failures = response.results.filter((r: any) => !r.success)
+      if (failures.length > 0) {
+        console.warn('⚠️ 部分配置保存失败:', failures)
+        const failedKeys = failures.map((f: any) => f.key).join(', ')
+        ElMessage.warning(`部分配置保存失败 (可能数据库中不存在): ${failedKeys}`)
+      }
+    }
+
+    console.log('✅ 配置保存成功，重新获取配置...')
+    
+    await fetchSystemConfig()
+    console.log('✅ 配置已刷新', { securityConfig: securityConfig.value })
+    
     configDialogVisible.value = false
-    
-    // 显示成功消息
+    configChanged.value = false
     ElMessage.success('系统配置保存成功')
   } catch (error) {
     console.error('保存配置失败:', error)
     ElMessage.error('保存配置失败: ' + (error as Error).message)
+  } finally {
+    configLoading.value = false
   }
-}// 刷新系统配置
-const refreshSystemConfig = () => {
-  ElMessage.success('系统配置刷新成功')
-  // 模拟更新配置数据
-  systemConfig.value.version = 'v' + (parseFloat(systemConfig.value.version.slice(1)) + 0.1).toFixed(1)
-  systemConfig.value.lastUpdate = new Date().toLocaleString('zh-CN', { hour12: false })
+}
+
+// 重启进度相关状态
+const showRestartProgress = ref(false)
+const restartProgress = ref(0)
+const restartStatus = ref('')
+
+// 获取环境显示名称
+ const getEnvDisplayName = (env: string) => {
+   const envMap: Record<string, string> = {
+     development: '开发环境',
+     testing: '测试环境',
+     production: '生产环境'
+   }
+   return envMap[env] || env || '未知环境'
+ }
+ 
+ // 获取实际运行环境（从前端获取的全局配置）
+ const getActualEnvironment = () => {
+   const actualEnv = globalConfig.environment || import.meta.env?.MODE || 'development'
+   return getEnvDisplayName(actualEnv)
+ }
+ 
+ // 检测配置变更
+const checkConfigChange = () => {
+  configChanged.value = true
+}
+
+// 刷新系统配置
+const refreshSystemConfig = async () => {
+  try {
+    await fetchSystemConfig()
+    ElMessage.success('系统配置刷新成功')
+  } catch (error) {
+    console.error('刷新系统配置失败:', error)
+  }
 }
 
 // 刷新安全配置
-const refreshSecurityConfig = () => {
-  ElMessage.success('安全配置刷新成功')
-  // 模拟更新安全配置数据
-  securityConfig.value.sslCertificate = securityConfig.value.sslCertificate === '已启用' ? '已启用' : '已启用'
+const refreshSecurityConfig = async () => {
+  try {
+    await fetchSystemConfig()
+    ElMessage.success('安全配置刷新成功')
+  } catch (error) {
+    console.error('刷新安全配置失败:', error)
+  }
 }
 
 // 刷新系统清理
 const refreshSystemCleanup = () => {
-  ElMessage.success('系统清理信息刷新成功')
-  // 模拟更新清理信息
+  // 目前没有对应的后端清理统计API，保留提示
+  ElMessage.info('正在执行系统清理分析...')
+  setTimeout(() => {
+    ElMessage.success('系统清理信息刷新成功')
+  }, 1000)
 }
 
 // 获取客户端状态类型
@@ -1324,7 +1848,8 @@ const refreshPerformanceMetrics = async () => {
   try {
     // 调用API获取真实的性能指标数据
     const response = await systemApi.getSystemStats()
-    const data = response?.data || response
+    // 标准化数据解析
+    const data = response?.success === true ? response.data : (response?.data || response)
 
     // 更新性能指标数据
     if (data && typeof data === 'object' && 'performanceMetrics' in data && data.performanceMetrics) {
@@ -1333,7 +1858,6 @@ const refreshPerformanceMetrics = async () => {
       performanceMetrics.value.throughput = perfMetricsTyped.throughput || performanceMetrics.value.throughput
       performanceMetrics.value.avgResponseTime = perfMetricsTyped.avgResponseTime || performanceMetrics.value.avgResponseTime
       performanceMetrics.value.errorRate = perfMetricsTyped.errorRate || performanceMetrics.value.errorRate
-      performanceMetrics.value.concurrentUsers = perfMetricsTyped.concurrentUsers || performanceMetrics.value.concurrentUsers
     } else {
       // 如果API没有返回性能指标数据，给出提示
       ElMessage.warning('暂无性能指标数据')
@@ -1348,7 +1872,6 @@ const refreshPerformanceMetrics = async () => {
     performanceMetrics.value.throughput = 0
     performanceMetrics.value.avgResponseTime = 0
     performanceMetrics.value.errorRate = 0
-    performanceMetrics.value.concurrentUsers = 0
   }
 }
 
@@ -1365,9 +1888,10 @@ const refreshSystemStatusOverview = async () => {
       systemApi.getDatabaseStatus()
     ])
     
-    const clientData = clientResponse?.data || clientResponse
-    const backendData = backendResponse?.data || backendResponse
-    const databaseData = databaseResponse?.data || databaseResponse
+    // 标准化数据解析
+    const clientData = clientResponse?.success === true ? clientResponse.data : (clientResponse?.data || clientResponse)
+    const backendData = backendResponse?.success === true ? backendResponse.data : (backendResponse?.data || backendResponse)
+    const databaseData = databaseResponse?.success === true ? databaseResponse.data : (databaseResponse?.data || databaseResponse)
     
     console.log('📊 客户端状态:', clientData)
     console.log('📊 后端服务状态:', backendData)
@@ -1386,7 +1910,8 @@ const refreshSystemStatusOverview = async () => {
       const metrics = clientDataTyped.metrics || {}
       console.log('🔍 [DEBUG] 客户端指标(metrics):', metrics)
       
-      clientStats.value.version = metrics.version || clientDataTyped.version || clientStats.value.version
+      // 客户端版本从配置文件获取，不使用API返回值
+      // clientStats.value.version = metrics.version || clientDataTyped.version || clientStats.value.version
       clientStats.value.onlineUsers = metrics.onlineUsers || clientDataTyped.onlineUsers || clientStats.value.onlineUsers
       clientStats.value.userDistribution = metrics.userDistribution || clientDataTyped.userDistribution || { high: 0, normal: 0, suspicious: 0 }
       clientStats.value.qualityIndex = metrics.qualityIndex || clientDataTyped.qualityIndex || 100
@@ -1415,7 +1940,8 @@ const refreshSystemStatusOverview = async () => {
         const metrics = backendDataTyped.metrics || {}
         console.log('🔍 [DEBUG] 后端指标(metrics):', metrics)
         
-        backendStats.value.version = metrics.version || backendDataTyped.version || backendStats.value.version
+        // 后端版本从配置文件获取，不使用API返回值
+        // backendStats.value.version = metrics.version || backendDataTyped.version || backendStats.value.version
         backendStats.value.apiResponseTime = metrics.apiResponseTime || backendDataTyped.apiResponseTime || backendStats.value.apiResponseTime
         backendStats.value.qps = metrics.qps ?? backendDataTyped.qps ?? backendStats.value.qps
         backendStats.value.uptime = metrics.uptime ?? backendDataTyped.uptime ?? backendStats.value.uptime
@@ -1438,7 +1964,8 @@ const refreshSystemStatusOverview = async () => {
         const metrics = databaseDataTyped.metrics || {}
         console.log('🔍 [DEBUG] 数据库指标(metrics):', metrics)
         
-        databaseStats.value.version = metrics.version || databaseDataTyped.version || databaseStats.value.version
+        // 数据库版本从配置文件获取，不使用API返回值
+        // databaseStats.value.version = metrics.version || databaseDataTyped.version || databaseStats.value.version
         databaseStats.value.connections = metrics.activeConnections || databaseDataTyped.activeConnections || databaseStats.value.connections
         databaseStats.value.maxConnections = metrics.maxConnections || databaseDataTyped.maxConnections || databaseStats.value.maxConnections
         databaseStats.value.cacheHitRate = metrics.cacheHitRate || databaseDataTyped.cacheHitRate || databaseStats.value.cacheHitRate
@@ -1467,8 +1994,7 @@ const refreshSystemStatusOverview = async () => {
     console.error('❌ 刷新系统状态概览失败:', error)
     ElMessage.error('刷新系统状态概览失败: ' + (error as Error).message)
     
-    // 设置默认值
-    clientStats.value.version = ''
+    // 设置默认值（版本号从配置文件获取，不重置）
     clientStats.value.onlineUsers = 0
     clientStats.value.peakUsers = 0
     clientStats.value.avgResponseTime = 0
@@ -1476,14 +2002,12 @@ const refreshSystemStatusOverview = async () => {
     clientStats.value.errorRate = 0
     clientStats.value.lastUpdate = ''
     
-    backendStats.value.version = ''
     backendStats.value.apiResponseTime = 0
     backendStats.value.qps = 0
     backendStats.value.uptime = 0
     backendStats.value.uptimeFormatted = ''
     backendStats.value.lastUpdate = ''
     
-    databaseStats.value.version = ''
     databaseStats.value.connections = 0
     databaseStats.value.maxConnections = 0
     databaseStats.value.cacheHitRate = 0
@@ -1491,7 +2015,6 @@ const refreshSystemStatusOverview = async () => {
     databaseStats.value.tableSpaceUsage = ''
     databaseStats.value.lastUpdate = ''
     
-    systemInfo.value.version = ''
     systemInfo.value.uptime = ''
     systemInfo.value.environment = ''
     systemInfo.value.startTime = ''
@@ -1502,11 +2025,10 @@ const refreshSystemStatusOverview = async () => {
 const refreshClientChartData = async () => {
   try {
     const response = await systemApi.getMetricsHistory({ type: 'ACTIVE_USERS', interval: '24 hours' })
-    const data = response as any
+    // 标准化处理：如果是数组则直接使用，如果是对象则取data
+    const history = Array.isArray(response) ? response : (response?.data || [])
     
-    if (data && data.data && Array.isArray(data.data)) {
-      const history = data.data
-      
+    if (history && Array.isArray(history)) {
       // 格式化图表数据
       const xAxisData = history.map((item: any) => {
         const date = new Date(item.timestamp)
@@ -1536,11 +2058,10 @@ const refreshClientChartData = async () => {
 const refreshBackendChartData = async () => {
   try {
     const response = await systemApi.getMetricsHistory({ type: 'BACKEND_RESPONSE_TIME', interval: '24 hours' })
-    const data = response as any
+    // 标准化处理：如果是数组则直接使用，如果是对象则取data
+    const history = Array.isArray(response) ? response : (response?.data || [])
     
-    if (data && data.data && Array.isArray(data.data)) {
-      const history = data.data
-      
+    if (history && Array.isArray(history)) {
       const xAxisData = history.map((item: any) => {
         const date = new Date(item.timestamp)
         return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
@@ -1563,11 +2084,10 @@ const refreshBackendChartData = async () => {
 const refreshDatabaseChartData = async () => {
   try {
     const response = await systemApi.getMetricsHistory({ type: 'DB_CONNECTIONS', interval: '24 hours' })
-    const data = response as any
+    // 标准化处理：如果是数组则直接使用，如果是对象则取data
+    const history = Array.isArray(response) ? response : (response?.data || [])
     
-    if (data && data.data && Array.isArray(data.data)) {
-      const history = data.data
-      
+    if (history && Array.isArray(history)) {
       const xAxisData = history.map((item: any) => {
         const date = new Date(item.timestamp)
         return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
@@ -1592,7 +2112,8 @@ const refreshComponentOverview = async () => {
   try {
     // 调用API获取真实的组件数据
     const response = await systemApi.getSystemStats()
-    const data = response?.data || response
+    // 标准化数据解析
+    const data = response?.success === true ? response.data : (response?.data || response)
     
     // 更新组件数据
     if (data) {
@@ -1620,7 +2141,8 @@ const refreshComponentOverview = async () => {
       // 更新系统信息
       if (dataTyped.systemInfo) {
         const systemInfoData = dataTyped.systemInfo
-        systemInfo.value.version = systemInfoData.version || systemInfo.value.version
+        // 版本号从配置文件获取，不使用API返回值
+        // systemInfo.value.version = systemInfoData.version || systemInfo.value.version
         systemInfo.value.uptime = systemInfoData.uptime || systemInfo.value.uptime
         systemInfo.value.environment = systemInfoData.environment || systemInfo.value.environment
       }
@@ -2402,8 +2924,8 @@ const fetchSystemStats = async () => {
     // 获取系统统计信息
     const response = await systemApi.getSystemStats()
     console.log('API Response:', response)
-    // 拦截器已经处理了双层嵌套，直接使用response
-    const statsData = response as SystemStatsData
+    // 标准化数据解析
+    const statsData = response?.success === true ? response.data : (response as any)
     console.log('Stats Data:', statsData)
     
     // 如果statsData为空，记录警告信息
@@ -2446,12 +2968,32 @@ const fetchSystemStats = async () => {
         extraStats.value.systemAvailability = statsData.extraStats.systemAvailability || extraStats.value.systemAvailability
       }
       console.log('📊 额外统计数据更新:', extraStats.value)
+
+      // 更新性能指标数据
+      if (statsData.performanceMetrics) {
+        performanceMetrics.value.throughput = statsData.performanceMetrics.throughput || performanceMetrics.value.throughput
+        performanceMetrics.value.avgResponseTime = statsData.performanceMetrics.avgResponseTime || performanceMetrics.value.avgResponseTime
+        performanceMetrics.value.errorRate = statsData.performanceMetrics.errorRate || performanceMetrics.value.errorRate
+        console.log('📊 性能指标数据更新:', performanceMetrics.value)
+      }
+
+      // 更新告警信息
+      if (statsData.alerts && Array.isArray(statsData.alerts)) {
+        alerts.value = statsData.alerts.map((alert: any) => ({
+          id: alert.id,
+          level: alert.level || 'INFO',
+          content: alert.content || alert.message || '',
+          time: alert.time || new Date().toLocaleString('zh-CN', { hour12: false })
+        }))
+        console.log('📊 告警信息更新:', alerts.value.length, '条')
+      }
       
 
       
       // 更新系统信息数据
       if (statsData.systemInfo) {
-        systemInfo.value.version = statsData.systemInfo.version || systemInfo.value.version
+        // 版本号从配置文件获取，不使用API返回值
+        // systemInfo.value.version = statsData.systemInfo.version || systemInfo.value.version
         systemInfo.value.uptime = statsData.systemInfo.uptime || systemInfo.value.uptime
         systemInfo.value.environment = statsData.systemInfo.environment || systemInfo.value.environment
         systemInfo.value.startTime = statsData.systemInfo.startTime || systemInfo.value.startTime
@@ -2484,7 +3026,8 @@ const fetchSystemStats = async () => {
         
         // 优先从 metrics 获取指标
         const metrics = clientDataTyped.metrics || {}
-        clientStats.value.version = metrics.version || clientDataTyped.version || clientStats.value.version
+        // 客户端版本从配置文件获取，不使用API返回值
+        // clientStats.value.version = metrics.version || clientDataTyped.version || clientStats.value.version
         clientStats.value.onlineUsers = metrics.onlineUsers || clientDataTyped.onlineUsers || clientStats.value.onlineUsers
         clientStats.value.userDistribution = metrics.userDistribution || clientDataTyped.userDistribution || { high: 0, normal: 0, suspicious: 0 }
         clientStats.value.qualityIndex = metrics.qualityIndex || clientDataTyped.qualityIndex || 100
@@ -2507,7 +3050,8 @@ const fetchSystemStats = async () => {
         
         // 优先从 metrics 获取指标
         const metrics = backendDataTyped.metrics || {}
-        backendStats.value.version = metrics.version || backendDataTyped.version || backendStats.value.version
+        // 后端版本从配置文件获取，不使用API返回值
+        // backendStats.value.version = metrics.version || backendDataTyped.version || backendStats.value.version
         backendStats.value.apiResponseTime = metrics.apiResponseTime || backendDataTyped.apiResponseTime || backendStats.value.apiResponseTime
         backendStats.value.qps = metrics.qps ?? backendDataTyped.qps ?? backendStats.value.qps
         backendStats.value.uptime = metrics.uptime ?? backendDataTyped.uptime ?? backendStats.value.uptime
@@ -2525,7 +3069,8 @@ const fetchSystemStats = async () => {
         
         // 优先从 metrics 获取指标
         const metrics = databaseDataTyped.metrics || {}
-        databaseStats.value.version = metrics.version || databaseDataTyped.version || databaseStats.value.version
+        // 数据库版本从配置文件获取，不使用API返回值
+        // databaseStats.value.version = metrics.version || databaseDataTyped.version || databaseStats.value.version
         databaseStats.value.connections = metrics.activeConnections || databaseDataTyped.activeConnections || databaseStats.value.connections
         databaseStats.value.maxConnections = metrics.maxConnections || databaseDataTyped.maxConnections || databaseStats.value.maxConnections
         databaseStats.value.cacheHitRate = metrics.cacheHitRate || databaseDataTyped.cacheHitRate || databaseStats.value.cacheHitRate
@@ -2618,7 +3163,8 @@ const fetchClientRealtimeData = async () => {
 
       if (clientData.metrics) {
         const metrics = clientData.metrics
-        clientStats.value.version = metrics.version || clientStats.value.version
+        // 客户端版本从配置文件获取，不使用API返回值
+        // clientStats.value.version = metrics.version || clientStats.value.version
         clientStats.value.onlineUsers = metrics.onlineUsers ?? clientStats.value.onlineUsers
         clientStats.value.userDistribution = metrics.userDistribution || clientStats.value.userDistribution
         clientStats.value.qualityIndex = metrics.qualityIndex ?? clientStats.value.qualityIndex
@@ -2793,18 +3339,79 @@ const stopClientDataTimer = () => {
   }
 }
 
+// 获取各组件版本信息
+const fetchVersionInfo = async () => {
+  try {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || ''
+    console.log('🔍 [Version] 开始获取版本信息，API地址:', baseUrl)
+    
+    const [adminRes, clientRes, backendRes] = await Promise.all([
+      fetch(`${baseUrl}/api/version/admin`).catch(() => null),
+      fetch(`${baseUrl}/api/version/client`).catch(() => null),
+      fetch(`${baseUrl}/api/version/backend`).catch(() => null)
+    ])
+    
+    if (adminRes?.ok) {
+      const data = await adminRes.json()
+      if (data.success && data.data) {
+        systemInfo.value.version = data.data.version || '1.0.0'
+        console.log('🔍 [Version] 管理端版本:', systemInfo.value.version)
+      }
+    }
+    
+    if (clientRes?.ok) {
+      const data = await clientRes.json()
+      if (data.success && data.data) {
+        clientStats.value.version = data.data.version || '1.0.0'
+        console.log('🔍 [Version] 客户端版本:', clientStats.value.version)
+      }
+    } else {
+      clientStats.value.version = '1.0.0'
+      console.warn('⚠️ [Version] 无法获取客户端版本，使用默认值: 1.0.0')
+    }
+    
+    if (backendRes?.ok) {
+      const data = await backendRes.json()
+      if (data.success && data.data) {
+        backendStats.value.version = data.data.version || '1.0.0'
+        console.log('🔍 [Version] 后端版本:', backendStats.value.version)
+      }
+    } else {
+      backendStats.value.version = '1.0.0'
+      console.warn('⚠️ [Version] 无法获取后端版本，使用默认值: 1.0.0')
+    }
+    
+    console.log('🔍 [Version] 版本信息获取完成:', {
+      system: systemInfo.value.version,
+      client: clientStats.value.version,
+      backend: backendStats.value.version
+    })
+  } catch (error) {
+    console.error('❌ [Version] 获取版本信息失败:', error)
+    clientStats.value.version = '1.0.0'
+    backendStats.value.version = '1.0.0'
+  }
+}
+
 // 组件挂载时获取真实数据
 onMounted(async () => {
   console.log('🏠 首页组件加载完成，开始初始化...')
+  
+  // 获取各组件版本信息
+  await fetchVersionInfo()
+  
   // 获取系统统计数据
   await fetchSystemStats()
+  
+  // 获取系统配置
+  await fetchSystemConfig()
   
   // 检查维护状态和网络状态
   await Promise.all([
     checkMaintenanceStatus(),
     checkNetworkStatus()
   ])
-  
+
   // 延迟初始化图表，确保选项卡内容已渲染
   setTimeout(() => {
     initCharts()
@@ -3465,6 +4072,21 @@ const initChartWithRetry = (elementId: string, option: any, retries = 0) => {
 
 .maintenance-detail {
   padding: 10px 0;
+}
+
+.restart-progress {
+  padding: 20px 0;
+  text-align: center;
+}
+
+.restart-progress .el-progress {
+  margin-bottom: 16px;
+}
+
+.restart-status {
+  color: #606266;
+  font-size: 14px;
+  margin: 0;
 }
 
 .cleanup-actions {

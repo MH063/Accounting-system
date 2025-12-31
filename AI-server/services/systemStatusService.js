@@ -175,9 +175,9 @@ class SystemStatusService {
    */
   async getRealOnlineUserCount() {
     try {
-      // 1. 获取最近活跃会话 (排除管理端)
+      // 1. 获取最近活跃会话 (按用户去重，只计算同一用户的最新会话)
       const query = `
-        SELECT s.*
+        SELECT DISTINCT ON (s.user_id) s.*
         FROM user_sessions s
         INNER JOIN users u ON s.user_id = u.id
         INNER JOIN user_roles ur ON u.id = ur.user_id AND ur.is_active = TRUE
@@ -187,13 +187,14 @@ class SystemStatusService {
         AND r.role_name != 'admin'
         AND s.expires_at > NOW()
         AND (s.updated_at > (NOW() - INTERVAL '5 minutes') OR s.last_accessed_at > (NOW() - INTERVAL '5 minutes'))
+        ORDER BY s.user_id, s.updated_at DESC, s.last_accessed_at DESC
       `;
       const result = await pool.query(query);
       const sessions = result.rows;
 
       console.log('[SystemStatusService] 在线用户查询结果:', {
-        sessionCount: sessions.length,
-        sessions: sessions.map(s => ({
+        userCount: sessions.length,
+        users: sessions.map(s => ({
           id: s.id,
           user_id: s.user_id,
           status: s.status,

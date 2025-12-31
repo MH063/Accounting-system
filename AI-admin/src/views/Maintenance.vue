@@ -651,6 +651,7 @@ import {
   healthApi 
 } from '../api/maintenance'
 import { systemApi } from '../api/user'
+import { getSystemConfig } from '../utils/systemConfig'
 
 // 响应式数据
 const activeTab = ref('info')
@@ -709,14 +710,40 @@ const maintenanceCountdown = computed(() => {
 })
 
 const systemInfo = ref({
-  name: 'AI管理系统',
-  version: 'v2.1.0',
-  environment: '生产环境',
-  startTime: '2023-11-01 08:30:15',
-  uptime: '15天 4小时 25分钟',
-  memoryUsage: 65,
-  cpuUsage: 32,
-  diskUsage: 45
+  name: '',
+  version: '',
+  environment: '',
+  startTime: '',
+  uptime: '',
+  memoryUsage: 0,
+  cpuUsage: 0,
+  diskUsage: 0
+})
+
+// 从全局配置同步系统信息（版本号从API获取）
+const syncSystemInfoFromGlobal = async () => {
+  const globalConfig = getSystemConfig()
+  systemInfo.value.name = globalConfig.name || '记账管理系统'
+  systemInfo.value.environment = globalConfig.environment === 'development' ? '开发环境' : 
+                                 globalConfig.environment === 'testing' ? '测试环境' : '生产环境'
+  
+  // 版本号从API获取
+  try {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || ''
+    const response = await fetch(`${baseUrl}/api/version/admin`).catch(() => null)
+    if (response?.ok) {
+      const data = await response.json()
+      if (data.success && data.data) {
+        systemInfo.value.version = data.data.version || '1.0.0'
+      }
+    }
+  } catch (e) {
+    systemInfo.value.version = '1.0.0'
+  }
+}
+
+onMounted(async () => {
+  await syncSystemInfoFromGlobal()
 })
 
 const scheduleList = ref([
@@ -1807,8 +1834,9 @@ const handleDeleteArchive = async (row: any) => {
 // 系统版本更新管理相关状态
 const checkingUpdate = ref(false)
 const updateLoading = ref(false)
+const globalVersionConfig = getSystemConfig()
 const currentVersion = ref({
-  version: 'v2.1.0',
+  version: globalVersionConfig.version || '1.0.0',
   releaseDate: '2023-11-01',
   description: '修复了若干问题并优化了用户体验'
 })

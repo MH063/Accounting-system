@@ -31,6 +31,8 @@ const qrCodesRoutes = require('./qrCodes');
 const notificationRoutes = require('./notifications');
 const securityRoutes = require('./security');
 const systemRoutes = require('./system');
+const systemConfigRoutes = require('./systemConfig');
+const environmentConfigRoutes = require('./environmentConfig');
 const performanceRoutes = require('./performance');
 
 module.exports = {
@@ -62,5 +64,7 @@ module.exports = {
   notificationRoutes,
   securityRoutes,
   systemRoutes,
+  systemConfigRoutes,
+  environmentConfigRoutes,
   performanceRoutes
 };
