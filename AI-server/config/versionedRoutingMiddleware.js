@@ -150,6 +150,9 @@ class VersionedRoutingMiddleware {
     return (req, res, next) => {
       const apiVersion = req.apiVersion;
       const originalPath = req.path;
+      const fullPath = req.originalUrl;
+      
+      console.log(`🔍 [VERSION_DEBUG] path: ${originalPath}, originalUrl: ${fullPath}, apiVersion: ${apiVersion}`);
       
       // 不需要版本化的路由列表
       const excludedPaths = [

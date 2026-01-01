@@ -20,7 +20,6 @@
           <span>用户管理</span>
         </template>
         <el-menu-item index="/users">用户列表</el-menu-item>
-        <el-menu-item index="/user-detail">用户详情</el-menu-item>
         <el-menu-item index="/batch-operation">批量操作</el-menu-item>
       </el-sub-menu>
       

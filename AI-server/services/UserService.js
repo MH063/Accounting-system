@@ -247,6 +247,111 @@ class UserService extends BaseService {
   }
 
   /**
+   * 批量创建用户（导入功能使用）
+   * @param {Array} usersData - 用户数据数组
+   * @returns {Promise<Object>} 创建结果
+   */
+  async batchCreateUsers(usersData) {
+    try {
+      this.logger.info('[UserService] 批量创建用户开始', { count: usersData.length });
+      
+      const results = {
+        success: 0,
+        failed: 0,
+        errors: []
+      };
+
+      // 使用事务处理批量导入
+      await this.transaction(async (client) => {
+        for (let i = 0; i < usersData.length; i++) {
+          const userData = usersData[i];
+          try {
+            // 1. 验证必填字段
+            if (!userData.username || !userData.email) {
+              throw new Error('用户名和邮箱为必填项');
+            }
+
+            // 2. 验证邮箱格式
+            if (!this.isValidEmail(userData.email)) {
+              throw new Error('邮箱格式不正确');
+            }
+
+            // 3. 检查用户名和邮箱是否已存在
+            const exists = await this.userRepository.checkUserExists(
+              userData.username,
+              userData.email
+            );
+
+            if (exists.exists) {
+              const conflictField = exists.conflictField === 'username' ? '用户名' : '邮箱';
+              const conflictValue = exists.conflictField === 'username' ? userData.username : userData.email;
+              throw new Error(`${conflictField} '${conflictValue}' 已存在`);
+            }
+
+            // 4. 处理密码 (如果没有提供，则使用默认密码)
+            const password = userData.password || '123456';
+            const saltRounds = 12;
+            const passwordHash = await bcrypt.hash(password, saltRounds);
+
+            // 5. 创建用户模型
+            const user = UserModel.create({
+              username: userData.username,
+              email: userData.email,
+              passwordHash: passwordHash,
+              full_name: userData.full_name || userData.username,
+              phone: userData.phone || null,
+              role: userData.role || 'user',
+              is_active: userData.is_active !== undefined ? userData.is_active : true,
+              created_at: new Date(),
+              updated_at: new Date()
+            });
+
+            // 6. 转换为数据库格式并创建
+            const dbData = user.toDatabaseFormat();
+            
+            // 使用 client 确保在同一个事务中执行（如果 repository.create 支持 client）
+            // 查阅 BaseRepository.create 发现它使用全局 query，不支持 client 注入
+            // 所以我们需要在 repository 中添加对事务的支持，或者在这里直接用 client 执行
+            const keys = Object.keys(dbData);
+            const values = Object.values(dbData);
+            const placeholders = keys.map((_, index) => `$${index + 1}`).join(', ');
+            
+            await client.query(
+              `INSERT INTO users (${keys.join(', ')}) VALUES (${placeholders})`,
+              values
+            );
+            
+            results.success++;
+          } catch (error) {
+            results.failed++;
+            results.errors.push({
+              index: i,
+              username: userData.username,
+              error: error.message
+            });
+            // 记录日志但不中断循环，因为在 transaction 中任何错误都会触发 ROLLBACK
+            // 如果希望部分成功，则不能使用 transaction 包装整个循环，或者在循环内部使用 SAVEPOINT
+          }
+        }
+        
+        // 如果有任何失败且我们希望整个事务回滚，可以在这里抛出异常
+        if (results.failed > 0) {
+          throw new Error(`批量导入部分失败，已回滚。失败数: ${results.failed}`);
+        }
+      });
+
+      this.logger.info('[UserService] 批量创建用户完成', { 
+        success: results.success, 
+        failed: results.failed 
+      });
+      return results;
+    } catch (error) {
+      this.logger.error('[UserService] 批量创建用户执行异常', { error: error.message });
+      throw error;
+    }
+  }
+
+  /**
    * 用户登录
    * @param {Object} loginData - 登录数据
    * @returns {Promise<Object>} 登录结果

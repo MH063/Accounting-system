@@ -208,7 +208,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/users', require('./routes/users'));
 
 // 注册版本化用户管理路由示例
-app.use('/api/users', require('./routes/versioned-users'));
+// app.use('/api/users', require('./routes/versioned-users'));
 
 app.use('/api/logs', require('./routes/logs'));
 app.use('/api/logs', require('./routes/logManagement'));
@@ -252,6 +252,9 @@ app.use('/api/audit', require('./routes/audit'));
 
 // 版本管理路由
 app.use('/api/version', require('./routes/version'));
+
+// 模板下载路由
+app.use('/api/templates', require('./routes/templates'));
 
 // 费用摘要路由
 app.use('/api/expense-summary', require('./routes/expenseSummary'));

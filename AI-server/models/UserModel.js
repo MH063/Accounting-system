@@ -217,7 +217,35 @@ class UserModel {
    * @returns {boolean} 是否有权限
    */
   hasPermission(permission) {
-    return this.permissions.includes(permission);
+    if (!this.permissions) return false;
+    
+    // 如果是数组 (新系统)
+    if (Array.isArray(this.permissions)) {
+      return this.permissions.includes(permission);
+    }
+    
+    // 如果是对象 (从数据库加载的 JSONB 格式)
+    if (typeof this.permissions === 'object') {
+      // 直接检查
+      if (this.permissions[permission] === true) return true;
+      
+      // 检查映射
+      const mapping = {
+        'user:activate': 'user_management',
+        'user:deactivate': 'user_management',
+        'user:create': 'user_management',
+        'user:update': 'user_management',
+        'user:delete': 'user_management',
+        'user:list': 'user_management',
+        'user:read': 'user_management',
+        'system:config': 'system_config'
+      };
+      
+      const dbKey = mapping[permission];
+      return dbKey ? this.permissions[dbKey] === true : false;
+    }
+    
+    return false;
   }
 
   /**

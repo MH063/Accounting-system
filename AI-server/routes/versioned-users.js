@@ -78,7 +78,7 @@ router.get('/', authenticateToken, responseWrapper(async (req, res) => {
 router.get('/:userId', authenticateToken, responseWrapper(async (req, res) => {
   try {
     const { userId } = req.params;
-    const user = UserManager.getUserById(userId);
+    const user = UserManager.getUser(userId);
     const apiVersion = req.apiVersion || 'v1';
     
     if (!user) {
@@ -149,24 +149,25 @@ router.get('/:userId', authenticateToken, responseWrapper(async (req, res) => {
 router.post('/', PermissionChecker.requireAdmin(), responseWrapper(async (req, res) => {
   try {
     const { username, email, password, roles = ['user'] } = req.body;
+    const finalPassword = password || '123456';
     const apiVersion = req.apiVersion || 'v1';
 
-    if (!username || !email || !password) {
+    if (!username || !email) {
       return res.status(400).json({
         success: false,
-        message: '缺少必需字段：username, email, password'
+        message: '缺少必需字段：username, email'
       });
     }
 
     // 检查用户是否已存在
-    if (UserManager.getUserByUsername(username)) {
+    if (UserManager.findUserByUsername(username)) {
       return res.status(409).json({
         success: false,
         message: '用户名已存在'
       });
     }
 
-    if (UserManager.getUserByEmail(email)) {
+    if (UserManager.findUserByEmail(email)) {
       return res.status(409).json({
         success: false,
         message: '邮箱已被使用'
@@ -178,14 +179,14 @@ router.post('/', PermissionChecker.requireAdmin(), responseWrapper(async (req, r
       id: uuidv4(),
       username,
       email,
-      password, // 注意：实际生产中需要加密
+      password: finalPassword, // 注意：实际生产中需要加密
       roles,
       status: 'active',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
 
-    UserManager.addUser(newUser);
+    await UserManager.createUser(newUser);
 
     let responseUser;
     let features = [];
@@ -236,7 +237,7 @@ router.put('/:userId', PermissionChecker.requireAdmin(), responseWrapper(async (
     const updates = req.body;
     const apiVersion = req.apiVersion || 'v1';
 
-    const user = UserManager.getUserById(userId);
+    const user = UserManager.getUser(userId);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -300,7 +301,7 @@ router.delete('/:userId', PermissionChecker.requireAdmin(), responseWrapper(asyn
     const { userId } = req.params;
     const apiVersion = req.apiVersion || 'v1';
 
-    const user = UserManager.getUserById(userId);
+    const user = UserManager.getUser(userId);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -413,7 +414,7 @@ router.post('/batch', PermissionChecker.requireAdmin(), responseWrapper(async (r
     const results = [];
     
     for (const userId of userIds) {
-      const user = UserManager.getUserById(userId);
+      const user = UserManager.getUser(userId);
       if (!user) {
         results.push({
           userId,

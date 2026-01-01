@@ -109,16 +109,16 @@ const persistToDatabase = async (entry) => {
     `;
 
     const values = [
-      tableName,
-      dbOperation,
+      tableName.substring(0, 100),
+      dbOperation.substring(0, 20),
       0, // record_id
       userId || null,
       (ip && ip !== '::1' && ip !== '127.0.0.1') ? ip : null,
-      userAgent,
-      action,
+      userAgent ? userAgent.substring(0, 500) : null,
+      action ? action.substring(0, 255) : null,
       finalSuccess,
       statusCode || null,
-      finalSeverity,
+      finalSeverity.substring(0, 20),
       JSON.stringify(operationData || loginData || anomalyData || eventData || {}),
       responseTime || null
     ];

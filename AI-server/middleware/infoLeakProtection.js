@@ -57,6 +57,11 @@ function sanitizeData(data) {
   }
   
   if (typeof data === 'object') {
+    // 更加鲁棒的 Date 对象检查 (考虑到可能的跨上下文/VM问题)
+    if (data instanceof Date || (data && typeof data.toISOString === 'function' && Object.prototype.toString.call(data) === '[object Date]')) {
+      return data;
+    }
+    
     if (Array.isArray(data)) {
       return data.map(item => sanitizeData(item));
     }

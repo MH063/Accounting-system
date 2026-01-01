@@ -80,23 +80,29 @@ class AdminAuthController extends BaseController {
       console.log('  - 请求IP:', req.ip);
       console.log('  - 请求体:', JSON.stringify(req.body, null, 2));
       
-      const { username, password } = req.body;
+      const { username, email, password } = req.body;
+      const loginIdentifier = username || email;
       
       // 记录管理员登录尝试
       logger.audit(req, '管理员登录尝试', { 
-        username,
+        identifier: loginIdentifier,
         timestamp: new Date().toISOString(),
         loginType: 'admin'
       });
 
       console.log('🔍 [AdminAuthController] 开始验证输入字段');
       // 验证输入
-      this.validateRequiredFields(req.body, ['username', 'password']);
+      if (!loginIdentifier) {
+        throw new Error('缺少必需字段: username 或 email');
+      }
+      if (!password) {
+        throw new Error('缺少必需字段: password');
+      }
       console.log('✅ [AdminAuthController] 输入验证通过');
 
       console.log('🔍 [AdminAuthController] 调用AdminAuthService进行登录验证');
       // 调用服务层进行管理员登录验证
-      const loginResult = await this.adminAuthService.adminLogin({ username, password });
+      const loginResult = await this.adminAuthService.adminLogin({ username: loginIdentifier, password });
       console.log('📋 [AdminAuthController] AdminAuthService返回结果:', JSON.stringify(loginResult, null, 2));
       
       if (!loginResult.success) {
@@ -130,6 +136,22 @@ class AdminAuthController extends BaseController {
 
       // AdminAuthService返回的结构与UserService不同，需要适配
       const { user, accessToken, refreshToken, expiresIn, tokenType } = loginResult.data;
+
+      // 创建用户会话(确保刷新令牌持久化到数据库，支持后续刷新)
+      try {
+        await this.userService.createUserSession(user.id, req.ip, req.get('User-Agent'), {
+          accessToken,
+          refreshToken,
+          clientType: 'admin'
+        });
+        logger.info('[AdminAuthController] 管理员会话创建成功', { userId: user.id });
+      } catch (sessionError) {
+        logger.error('[AdminAuthController] 管理员会话创建失败', { 
+          error: sessionError.message,
+          userId: user.id 
+        });
+        // 会话创建失败不应中断登录流程，但会记录日志
+      }
 
       console.log('✅ [AdminAuthController] 登录成功，准备返回响应');
       logger.auth('管理员登录成功', { username, userId: user.id, role: user.role });

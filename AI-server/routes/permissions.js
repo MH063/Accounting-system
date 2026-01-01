@@ -406,7 +406,7 @@ router.post('/users/:userId/activate', requireAdmin, responseWrapper(async (req,
     });
   }
 
-  const activatedUser = UserManager.setUserActive(userId, true);
+  const activatedUser = UserManager.updateUser(userId, { isActive: true });
 
   logger.info('用户激活', {
     adminId: req.user.id,
@@ -435,7 +435,7 @@ router.post('/users/:userId/deactivate', requireAdmin, responseWrapper(async (re
     });
   }
 
-  const deactivatedUser = UserManager.setUserActive(userId, false);
+  const deactivatedUser = UserManager.updateUser(userId, { isActive: false });
 
   logger.info('用户停用', {
     adminId: req.user.id,

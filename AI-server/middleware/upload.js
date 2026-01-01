@@ -22,7 +22,8 @@ if (!fs.existsSync(uploadDir)) {
 const allowedExtensions = [
   '.jpg', '.jpeg', '.png', '.gif', '.webp', // 图片
   '.pdf', '.doc', '.docx', '.txt', // 文档
-  '.mp4', '.mpeg' // 视频
+  '.mp4', '.mpeg', // 视频
+  '.xls', '.xlsx' // Excel
 ];
 
 // 允许的文件类型
@@ -36,7 +37,9 @@ const allowedMimeTypes = [
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'text/plain',
   'video/mp4',
-  'video/mpeg'
+  'video/mpeg',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 ];
 
 // 文件内容签名（魔数）验证
@@ -50,7 +53,9 @@ const fileSignatures = {
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['50 4B 03 04'],
   'text/plain': [], // 纯文本没有特定的魔数
   'video/mp4': ['66 74 79 70 69 73 6F 6D', '66 74 79 70 6D 70 34 32'],
-  'video/mpeg': ['00 00 01 B3']
+  'video/mpeg': ['00 00 01 B3'],
+  'application/vnd.ms-excel': ['D0 CF 11 E0'],
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['50 4B 03 04']
 };
 
 /**
@@ -223,7 +228,7 @@ const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB，按照任务要求调整文件大小限制
+    fileSize: 10 * 1024 * 1024, // 增加到10MB，支持Excel导入
     files: 5 // 最多5个文件
   }
 });

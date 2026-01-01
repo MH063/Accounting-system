@@ -101,16 +101,16 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="lastLoginTime" label="最后登录时间">
-          <template #default="scope">
-            {{ formatDate(scope.row.lastLoginTime) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="createdAt" label="创建时间">
-          <template #default="scope">
-            {{ formatDate(scope.row.createdAt) }}
-          </template>
-        </el-table-column>
+  <el-table-column prop="lastLoginTime" label="最后登录时间">
+  <template #default="scope">
+    {{ formatDate(scope.row.lastLoginTime) }}
+  </template>
+</el-table-column>
+<el-table-column prop="createdAt" label="创建时间">
+  <template #default="scope">
+    {{ formatDate(scope.row.createdAt) }}
+  </template>
+</el-table-column>
         <el-table-column label="操作" width="180" fixed="right">
           <template #default="scope">
             <el-button size="small" @click="handleView(scope.row)">查看</el-button>
@@ -276,16 +276,39 @@ const router = useRouter()
 // 创建分页管理器
 const { paginationState, dataList, loadData, handleSizeChange: pagerHandleSizeChange, handleCurrentChange: pagerHandleCurrentChange, refresh } = createPaginationManager<any>(
   async (params) => {
+    console.log('📡 [Users View] 发送获取用户列表请求:', params)
     const response = await userApi.getUsers(params)
-    console.log('👥 [Users View] 获取用户列表响应:', response)
+    console.log('👥 [Users View] 获取用户列表原始响应:', response)
     
-    // 处理后端返回的数据结构 (符合规则 5: response.data.data.xxx)
-    // 此时 response 已经是拦截器返回的 response.data，所以我们需要访问 response.data.users
-    const innerData = response?.data || response
-    const usersData = innerData?.users || (Array.isArray(innerData) ? innerData : [])
-    const totalCount = innerData?.total || innerData?.count || (Array.isArray(innerData) ? innerData.length : 0)
+    // 根据规则 5 和拦截器逻辑，response 应该是 resData.data
+    // 我们预期的结构是 { users: [], total: number }
     
-    console.log('📊 [Users View] 处理后的数据:', { count: usersData.length, total: totalCount })
+    let usersData: any[] = []
+      let totalCount = 0
+      
+      if (response && typeof response === 'object') {
+      // 兼容多种返回结构
+      usersData = response.users || response.data?.users || (Array.isArray(response) ? response : [])
+      totalCount = response.total || response.count || response.data?.total || (Array.isArray(usersData) ? usersData.length : 0)
+    }
+
+    usersData = usersData.map((u: any) => {
+        // 辅助函数：判断是否为有效值（排除空对象）
+        const getValid = (v: any) => {
+          if (v === null || v === undefined || v === '') return null;
+          if (typeof v === 'object' && !(v instanceof Date) && Object.keys(v).length === 0) return null;
+          return v;
+        };
+
+        const item = {
+          ...u,
+          // 极致兜底映射
+          createdAt: getValid(u.createdAt) || getValid(u.created_at) || getValid(u.createdTime) || null,
+          lastLoginTime: getValid(u.lastLoginTime) || getValid(u.last_login_at) || getValid(u.lastLogin) || null
+        };
+        
+        return item;
+      });
     
     return {
       data: usersData,
@@ -329,8 +352,8 @@ const addForm = ref({
   email: '',
   phone: '',
   role: '',
-  password: '',
-  confirmPassword: '',
+  password: '123456',
+  confirmPassword: '123456',
   dormitory: '',
   status: 'active',
   remark: ''
@@ -347,37 +370,118 @@ const addFormRules = {
   status: commonRules.status
 }
 
-// 格式化日期
-const formatDate = (dateString: string) => {
-  if (!dateString) return '-'
-  return new Date(dateString).toLocaleString()
+// 格式化日期 (V6 - 终极修复版)
+const formatDate = (val: any) => {
+  // 1. 立即处理空值
+  if (val === null || val === undefined || val === '') {
+    return '-'
+  }
+
+  // 2. 尝试解析
+  let date: Date | null = null
+
+  try {
+    if (val instanceof Date) {
+      date = val
+    } else if (typeof val === 'string') {
+      // 移除可能存在的空白字符
+      const cleanStr = val.trim()
+      if (!cleanStr) return '-'
+      date = new Date(cleanStr)
+      
+      // 如果解析失败，尝试手动解析 ISO 格式 (YYYY-MM-DDTHH:mm:ss...)
+      if (isNaN(date.getTime()) && cleanStr.includes('T')) {
+        const parts = cleanStr.split(/[T.+]/)
+        if (parts.length >= 2) {
+          const dateParts = parts[0].split('-')
+          const timeParts = parts[1].split(':')
+          if (dateParts.length === 3 && timeParts.length >= 2) {
+            date = new Date(
+              parseInt(dateParts[0]),
+              parseInt(dateParts[1]) - 1,
+              parseInt(dateParts[2]),
+              parseInt(timeParts[0]),
+              parseInt(timeParts[1]),
+              timeParts[2] ? parseInt(timeParts[2]) : 0
+            )
+          }
+        }
+      }
+    } else if (typeof val === 'number') {
+      date = new Date(val)
+    } else if (typeof val === 'object') {
+      // 处理可能的 Proxy 或包装对象
+      const realVal = val.value || val.timestamp || val.time || (typeof val.valueOf === 'function' ? val.valueOf() : null)
+      if (realVal) {
+        date = new Date(realVal)
+      }
+    }
+  } catch (e) {
+    // 解析失败静默处理
+  }
+
+  // 3. 最终校验
+  if (!date || isNaN(date.getTime())) {
+    // 如果解析彻底失败，但原始值是字符串且包含日期特征，尝试简单截取
+    if (typeof val === 'string' && val.includes('-')) {
+      return val.replace('T', ' ').split('.')[0]
+    }
+    return '-'
+  }
+
+  // 4. 格式化输出 (YYYY-MM-DD HH:mm:ss)
+  try {
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    const hh = String(date.getHours()).padStart(2, '0')
+    const mm = String(date.getMinutes()).padStart(2, '0')
+    const ss = String(date.getSeconds()).padStart(2, '0')
+    return `${y}-${m}-${d} ${hh}:${mm}:${ss}`
+  } catch (e) {
+    return typeof val === 'string' ? val : '-'
+  }
 }
 
 // 加载用户列表
-const loadUsers = async () => {
-  console.log('🔄 开始加载用户列表...', {
-    page: currentPage.value,
-    pageSize: pageSize.value,
-    ...searchForm.value
-  })
-  
+const loadUsers = async (useCache = true) => {
   const params = {
-    page: currentPage.value,
-    pageSize: pageSize.value,
     ...searchForm.value
   }
   
-  return loadData(params)
+  if (!useCache) {
+    return refresh(params)
+  }
+  
+  const result = await loadData(params, useCache)
+  
+  if (dataList.value.length > 0) {
+    const firstUser = dataList.value[0]
+    console.log('🔍 [Users View] 第一条用户数据详细检查:', {
+      id: firstUser.id,
+      username: firstUser.username,
+      // 检查字段名是否存在，是否拼写错误
+      createdAt: firstUser.createdAt,
+      lastLoginTime: firstUser.lastLoginTime,
+      // 检查原始字段名（防止映射失败）
+      created_at: firstUser.created_at,
+      last_login_at: firstUser.last_login_at,
+      // 检查所有键
+      allKeys: Object.keys(firstUser)
+    })
+  }
+  
+  return result
 }
 
 // 搜索用户
-const handleSearch = () => {
+const handleSearch = async () => {
   currentPage.value = 1 // 重置到第一页
-  loadUsers()
+  await loadUsers(false)
 }
 
 // 重置搜索
-const handleReset = () => {
+const handleReset = async () => {
   searchForm.value = {
     keyword: '',
     role: '',
@@ -385,7 +489,7 @@ const handleReset = () => {
     dormitory: ''
   }
   currentPage.value = 1
-  loadUsers()
+  await loadUsers(false)
 }
 
 // 操作方法
@@ -400,8 +504,8 @@ const resetAddForm = () => {
     email: '',
     phone: '',
     role: '',
-    password: '',
-    confirmPassword: '',
+    password: '123456',
+    confirmPassword: '123456',
     dormitory: '',
     status: 'active',
     remark: ''
@@ -447,7 +551,7 @@ const handleSubmitAdd = async () => {
       resetAddForm()
       
       // 刷新用户列表
-      loadUsers()
+      await loadUsers(false)
     } else {
       ElMessage.error('创建用户失败')
     }
@@ -466,7 +570,10 @@ const handleView = (row: any) => {
 }
 
 const handleEdit = (row: any) => {
-  router.push(`/user-detail/${row.id}`)
+  router.push({
+    path: `/user-detail/${row.id}`,
+    query: { mode: 'edit' }
+  })
 }
 
 const handleDelete = async (row: any) => {
@@ -486,12 +593,13 @@ const handleDelete = async (row: any) => {
     ElMessage.success('用户删除成功')
     
     // 重新加载用户列表
-    loadUsers()
+    await loadUsers(false)
     
   } catch (error: any) {
     if (error !== 'cancel') {
       console.error('❌ 删除用户失败:', error)
-      ElMessage.error('删除用户失败')
+      const errorMsg = error.response?.data?.message || '删除用户失败'
+      ElMessage.error(errorMsg)
     }
   }
 }
@@ -502,44 +610,36 @@ const handleSelectionChange = (selection: any[]) => {
 }
 
 const handleBatchEnable = async () => {
-  if (selectedUsers.value.length === 0) {
-    ElMessage.warning('请至少选择一个用户')
-    return
-  }
+  if (selectedUsers.value.length === 0) return
   
   try {
-    const userIds = selectedUsers.value.map(user => user.id)
-    console.log('🔄 批量启用用户:', userIds)
+    const ids = selectedUsers.value.map(u => u.id)
+    await userApi.batchEnableUsers(ids)
     
-    // 调用实际的批量启用API
-    await userApi.batchEnableUsers(userIds)
-    ElMessage.success(`成功启用 ${selectedUsers.value.length} 个用户`)
-    selectedUsers.value = []
-    loadUsers()
-  } catch (error: any) {
-    console.error('❌ 批量启用用户失败:', error)
-    ElMessage.error('批量启用用户失败')
+    ElMessage.success('用户启用成功')
+    // 刷新用户列表
+    await loadUsers(false)
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('❌ 批量启用失败:', error)
+    }
   }
 }
 
 const handleBatchDisable = async () => {
-  if (selectedUsers.value.length === 0) {
-    ElMessage.warning('请至少选择一个用户')
-    return
-  }
+  if (selectedUsers.value.length === 0) return
   
   try {
-    const userIds = selectedUsers.value.map(user => user.id)
-    console.log('🔄 批量禁用用户:', userIds)
+    const ids = selectedUsers.value.map(u => u.id)
+    await userApi.batchDisableUsers(ids)
     
-    // 调用实际的批量禁用API
-    await userApi.batchDisableUsers(userIds)
-    ElMessage.success(`成功禁用 ${selectedUsers.value.length} 个用户`)
-    selectedUsers.value = []
-    loadUsers()
-  } catch (error: any) {
-    console.error('❌ 批量禁用用户失败:', error)
-    ElMessage.error('批量禁用用户失败')
+    ElMessage.success('用户禁用成功')
+    // 刷新用户列表
+    await loadUsers(false)
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('❌ 批量禁用失败:', error)
+    }
   }
 }
 
@@ -567,11 +667,15 @@ const handleBatchDelete = async () => {
     await userApi.batchDeleteUsers(userIds)
     ElMessage.success(`成功删除 ${selectedUsers.value.length} 个用户`)
     selectedUsers.value = []
-    loadUsers()
+    await loadUsers(false)
   } catch (error: any) {
     if (error !== 'cancel') {
       console.error('❌ 批量删除用户失败:', error)
-      ElMessage.error('批量删除用户失败')
+      // 如果拦截器已经处理过错误（通过 Promise.reject(new Error(msg))），
+      // 则 error.message 就是错误消息。如果是网络错误，则可能有 error.response
+      const errorMsg = error.message || '批量删除操作失败'
+      // 避免重复显示相同消息 (拦截器可能已经显示过一次)
+      // 但为了稳妥，如果不是 cancel，我们至少记录日志
     }
   }
 }
@@ -627,8 +731,8 @@ watch(() => searchForm.value.keyword, (newValue) => {
 
 // 组件挂载时加载数据
 onMounted(() => {
-  console.log('👥 用户管理页面加载完成')
-  loadUsers()
+  // 强制不使用缓存加载第一次数据，确保看到真实的数据库数据
+  loadUsers(false)
 })
 
 /**

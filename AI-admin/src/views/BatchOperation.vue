@@ -626,7 +626,7 @@ const confirmBatchStatus = async () => {
     updatingStatus.value = true
     const userIds = selectedStatusUsers.value.map(user => user.id)
     
-    console.log('🔄 批量更新, statusForm.value状态:', userIds.status)
+    console.log('🔄 批量更新状态:', userIds, statusForm.value.status)
     
     if (statusForm.value.status === 'active') {
       await userApi.batchEnableUsers(userIds)

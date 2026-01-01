@@ -464,7 +464,7 @@ CREATE TABLE expenses (
     CONSTRAINT fk_expenses_category_id 
         FOREIGN KEY (category_id) REFERENCES expense_categories(id) ON DELETE RESTRICT,
     CONSTRAINT fk_expenses_applicant_id 
-        FOREIGN KEY (applicant_id) REFERENCES users(id) ON DELETE RESTRICT,
+        FOREIGN KEY (applicant_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT fk_expenses_dorm_id 
         FOREIGN KEY (dorm_id) REFERENCES dorms(id) ON DELETE RESTRICT,
     CONSTRAINT fk_expenses_payer_id 
@@ -2553,7 +2553,7 @@ CREATE TABLE admin_operationlogs (
     
     -- 外键约束
     CONSTRAINT fk_admin_operationlogs_operator_id 
-        FOREIGN KEY (operator_id) REFERENCES users(id) ON DELETE RESTRICT,
+        FOREIGN KEY (operator_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT fk_admin_operationlogs_approval_required_by 
         FOREIGN KEY (approval_required_by) REFERENCES users(id) ON DELETE SET NULL,
     
@@ -2673,7 +2673,7 @@ CREATE TABLE admin_backup_records (
     
     -- 外键约束
     CONSTRAINT fk_admin_backup_records_initiated_by 
-        FOREIGN KEY (initiated_by) REFERENCES users(id) ON DELETE RESTRICT,
+        FOREIGN KEY (initiated_by) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT fk_admin_backup_records_last_restored_by 
         FOREIGN KEY (last_restored_by) REFERENCES users(id) ON DELETE SET NULL,
     
@@ -3002,7 +3002,7 @@ CREATE TABLE admin_analytics_reports (
     
     -- 外键约束
     CONSTRAINT fk_admin_analytics_reports_generated_by 
-        FOREIGN KEY (generated_by) REFERENCES users(id) ON DELETE RESTRICT,
+        FOREIGN KEY (generated_by) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT fk_admin_analytics_reports_last_exported_by 
         FOREIGN KEY (last_exported_by) REFERENCES users(id) ON DELETE SET NULL,
     
@@ -3120,7 +3120,7 @@ CREATE TABLE budget_categories (
     CONSTRAINT fk_budget_categories_parent_id 
         FOREIGN KEY (parent_id) REFERENCES budget_categories(id) ON DELETE SET NULL,
     CONSTRAINT fk_budget_categories_created_by 
-        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT,
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
     
     -- 唯一约束
     CONSTRAINT uk_budget_categories_name_parent UNIQUE(name, parent_id)
@@ -3179,7 +3179,7 @@ CREATE TABLE budgets (
     CONSTRAINT fk_budgets_approved_by 
         FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE SET NULL,
     CONSTRAINT fk_budgets_created_by 
-        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT,
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
     
     -- 检查约束
     CONSTRAINT budgets_period_valid CHECK (budget_period_end >= budget_period_start),
@@ -3235,7 +3235,7 @@ CREATE TABLE budget_usage_records (
     CONSTRAINT fk_budget_usage_records_expense_id 
         FOREIGN KEY (expense_id) REFERENCES expenses(id) ON DELETE SET NULL,
     CONSTRAINT fk_budget_usage_records_recorded_by 
-        FOREIGN KEY (recorded_by) REFERENCES users(id) ON DELETE RESTRICT
+        FOREIGN KEY (recorded_by) REFERENCES users(id) ON DELETE CASCADE
 );
 
 COMMENT ON TABLE budget_usage_records IS '预算使用记录表，记录预算的每一笔使用情况';
@@ -3329,7 +3329,7 @@ CREATE TABLE approval_workflow_templates (
     CONSTRAINT fk_approval_workflow_templates_department_id 
         FOREIGN KEY (department_id) REFERENCES dorms(id) ON DELETE SET NULL,
     CONSTRAINT fk_approval_workflow_templates_created_by 
-        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT,
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
     
     -- 唯一约束
     CONSTRAINT uk_approval_workflow_templates_name_type UNIQUE(name, workflow_type)
@@ -3440,7 +3440,7 @@ CREATE TABLE approval_workflow_instances (
     CONSTRAINT fk_approval_workflow_instances_current_step_id 
         FOREIGN KEY (current_step_id) REFERENCES approval_workflow_steps(id) ON DELETE SET NULL,
     CONSTRAINT fk_approval_workflow_instances_initiator_id 
-        FOREIGN KEY (initiator_id) REFERENCES users(id) ON DELETE RESTRICT
+        FOREIGN KEY (initiator_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 COMMENT ON TABLE approval_workflow_instances IS '审批流程实例表，存储具体的审批流程实例';
@@ -3500,7 +3500,7 @@ CREATE TABLE approval_records (
     CONSTRAINT fk_approval_records_step_id 
         FOREIGN KEY (step_id) REFERENCES approval_workflow_steps(id) ON DELETE RESTRICT,
     CONSTRAINT fk_approval_records_approver_id 
-        FOREIGN KEY (approver_id) REFERENCES users(id) ON DELETE RESTRICT,
+        FOREIGN KEY (approver_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT fk_approval_records_delegated_to_id 
         FOREIGN KEY (delegated_to_id) REFERENCES users(id) ON DELETE SET NULL,
     CONSTRAINT fk_approval_records_next_step_id 
@@ -3567,7 +3567,7 @@ CREATE TABLE report_templates (
     
     -- 外键约束
     CONSTRAINT fk_report_templates_created_by 
-        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT,
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
     
     -- 唯一约束
     CONSTRAINT uk_report_templates_name_version UNIQUE(name, version)
@@ -3633,7 +3633,7 @@ CREATE TABLE report_instances (
     CONSTRAINT fk_report_instances_template_id 
         FOREIGN KEY (template_id) REFERENCES report_templates(id) ON DELETE RESTRICT,
     CONSTRAINT fk_report_instances_created_by 
-        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT,
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
     
     -- 检查约束
     CONSTRAINT report_instances_duration_positive 
@@ -3696,7 +3696,7 @@ CREATE TABLE data_views (
     
     -- 外键约束
     CONSTRAINT fk_data_views_created_by 
-        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
 );
 
 COMMENT ON TABLE data_views IS '数据视图表，存储各类数据视图定义';

@@ -7,6 +7,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const logger = require('../config/logger');
 const { generateTokenPair } = require('../config/jwtManager');
+const { ROLES, PERMISSIONS } = require('../config/permissions');
 const UserRepository = require('../repositories/UserRepository');
 const UserModel = require('../models/UserModel');
 
@@ -39,9 +40,9 @@ class AdminAuthService {
         };
       }
 
-      // 2. 查找用户
+      // 2. 查找用户 (支持用户名或邮箱登录)
       let user = await this.userRepository.findByUsername(username);
-      if (!user) {
+      if (!user && username.includes('@')) {
         user = await this.userRepository.findByEmail(username);
       }
 
@@ -83,6 +84,7 @@ class AdminAuthService {
         email: user.email,
         status: user.isActive ? 'active' : 'inactive',
         role: 'admin',
+        permissions: ROLES.ADMIN.permissions,
         isAdmin: true
       });
 

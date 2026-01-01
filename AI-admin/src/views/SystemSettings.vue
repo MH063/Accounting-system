@@ -795,9 +795,9 @@ const fetchSystemConfigForSettings = async () => {
     const response = await userApi.getSystemConfigs()
     console.log('📡 SystemSettings API响应:', response)
     
-    // 标准化数据解析
+    // 标准化数据解析：兼容直接返回数据或嵌套在 data 中的结构
     let data = response
-    if (response && response.success === true && response.data) {
+    if (response && response.data && !response.configs) {
       data = response.data
     }
     

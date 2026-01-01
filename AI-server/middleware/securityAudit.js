@@ -241,14 +241,14 @@ function logSecurityEvent(event) {
     // 异步持久化到数据库
     const persistToDb = async (event) => {
       try {
-        // 如果没有 userId，由于数据库约束，我们尝试寻找一个默认值或记录为系统操作(0)
-        // 注意：数据库 user_id 是 bigint NOT NULL
-        const userId = event.userId || 0;
+        // 如果没有 userId，由于数据库约束，我们尝试记录为 null
+        // 如果数据库 user_id 是 bigint NOT NULL，插入 null 会失败，这时我们在 catch 中处理
+        const userId = event.userId || null;
         
         // 确保 operation 字段有值
         const operation = event.type || event.operation || event.action || 'unknown';
 
-        const query = `
+        const queryText = `
           INSERT INTO security_verification_logs 
           (user_id, operation, verification_type, success, reason, ip_address, user_agent, device_info, created_at)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -278,16 +278,15 @@ function logSecurityEvent(event) {
           }),
           event.timestamp
         ];
-        await pool.query(query, params);
+        await pool.query(queryText, params);
         console.log(`[SECURITY_AUDIT] 成功持久化安全事件: ${operation}, userId: ${userId}`);
       } catch (dbError) {
-        logger.error('[SECURITY_AUDIT] 持久化安全事件到数据库失败:', dbError.message);
-        console.error('[SECURITY_AUDIT] 持久化失败详情:', {
-          userId: event.userId,
-          type: event.type,
-          ip: event.sourceIp,
-          error: dbError.message
-        });
+        // 这里的错误不应该影响主流程
+        if (dbError.message.includes('null value in column "user_id"')) {
+          console.warn('[SECURITY_AUDIT] 无法持久化审计日志：user_id 不能为空且当前用户未登录。建议修改数据库表结构使 user_id 允许为空。');
+        } else {
+          logger.error('[SECURITY_AUDIT] 持久化安全事件到数据库失败:', dbError.message);
+        }
       }
     };
 

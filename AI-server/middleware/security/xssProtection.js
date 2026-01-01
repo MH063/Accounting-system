@@ -191,6 +191,8 @@ const hasXssPayload = (content, fieldName = '', req = null) => {
 const sanitizeObject = (obj) => {
   if (typeof obj === 'string') {
     return cleanHtml(obj);
+  } else if (obj instanceof Date || (obj && typeof obj.toISOString === 'function' && Object.prototype.toString.call(obj) === '[object Date]')) {
+    return obj;
   } else if (Array.isArray(obj)) {
     return obj.map(item => sanitizeObject(item));
   } else if (typeof obj === 'object' && obj !== null) {

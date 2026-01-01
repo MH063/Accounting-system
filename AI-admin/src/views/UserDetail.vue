@@ -47,11 +47,20 @@
           </el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="寝室号">
-          <el-input v-model="userDetail.dormitory" v-if="isEditing" />
-          <span v-else>{{ userDetail.dormitory || '-' }}</span>
+          <el-input v-model="userDetail.dormitory" v-if="isEditing" placeholder="请输入寝室号" />
+          <el-tag v-else :type="(userDetail.dormitory || userDetail.room_number) ? 'primary' : 'info'">
+            {{ userDetail.dormitory || userDetail.room_number || '未分配' }}
+          </el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="创建时间">{{ formatDate(userDetail.createdAt) }}</el-descriptions-item>
-        <el-descriptions-item label="最后登录时间">{{ formatDate(userDetail.lastLoginTime) }}</el-descriptions-item>
+        <el-descriptions-item label="创建时间">
+          <span :class="{ 'text-gray': !userDetail.createdAt && !userDetail.created_at }">
+            {{ (userDetail.createdAt || userDetail.created_at) ? formatDate(userDetail.createdAt || userDetail.created_at) : '未知' }}
+          </span>
+        </el-descriptions-item>
+        <el-descriptions-item label="最后登录时间">
+          <el-tag v-if="!userDetail.lastLoginTime && !userDetail.last_login_at" type="info">从未登录</el-tag>
+          <span v-else>{{ formatDate(userDetail.lastLoginTime || userDetail.last_login_at) }}</span>
+        </el-descriptions-item>
       </el-descriptions>
 
       <!-- 操作按钮 -->
@@ -268,10 +277,62 @@ const rolesLoading = ref(false)
 const userDormitory = ref<any>({})
 const dormitoryLoading = ref(false)
 
-// 格式化日期
-const formatDate = (dateString: string) => {
-  if (!dateString) return '-'
-  return new Date(dateString).toLocaleString()
+// 格式化日期 (V3: 终极鲁棒性，处理各种异常数据)
+const formatDate = (val: any) => {
+  if (val === null || val === undefined || val === '') return ''
+
+  let date: Date | null = null
+  
+  // 1. 处理已经是 Date 对象的情况
+  if (val instanceof Date) {
+    date = val
+  } 
+  // 2. 处理 ISO 字符串或数字时间戳
+  else if (typeof val === 'string' || typeof val === 'number') {
+    if (typeof val === 'string' && val.trim() === '') return ''
+    date = new Date(val)
+  } 
+  // 3. 处理对象情况 (处理可能是空对象 {} 的情况)
+  else if (typeof val === 'object') {
+    // 检查是否是包装后的日期对象
+    const possibleValue = val.value || val.timestamp || val.time || val.date || val.$date
+    if (possibleValue) {
+      date = new Date(possibleValue)
+    } else {
+      // 检查是否有 toISOString 方法 (即使 instanceof 失败也可能存在)
+      if (typeof val.toISOString === 'function') {
+        date = new Date(val.toISOString())
+      } else {
+        // 尝试转换为字符串
+        const str = String(val)
+        if (str !== '[object Object]') {
+          date = new Date(str)
+        }
+      }
+    }
+  }
+
+  // 确保 date 是有效的 Date 对象
+  if (!date || isNaN(date.getTime())) {
+    // 检查是否是特殊字符串 "never" 或其他代表空值的标记
+    if (typeof val === 'string' && (val.toLowerCase() === 'never' || val.trim() === '')) {
+      return ''
+    }
+    console.warn('⚠️ [UserDetail] 无法解析的日期:', val)
+    return ''
+  }
+  
+  try {
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    const hh = String(date.getHours()).padStart(2, '0')
+    const mm = String(date.getMinutes()).padStart(2, '0')
+    const ss = String(date.getSeconds()).padStart(2, '0')
+    return `${y}-${m}-${d} ${hh}:${mm}:${ss}`
+  } catch (e) {
+    return ''
+  }
 }
 
 // 加载用户详情
@@ -279,10 +340,8 @@ const loadUserDetail = async () => {
   try {
     loading.value = true
     const userId = route.params.id as string
-    console.log('🔄 加载用户详情:', userId)
     
     const response = await userApi.getUserById(parseInt(userId))
-    console.log('✅ 用户详情响应:', response)
     
     // 处理后端返回的数据结构 (符合规则 5: response.data.data.xxx)
     // 此时 response 已经是拦截器返回的 response.data
@@ -303,7 +362,6 @@ const loadLoginLogs = async () => {
   try {
     logsLoading.value = true
     const userId = route.params.id as string
-    console.log('🔄 加载用户登录日志:', userId)
     
     const response = await userApi.getUserLoginLogs(parseInt(userId), {
       page: logsPage.value,
@@ -336,13 +394,11 @@ const loadPaymentRecords = async () => {
   try {
     paymentsLoading.value = true
     const userId = route.params.id as string
-    console.log('🔄 加载用户支付记录:', userId)
     
     const response = await userApi.getUserPaymentRecords(parseInt(userId), {
       page: paymentsPage.value,
       pageSize: paymentsPageSize.value
     })
-    console.log('✅ 支付记录响应:', response)
     
     // 处理后端返回的数据结构 (符合规则 5: response.data.data.xxx)
     const innerData = response?.data || response
@@ -369,10 +425,8 @@ const loadUserRoles = async () => {
   try {
     rolesLoading.value = true
     const userId = route.params.id as string
-    console.log('🔄 加载用户权限角色:', userId)
     
     const response = await userApi.getUserRoles(parseInt(userId))
-    console.log('✅ 用户权限角色响应:', response)
     
     // 处理后端返回的数据结构 (符合规则 5: response.data.data.xxx)
     const innerData = response?.data || response
@@ -404,10 +458,8 @@ const loadUserDormitory = async () => {
   try {
     dormitoryLoading.value = true
     const userId = route.params.id as string
-    console.log('🔄 加载用户所属寝室信息:', userId)
     
     const response = await userApi.getUserDormitory(parseInt(userId))
-    console.log('✅ 用户寝室信息响应:', response)
     
     // 处理后端返回的数据结构 (符合规则 5: response.data.data.xxx)
     const dormitoryData = response?.data || response
@@ -434,7 +486,6 @@ const handleEdit = () => {
 const handleSave = async () => {
   try {
     const userId = route.params.id as string
-    console.log('🔄 更新用户信息:', userId, userDetail.value)
     
     await userApi.updateUser(parseInt(userId), userDetail.value)
     ElMessage.success('用户信息更新成功')
@@ -443,7 +494,8 @@ const handleSave = async () => {
     
   } catch (error: any) {
     console.error('❌ 更新用户信息失败:', error)
-    ElMessage.error('更新用户信息失败')
+    const errorMsg = error.response?.data?.message || '更新用户信息失败'
+    ElMessage.error(errorMsg)
   }
 }
 
@@ -465,7 +517,6 @@ const handleResetPassword = async () => {
     )
     
     const userId = route.params.id as string
-    console.log('🔄 重置用户密码:', userId)
     
     await userApi.resetUserPassword(parseInt(userId))
     ElMessage.success('密码重置成功，新密码已发送到用户邮箱')
@@ -491,7 +542,6 @@ const handleDeleteUser = async () => {
     )
     
     const userId = route.params.id as string
-    console.log('🗑️ 删除用户:', userId)
     
     await userApi.deleteUser(parseInt(userId))
     ElMessage.success('用户删除成功')
@@ -500,7 +550,8 @@ const handleDeleteUser = async () => {
   } catch (error: any) {
     if (error !== 'cancel') {
       console.error('❌ 删除用户失败:', error)
-      ElMessage.error('删除用户失败')
+      const errorMsg = error.response?.data?.message || '删除用户失败'
+      ElMessage.error(errorMsg)
     }
   }
 }
@@ -513,7 +564,6 @@ const handleEditRoles = () => {
 const handleSaveRoles = async () => {
   try {
     const userId = route.params.id as string
-    console.log('🔄 更新用户权限角色:', userId, selectedRoleIds.value)
     
     await userApi.updateUserRoles(parseInt(userId), selectedRoleIds.value)
     ElMessage.success('用户权限更新成功')
@@ -524,7 +574,8 @@ const handleSaveRoles = async () => {
     
   } catch (error: any) {
     console.error('❌ 更新用户权限失败:', error)
-    ElMessage.error('更新用户权限失败')
+    const errorMsg = error.response?.data?.message || '更新用户权限失败'
+    ElMessage.error(errorMsg)
   }
 }
 
@@ -558,7 +609,12 @@ const handlePaymentsCurrentChange = (val: number) => {
 
 // 组件挂载时加载数据
 onMounted(() => {
-  console.log('👤 用户详情页面加载完成')
+  
+  // 检查是否进入编辑模式
+  if (route.query.mode === 'edit') {
+    isEditing.value = true
+  }
+  
   loadUserDetail()
   loadLoginLogs()
   loadPaymentRecords()
@@ -628,5 +684,9 @@ onMounted(() => {
 .roles-list span {
   color: #909399;
   font-style: italic;
+}
+
+.text-gray {
+  color: #909399;
 }
 </style>

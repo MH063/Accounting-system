@@ -6,6 +6,8 @@
 const BaseController = require('./BaseController');
 const UserService = require('../services/UserService');
 const logger = require('../config/logger');
+const xlsx = require('xlsx');
+const fs = require('fs');
 const { generateTokenPair, refreshAccessToken, revokeTokenPair } = require('../config/jwtManager');
 const { logSecurityEvent, SECURITY_EVENTS } = require('../middleware/securityAudit');
 const { successResponse, errorResponse } = require('../middleware/response');
@@ -26,6 +28,79 @@ class AuthController extends BaseController {
     this.resetPassword = this.resetPassword.bind(this);
     this.verifyEmail = this.verifyEmail.bind(this);
     this.heartbeat = this.heartbeat.bind(this);
+    this.importUsers = this.importUsers.bind(this);
+  }
+
+  /**
+   * 导入用户数据
+   * POST /api/auth/import
+   */
+  async importUsers(req, res, next) {
+    try {
+      if (!req.file) {
+        return errorResponse(res, '请上传文件', 400);
+      }
+
+      const filePath = req.file.path;
+      let data;
+      try {
+        const workbook = xlsx.readFile(filePath);
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        data = xlsx.utils.sheet_to_json(worksheet);
+      } catch (parseError) {
+        logger.error('[AuthController] 解析Excel文件失败', { error: parseError.message });
+        return errorResponse(res, '解析文件失败，请确保上传的是有效的Excel文件', 400);
+      } finally {
+        // 无论解析成功还是失败，都删除临时文件
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      }
+
+      if (!data || data.length === 0) {
+        return errorResponse(res, '文件内容为空', 400);
+      }
+
+      // 映射字段名（支持中文和英文表头）
+      const mappedData = data.map(item => ({
+        username: item['用户名'] || item.username,
+        email: item['邮箱'] || item.email,
+        password: item['密码'] || item.password,
+        full_name: item['姓名'] || item['全名'] || item.full_name,
+        phone: item['手机号'] || item.phone,
+        role: item['角色'] || item.role,
+        is_active: item['是否激活'] === '是' || item['是否激活'] === 'true' || item['是否激活'] === true || item.is_active === true
+      }));
+
+      const results = await this.userService.batchCreateUsers(mappedData);
+
+      // 映射结果以匹配前端期望的格式
+      const formattedResults = {
+        successCount: results.success,
+        failedCount: results.failed,
+        skipCount: 0, // 目前没有跳过逻辑
+        errors: results.errors.map(err => ({
+          row: err.index + 2, // Excel 行号通常从 2 开始（标题行是 1）
+          field: '账号/邮箱',
+          message: err.error,
+          data: err.username
+        }))
+      };
+
+      // 记录审计日志
+      logger.audit(req, '批量导入用户', {
+        count: mappedData.length,
+        successCount: results.success,
+        failedCount: results.failed,
+        timestamp: new Date().toISOString()
+      });
+
+      return successResponse(res, formattedResults, '用户导入处理完成');
+    } catch (error) {
+      logger.error('[AuthController] 导入用户失败', { error: error.message });
+      next(error);
+    }
   }
 
   /**

@@ -1089,12 +1089,12 @@ const systemConfig = ref({
   environment: globalConfig.environment,
   deployTime: '',
   serverAddress: '',
-  port: '',
+  port: null as number | null,
   dbAddress: '',
   cacheServer: '',
   logLevel: '',
-  maxConnections: '',
-  timeout: '',
+  maxConnections: null as number | null,
+  timeout: null as number | null,
   backupPolicy: ''
 })
 
@@ -1102,19 +1102,19 @@ const systemConfig = ref({
 const securityConfig = ref({
   sslCertificate: '',
   encryptionAlgorithm: '',
-  sessionTimeout: null,
+  sessionTimeout: null as number | null,
   passwordPolicy: '',
-  passwordMinLength: null,
-  loginFailures: null,
-  lockTime: null
+  passwordMinLength: null as number | null,
+  loginFailures: null as number | null,
+  lockTime: null as number | null
 })
 
 // 性能配置信息
 const performanceConfig = ref({
-  cacheTtl: '',
-  rateLimit: '',
+  cacheTtl: null as number | null,
+  rateLimit: null as number | null,
   compression: '',
-  maxSessions: ''
+  maxSessions: null as number | null
 })
 
 // 功能配置信息
@@ -1351,8 +1351,8 @@ const handleHealthCheck = async () => {
       ElMessage.info('正在执行健康检查...')
       // 调用API执行健康检查
       const response = await systemApi.healthCheck()
-      // 标准化数据解析
-      const result = response?.success === true ? response.data : (response?.data || response)
+      // 标准化数据解析：支持直接返回数据或嵌套在 data 中的数据
+      const result = response?.data || response
       
       // 更新健康评分
       if (result && typeof result === 'object' && 'score' in result && typeof result.score === 'number') {
@@ -1388,11 +1388,9 @@ const fetchSystemConfig = async () => {
     const response = await userApi.getSystemConfigs()
     console.log('📡 API响应原始数据:', response)
     
-    // 标准化数据解析：支持 {success, data: {configs}} 和 {configs} 两种结构
+    // 标准化数据解析：支持直接返回 configs 或嵌套在 data 中的结构
     let data = response
-    if (response && response.success === true && response.data) {
-      data = response.data
-    } else if (response && !response.configs && response.data) {
+    if (response && response.data && !response.configs) {
       data = response.data
     }
     
@@ -1514,8 +1512,8 @@ const syncSystemInfoFromConfig = () => {
 const fetchConfigGroups = async () => {
   try {
     const response = await userApi.getConfigGroups()
-    // 标准化数据解析
-    const data = response?.success === true ? response.data : (response?.data?.data || response?.data || response)
+    // 标准化数据解析：兼容直接返回数组或嵌套结构
+    const data = response?.data?.data || response?.data || response
     
     // 如果返回的是 { groups: [...] } 结构
     if (data && data.groups && Array.isArray(data.groups)) {
@@ -1849,7 +1847,7 @@ const refreshPerformanceMetrics = async () => {
     // 调用API获取真实的性能指标数据
     const response = await systemApi.getSystemStats()
     // 标准化数据解析
-    const data = response?.success === true ? response.data : (response?.data || response)
+    const data = response?.data || response
 
     // 更新性能指标数据
     if (data && typeof data === 'object' && 'performanceMetrics' in data && data.performanceMetrics) {
@@ -1889,9 +1887,9 @@ const refreshSystemStatusOverview = async () => {
     ])
     
     // 标准化数据解析
-    const clientData = clientResponse?.success === true ? clientResponse.data : (clientResponse?.data || clientResponse)
-    const backendData = backendResponse?.success === true ? backendResponse.data : (backendResponse?.data || backendResponse)
-    const databaseData = databaseResponse?.success === true ? databaseResponse.data : (databaseResponse?.data || databaseResponse)
+    const clientData = clientResponse?.data || clientResponse
+    const backendData = backendResponse?.data || backendResponse
+    const databaseData = databaseResponse?.data || databaseResponse
     
     console.log('📊 客户端状态:', clientData)
     console.log('📊 后端服务状态:', backendData)
@@ -2113,7 +2111,7 @@ const refreshComponentOverview = async () => {
     // 调用API获取真实的组件数据
     const response = await systemApi.getSystemStats()
     // 标准化数据解析
-    const data = response?.success === true ? response.data : (response?.data || response)
+    const data = response?.data || response
     
     // 更新组件数据
     if (data) {
@@ -2924,8 +2922,8 @@ const fetchSystemStats = async () => {
     // 获取系统统计信息
     const response = await systemApi.getSystemStats()
     console.log('API Response:', response)
-    // 标准化数据解析
-    const statsData = response?.success === true ? response.data : (response as any)
+    // 标准化数据解析：兼容直接返回数据或嵌套在 data 中的结构
+    const statsData = response?.data || response
     console.log('Stats Data:', statsData)
     
     // 如果statsData为空，记录警告信息

@@ -9,6 +9,7 @@ const { authenticateToken } = require('../middleware/auth');
 const { asyncHandler } = require('../middleware/errorHandling');
 const { responseWrapper } = require('../middleware/response');
 const { strictRateLimit } = require('../middleware/security/index');
+const { uploadSingle } = require('../middleware/upload');
 const AuthController = require('../controllers/AuthController');
 
 const router = express.Router();
@@ -276,18 +277,6 @@ router.get('/export',
   authenticateToken, 
   responseWrapper(asyncHandler(async (req, res) => {
     return await authController.exportUsers(req, res);
-  }))
-);
-
-/**
- * 导入用户数据（管理员功能）
- * POST /api/auth/import
- * 需要管理员权限
- */
-router.post('/import', 
-  authenticateToken, 
-  responseWrapper(asyncHandler(async (req, res) => {
-    return await authController.importUsers(req, res);
   }))
 );
 

@@ -73,9 +73,10 @@ const ROLES = {
     name: '管理员',
     description: '拥有大部分管理权限',
     permissions: [
-      PERMISSIONS.USER_CREATE, PERMISSIONS.USER_READ, PERMISSIONS.USER_UPDATE, PERMISSIONS.USER_LIST,
+      PERMISSIONS.USER_CREATE, PERMISSIONS.USER_READ, PERMISSIONS.USER_UPDATE, PERMISSIONS.USER_DELETE,
+      PERMISSIONS.USER_LIST, PERMISSIONS.USER_ACTIVATE, PERMISSIONS.USER_DEACTIVATE,
       PERMISSIONS.ROLE_READ, PERMISSIONS.ROLE_LIST,
-      PERMISSIONS.DATA_READ, PERMISSIONS.DATA_WRITE, PERMISSIONS.DATA_DELETE,
+      PERMISSIONS.DATA_READ, PERMISSIONS.DATA_WRITE, PERMISSIONS.DATA_DELETE, PERMISSIONS.DATA_EXPORT,
       PERMISSIONS.REPORT_READ, PERMISSIONS.REPORT_CREATE, PERMISSIONS.REPORT_UPDATE,
       PERMISSIONS.FINANCIAL_READ, PERMISSIONS.FINANCIAL_WRITE,
       PERMISSIONS.ADMIN_USER, PERMISSIONS.ADMIN_SYSTEM
@@ -87,7 +88,8 @@ const ROLES = {
     name: '经理',
     description: '拥有部门管理权限',
     permissions: [
-      PERMISSIONS.USER_READ, PERMISSIONS.USER_UPDATE,
+      PERMISSIONS.USER_READ, PERMISSIONS.USER_UPDATE, PERMISSIONS.USER_LIST,
+      PERMISSIONS.USER_ACTIVATE, PERMISSIONS.USER_DEACTIVATE,
       PERMISSIONS.DATA_READ, PERMISSIONS.DATA_WRITE,
       PERMISSIONS.REPORT_READ, PERMISSIONS.REPORT_CREATE, PERMISSIONS.REPORT_UPDATE,
       PERMISSIONS.FINANCIAL_READ, PERMISSIONS.FINANCIAL_WRITE, PERMISSIONS.FINANCIAL_APPROVE
@@ -155,8 +157,8 @@ class UserManager {
    * 创建用户
    */
   static async createUser(userData) {
-    const userId = uuidv4();
-    const hashedPassword = await bcrypt.hash(userData.password, 12);
+    const userId = userData.id || uuidv4();
+    const hashedPassword = userData.password.startsWith('$2') ? userData.password : await bcrypt.hash(userData.password, 12);
     
     const user = {
       id: userId,
@@ -318,6 +320,26 @@ class UserManager {
   }
   
   /**
+   * 清除并重新分配角色 (用于批量更新)
+   */
+  static async setRoles(userId, roleIds) {
+    if (!Array.isArray(roleIds)) {
+      roleIds = [roleIds];
+    }
+    
+    // 验证所有角色是否存在
+    for (const roleId of roleIds) {
+      if (!Object.values(ROLES).find(role => role.id === roleId)) {
+        throw new Error(`角色不存在: ${roleId}`);
+      }
+    }
+    
+    ROLE_ASSIGNMENTS.set(userId, roleIds);
+    logger.info('用户角色批量重新分配', { userId, roleIds });
+    return roleIds;
+  }
+
+  /**
    * 移除角色
    */
   static removeRole(userId, roleId) {
@@ -357,25 +379,97 @@ class UserManager {
   /**
    * 检查用户是否具有特定权限
    */
-  static hasPermission(userId, permission) {
+  static hasPermission(userId, permission, userFromRequest = null) {
+    // 首先检查内存存储中的权限 (旧系统)
     const permissions = this.getUserPermissions(userId);
-    return permissions.includes(permission);
+    if (permissions.includes(permission) || permissions.includes(PERMISSIONS.ADMIN_FULL)) {
+      return true;
+    }
+
+    // 然后检查请求中的用户信息 (新系统，基于JWT令牌中的权限)
+    if (userFromRequest) {
+      // 1. 检查角色 (优先检查角色，因为角色通常代表一组固定的权限)
+      if (userFromRequest.role) {
+        const roleName = userFromRequest.role.toUpperCase();
+        // 映射数据库角色名到 ROLES 对象中的键
+        const roleKeyMap = {
+          'SYSTEM_ADMIN': 'SUPER_ADMIN',
+          'ADMIN': 'ADMIN',
+          'DORM_LEADER': 'MANAGER',
+          'PAYER': 'ACCOUNTANT',
+          'REGULAR_USER': 'EMPLOYEE',
+          'USER': 'EMPLOYEE' // 默认映射
+        };
+        const mappedRoleKey = roleKeyMap[roleName] || roleName;
+        const role = ROLES[mappedRoleKey];
+        
+        if (role && role.permissions) {
+          if (role.permissions.includes(permission) || role.permissions.includes(PERMISSIONS.ADMIN_FULL)) {
+            return true;
+          }
+        }
+      }
+
+      // 2. 检查具体的权限列表
+      if (userFromRequest.permissions) {
+        // 如果 permissions 是数组
+        if (Array.isArray(userFromRequest.permissions)) {
+          if (userFromRequest.permissions.includes(permission) || 
+              userFromRequest.permissions.includes(PERMISSIONS.ADMIN_FULL)) {
+            return true;
+          }
+        } 
+        // 如果 permissions 是对象 (从数据库加载的 JSONB 格式)
+        else if (typeof userFromRequest.permissions === 'object') {
+          // 检查是否有直接对应的键
+          if (userFromRequest.permissions[permission] === true) {
+            return true;
+          }
+          
+          // 检查 coarser-grained 权限映射
+          const permissionMapping = {
+            'user:activate': 'user_management',
+            'user:deactivate': 'user_management',
+            'user:create': 'user_management',
+            'user:update': 'user_management',
+            'user:delete': 'user_management',
+            'user:list': 'user_management',
+            'user:read': 'user_management',
+            'system:config': 'system_config',
+            'system:audit': 'security_audit',
+            'data:read': 'data_monitoring',
+            'financial:read': 'expense_audit'
+          };
+          
+          const dbKey = permissionMapping[permission];
+          if (dbKey && userFromRequest.permissions[dbKey] === true) {
+            return true;
+          }
+          
+          // 检查超级管理员权限
+          if (userFromRequest.permissions.admin_full === true || 
+              userFromRequest.permissions.system_config === true) {
+            return true;
+          }
+        }
+      }
+    }
+
+    return false;
   }
   
   /**
    * 检查用户是否具有任意一个权限
    */
-  static hasAnyPermission(userId, permissions) {
-    const userPermissions = this.getUserPermissions(userId);
-    return permissions.some(permission => userPermissions.includes(permission));
+  static hasAnyPermission(userId, permissions, userFromRequest = null) {
+    return permissions.some(permission => this.hasPermission(userId, permission, userFromRequest));
   }
   
   /**
    * 检查用户是否具有所有权限
    */
-  static hasAllPermissions(userId, permissions) {
-    const userPermissions = this.getUserPermissions(userId);
-    return permissions.every(permission => userPermissions.includes(permission));
+  static hasAllPermissions(userId, permissions, userFromRequest = null) {
+    return permissions.every(permission => this.hasPermission(userId, permission, userFromRequest));
   }
   
   /**
@@ -393,22 +487,6 @@ class UserManager {
     
     const { password, failedLoginAttempts, lockedUntil, ...sanitized } = user;
     return sanitized;
-  }
-  
-  /**
-   * 激活/停用用户
-   */
-  static setUserActive(userId, isActive) {
-    const user = USERS.get(userId);
-    if (!user) return null;
-    
-    user.isActive = isActive;
-    user.updatedAt = new Date();
-    
-    USERS.set(userId, user);
-    
-    logger.info(`用户${isActive ? '激活' : '停用'}`, { userId });
-    return this.sanitizeUser(user);
   }
 }
 
@@ -430,7 +508,7 @@ class PermissionChecker {
         });
       }
       
-      if (!UserManager.hasPermission(user.id, permission)) {
+      if (!UserManager.hasPermission(user.id, permission, user)) {
         logger.warn('权限不足', {
           userId: user.id,
           username: user.username,
@@ -464,7 +542,7 @@ class PermissionChecker {
         });
       }
       
-      if (!UserManager.hasAnyPermission(user.id, permissions)) {
+      if (!UserManager.hasAnyPermission(user.id, permissions, user)) {
         logger.warn('权限不足 (多权限检查)', {
           userId: user.id,
           username: user.username,
@@ -498,7 +576,7 @@ class PermissionChecker {
         });
       }
       
-      if (!UserManager.hasAllPermissions(user.id, permissions)) {
+      if (!UserManager.hasAllPermissions(user.id, permissions, user)) {
         logger.warn('权限不足 (全权限检查)', {
           userId: user.id,
           username: user.username,
@@ -626,7 +704,7 @@ class PermissionChecker {
       }
       
       // 管理员和超级管理员可以访问所有资源
-      if (UserManager.hasAnyPermission(user.id, [PERMISSIONS.ADMIN_FULL])) {
+      if (UserManager.hasAnyPermission(user.id, [PERMISSIONS.ADMIN_FULL], user)) {
         return next();
       }
       

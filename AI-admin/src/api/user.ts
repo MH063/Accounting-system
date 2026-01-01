@@ -3,8 +3,8 @@ import api from './index'
 // 用户相关API
 export const userApi = {
   // 获取用户列表
-  getUsers: (params?: { page?: number; pageSize?: number; keyword?: string; role?: string; status?: string; dormitory?: string }) => 
-    api.get('/users', { params }),
+  getUsers: (params?: { page?: number; pageSize?: number; keyword?: string; role?: string; status?: string; dormitory?: string; _t?: number }) => 
+    api.get('/users', { params: { ...params, _t: Date.now() } }),
   
   // 获取用户详情
   getUserById: (id: number) => 
@@ -78,7 +78,29 @@ export const userApi = {
   
   // 批量分配寝室
   batchAssignDormitory: (userIds: number[], dormitoryInfo: any) => 
-    api.put('/users/batch/dormitory', { userIds, dormitoryInfo })
+    api.put('/users/batch/dormitory', { userIds, dormitoryInfo }),
+
+  // 获取所有系统配置
+  getSystemConfigs: (params?: {
+    environment?: string;
+    group?: string;
+    active?: boolean;
+  }) => api.get('/system/config', { params }),
+
+  // 批量设置配置
+  setConfig: (data: { configs: Record<string, any> }) =>
+    api.put('/system/config', data),
+
+  // 获取配置分组
+  getConfigGroups: () => api.get('/system/config/groups'),
+
+  // 切换运行环境
+  switchEnvironment: (data: { environment: string; reason?: string }) =>
+    api.post('/system/environment/switch', data),
+
+  // 获取环境状态
+  getEnvironmentStatus: () =>
+    api.get('/system/environment/status')
 }
 
 // 系统相关API
