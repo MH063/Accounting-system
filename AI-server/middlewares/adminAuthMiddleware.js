@@ -100,22 +100,22 @@ const superAdminAuthMiddleware = async (req, res, next) => {
       });
     });
 
-    // 验证是否为超级管理员
-    if (req.user.adminLevel !== 'super_admin') {
-      logger.security(req, '超级管理员权限验证失败', { 
-        reason: '用户不是超级管理员',
+    // 验证是否为系统管理员
+    if (req.user.adminLevel !== 'system_admin') {
+      logger.security(req, '系统管理员权限验证失败', { 
+        reason: '用户不是系统管理员',
         userId: req.user.id,
         adminLevel: req.user.adminLevel,
         timestamp: new Date().toISOString()
       });
       return res.status(403).json({
         success: false,
-        message: '需要超级管理员权限',
-        code: 'NOT_SUPER_ADMIN'
+        message: '需要系统管理员权限',
+        code: 'NOT_SYSTEM_ADMIN'
       });
     }
 
-    logger.info('[SuperAdminAuthMiddleware] 超级管理员权限验证成功', { 
+    logger.info('[SystemAdminAuthMiddleware] 系统管理员权限验证成功', { 
       userId: req.user.id,
       username: req.user.username
     });
@@ -123,7 +123,7 @@ const superAdminAuthMiddleware = async (req, res, next) => {
     next();
 
   } catch (error) {
-    logger.error('[SuperAdminAuthMiddleware] 超级管理员权限验证处理失败', { 
+    logger.error('[SystemAdminAuthMiddleware] 系统管理员权限验证处理失败', { 
       error: error.message
     });
     return res.status(403).json({
@@ -152,7 +152,7 @@ const permissionMiddleware = (requiredPermission) => {
       const userPermissions = req.user.permissions || [];
       const hasPermission = userPermissions.includes(requiredPermission) || 
                            userPermissions.includes('all') || // 拥有所有权限
-                           req.user.adminLevel === 'super_admin'; // 超级管理员拥有所有权限
+                           req.user.adminLevel === 'system_admin'; // 系统管理员拥有所有权限
 
       if (!hasPermission) {
         logger.security(req, '权限检查失败', { 
@@ -207,9 +207,9 @@ const multiPermissionMiddleware = (requiredPermissions, requireAll = false) => {
 
       const userPermissions = req.user.permissions || [];
       
-      // 超级管理员拥有所有权限
-      if (req.user.adminLevel === 'super_admin') {
-        logger.info('[MultiPermissionMiddleware] 超级管理员，权限检查通过', { 
+      // 系统管理员拥有所有权限
+      if (req.user.adminLevel === 'system_admin') {
+        logger.info('[MultiPermissionMiddleware] 系统管理员，权限检查通过', { 
           userId: req.user.id
         });
         return next();

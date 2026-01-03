@@ -53,10 +53,11 @@ export interface User {
 }
 
 export enum UserRole {
+  SYSTEM_ADMIN = 'system_admin',
   ADMIN = 'admin',
-  STUDENT = 'student',
-  TEACHER = 'teacher',
-  GUEST = 'guest'
+  DORM_LEADER = 'dorm_leader',
+  PAYER = 'payer',
+  USER = 'user'
 }
 
 export enum UserStatus {

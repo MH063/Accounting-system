@@ -15,7 +15,7 @@
       <div class="search-bar">
         <el-input
           v-model="searchQuery"
-          placeholder="搜索成员姓名、学号或联系方式"
+          placeholder="搜索成员姓名或联系方式"
           clearable
           @keyup.enter="handleSearch"
           class="search-input"
@@ -72,7 +72,6 @@
                   {{ getRoleText(member.role) }}
                 </el-tag>
               </div>
-              <div class="member-id">{{ member.studentId }}</div>
             </div>
             <div class="member-status">
               <el-tag :type="getStatusTagType(member.status)">
@@ -164,7 +163,6 @@ const members = ref([
   {
     id: 1,
     name: '张三',
-    studentId: '2021001',
     avatar: 'https://cube.elemecdn.com/0/88/03b0d39583f48206768a7534e55bcpng.png',
     role: 'leader',
     status: 'online',
@@ -176,7 +174,6 @@ const members = ref([
   {
     id: 2,
     name: '李四',
-    studentId: '2021002',
     avatar: 'https://cube.elemecdn.com/0/88/03b0d39583f48206768a7534e55bcpng.png',
     role: 'member',
     status: 'offline',
@@ -188,7 +185,6 @@ const members = ref([
   {
     id: 3,
     name: '王五',
-    studentId: '2021003',
     avatar: 'https://cube.elemecdn.com/0/88/03b0d39583f48206768a7534e55bcpng.png',
     role: 'member',
     status: 'online',
@@ -212,7 +208,6 @@ const filteredMembers = computed(() => {
     const query = searchQuery.value.toLowerCase()
     result = result.filter(member => 
       member.name.toLowerCase().includes(query) ||
-      member.studentId.toLowerCase().includes(query) ||
       (member.phone && member.phone.includes(query)) ||
       (member.email && member.email.toLowerCase().includes(query))
     )

@@ -54,9 +54,6 @@
                   <el-button size="small" @click="sendEmail" circle>
                     <el-icon><Message /></el-icon>
                   </el-button>
-                  <el-button size="small" @click="copyStudentId" circle>
-                    <el-icon><CopyDocument /></el-icon>
-                  </el-button>
                 </div>
               </div>
             </template>
@@ -65,9 +62,6 @@
               <el-descriptions :column="2" border>
                 <el-descriptions-item label="姓名">
                   <div class="info-value">{{ currentMember.name }}</div>
-                </el-descriptions-item>
-                <el-descriptions-item label="学号">
-                  <div class="info-value">{{ currentMember.studentId }}</div>
                 </el-descriptions-item>
                 <el-descriptions-item label="联系电话">
                   <div class="info-value">{{ currentMember.phone }}</div>
@@ -105,20 +99,11 @@
                 label-width="120px"
               >
                 <el-row :gutter="20">
-                  <el-col :span="12">
+                  <el-col :span="24">
                     <el-form-item label="姓名" prop="name">
                       <el-input 
                         v-model="editForm.name" 
                         placeholder="请输入姓名"
-                        clearable
-                      />
-                    </el-form-item>
-                  </el-col>
-                  <el-col :span="12">
-                    <el-form-item label="学号" prop="studentId">
-                      <el-input 
-                        v-model="editForm.studentId" 
-                        placeholder="请输入学号"
                         clearable
                       />
                     </el-form-item>
@@ -325,7 +310,6 @@ import memberService from '@/services/memberService'
 
 interface Member {
   id: number
-  studentId: string
   name: string
   phone: string
   email?: string
@@ -446,7 +430,6 @@ const memberFormRef = ref()
 // 成员数据 - 从API加载
 const currentMember = ref<Member>({
   id: 0,
-  studentId: '',
   name: '',
   phone: '',
   email: '',
@@ -480,7 +463,6 @@ const loadMemberInfo = async () => {
       // 使用默认数据
       currentMember.value = {
         id: parseInt(memberId.value) || 0,
-        studentId: '',
         name: '',
         phone: '',
         email: '',
@@ -502,7 +484,6 @@ const loadMemberInfo = async () => {
     // 加载失败时设置为空数据
     currentMember.value = {
       id: 0,
-      studentId: '',
       name: '',
       phone: '',
       email: '',
@@ -523,7 +504,6 @@ const loadMemberInfo = async () => {
 // 编辑表单
 const editForm = ref({
   name: '',
-  studentId: '',
   phone: '',
   email: '',
   room: '',
@@ -537,10 +517,6 @@ const memberRules = {
   name: [
     { required: true, message: '请输入姓名', trigger: 'blur' },
     { min: 2, max: 10, message: '姓名长度在 2 到 10 个字符', trigger: 'blur' }
-  ],
-  studentId: [
-    { required: true, message: '请输入学号', trigger: 'blur' },
-    { pattern: /^\d{10}$/, message: '学号应为10位数字', trigger: 'blur' }
   ],
   phone: [
     { required: true, message: '请输入联系电话', trigger: 'blur' },
@@ -572,7 +548,6 @@ const startEdit = () => {
   // 复制当前成员信息到编辑表单
   editForm.value = {
     name: currentMember.value.name,
-    studentId: currentMember.value.studentId,
     phone: currentMember.value.phone,
     email: currentMember.value.email || '',
     room: currentMember.value.room,
@@ -597,7 +572,6 @@ const saveMemberInfo = async () => {
     
     const response = await memberService.updateMember(memberId.value, {
       name: editForm.value.name,
-      studentId: editForm.value.studentId,
       phone: editForm.value.phone,
       email: editForm.value.email || undefined,
       room: editForm.value.room,
@@ -610,7 +584,6 @@ const saveMemberInfo = async () => {
       currentMember.value = { 
         ...currentMember.value, 
         name: editForm.value.name,
-        studentId: editForm.value.studentId,
         phone: editForm.value.phone,
         email: editForm.value.email || undefined,
         room: editForm.value.room,
@@ -677,12 +650,7 @@ const sendEmail = () => {
 }
 
 const copyStudentId = async () => {
-  try {
-    await navigator.clipboard.writeText(currentMember.value.studentId)
-    ElMessage.success('学号已复制到剪贴板')
-  } catch (error) {
-    ElMessage.error('复制失败，请手动复制')
-  }
+  // 方法已移除
 }
 
 

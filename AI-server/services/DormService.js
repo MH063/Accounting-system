@@ -1,12 +1,28 @@
 const BaseService = require('./BaseService');
 const DormRepository = require('../repositories/DormRepository');
+const UserRepository = require('../repositories/UserRepository');
 const logger = require('../config/logger');
+
+// 角色名称标准化：将旧角色名转换为新角色名
+const normalizeRole = (role) => {
+  if (role === 'super_admin') return 'system_admin';
+  return role;
+};
+
+// 标准化用户角色数组
+const normalizeUserRoles = (role) => {
+  if (Array.isArray(role)) {
+    return role.map(r => normalizeRole(r));
+  }
+  return [normalizeRole(role)];
+};
 
 class DormService extends BaseService {
   constructor() {
     const dormRepository = new DormRepository();
     super(dormRepository);
     this.dormRepository = dormRepository;
+    this.userRepository = new UserRepository();
   }
 
   /**
@@ -35,34 +51,46 @@ class DormService extends BaseService {
       return {
         success: true,
         data: {
-          dorms: result.dorms.map(dorm => ({
-            id: dorm.id,
-            dormName: dorm.dorm_name,
-            dormCode: dorm.dorm_code,
-            address: dorm.address,
-            capacity: dorm.capacity,
-            currentOccupancy: dorm.current_occupancy,
-            description: dorm.description,
-            status: dorm.status,
-            type: dorm.type,
-            area: dorm.area,
-            genderLimit: dorm.gender_limit,
-            monthlyRent: dorm.monthly_rent,
-            deposit: dorm.deposit,
-            utilityIncluded: dorm.utility_included,
-            building: dorm.building,
-            floor: dorm.floor,
-            roomNumber: dorm.room_number,
-            facilities: dorm.facilities,
-            amenities: dorm.amenities,
-            createdAt: dorm.created_at,
-            updatedAt: dorm.updated_at,
-            adminInfo: dorm.admin_username ? {
-              username: dorm.admin_username,
-              nickname: dorm.admin_nickname,
-              avatarUrl: dorm.admin_avatar
-            } : null
-          })),
+          dorms: result.dorms.map(dorm => {
+            // 统一状态映射 (规则 5 思想：数据转换)
+            let status = dorm.status;
+            if (status === 'active') {
+              status = 'normal';
+            }
+            // 如果人数已满，且状态是 normal，则显示为 full
+            if (status === 'normal' && dorm.current_occupancy >= dorm.capacity && dorm.capacity > 0) {
+              status = 'full';
+            }
+
+            return {
+              id: dorm.id,
+              dormNumber: dorm.dorm_name,
+              dormCode: dorm.dorm_code,
+              address: dorm.address,
+              capacity: dorm.capacity,
+              currentOccupancy: dorm.current_occupancy,
+              description: dorm.description,
+              status: status,
+              type: dorm.type,
+              area: dorm.area,
+              genderLimit: dorm.gender_limit,
+              monthlyRent: dorm.monthly_rent,
+              deposit: dorm.deposit,
+              utilityIncluded: dorm.utility_included,
+              building: dorm.building,
+              floor: dorm.floor,
+              roomNumber: dorm.room_number,
+              facilities: dorm.facilities,
+              amenities: dorm.amenities,
+              createdAt: dorm.created_at,
+              updatedAt: dorm.updated_at,
+              admin: {
+                username: dorm.admin_username,
+                nickname: dorm.admin_nickname,
+                avatar: dorm.admin_avatar
+              }
+            };
+          }),
           pagination: {
             total: result.total,
             page: result.page,
@@ -109,11 +137,23 @@ class DormService extends BaseService {
       // 获取宿舍成员列表
       const members = await this.dormRepository.getDormMembers(dormId);
       
+      // 动态计算入住人数（统计 active 状态的成员数量）
+      const currentOccupancy = members.filter(m => m.member_status === 'active').length;
+      
       // 获取宿舍费用统计
       const expenseStats = await this.dormRepository.getDormExpenseStats(dormId);
       
       logger.info('[DormService] 宿舍详情获取成功', { dormId });
       
+      // 统一状态映射
+      let status = dorm.status;
+      if (status === 'active' || status === 'inactive') {
+        status = 'normal';
+      }
+      if (status === 'normal' && currentOccupancy >= dorm.capacity && dorm.capacity > 0) {
+        status = 'full';
+      }
+
       return {
         success: true,
         data: {
@@ -123,9 +163,9 @@ class DormService extends BaseService {
             dormCode: dorm.dorm_code,
             address: dorm.address,
             capacity: dorm.capacity,
-            currentOccupancy: dorm.current_occupancy,
+            currentOccupancy: currentOccupancy,
             description: dorm.description,
-            status: dorm.status,
+            status: status,
             type: dorm.type,
             area: dorm.area,
             genderLimit: dorm.gender_limit,
@@ -146,14 +186,16 @@ class DormService extends BaseService {
               avatarUrl: dorm.admin_avatar_url
             } : null,
             currentUsers: members.map(member => ({
-              id: member.id,
+              id: member.user_id,
               username: member.username,
               nickname: member.nickname,
               realName: member.real_name,
               phone: member.phone,
               avatarUrl: member.avatar_url,
               memberRole: member.member_role,
+              memberStatus: member.member_status,
               moveInDate: member.move_in_date,
+              moveOutDate: member.move_out_date,
               bedNumber: member.bed_number,
               roomNumber: member.room_number,
               monthlyShare: member.monthly_share,
@@ -166,7 +208,7 @@ class DormService extends BaseService {
               pendingCount: parseInt(expenseStats.pending_count) || 0,
               overdueCount: parseInt(expenseStats.overdue_count) || 0
             },
-            occupancyRate: dorm.capacity > 0 ? Math.round((dorm.current_occupancy / dorm.capacity) * 10000) / 100 : 0,
+            occupancyRate: dorm.capacity > 0 ? Math.round((currentOccupancy / dorm.capacity) * 10000) / 100 : 0,
             // 添加解散流程信息
             dismissalRecord: dorm.dismissal_id ? {
               id: dorm.dismissal_id,
@@ -572,10 +614,17 @@ class DormService extends BaseService {
       }
       
       // 检查用户权限（系统管理员、普通管理员或宿舍管理员）
-      const userRole = currentUser.role;
-      const isAuthorized = userRole === 'system_admin' || 
-                          userRole === 'admin' || 
+      logger.info('[DormService] 权限检查', { 
+        userId: currentUser.id, 
+        originalRole: currentUser.role,
+        normalizedRoles: normalizeUserRoles(currentUser.role),
+        dormAdminId: dormInfo.admin_id
+      });
+      const userRoles = normalizeUserRoles(currentUser.role);
+      const isAuthorized = userRoles.some(r => ['system_admin', 'admin'].includes(r)) || 
                           dormInfo.admin_id === currentUser.id;
+      
+      logger.info('[DormService] 权限检查结果', { isAuthorized, userRoles });
                           
       if (!isAuthorized) {
         return {
@@ -622,6 +671,22 @@ class DormService extends BaseService {
             success: false,
             message: '指定的管理员不存在或状态无效'
           };
+        }
+
+        // 验证是否为系统角色 (内置角色不能分配宿舍资源)
+        const targetUser = await this.userRepository.findByIdWithRoles(dormData.adminId);
+        if (targetUser) {
+          const targetRole = targetUser.role;
+          const targetRoles = Array.isArray(targetRole) ? targetRole : [targetRole];
+          const isSystemRole = targetRoles.some(r => ['system_admin', 'admin'].includes(r));
+          
+          if (isSystemRole) {
+            logger.warn('[DormService] 尝试将系统角色用户更新为宿舍管理员被拒绝', { adminId: dormData.adminId, role: targetRole });
+            return {
+              success: false,
+              message: '系统管理员或管理员角色无法分配到宿舍'
+            };
+          }
         }
       }
       
@@ -692,6 +757,29 @@ class DormService extends BaseService {
    * @returns {Object} 验证结果
    */
   _validateUpdateDormData(dormData) {
+    // 统一处理字段映射
+    if (dormData.dormName === undefined && dormData.dormNumber !== undefined) {
+      dormData.dormName = dormData.dormNumber;
+    }
+
+    // 状态映射：前端状态 -> 数据库状态
+    // 前端: normal, maintenance, full, frozen, dissolved
+    // 数据库: active, maintenance, inactive, deleted
+    const statusMap = {
+      'normal': 'active',
+      'full': 'active',
+      'frozen': 'inactive',
+      'dissolved': 'deleted',
+      'active': 'active',
+      'inactive': 'inactive',
+      'maintenance': 'maintenance',
+      'deleted': 'deleted'
+    };
+    if (dormData.status && statusMap[dormData.status]) {
+      logger.info('[DormService] 转换宿舍状态', { original: dormData.status, mapped: statusMap[dormData.status] });
+      dormData.status = statusMap[dormData.status];
+    }
+
     // 如果提供了宿舍名称，不能为为空
     if (dormData.dormName !== undefined && dormData.dormName === '') {
       return { isValid: false, message: '宿舍名称不能为空' };
@@ -762,6 +850,22 @@ class DormService extends BaseService {
             message: '指定的管理员不存在或状态无效'
           };
         }
+
+        // 验证是否为系统角色 (内置角色不能分配宿舍资源)
+        const targetUser = await this.userRepository.findByIdWithRoles(dormData.adminId);
+        if (targetUser) {
+          const targetRole = targetUser.role;
+          const targetRoles = Array.isArray(targetRole) ? targetRole : [targetRole];
+          const isSystemRole = targetRoles.some(r => ['system_admin', 'admin'].includes(r));
+          
+          if (isSystemRole) {
+            logger.warn('[DormService] 尝试将系统角色用户设置为宿舍管理员被拒绝', { adminId: dormData.adminId, role: targetRole });
+            return {
+              success: false,
+              message: '系统管理员或管理员角色无法分配到宿舍'
+            };
+          }
+        }
       }
 
       // 3. 检查宿舍编码唯一性（如提供）
@@ -826,6 +930,26 @@ class DormService extends BaseService {
    * @returns {Object} 验证结果
    */
   _validateDormData(dormData) {
+    // 统一处理字段映射
+    if (!dormData.dormName && dormData.dormNumber) {
+      dormData.dormName = dormData.dormNumber;
+    }
+
+    // 状态映射：前端状态 -> 数据库状态
+    const statusMap = {
+      'normal': 'active',
+      'full': 'active',
+      'frozen': 'inactive',
+      'dissolved': 'deleted',
+      'active': 'active',
+      'inactive': 'inactive',
+      'maintenance': 'maintenance',
+      'deleted': 'deleted'
+    };
+    if (dormData.status && statusMap[dormData.status]) {
+      dormData.status = statusMap[dormData.status];
+    }
+
     // 检查必需字段
     if (!dormData.dormName) {
       return { isValid: false, message: '宿舍名称不能为空' };
@@ -958,9 +1082,8 @@ class DormService extends BaseService {
       }
       
       // 检查用户权限（系统管理员、普通管理员或宿舍管理员）
-      const userRole = currentUser.role;
-      const isAuthorized = userRole === 'system_admin' || 
-                          userRole === 'admin' || 
+      const userRoles = normalizeUserRoles(currentUser.role);
+      const isAuthorized = userRoles.some(r => ['system_admin', 'admin'].includes(r)) || 
                           dormInfo.admin_id === currentUser.id;
                           
       if (!isAuthorized) {
@@ -1024,7 +1147,7 @@ class DormService extends BaseService {
       }
       
       const { 
-        deleteType = 'logical',  // 删除类型：'physical'（物理删除）或'logical'（逻辑删除）
+        deleteType = 'physical',  // 删除类型：'physical'（物理删除）或'logical'（逻辑删除）
         handleUnpaidExpenses = 'waive',  // 处理未结费用：'waive'（免除）、'reallocate'（重新分摊）、'keep'（保持）
         refundDeposit = false,  // 是否退还押金
         newAdminId,  // 如果删除的是管理员，指定新的管理员用户ID
@@ -1033,8 +1156,19 @@ class DormService extends BaseService {
       
       // 2. 验证当前用户权限
       const hasPermission = await this.dormRepository.validateOperatorPermission(userDormId, currentUser.id);
-      logger.info('[DormService] 权限验证结果', { hasPermission, userDormId, operatorId: currentUser.id });
+      logger.info('[DormService] 权限验证结果', { 
+        hasPermission, 
+        userDormId, 
+        operatorId: currentUser.id,
+        operatorRole: currentUser.role,
+        userId: currentUser.id
+      });
       if (!hasPermission) {
+        logger.warn('[DormService] 权限不足', {
+          userDormId,
+          operatorId: currentUser.id,
+          operatorRole: currentUser.role
+        });
         return {
           success: false,
           message: '权限不足，无法删除成员'
@@ -1274,9 +1408,8 @@ class DormService extends BaseService {
         };
       }
       
-      const userRole = currentUser.role;
-      const isAuthorized = userRole === 'system_admin' || 
-                          userRole === 'admin' || 
+      const userRoles = normalizeUserRoles(currentUser.role);
+      const isAuthorized = userRoles.some(r => ['system_admin', 'admin'].includes(r)) || 
                           dormInfo.admin_id === currentUser.id;
                           
       if (!isAuthorized) {
@@ -1408,9 +1541,8 @@ class DormService extends BaseService {
         };
       }
       
-      const userRole = currentUser.role;
-      const isAuthorized = userRole === 'system_admin' || 
-                          userRole === 'admin' || 
+      const userRoles = normalizeUserRoles(currentUser.role);
+      const isAuthorized = userRoles.some(r => ['system_admin', 'admin'].includes(r)) || 
                           dormInfo.admin_id === currentUser.id;
                           
       if (!isAuthorized) {
@@ -1486,9 +1618,8 @@ class DormService extends BaseService {
         };
       }
       
-      const userRole = currentUser.role;
-      const isAuthorized = userRole === 'system_admin' || 
-                          userRole === 'admin' || 
+      const userRoles = normalizeUserRoles(currentUser.role);
+      const isAuthorized = userRoles.some(r => ['system_admin', 'admin'].includes(r)) || 
                           dormInfo.admin_id === currentUser.id;
                           
       if (!isAuthorized) {
@@ -1565,8 +1696,8 @@ class DormService extends BaseService {
       }
       
       const userRole = currentUser.role;
-      const isAuthorized = userRole === 'system_admin' || 
-                          userRole === 'admin' || 
+      const userRoles = Array.isArray(userRole) ? userRole : [userRole];
+      const isAuthorized = userRoles.some(r => ['system_admin', 'admin'].includes(r)) || 
                           dormInfo.admin_id === currentUser.id;
                           
       if (!isAuthorized) {
@@ -1686,7 +1817,8 @@ class DormService extends BaseService {
         success: true,
         data: {
           members: members.map(member => ({
-            id: member.id,
+            id: member.user_dorm_id,  // 使用 user_dorms 表的记录 ID
+            userId: member.user_id,   // 用户 ID
             username: member.username,
             nickname: member.nickname,
             realName: member.real_name,
@@ -1877,6 +2009,678 @@ class DormService extends BaseService {
       return {
         success: false,
         message: '获取用户所在的寝室信息失败: ' + error.message
+      };
+    }
+  }
+
+  /**
+   * 获取所有楼栋列表
+   * @returns {Promise<Object>} 楼栋列表结果
+   */
+  async getBuildings() {
+    try {
+      logger.info('[DormService] 获取楼栋列表');
+      const buildings = await this.dormRepository.getBuildings();
+      return {
+        success: true,
+        data: buildings,
+        message: '楼栋列表获取成功'
+      };
+    } catch (error) {
+      logger.error('[DormService] 获取楼栋列表失败', { error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * 获取宿舍统计信息
+   * @returns {Promise<Object>} 统计信息结果
+   */
+  async getDormStats() {
+    try {
+      logger.info('[DormService] 获取宿舍统计信息');
+      const stats = await this.dormRepository.getDormStats();
+      return {
+        success: true,
+        data: {
+          total: parseInt(stats.total) || 0,
+          normal: parseInt(stats.normal) || 0,
+          maintenance: parseInt(stats.maintenance) || 0,
+          full: parseInt(stats.full) || 0,
+          // 保留原有嵌套结构以保持兼容性
+          totalCount: parseInt(stats.total) || 0,
+          statusCounts: {
+            normal: parseInt(stats.normal) || 0,
+            maintenance: parseInt(stats.maintenance) || 0,
+            full: parseInt(stats.full) || 0
+          }
+        },
+        message: '统计信息获取成功'
+      };
+    } catch (error) {
+      logger.error('[DormService] 获取宿舍统计信息失败', { error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * 验证是否具有管理权限
+   * @param {Object} currentUser - 当前用户信息
+   * @returns {boolean} 是否具有管理权限
+   */
+  hasAdminPermission(currentUser) {
+    if (!currentUser || !currentUser.role) {
+      return false;
+    }
+
+    const allowedRoles = ['system_admin', 'admin'];
+    // 将 super_admin 转换为 system_admin
+    const userRoles = Array.isArray(currentUser.role) 
+      ? currentUser.role.map(r => r === 'super_admin' ? 'system_admin' : r)
+      : [currentUser.role === 'super_admin' ? 'system_admin' : currentUser.role];
+
+    return userRoles.some(role => allowedRoles.includes(role));
+  }
+
+  /**
+   * 批量删除宿舍
+   * @param {Array<number>} ids - 宿舍ID列表
+   * @param {Object} currentUser - 当前用户信息
+   * @returns {Promise<Object>} 操作结果
+   */
+  async batchDeleteDorms(ids, currentUser) {
+    try {
+      console.log('[DormService] 批量删除宿舍', { ids, userId: currentUser?.id });
+      
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return {
+          success: false,
+          message: '请选择要删除的宿舍'
+        };
+      }
+
+      // 验证权限：系统管理员或普通管理员
+      if (!this.hasAdminPermission(currentUser)) {
+        return {
+          success: false,
+          message: '权限不足，无法执行批量删除'
+        };
+      }
+
+      const result = await this.dormRepository.batchDeleteDorms(ids, currentUser.id);
+      
+      if (!result.success) {
+        return {
+          success: false,
+          message: result.message
+        };
+      }
+
+      console.log('[DormService] 批量删除成功', { deletedCount: result.deletedCount });
+      
+      return {
+        success: true,
+        data: { rowCount: result.deletedCount },
+        message: result.message
+      };
+    } catch (error) {
+      console.error('[DormService] 批量删除宿舍失败', { error: error.message, ids });
+      return {
+        success: false,
+        message: '批量删除宿舍失败: ' + error.message
+      };
+    }
+  }
+
+  /**
+   * 批量更新宿舍状态
+   * @param {Array<number>} ids - 宿舍ID列表
+   * @param {string} status - 目标状态
+   * @param {Object} currentUser - 当前用户信息
+   * @returns {Promise<Object>} 操作结果
+   */
+  async batchUpdateDormStatus(ids, status, currentUser) {
+    try {
+      logger.info('[DormService] 批量更新宿舍状态', { ids, status, userId: currentUser.id });
+      
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return {
+          success: false,
+          message: '请选择要更新的宿舍'
+        };
+      }
+
+      if (!status) {
+        return {
+          success: false,
+          message: '请指定目标状态'
+        };
+      }
+
+      // 验证权限
+      if (!this.hasAdminPermission(currentUser)) {
+        return {
+          success: false,
+          message: '权限不足，无法执行批量更新'
+        };
+      }
+
+      // 映射状态到数据库支持的值 (规则 11: 不改动表结构，进行逻辑映射)
+      let dbStatus = status;
+      if (status === 'normal' || status === 'full') {
+        dbStatus = 'active';
+      }
+
+      const result = await this.dormRepository.batchUpdateDormStatus(ids, dbStatus);
+      
+      return {
+        success: true,
+        data: { rowCount: result },
+        message: `成功更新 ${result} 个宿舍的状态`
+      };
+    } catch (error) {
+      logger.error('[DormService] 批量更新宿舍状态失败', { error: error.message, ids, status });
+      throw error;
+    }
+  }
+
+  /**
+   * 添加宿舍成员
+   * @param {number} dormId - 宿舍ID
+   * @param {Object} memberData - 成员数据
+   * @param {Object} currentUser - 当前用户信息
+   * @returns {Promise<Object>} 添加结果
+   */
+  async addDormMember(dormId, memberData, currentUser) {
+    try {
+      logger.info('[DormService] 添加宿舍成员', { 
+        dormId, 
+        dormIdType: typeof dormId,
+        memberData, 
+        userId: currentUser.id,
+        memberDataKeys: memberData ? Object.keys(memberData) : [],
+        extractedUserId: memberData?.userId,
+        extractedUserIdType: typeof memberData?.userId
+      });
+      
+      // 1. 参数验证
+      if (!dormId || isNaN(dormId)) {
+        logger.warn('[DormService] 宿舍ID验证失败', { dormId, isNaN: isNaN(dormId) });
+        return {
+          success: false,
+          message: '宿舍ID无效'
+        };
+      }
+      
+      const { userId, bedNumber, roomNumber, moveInDate, memberRole } = memberData;
+      
+      logger.info('[DormService] 解构后的参数', { userId, bedNumber, roomNumber, moveInDate, memberRole });
+      
+      if (!userId || isNaN(userId)) {
+        logger.warn('[DormService] 用户ID验证失败', { userId, isNaN: isNaN(userId) });
+        return {
+          success: false,
+          message: '用户ID无效'
+        };
+      }
+
+      // 2. 验证当前用户权限
+      const dormInfo = await this.dormRepository.validateDormExists(dormId);
+      if (!dormInfo) {
+        return {
+          success: false,
+          message: '宿舍不存在或已被删除'
+        };
+      }
+      
+      const userRoles = normalizeUserRoles(currentUser.role);
+      
+      // 检查用户权限（系统管理员、管理员或宿舍长）
+      const isAuthorized = userRoles.some(r => ['system_admin', 'admin', 'dorm_leader'].includes(r));
+                          
+      if (!isAuthorized) {
+        return {
+          success: false,
+          message: '权限不足，无法添加成员'
+        };
+      }
+      
+      // 3. 验证用户是否可以添加到宿舍
+      // 系统角色（system_admin, admin）不能被分配到宿舍
+      const targetUser = await this.userRepository.findByIdWithRoles(userId);
+      if (targetUser) {
+        const targetRole = targetUser.role;
+        const targetRoles = Array.isArray(targetRole) ? targetRole : [targetRole];
+        const isSystemRole = targetRoles.some(r => ['system_admin', 'admin'].includes(r));
+        
+        if (isSystemRole) {
+          logger.warn('[DormService] 尝试将系统角色用户添加到宿舍被拒绝', { userId, role: targetRole });
+          return {
+            success: false,
+            message: '系统管理员或管理员角色无法分配到宿舍'
+          };
+        }
+      }
+
+      const validation = await this.dormRepository.validateUserCanAddToDorm(dormId, userId);
+      if (!validation.canAdd) {
+        return {
+          success: false,
+          message: validation.message
+        };
+      }
+      
+      // 4. 添加成员
+      const member = await this.dormRepository.addDormMember(dormId, userId, {
+        bedNumber,
+        roomNumber,
+        moveInDate,
+        memberRole
+      });
+      
+      // 5. 记录审计日志
+      await this.dormRepository.logAuditAction({
+        tableName: 'user_dorms',
+        operation: 'INSERT',
+        recordId: member.id,
+        oldValues: null,
+        newValues: {
+          user_id: userId,
+          dorm_id: dormId,
+          member_role: memberRole || 'member',
+          status: 'active',
+          bed_number: bedNumber,
+          room_number: roomNumber
+        },
+        userId: currentUser.id,
+        sessionId: currentUser.sessionId,
+        ipAddress: currentUser.ip,
+        userAgent: currentUser.userAgent
+      });
+      
+      // 6. 发送通知
+      await this.dormRepository.sendNotification({
+        title: '宿舍成员加入通知',
+        content: `您已被添加为宿舍"${dormInfo.dorm_name}"的成员`,
+        type: 'info',
+        userId: userId,
+        dormId: dormId,
+        senderId: currentUser.id,
+        relatedId: member.id,
+        relatedTable: 'user_dorms'
+      });
+      
+      logger.info('[DormService] 宿舍成员添加成功', { 
+        userDormId: member.id,
+        userId: userId,
+        dormId: dormId
+      });
+      
+      return {
+        success: true,
+        data: {
+          userDorm: {
+            id: member.id,
+            userId: member.user_id,
+            dormId: member.dorm_id,
+            memberRole: member.member_role,
+            status: member.status,
+            bedNumber: member.bed_number,
+            roomNumber: member.room_number,
+            moveInDate: member.move_in_date,
+            joinedAt: member.joined_at
+          }
+        },
+        message: '成员添加成功'
+      };
+      
+    } catch (error) {
+      logger.error('[DormService] 添加宿舍成员失败', { error: error.message, dormId, userId: memberData?.userId, operatorId: currentUser?.id });
+      throw error;
+    }
+  }
+
+  /**
+   * 批量分配宿舍
+   * @param {Array<number>} userIds - 用户ID数组
+   * @param {Object} dormitoryInfo - 宿舍信息 (building, floor, roomNumber, bedNumber)
+   * @param {Object} currentUser - 当前用户信息
+   * @returns {Promise<Object>} 批量分配结果
+   */
+  async batchAssignDormitory(userIds, dormitoryInfo, currentUser) {
+    try {
+      logger.info('[DormService] 批量分配宿舍', { userIds, dormitoryInfo, operatorId: currentUser.id });
+
+      if (!Array.isArray(userIds) || userIds.length === 0) {
+        return { success: false, message: '请选择至少一个用户' };
+      }
+
+      const { building, floor, roomNumber, bedNumber } = dormitoryInfo;
+      if (!building || !floor || !roomNumber) {
+        return { success: false, message: '宿舍信息不完整' };
+      }
+
+      // 1. 查找或创建宿舍
+      let dorm = await this.dormRepository.findDormByInfo({ building, floor, roomNumber });
+      if (!dorm) {
+        // 如果不存在，尝试创建一个新的
+        const dormName = `${building}-${floor}-${roomNumber}`;
+        const dormCode = `DORM-${Date.now()}`;
+        const createResult = await this.createDorm({
+          dormName,
+          dormCode,
+          address: `${building}栋${floor}层${roomNumber}室`,
+          capacity: 4, // 默认容量
+          building,
+          floor,
+          roomNumber,
+          status: 'normal'
+        });
+        
+        if (!createResult.success) {
+          return createResult;
+        }
+        dorm = createResult.data.dorm;
+      }
+
+      const dormId = dorm.id;
+      const results = {
+        total: userIds.length,
+        successCount: 0,
+        failCount: 0,
+        errors: []
+      };
+
+      // 2. 逐个分配用户
+      for (const userId of userIds) {
+        try {
+          const addResult = await this.addDormMember(dormId, {
+            userId,
+            bedNumber,
+            roomNumber,
+            moveInDate: new Date().toISOString().split('T')[0],
+            memberRole: 'member'
+          }, currentUser);
+
+          if (addResult.success) {
+            results.successCount++;
+          } else {
+            results.failCount++;
+            results.errors.push({ userId, message: addResult.message });
+          }
+        } catch (err) {
+          logger.error('[DormService] 批量分配单个用户失败', { userId, error: err.message });
+          results.failCount++;
+          results.errors.push({ userId, message: err.message });
+        }
+      }
+
+      return {
+        success: true,
+        data: results,
+        message: `批量分配完成：成功 ${results.successCount} 个，失败 ${results.failCount} 个`
+      };
+
+    } catch (error) {
+      logger.error('[DormService] 批量分配宿舍失败', { error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * 获取可添加到宿舍的用户列表
+   * @param {number} dormId - 宿舍ID
+   * @param {Object} options - 查询选项
+   * @param {Object} currentUser - 当前用户信息
+   * @returns {Promise<Object>} 可添加的用户列表结果
+   */
+  async getAvailableUsers(dormId, options, currentUser) {
+    try {
+      logger.info('[DormService] 获取可添加用户列表', { dormId, options, userId: currentUser.id });
+      
+      // 1. 参数验证
+      if (!dormId || isNaN(dormId)) {
+        return {
+          success: false,
+          message: '宿舍ID无效'
+        };
+      }
+      
+      // 2. 验证宿舍是否存在
+      const dormInfo = await this.dormRepository.validateDormExists(dormId);
+      if (!dormInfo) {
+        return {
+          success: false,
+          message: '宿舍不存在或已被删除'
+        };
+      }
+      
+      // 3. 获取可添加用户列表
+      const users = await this.dormRepository.getAvailableUsers(dormId, options);
+      
+      logger.info('[DormService] 可添加用户列表获取成功', { dormId, count: users.length });
+      
+      return {
+        success: true,
+        data: {
+          users: users.map(user => ({
+            id: user.id,
+            username: user.username,
+            nickname: user.nickname,
+            realName: user.real_name,
+            phone: user.phone,
+            avatarUrl: user.avatar_url
+          }))
+        },
+        message: '可添加用户列表获取成功'
+      };
+      
+    } catch (error) {
+      logger.error('[DormService] 获取可添加用户列表失败', { error: error.message, dormId });
+      return {
+        success: false,
+        data: { users: [] },
+        message: '获取可添加用户列表失败: ' + error.message
+      };
+    }
+  }
+
+  /**
+   * 获取宿舍费用统计摘要
+   * @param {number} dormId - 宿舍ID
+   * @returns {Promise<Object>} 费用统计结果
+   */
+  async getDormFeeSummary(dormId) {
+    try {
+      logger.info('[DormService] 获取宿舍费用统计摘要', { dormId });
+      
+      // 1. 参数验证
+      if (!dormId || isNaN(dormId)) {
+        return {
+          success: false,
+          message: '宿舍ID无效'
+        };
+      }
+      
+      // 2. 验证宿舍是否存在
+      const dormInfo = await this.dormRepository.validateDormExists(dormId);
+      if (!dormInfo) {
+        return {
+          success: false,
+          message: '宿舍不存在或已被删除'
+        };
+      }
+      
+      // 3. 获取费用统计
+      const summary = await this.dormRepository.getDormFeeSummary(dormId);
+      
+      logger.info('[DormService] 宿舍费用统计摘要获取成功', { dormId });
+      
+      return {
+        success: true,
+        data: {
+          feeSummary: {
+            monthlyTotal: summary.monthlyTotal,
+            totalExpenses: summary.totalExpenses,
+            totalPaid: summary.totalPaid,
+            totalPending: summary.totalPending,
+            totalOverdue: summary.totalOverdue,
+            unpaid: summary.unpaid,
+            status: summary.status,
+            stats: {
+              totalCount: summary.totalCount,
+              paidCount: summary.paidCount,
+              pendingCount: summary.pendingCount,
+              overdueCount: summary.overdueCount,
+              monthlyCount: summary.monthlyCount
+            }
+          }
+        },
+        message: '宿舍费用统计获取成功'
+      };
+      
+    } catch (error) {
+      logger.error('[DormService] 获取宿舍费用统计摘要失败', { error: error.message, dormId });
+      return {
+        success: false,
+        data: {
+          feeSummary: {
+            monthlyTotal: 0,
+            totalExpenses: 0,
+            totalPaid: 0,
+            totalPending: 0,
+            totalOverdue: 0,
+            unpaid: 0,
+            status: 'paid',
+            stats: {
+              totalCount: 0,
+              paidCount: 0,
+              pendingCount: 0,
+              overdueCount: 0,
+              monthlyCount: 0
+            }
+          }
+        },
+        message: '获取宿舍费用统计失败: ' + error.message
+      };
+    }
+  }
+
+  /**
+   * 获取宿舍维修记录
+   * @param {number} dormId - 宿舍ID
+   * @param {Object} options - 查询选项
+   * @param {Object} currentUser - 当前用户信息
+   * @returns {Promise<Object>} 维修记录结果
+   */
+  async getDormMaintenanceRecords(dormId, options, currentUser) {
+    try {
+      logger.info('[DormService] 获取宿舍维修记录', { dormId, options, userId: currentUser.id });
+      
+      // 1. 参数验证
+      if (!dormId || isNaN(dormId)) {
+        return {
+          success: false,
+          message: '宿舍ID无效'
+        };
+      }
+      
+      // 2. 验证宿舍是否存在
+      const dormInfo = await this.dormRepository.validateDormExists(dormId);
+      if (!dormInfo) {
+        return {
+          success: false,
+          message: '宿舍不存在或已被删除'
+        };
+      }
+      
+      // 3. 验证分页参数
+      const page = Math.max(1, parseInt(options?.page) || 1);
+      const limit = Math.min(100, Math.max(1, parseInt(options?.limit) || 10));
+      
+      // 4. 获取维修记录
+      const result = await this.dormRepository.getDormMaintenanceRecords(dormId, {
+        page,
+        limit,
+        status: options?.status
+      });
+      
+      // 类型映射
+      const typeMap = {
+        'plumbing': '水管',
+        'electrical': '电气',
+        'furniture': '家具',
+        'appliance': '电器',
+        'network': '网络',
+        'other': '其他'
+      };
+      
+      const urgencyMap = {
+        'low': '低',
+        'normal': '正常',
+        'high': '高',
+        'urgent': '紧急'
+      };
+      
+      const statusMap = {
+        'pending': '待处理',
+        'assigned': '已分配',
+        'in_progress': '处理中',
+        'completed': '已完成',
+        'rejected': '已拒绝',
+        'cancelled': '已取消'
+      };
+      
+      logger.info('[DormService] 宿舍维修记录获取成功', { dormId, total: result.total });
+      
+      return {
+        success: true,
+        data: {
+          records: result.records.map(record => ({
+            id: record.id,
+            title: record.title,
+            description: record.description,
+            type: record.type,
+            typeText: typeMap[record.type] || record.type,
+            urgencyLevel: record.urgency_level,
+            urgencyText: urgencyMap[record.urgency_level] || record.urgency_level,
+            status: record.status,
+            statusText: statusMap[record.status] || record.status,
+            requester: record.requester_name || record.requester_nickname || '未知',
+            assignedTo: record.assigned_name || record.assigned_nickname || '待分配',
+            assignedAt: record.assigned_at,
+            startedAt: record.started_at,
+            completedAt: record.completed_at,
+            completionNotes: record.completion_notes,
+            rating: record.rating,
+            feedback: record.feedback,
+            createdAt: record.created_at,
+            updatedAt: record.updated_at
+          })),
+          pagination: {
+            page: result.page,
+            limit: result.limit,
+            total: result.total,
+            totalPages: Math.ceil(result.total / result.limit)
+          }
+        },
+        message: '宿舍维修记录获取成功'
+      };
+      
+    } catch (error) {
+      logger.error('[DormService] 获取宿舍维修记录失败', { error: error.message, dormId });
+      return {
+        success: false,
+        data: {
+          records: [],
+          pagination: {
+            page: 1,
+            limit: 10,
+            total: 0,
+            totalPages: 0
+          }
+        },
+        message: '获取宿舍维修记录失败: ' + error.message
       };
     }
   }

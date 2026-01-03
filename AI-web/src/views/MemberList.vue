@@ -53,7 +53,6 @@
               </el-avatar>
               <div class="member-details">
                 <div class="member-name">{{ member.name }}</div>
-                <div class="member-student-id">{{ member.studentId }}</div>
               </div>
             </div>
             
@@ -88,7 +87,7 @@
             <el-col :span="6">
               <el-input
                 v-model="searchQuery"
-                placeholder="搜索成员姓名或学号"
+                placeholder="搜索成员姓名"
                 :prefix-icon="Search"
                 clearable
                 @clear="handleSearch"
@@ -107,18 +106,16 @@
             <el-col :span="4">
               <el-select v-model="roleFilter" placeholder="筛选角色" clearable @change="handleSearch">
                 <el-option label="全部角色" value="" />
-                <el-option label="寝室长" value="dorm_leader" />
+                <el-option label="系统管理员" value="system_admin" />
                 <el-option label="管理员" value="admin" />
-                <el-option label="普通成员" value="member" />
-                <el-option label="查看者" value="viewer" />
+                <el-option label="宿舍长" value="dorm_leader" />
+                <el-option label="付款人" value="payer" />
+                <el-option label="普通用户" value="user" />
               </el-select>
             </el-col>
             <el-col :span="4">
               <el-select v-model="roomFilter" placeholder="筛选房间" clearable @change="handleSearch">
                 <el-option label="全部房间" value="" />
-                <el-option label="A-101" value="A-101" />
-                <el-option label="A-102" value="A-102" />
-                <el-option label="A-103" value="A-103" />
               </el-select>
             </el-col>
             <el-col :span="6">
@@ -194,7 +191,6 @@
                       查看者
                     </el-tag>
                   </div>
-                  <div class="member-id">{{ member.studentId }}</div>
                   <div class="room-info">
                     <el-icon><House /></el-icon>
                     {{ member.room }}
@@ -322,7 +318,6 @@
           </el-avatar>
           <div class="member-details">
             <div class="member-name">{{ selectedMemberForRoleUpdate.name }}</div>
-            <div class="member-id">{{ selectedMemberForRoleUpdate.studentId }}</div>
             <div class="current-role">
               当前角色: <el-tag :type="getRoleTagType(selectedMemberForRoleUpdate.role)">
                 {{ getRoleText(selectedMemberForRoleUpdate.role) }}
@@ -335,9 +330,9 @@
           <el-form label-width="80px">
             <el-form-item label="新角色">
               <el-select v-model="newRole" placeholder="请选择角色" style="width: 100%">
-                <el-option label="管理员" value="admin" />
-                <el-option label="普通成员" value="member" />
-                <el-option label="查看者" value="viewer" />
+                <el-option label="宿舍长" value="dorm_leader" />
+                <el-option label="付款人" value="payer" />
+                <el-option label="普通用户" value="user" />
               </el-select>
             </el-form-item>
           </el-form>
@@ -375,7 +370,6 @@
           </el-avatar>
           <div class="member-details">
             <div class="member-name">{{ selectedMemberForStatusUpdate.name }}</div>
-            <div class="member-id">{{ selectedMemberForStatusUpdate.studentId }}</div>
             <div class="current-status">
               当前状态: <el-tag :type="getStatusType(selectedMemberForStatusUpdate.status)">
                 {{ getStatusText(selectedMemberForStatusUpdate.status) }}
@@ -472,10 +466,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 // 类型定义
 interface Member {
   id: number
-  studentId: string
   name: string
   room: string
-  role: 'dorm_leader' | 'admin' | 'member' | 'viewer'
+  role: 'system_admin' | 'admin' | 'dorm_leader' | 'payer' | 'user'
   status: 'online' | 'active' | 'away' | 'inactive'
   joinDate: string
   phone: string
@@ -544,7 +537,7 @@ const members = ref<Member[]>([])
 // 角色更新相关状态
 const roleUpdateDialogVisible = ref(false)
 const selectedMemberForRoleUpdate = ref<Member | null>(null)
-const newRole = ref<'admin' | 'member' | 'viewer'>('member')
+const newRole = ref<'dorm_leader' | 'payer' | 'user'>('user')
 const roleUpdateLoading = ref(false)
 
 // 状态更新相关状态
@@ -603,7 +596,6 @@ const loadMembers = async () => {
       // 转换新接口返回的数据格式为当前组件使用的格式
       const convertedMembers = membersData.map(member => ({
         id: member.userId,
-        studentId: member.username,
         name: member.realName || member.nickname || member.username,
         room: member.dorm ? `${member.dorm.building || ''}-${member.dorm.roomNumber || ''}` : '未分配',
         role: member.membership ? (member.membership.role === 'admin' ? 'admin' : 
@@ -678,8 +670,7 @@ const filteredMembers = computed(() => {
     if (member.isPending) return false
     
     const matchesSearch = !searchQuery.value || 
-      member.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      member.studentId.toLowerCase().includes(searchQuery.value.toLowerCase())
+      member.name.toLowerCase().includes(searchQuery.value.toLowerCase())
     
     const matchesStatus = !statusFilter.value || member.status === statusFilter.value
     const matchesRole = !roleFilter.value || member.role === roleFilter.value
@@ -879,10 +870,9 @@ const canUpdateRole = (member: Member) => {
 const handleUpdateRole = (member: Member) => {
   selectedMemberForRoleUpdate.value = member
   // 设置当前角色为默认值
-  newRole.value = member.role === 'admin' ? 'admin' : 
-                  member.role === 'dorm_leader' ? 'admin' : 
-                  member.role === 'member' ? 'member' : 
-                  member.role === 'viewer' ? 'viewer' : 'member'
+  newRole.value = member.role === 'dorm_leader' ? 'dorm_leader' : 
+                  member.role === 'payer' ? 'payer' : 
+                  member.role === 'user' ? 'user' : 'user'
   roleUpdateDialogVisible.value = true
 }
 

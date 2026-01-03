@@ -11,22 +11,35 @@ router.get('/statistics', authenticateToken, async (req, res) => {
   try {
     console.log('开始获取仪表盘统计数据');
     
-    // 1. 用户统计
+    // 1. 用户统计 (排除系统内置角色)
     const userStatsQuery = `
       SELECT 
         COUNT(*) as total_users,                    -- 总用户数
         COUNT(CASE WHEN status = 'active' THEN 1 END) as active_users,  -- 活跃用户数
         COUNT(CASE WHEN last_login_at >= NOW() - INTERVAL '30 days' THEN 1 END) as recently_active_users  -- 30天内活跃用户数
-      FROM users
+      FROM users u
+      WHERE u.id NOT IN (
+        SELECT ur.user_id 
+        FROM user_roles ur
+        JOIN roles r ON ur.role_id = r.id
+        WHERE r.is_system_role = TRUE
+      )
     `;
     const userStatsResult = await query(userStatsQuery);
     const userStats = userStatsResult.rows[0];
     
-    // 2. 有宿舍的用户统计
+    // 2. 有宿舍的用户统计 (排除系统内置角色)
     const dormUsersQuery = `
-      SELECT COUNT(DISTINCT user_id) as users_with_dorm
-      FROM user_dorms
-      WHERE status = 'active'
+      SELECT COUNT(DISTINCT ud.user_id) as users_with_dorm
+      FROM user_dorms ud
+      JOIN users u ON ud.user_id = u.id
+      WHERE ud.status = 'active'
+        AND u.id NOT IN (
+          SELECT ur.user_id 
+          FROM user_roles ur
+          JOIN roles r ON ur.role_id = r.id
+          WHERE r.is_system_role = TRUE
+        )
     `;
     const dormUsersResult = await query(dormUsersQuery);
     const usersWithDorm = parseInt(dormUsersResult.rows[0].users_with_dorm);
@@ -48,39 +61,60 @@ router.get('/statistics', authenticateToken, async (req, res) => {
       ? (dormStats.total_occupancy / dormStats.total_capacity * 100).toFixed(2)
       : 0;
     
-    // 4. 本月费用统计
+    // 4. 本月费用统计 (排除系统内置角色申请的费用)
     const expenseStatsQuery = `
       SELECT 
-        COALESCE(SUM(amount), 0) as total_monthly_expense,  -- 本月总费用
-        COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_expenses,  -- 待审批费用数
-        COUNT(CASE WHEN status = 'approved' THEN 1 END) as approved_expenses  -- 已审批费用数
-      FROM expenses
-      WHERE expense_date >= date_trunc('month', CURRENT_DATE)
-        AND expense_date < date_trunc('month', CURRENT_DATE) + interval '1 month'
+        COALESCE(SUM(e.amount), 0) as total_monthly_expense,  -- 本月总费用
+        COUNT(CASE WHEN e.status = 'pending' THEN 1 END) as pending_expenses,  -- 待审批费用数
+        COUNT(CASE WHEN e.status = 'approved' THEN 1 END) as approved_expenses  -- 已审批费用数
+      FROM expenses e
+      LEFT JOIN users u ON e.applicant_id = u.id
+      WHERE e.expense_date >= date_trunc('month', CURRENT_DATE)
+        AND e.expense_date < date_trunc('month', CURRENT_DATE) + interval '1 month'
+        AND (e.applicant_id IS NULL OR e.applicant_id NOT IN (
+          SELECT ur.user_id 
+          FROM user_roles ur
+          JOIN roles r ON ur.role_id = r.id
+          WHERE r.is_system_role = TRUE
+        ))
     `;
     const expenseStatsResult = await query(expenseStatsQuery);
     const expenseStats = expenseStatsResult.rows[0];
     
-    // 5. 上月费用统计（用于计算支出趋势）
+    // 5. 上月费用统计 (排除系统内置角色申请的费用)
     const lastMonthExpenseQuery = `
       SELECT 
-        COALESCE(SUM(amount), 0) as total_last_month_expense  -- 上月总费用
-      FROM expenses
-      WHERE expense_date >= date_trunc('month', CURRENT_DATE - interval '1 month')
-        AND expense_date < date_trunc('month', CURRENT_DATE)
+        COALESCE(SUM(e.amount), 0) as total_last_month_expense  -- 上月总费用
+      FROM expenses e
+      LEFT JOIN users u ON e.applicant_id = u.id
+      WHERE e.expense_date >= date_trunc('month', CURRENT_DATE - interval '1 month')
+        AND e.expense_date < date_trunc('month', CURRENT_DATE)
+        AND (e.applicant_id IS NULL OR e.applicant_id NOT IN (
+          SELECT ur.user_id 
+          FROM user_roles ur
+          JOIN roles r ON ur.role_id = r.id
+          WHERE r.is_system_role = TRUE
+        ))
     `;
     const lastMonthExpenseResult = await query(lastMonthExpenseQuery);
     const totalLastMonthExpense = parseFloat(lastMonthExpenseResult.rows[0].total_last_month_expense);
     
-    // 5. 费用分摊统计
+    // 6. 费用分摊统计 (排除系统内置角色的分摊)
     const expenseSplitStatsQuery = `
       SELECT 
-        COALESCE(SUM(split_amount), 0) as total_split_amount,  -- 总分摊金额
-        COALESCE(SUM(paid_amount), 0) as total_paid_amount,   -- 总已支付金额
-        COUNT(CASE WHEN payment_status = 'pending' THEN 1 END) as pending_payments,  -- 待支付数
-        COUNT(CASE WHEN payment_status = 'paid' THEN 1 END) as paid_payments,       -- 已支付数
-        COUNT(CASE WHEN payment_status = 'overdue' THEN 1 END) as overdue_payments   -- 逾期支付数
-      FROM expense_splits
+        COALESCE(SUM(es.split_amount), 0) as total_split_amount,  -- 总分摊金额
+        COALESCE(SUM(es.paid_amount), 0) as total_paid_amount,   -- 总已支付金额
+        COUNT(CASE WHEN es.payment_status = 'pending' THEN 1 END) as pending_payments,  -- 待支付数
+        COUNT(CASE WHEN es.payment_status = 'paid' THEN 1 END) as paid_payments,       -- 已支付数
+        COUNT(CASE WHEN es.payment_status = 'overdue' THEN 1 END) as overdue_payments   -- 逾期支付数
+      FROM expense_splits es
+      JOIN users u ON es.user_id = u.id
+      WHERE u.id NOT IN (
+        SELECT ur.user_id 
+        FROM user_roles ur
+        JOIN roles r ON ur.role_id = r.id
+        WHERE r.is_system_role = TRUE
+      )
     `;
     const expenseSplitStatsResult = await query(expenseSplitStatsQuery);
     const expenseSplitStats = expenseSplitStatsResult.rows[0];

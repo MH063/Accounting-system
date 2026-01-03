@@ -88,6 +88,7 @@
         <el-table-column prop="email" label="邮箱" />
         <el-table-column prop="role" label="角色">
           <template #default="scope">
+            <el-tag v-if="scope.row.isSystemRole" type="info" effect="plain" style="margin-right: 5px;">系统角色</el-tag>
             <el-tag v-if="scope.row.role === 'admin'" type="success">管理员</el-tag>
             <el-tag v-else>普通用户</el-tag>
           </template>

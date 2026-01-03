@@ -22,31 +22,58 @@ router.get('/', authenticateToken, responseWrapper(async (req, res) => {
     // 基础成员统计
     const memberStatsQuery = `
       WITH member_stats AS (
-        -- 总用户数
-        SELECT COUNT(*) as total_users FROM users WHERE status != 'banned'
+        -- 总用户数 (排除系统内置角色)
+        SELECT COUNT(*) as total_users FROM users u 
+        WHERE u.status != 'banned'
+          AND u.id NOT IN (
+            SELECT ur.user_id 
+            FROM user_roles ur
+            JOIN roles r ON ur.role_id = r.id
+            WHERE r.is_system_role = TRUE
+          )
       ),
       active_members AS (
-        -- 活跃成员数（最近30天登录过）
+        -- 活跃成员数 (排除系统内置角色)
         SELECT COUNT(DISTINCT u.id) as active_users 
         FROM users u 
         WHERE u.status = 'active' 
           AND u.last_login_at >= NOW() - INTERVAL '30 days'
+          AND u.id NOT IN (
+            SELECT ur.user_id 
+            FROM user_roles ur
+            JOIN roles r ON ur.role_id = r.id
+            WHERE r.is_system_role = TRUE
+          )
       ),
       dorm_members AS (
-        -- 有宿舍的成员数
+        -- 有宿舍的成员数 (排除系统内置角色)
         SELECT COUNT(DISTINCT ud.user_id) as users_in_dorms
         FROM user_dorms ud 
+        JOIN users u ON ud.user_id = u.id
         WHERE ud.status = 'active'
+          AND u.id NOT IN (
+            SELECT ur.user_id 
+            FROM user_roles ur
+            JOIN roles r ON ur.role_id = r.id
+            WHERE r.is_system_role = TRUE
+          )
       ),
       expense_stats AS (
-        -- 费用相关统计
+        -- 费用相关统计 (排除系统内置角色)
         SELECT 
           COUNT(DISTINCT es.user_id) as users_with_expenses,
           SUM(es.split_amount) as total_split_amount,
           AVG(es.split_amount) as avg_split_amount,
           SUM(CASE WHEN es.payment_status = 'paid' THEN es.paid_amount ELSE 0 END) as total_paid_amount
         FROM expense_splits es
+        JOIN users u ON es.user_id = u.id
         WHERE es.split_amount > 0
+          AND u.id NOT IN (
+            SELECT ur.user_id 
+            FROM user_roles ur
+            JOIN roles r ON ur.role_id = r.id
+            WHERE r.is_system_role = TRUE
+          )
       ),
       dorm_stats AS (
         -- 宿舍相关统计
@@ -102,7 +129,7 @@ router.get('/', authenticateToken, responseWrapper(async (req, res) => {
     const memberStatsResult = await query(memberStatsQuery);
     const stats = memberStatsResult.rows[0];
 
-    // 按月统计成员增长和费用变化（最近12个月）
+    // 按月统计成员增长和费用变化（最近12个月） (排除系统内置角色)
     const monthlyStatsQuery = `
       SELECT 
         DATE_TRUNC('month', u.created_at) as month,
@@ -116,6 +143,12 @@ router.get('/', authenticateToken, responseWrapper(async (req, res) => {
       LEFT JOIN user_dorms ud ON u.id = ud.user_id AND ud.status = 'active'
       LEFT JOIN expense_splits es ON u.id = es.user_id
       WHERE u.created_at >= CURRENT_DATE - INTERVAL '12 months'
+        AND u.id NOT IN (
+          SELECT ur.user_id 
+          FROM user_roles ur
+          JOIN roles r ON ur.role_id = r.id
+          WHERE r.is_system_role = TRUE
+        )
       GROUP BY DATE_TRUNC('month', u.created_at)
       ORDER BY month DESC
       LIMIT 12

@@ -22,8 +22,9 @@ router.get('/smart-reminders', authenticateToken, async (req, res) => {
               u.id as user_id,
               CASE 
                   WHEN r.role_name = 'system_admin' OR r.role_name = 'admin' THEN 'admin'
-                  WHEN r.role_name = 'dorm_leader' THEN 'dorm_admin'
-                  ELSE 'regular_user'
+                  WHEN r.role_name = 'dorm_leader' THEN 'dorm_leader'
+                  WHEN r.role_name = 'payer' THEN 'payer'
+                  ELSE 'user'
               END as user_category
           FROM users u
           LEFT JOIN user_roles ur ON u.id = ur.user_id AND ur.is_active = TRUE

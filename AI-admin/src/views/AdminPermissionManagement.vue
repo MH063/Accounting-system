@@ -105,7 +105,12 @@
           
           <el-table :data="adminList" style="width: 100%" v-loading="loading">
             <el-table-column prop="id" label="ID" width="80" />
-            <el-table-column prop="username" label="用户名" />
+            <el-table-column prop="username" label="用户名">
+              <template #default="scope">
+                <span>{{ scope.row.username }}</span>
+                <el-tag v-if="scope.row.isSystemRole" size="small" type="info" effect="plain" style="margin-left: 8px;">系统角色</el-tag>
+              </template>
+            </el-table-column>
             <el-table-column prop="realName" label="真实姓名" />
             <el-table-column prop="email" label="邮箱" />
             <el-table-column prop="phone" label="手机号" />
@@ -189,8 +194,13 @@
           
           <el-table :data="roleList" style="width: 100%" v-loading="loading">
             <el-table-column prop="id" label="ID" width="80" />
-            <el-table-column prop="name" label="角色名称" />
-            <el-table-column prop="code" label="角色代码" />
+            <el-table-column prop="name" label="角色名称">
+            <template #default="scope">
+              <span>{{ scope.row.name }}</span>
+              <el-tag v-if="scope.row.isSystemRole" size="small" type="info" effect="plain" style="margin-left: 8px;">系统角色</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="code" label="角色代码" />
             <el-table-column prop="description" label="描述" />
             <el-table-column prop="status" label="状态" width="100">
               <template #default="scope">
@@ -409,6 +419,7 @@
             <div class="detail-item">
               <label class="detail-label">用户名:</label>
               <span class="detail-value">{{ currentViewAdmin.username }}</span>
+              <el-tag v-if="currentViewAdmin.isSystemRole" size="small" type="info" effect="plain" style="margin-left: 8px;">系统角色</el-tag>
             </div>
           </el-col>
           <el-col :span="12">
@@ -547,6 +558,15 @@
         ref="adminFormRef" 
         label-width="100px"
       >
+        <el-alert
+          v-if="adminFormData.isSystemRole"
+          title="系统内置管理员"
+          type="info"
+          description="该用户拥有系统内置管理角色，将无法分配到具体宿舍或参与费用分摊。"
+          show-icon
+          :closable="false"
+          style="margin-bottom: 20px;"
+        />
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="用户名" prop="username">
@@ -1208,6 +1228,7 @@ const currentViewAdmin = ref<AdminAccount>({
   status: 'active',
   roleIds: [],
   roleNames: [],
+  isSystemRole: false,
   lastLoginTime: '',
   createTime: '',
   updateTime: '',
@@ -1279,7 +1300,8 @@ const adminFormData = reactive({
   password: '',
   confirmPassword: '',
   roleIds: [] as number[],
-  status: 'active'
+  status: 'active',
+  isSystemRole: false
 })
 
 const passwordFormData = reactive({
@@ -1676,7 +1698,8 @@ const handleCreateAdmin = () => {
     password: '',
     confirmPassword: '',
     roleIds: [],
-    status: 'active'
+    status: 'active',
+    isSystemRole: false
   })
   adminDialogVisible.value = true
 }
@@ -1694,6 +1717,7 @@ const handleViewAdmin = async (row: AdminAccount) => {
       phone: row.phone,
       status: row.status,
       roleNames: row.roleNames || [],
+      isSystemRole: row.isSystemRole || false,
       lastLoginTime: row.lastLoginTime || '',
       createTime: row.createTime || '',
       updateTime: row.updateTime || '',
@@ -1777,7 +1801,8 @@ const handleEditAdmin = (row: AdminAccount) => {
     password: '',
     confirmPassword: '',
     roleIds: row.roleIds,
-    status: row.status
+    status: row.status,
+    isSystemRole: row.isSystemRole || false
   })
   adminDialogVisible.value = true
 }

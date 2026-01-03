@@ -176,6 +176,41 @@ class CategoryController extends BaseController {
   }
 
   /**
+   * 获取费用类别列表（用于费用创建页面）
+   * GET /api/categories/expense
+   */
+  async getExpenseCategories(req, res, next) {
+    try {
+      logger.info('[CategoryController] 获取费用类别列表', { 
+        query: req.query 
+      });
+
+      // 调用服务层获取活跃分类列表
+      const result = await this.categoryService.getActiveCategories({
+        limit: 100, // 获取所有活跃类别
+        sort: 'sort_order',
+        order: 'ASC'
+      });
+      
+      // 转换为前端需要的格式
+      const expenseCategories = result.data.map(category => ({
+        value: category.category_code,
+        label: category.category_name,
+        color: category.color_code || '#409EFF',
+        icon: category.icon_name || 'category',
+        description: category.description || ''
+      }));
+      
+      return successResponse(res, {
+        categories: expenseCategories
+      }, '费用类别列表获取成功');
+    } catch (error) {
+      logger.error('[CategoryController] 获取费用类别列表失败', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
    * 获取分类使用统计
    * GET /api/categories/statistics
    */

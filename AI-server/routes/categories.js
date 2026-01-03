@@ -88,4 +88,15 @@ router.get('/statistics',
   }))
 );
 
+/**
+ * 费用类别列表接口 - GET方法
+ * 路由: /api/categories/expense
+ * 专用于费用创建页面，返回费用类别列表
+ */
+router.get('/expense', 
+  responseWrapper(asyncHandler(async (req, res, next) => {
+    return await categoryController.getExpenseCategories(req, res, next);
+  }))
+);
+
 module.exports = router;

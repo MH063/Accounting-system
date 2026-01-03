@@ -1,4 +1,4 @@
-﻿-- ============================================================
+-- ============================================================
 -- 记账宝系统数据库建表脚本
 -- 版本: 1.0
 -- 数据库: PostgreSQL 18
@@ -1282,22 +1282,42 @@ SELECT
         FROM expense_splits es
         JOIN users u ON es.user_id = u.id
         WHERE es.expense_id = e.id
+          AND NOT EXISTS (
+            SELECT 1 FROM user_roles ur 
+            JOIN roles r ON ur.role_id = r.id 
+            WHERE ur.user_id = u.id AND r.is_system_role = TRUE
+          )
     ) AS splits,
     -- 分摊统计
     (
         SELECT COUNT(*)
-        FROM expense_splits
-        WHERE expense_id = e.id
+        FROM expense_splits es
+        WHERE es.expense_id = e.id
+          AND NOT EXISTS (
+            SELECT 1 FROM user_roles ur 
+            JOIN roles r ON ur.role_id = r.id 
+            WHERE ur.user_id = es.user_id AND r.is_system_role = TRUE
+          )
     ) AS total_splits,
     (
         SELECT COUNT(*)
-        FROM expense_splits
-        WHERE expense_id = e.id AND payment_status = 'paid'
+        FROM expense_splits es
+        WHERE es.expense_id = e.id AND es.payment_status = 'paid'
+          AND NOT EXISTS (
+            SELECT 1 FROM user_roles ur 
+            JOIN roles r ON ur.role_id = r.id 
+            WHERE ur.user_id = es.user_id AND r.is_system_role = TRUE
+          )
     ) AS paid_splits,
     (
-        SELECT SUM(paid_amount)
-        FROM expense_splits
-        WHERE expense_id = e.id
+        SELECT SUM(es.paid_amount)
+        FROM expense_splits es
+        WHERE es.expense_id = e.id
+          AND NOT EXISTS (
+            SELECT 1 FROM user_roles ur 
+            JOIN roles r ON ur.role_id = r.id 
+            WHERE ur.user_id = es.user_id AND r.is_system_role = TRUE
+          )
     ) AS total_paid
 FROM expenses e
 LEFT JOIN expense_categories ec ON e.category_id = ec.id
@@ -1359,6 +1379,11 @@ JOIN user_dorms ud ON u.id = ud.user_id AND ud.status = 'active'
 JOIN dorms d ON ud.dorm_id = d.id
 LEFT JOIN expense_categories ec ON e.category_id = ec.id
 WHERE es.payment_status IN ('pending', 'overdue')
+  AND NOT EXISTS (
+    SELECT 1 FROM user_roles ur 
+    JOIN roles r ON ur.role_id = r.id 
+    WHERE ur.user_id = u.id AND r.is_system_role = TRUE
+  )
 ORDER BY es.due_date ASC, es.expense_id ASC;-- 月度费用统计视图
 CREATE VIEW monthly_expense_stats AS
 SELECT 
@@ -1397,6 +1422,11 @@ JOIN expenses e ON es.expense_id = e.id
 JOIN users u ON es.user_id = u.id
 JOIN user_dorms ud ON u.id = ud.user_id AND ud.status = 'active'
 JOIN dorms d ON ud.dorm_id = d.id
+WHERE NOT EXISTS (
+    SELECT 1 FROM user_roles ur 
+    JOIN roles r ON ur.role_id = r.id 
+    WHERE ur.user_id = u.id AND r.is_system_role = TRUE
+)
 GROUP BY es.user_id, u.username, u.nickname, d.dorm_name, d.dorm_code, TO_CHAR(e.expense_date, 'YYYY-MM')
 ORDER BY month DESC, d.dorm_name, u.username;
 
@@ -1447,10 +1477,15 @@ BEGIN
     IF p_split_type = 'equal' THEN
         -- 等额分摊：总金额平均分配给所有被选中的寝室成员
         SELECT COUNT(*) INTO v_user_count
-        FROM user_dorms
-        WHERE dorm_id = v_dorm_id 
-        AND status = 'active'
-        AND (move_out_date IS NULL OR move_out_date > CURRENT_DATE);
+        FROM user_dorms ud
+        WHERE ud.dorm_id = v_dorm_id 
+        AND ud.status = 'active'
+        AND (ud.move_out_date IS NULL OR ud.move_out_date > CURRENT_DATE)
+        AND NOT EXISTS (
+            SELECT 1 FROM user_roles ur 
+            JOIN roles r ON ur.role_id = r.id 
+            WHERE ur.user_id = ud.user_id AND r.is_system_role = TRUE
+        );
         
         IF v_user_count = 0 THEN
             RAISE EXCEPTION '宿舍中没有活跃用户: %', v_dorm_id;
@@ -1466,6 +1501,11 @@ BEGIN
             WHERE ud.dorm_id = v_dorm_id 
             AND ud.status = 'active'
             AND (ud.move_out_date IS NULL OR ud.move_out_date > CURRENT_DATE)
+            AND NOT EXISTS (
+                SELECT 1 FROM user_roles ur 
+                JOIN roles r ON ur.role_id = r.id 
+                WHERE ur.user_id = ud.user_id AND r.is_system_role = TRUE
+            )
         LOOP
             INSERT INTO expense_splits (
                 expense_id, 
@@ -1503,6 +1543,11 @@ BEGIN
             WHERE ud.dorm_id = v_dorm_id 
             AND ud.status = 'active'
             AND (ud.move_out_date IS NULL OR ud.move_out_date > CURRENT_DATE)
+            AND NOT EXISTS (
+                SELECT 1 FROM user_roles ur 
+                JOIN roles r ON ur.role_id = r.id 
+                WHERE ur.user_id = ud.user_id AND r.is_system_role = TRUE
+            )
         LOOP
             v_total_days := v_total_days + v_user_record.days_in_dorm;
         END LOOP;
@@ -1527,6 +1572,11 @@ BEGIN
             WHERE ud.dorm_id = v_dorm_id 
             AND ud.status = 'active'
             AND (ud.move_out_date IS NULL OR ud.move_out_date > CURRENT_DATE)
+            AND NOT EXISTS (
+                SELECT 1 FROM user_roles ur 
+                JOIN roles r ON ur.role_id = r.id 
+                WHERE ur.user_id = ud.user_id AND r.is_system_role = TRUE
+            )
         LOOP
             v_user_days := v_user_record.days_in_dorm;
             v_split_percentage := (v_user_days::DECIMAL(15,2) / v_total_days::DECIMAL(15,2)) * 100.0;
@@ -2008,13 +2058,13 @@ INSERT INTO roles (role_name, role_display_name, description, permissions, is_sy
 ('admin', '管理员', '业务运营管理员，负责用户管理、数据监控、内容管理、纠纷处理等业务层面的管理', 
  '{"user_management": true, "data_monitoring": true, "content_management": true, "dispute_resolution": true, "business_operations": true}', 
  true),
-('dorm_leader', '寝室长', '寝室费用总负责人，管理寝室日常费用和成员协调', 
+('dorm_leader', '宿舍长', '宿舍费用总负责人，管理宿舍日常费用和成员协调', 
  '{"dorm_creation": true, "member_invitation": true, "expense_creation": true, "expense_audit": true, "dorm_config": true}', 
  true),
-('payer', '缴费人', '负责费用收缴和支付的成员，确保费用收缴到位', 
+('payer', '付款人', '负责费用收缴和支付的成员，确保费用收缴到位', 
  '{"payment_code_management": true, "payment_confirmation": true, "expense_audit": true, "bill_management": true}', 
  true),
-('regular_user', '普通用户', '普通寝室成员，参与费用分摊和支付', 
+('user', '普通用户', '普通宿舍成员，参与费用分摊和支付', 
  '{"view_bills": true, "pay_expenses": true, "expense_confirmation": true, "personal_settings": true}', 
  false);
 
@@ -2045,7 +2095,7 @@ WHERE u.username = 'admin' AND r.role_name = 'system_admin';
 INSERT INTO user_roles (user_id, role_id, assigned_by) 
 SELECT u.id, r.id, 1 
 FROM users u, roles r 
-WHERE u.username = 'test_user' AND r.role_name = 'regular_user';
+WHERE u.username = 'test_user' AND r.role_name = 'user';
 
 -- 创建示例宿舍数据
 INSERT INTO dorms (dorm_name, building, room_number, floor, capacity, monthly_rent, deposit, area, address, admin_id) VALUES
@@ -2101,7 +2151,7 @@ DECLARE
 BEGIN
     -- 如果没有获取到用户ID，返回默认角色
     IF v_user_id IS NULL OR v_user_id = 0 THEN
-        RETURN 'regular_user';
+        RETURN 'user';
     END IF;
     
     SELECT r.role_name INTO v_role_name
@@ -2113,7 +2163,7 @@ BEGIN
     ORDER BY r.is_system_role DESC, r.role_name
     LIMIT 1;
     
-    RETURN COALESCE(v_role_name, 'regular_user');
+    RETURN COALESCE(v_role_name, 'user');
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -2436,8 +2486,8 @@ BEGIN
             RETURN v_user_role IN ('system_admin', 'admin', 'dorm_leader');
         WHEN 'payer' THEN
             RETURN v_user_role IN ('system_admin', 'admin', 'dorm_leader', 'payer');
-        WHEN 'regular_user' THEN
-            RETURN v_user_role IN ('system_admin', 'admin', 'dorm_leader', 'payer', 'regular_user');
+        WHEN 'user' THEN
+            RETURN v_user_role IN ('system_admin', 'admin', 'dorm_leader', 'payer', 'user');
         ELSE
             RETURN FALSE;
     END CASE;

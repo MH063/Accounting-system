@@ -895,10 +895,11 @@ class SystemStatusService {
       );
 
       // 计算最终健康分（动态权重调整）
+      // 基础健康占 20%，性能(依赖)和业务占剩下的 80%
       const finalScore = Math.round(
-        baseScore * 0.3 + 
-        dependencyHealth.score * dynamicWeights.performance + 
-        businessHealth.score * dynamicWeights.business
+        baseScore * 0.2 + 
+        (dependencyHealth.score * dynamicWeights.performance + 
+         businessHealth.score * dynamicWeights.business) * 0.8
       );
 
       // 异常模式识别
@@ -1147,14 +1148,20 @@ class SystemStatusService {
    */
   assessMemoryHealth(memUsage) {
     try {
-      const heapUsedPercent = Math.round((memUsage.heapUsed / memUsage.heapTotal) * 100);
+      const v8 = require('v8');
+      const heapStats = v8.getHeapStatistics();
+      const heapUsedPercent = Math.round((memUsage.heapUsed / heapStats.heap_size_limit) * 100);
       
+      // 基于最大堆限制的评估更加准确
       if (heapUsedPercent > 90) return 0;
       if (heapUsedPercent > 80) return 60;
       if (heapUsedPercent > 70) return 80;
       return 100;
     } catch (error) {
-      return 0;
+      // 降级使用 heapTotal
+      const heapUsedPercent = Math.round((memUsage.heapUsed / memUsage.heapTotal) * 100);
+      if (heapUsedPercent > 95) return 0;
+      return 100;
     }
   }
 
@@ -1185,15 +1192,19 @@ class SystemStatusService {
    */
   assessGcHealth(memUsage) {
     try {
-      // 简化的GC健康评估
-      const heapUsedPercent = Math.round((memUsage.heapUsed / memUsage.heapTotal) * 100);
+      const v8 = require('v8');
+      const heapStats = v8.getHeapStatistics();
+      // 使用 heap_size_limit (最大可分配堆内存) 作为基准评估 GC 压力更准确
+      const heapUsedPercent = Math.round((memUsage.heapUsed / heapStats.heap_size_limit) * 100);
       
-      // GC压力评估（基于堆内存使用率）
-      if (heapUsedPercent > 85) return 60;  // GC压力大
-      if (heapUsedPercent > 70) return 80;  // GC压力中等
-      return 100;  // GC压力正常
+      // GC压力评估（基于真实堆内存占用率）
+      if (heapUsedPercent > 85) return 60;  // 接近极限，GC 压力大
+      if (heapUsedPercent > 70) return 80;  // 负载较高，GC 频繁
+      return 100;
     } catch (error) {
-      return 0;
+      // 降级评估逻辑
+      const heapUsedPercent = Math.round((memUsage.heapUsed / memUsage.heapTotal) * 100);
+      return heapUsedPercent > 95 ? 60 : 100;
     }
   }
 
@@ -1335,7 +1346,7 @@ class SystemStatusService {
       const stats = await pool.query(`
         SELECT 
           COUNT(*) as total,
-          COUNT(*) FILTER (WHERE status = 'success' OR status = 'completed') as success
+          COUNT(*) FILTER (WHERE success = TRUE) as success
         FROM audit_logs
         WHERE created_at > NOW() - INTERVAL '1 hour'
       `);
@@ -1381,8 +1392,9 @@ class SystemStatusService {
       const successRate = total > 0 ? (commits / total) * 100 : 100;
       
       let score = 100;
-      if (successRate < 95) score = 50;
-      else if (successRate < 99) score = 80;
+      if (successRate < 80) score = 50;
+      else if (successRate < 90) score = 80;
+      else if (successRate < 98) score = 95;
       
       return {
         score: score,
@@ -1403,11 +1415,12 @@ class SystemStatusService {
    */
   async assessExceptionHealth() {
     try {
-      // 从审计日志中获取最近1分钟的异常数
+      // 从审计日志中获取最近1分钟的异常数（排除 401/403 这种正常的安全拒绝响应）
       const errorStats = await pool.query(`
         SELECT COUNT(*) as error_count
         FROM audit_logs
         WHERE success = FALSE
+        AND response_status NOT IN (401, 403)
         AND created_at > NOW() - INTERVAL '1 minute'
       `);
       

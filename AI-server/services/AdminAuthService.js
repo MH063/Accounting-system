@@ -20,6 +20,35 @@ class AdminAuthService {
   }
 
   /**
+   * 检查是否具有管理员访问权限
+   * @param {Object} user - 用户对象
+   * @param {Object} userWithRoles - 包含角色的用户对象
+   * @returns {boolean}
+   */
+  checkAdminAccess(user, userWithRoles) {
+    if (!user) return false;
+    
+    const adminRoles = ['admin', 'system_admin'];
+    
+    // 检查 role 字段 (可能是字符串或数组)
+    const roles = [];
+    if (user.role) {
+      if (Array.isArray(user.role)) roles.push(...user.role);
+      else roles.push(user.role);
+    }
+    if (userWithRoles && userWithRoles.role) {
+      if (Array.isArray(userWithRoles.role)) roles.push(...userWithRoles.role);
+      else roles.push(userWithRoles.role);
+    }
+    
+    const hasAdminRole = roles.some(role => adminRoles.includes(role));
+    const isAdminByUsername = user.username === 'admin' || user.username === 'system_admin';
+    const isAdminByEmail = user.email === 'admin@example.com';
+    
+    return hasAdminRole || isAdminByUsername || isAdminByEmail;
+  }
+
+  /**
    * 管理员登录验证
    * @param {Object} loginData - 登录数据
    * @param {string} loginData.username - 用户名
@@ -51,17 +80,8 @@ class AdminAuthService {
       }
 
           // 3. 检查是否为管理员角色
-      // 从用户角色信息中检查是否有管理员权限
       const userWithRoles = await this.userRepository.findUserWithRoles(username);
-      const hasAdminRole = userWithRoles && userWithRoles.role === 'admin';
-      
-      // 保留原有的检查逻辑作为备选
-      const isAdminByUsername = username === 'admin' || username.includes('admin');
-      const isAdminByStatus = user.role === 'admin';
-      const isAdminByEmail = user.email === 'admin@example.com';
-      
-      // 只要满足任何一个管理员条件即可
-      const isAdmin = hasAdminRole || isAdminByUsername || isAdminByStatus || isAdminByEmail;
+      const isAdmin = this.checkAdminAccess(user, userWithRoles);
       
       if (!isAdmin) {
         return this.handleFailedLogin(username, '权限不足，仅管理员可以登录');
@@ -83,8 +103,8 @@ class AdminAuthService {
         username: user.username,
         email: user.email,
         status: user.isActive ? 'active' : 'inactive',
-        role: 'admin',
-        permissions: ROLES.ADMIN.permissions,
+        role: userWithRoles?.role || user.role || 'admin',
+        permissions: userWithRoles?.permissions || user.permissions || ROLES.ADMIN.permissions,
         isAdmin: true
       });
 
@@ -207,11 +227,9 @@ class AdminAuthService {
       }
 
       // 检查是否为管理员
-      // 使用用户角色信息检查管理员权限
       const userWithRoles = await this.userRepository.findUserWithRoles(user.email);
-      const hasAdminRole = userWithRoles && userWithRoles.role === 'admin';
+      const isAdmin = this.checkAdminAccess(user, userWithRoles);
       
-      const isAdmin = user.username === 'admin' || user.email === 'admin@example.com' || user.role === 'admin' || hasAdminRole;
       if (!isAdmin) {
         return {
           success: false,
@@ -231,7 +249,7 @@ class AdminAuthService {
         data: {
           ...user.toApiResponse(),
           isAdmin: true,
-          adminLevel: user.role === 'admin' ? 'super_admin' : 'admin'
+          adminLevel: isAdmin ? 'system_admin' : 'admin'
         },
         message: '获取管理员资料成功'
       };
@@ -263,11 +281,9 @@ class AdminAuthService {
       }
 
       // 检查是否为管理员
-      // 使用用户角色信息检查管理员权限
       const userWithRoles = await this.userRepository.findUserWithRoles(user.email);
-      const hasAdminRole = userWithRoles && userWithRoles.role === 'admin';
+      const isAdmin = this.checkAdminAccess(user, userWithRoles);
       
-      const isAdmin = user.username === 'admin' || user.email === 'admin@example.com' || user.role === 'admin' || hasAdminRole;
       if (!isAdmin) {
         return false;
       }
@@ -303,11 +319,9 @@ class AdminAuthService {
       }
 
       // 检查是否为管理员
-      // 使用用户角色信息检查管理员权限
       const userWithRoles = await this.userRepository.findUserWithRoles(user.email);
-      const hasAdminRole = userWithRoles && userWithRoles.role === 'admin';
+      const isAdmin = this.checkAdminAccess(user, userWithRoles);
       
-      const isAdmin = user.username === 'admin' || user.email === 'admin@example.com' || user.role === 'admin' || hasAdminRole;
       if (!isAdmin) {
         return [];
       }

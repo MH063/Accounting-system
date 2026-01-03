@@ -512,6 +512,23 @@ export const confirmPayment = async (data: ConfirmPaymentRequest): Promise<ApiRe
 }
 
 /**
+ * 清空所有费用记录（仅管理员可用）
+ */
+export const clearAllExpenses = async (): Promise<ApiResponse<any>> => {
+  try {
+    const response = await request.delete<ApiResponse<any>>('/expenses/clear-all');
+    return response;
+  } catch (error) {
+    console.error('清空所有费用记录失败:', error);
+    return {
+      success: false,
+      data: null,
+      message: '清空所有费用记录失败'
+    };
+  }
+}
+
+/**
  * 获取待审核支出列表
  */
 export const getPendingExpenses = async (params?: { [key: string]: any }): Promise<ApiResponse<ExpenseItem[]>> => {
@@ -573,7 +590,8 @@ export const expenseService = {
   exportExpenses,
   getQRCodes,
   confirmPayment,
-  reviewExpense
+  reviewExpense,
+  clearAllExpenses
 }
 
 export default expenseService

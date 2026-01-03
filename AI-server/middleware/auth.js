@@ -20,13 +20,33 @@ const userService = new UserService();
  */
 const authenticateToken = async (req, res, next) => {
   // 从请求头获取令牌
-  const token = tokenService.extractTokenFromHeader(req);
+  const authHeader = req.headers.authorization || req.headers.Authorization;
+  const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
   
+  // 关键位置打印日志 (规则 7)
+  logger.debug('[AuthMiddleware] 令牌提取详情', {
+    url: req.originalUrl,
+    method: req.method,
+    hasAuthHeader: !!req.headers.authorization || !!req.headers.Authorization,
+    authHeaderPreview: authHeader ? `${authHeader.substring(0, 20)}...` : '缺失',
+    tokenExtracted: !!token,
+    tokenPrefix: token ? `${token.substring(0, 15)}...` : null,
+    headers: {
+      authorization: req.headers.authorization ? '存在' : '缺失',
+      Authorization: req.headers.Authorization ? '存在' : '缺失',
+      origin: req.headers.origin,
+      referer: req.headers.referer,
+      contentType: req.headers['content-type']
+    }
+  });
+
   // 如果没有令牌，返回401未授权
   if (!token) {
     logger.security(req, 'JWT认证失败', { 
       reason: '缺少认证令牌',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      attemptFrom: req.ip,
+      userAgent: req.headers['user-agent']
     });
     return res.status(401).json({
       success: false,
@@ -36,18 +56,31 @@ const authenticateToken = async (req, res, next) => {
   }
   
   const result = await tokenService.verifyAccessToken(token);
-  
+
   if (result.success) {
     const user = result.data;
+
+    logger.info('[AuthMiddleware] Token验证成功，用户信息详情', {
+      userId: user.id,
+      username: user.username,
+      role: user.role,
+      roleType: typeof user.role,
+      isArray: Array.isArray(user.role),
+      isAdmin: user.isAdmin,
+      email: user.email,
+      allKeys: Object.keys(user)
+    });
+
     req.user = user;
     req.tokenInfo = {
       type: user.type,
       jti: user.jti || user.jwtid,
       isRevoked: false
     };
-    logger.security(req, 'JWT认证成功', { 
+    logger.security(req, 'JWT认证成功', {
       userId: user.id,
       tokenType: user.type,
+      userRole: user.role,
       timestamp: new Date().toISOString()
     });
 
@@ -136,11 +169,20 @@ const authorizeAdmin = (req, res, next) => {
     });
   }
   
-  // 兼容两种角色标识方式：
-  // 1. role 字段：role === 'admin' 或 role 数组包含 'admin'
+  // 兼容多种角色标识方式：
+  // 1. role 字段：包含 'admin' 或 'system_admin'
   // 2. isAdmin 字段：isAdmin === true
-  const isAdminRole = req.user.role === 'admin' || 
-    (Array.isArray(req.user.role) && req.user.role.includes('admin'));
+  // 注意：旧令牌中的 'super_admin' 将自动转换为 'system_admin'
+  const hasAdminRole = (role) => {
+    if (Array.isArray(role)) {
+      const normalizedRoles = role.map(r => r === 'super_admin' ? 'system_admin' : r);
+      return normalizedRoles.some(r => r === 'admin' || r === 'system_admin');
+    }
+    const normalizedRole = role === 'super_admin' ? 'system_admin' : role;
+    return normalizedRole === 'admin' || normalizedRole === 'system_admin';
+  };
+  
+  const isAdminRole = hasAdminRole(req.user.role);
   const isAdminFlag = req.user.isAdmin === true;
   
   if (isAdminRole || isAdminFlag) {

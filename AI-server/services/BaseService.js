@@ -319,7 +319,10 @@ class BaseService {
       return result;
     } catch (error) {
       await client.query('ROLLBACK');
-      this.logger.error(`[${this.constructor.name}] 事务回滚`, { error: error.message });
+      this.logger.error(`[${this.constructor.name}] 事务回滚`, { 
+        error: error.message,
+        stack: error.stack
+      });
       throw error;
     } finally {
       client.release();

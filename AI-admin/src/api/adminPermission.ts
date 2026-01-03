@@ -11,6 +11,7 @@ export interface AdminAccount {
   status: 'active' | 'inactive' | 'locked' | 'pending'
   roleIds: number[]
   roleNames: string[]
+  isSystemRole?: boolean
   lastLoginTime?: string
   lastLoginIp?: string
   createTime: string
@@ -27,6 +28,7 @@ export interface PermissionRole {
   description: string
   permissions: string[]
   status: 'active' | 'inactive'
+  isSystemRole?: boolean
   createTime: string
   updateTime: string
   createdBy: number

@@ -975,10 +975,11 @@ CREATE TRIGGER trigger_create_expense_splits
 ```sql
 -- 插入默认角色数据
 INSERT INTO roles (role_name, role_display_name, description, permissions, is_system_role) VALUES
-('super_admin', '超级管理员', '拥有系统所有权限', '{"all": true}', true),
-('dorm_admin', '宿舍管理员', '宿舍管理权限', '{"dorms": ["read", "write", "delete"], "members": ["read", "write"], "expenses": ["read", "approve"]}', true),
-('member', '普通成员', '基础成员权限', '{"expenses": ["read", "create"], "profile": ["read", "write"]}', true),
-('viewer', '查看者', '只读权限', '{"dorms": ["read"], "members": ["read"], "expenses": ["read"]}', true);
+('system_admin', '系统管理员', '系统最高管理员，拥有最高权限', '{"all": true}', true),
+('admin', '管理员', '业务运营管理员', '{"users": ["read", "write", "delete"], "dorms": ["read", "write", "delete"], "expenses": ["read", "approve"]}', true),
+('dorm_leader', '宿舍长', '宿舍费用负责人', '{"dorms": ["read", "write"], "expenses": ["read", "create", "approve"]}', false),
+('payer', '付款人', '负责费用支付', '{"expenses": ["read", "pay"], "payments": ["create"]}', false),
+('user', '普通用户', '基础成员权限', '{"expenses": ["read", "create"], "profile": ["read", "write"]}', false);
 
 -- 插入费用类别数据
 INSERT INTO expense_categories (category_code, category_name, description, color_code, icon_name, sort_order) VALUES
@@ -992,11 +993,11 @@ INSERT INTO expense_categories (category_code, category_name, description, color
 INSERT INTO users (username, email, password_hash, nickname, status, email_verified) VALUES
 ('admin', 'admin@example.com', '$2b$10$rOzK9Y8hO7L6P5M6N4K3O2P1Q0R9S8T7U6V5W4X3Y2Z1a0b1c2d3e4', '系统管理员', 'active', true);
 
--- 为管理员分配超级管理员角色
+-- 为管理员分配系统管理员角色
 INSERT INTO user_roles (user_id, role_id, assigned_by) 
 SELECT u.id, r.id, u.id 
 FROM users u, roles r 
-WHERE u.username = 'admin' AND r.role_name = 'super_admin';
+WHERE u.username = 'admin' AND r.role_name = 'system_admin';
 
 -- 创建示例宿舍
 INSERT INTO dorms (dorm_name, dorm_code, address, capacity, admin_id) VALUES

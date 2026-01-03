@@ -70,25 +70,38 @@ async function getGlobalStats() {
   // 全局统计查询
   const globalStatsQuery = `
     WITH 
-    -- 用户统计
+    -- 用户统计 (排除系统内置角色)
     user_stats AS (
         SELECT 
             COUNT(*) as total_users,
             COUNT(CASE WHEN status = 'active' THEN 1 END) as active_users,
             COUNT(CASE WHEN last_login_at >= NOW() - INTERVAL '30 days' THEN 1 END) as recent_active_users
-        FROM users
+        FROM users u
         WHERE status != 'banned'
+        AND u.id NOT IN (
+          SELECT ur.user_id 
+          FROM user_roles ur
+          JOIN roles r ON ur.role_id = r.id
+          WHERE r.is_system_role = TRUE
+        )
     ),
-    -- 宿舍成员统计
+    -- 宿舍成员统计 (排除系统内置角色)
     dorm_member_stats AS (
         SELECT 
-            COUNT(DISTINCT user_id) as users_in_dorms,
-            COUNT(DISTINCT dorm_id) as dorms_with_members,
-            AVG(monthly_share) as avg_monthly_share
-        FROM user_dorms
-        WHERE status = 'active'
+            COUNT(DISTINCT ud.user_id) as users_in_dorms,
+            COUNT(DISTINCT ud.dorm_id) as dorms_with_members,
+            AVG(ud.monthly_share) as avg_monthly_share
+        FROM user_dorms ud
+        JOIN users u ON ud.user_id = u.id
+        WHERE ud.status = 'active'
+        AND u.id NOT IN (
+          SELECT ur.user_id 
+          FROM user_roles ur
+          JOIN roles r ON ur.role_id = r.id
+          WHERE r.is_system_role = TRUE
+        )
     ),
-    -- 费用统计
+    -- 费用统计 (排除系统内置角色)
     expense_stats AS (
         SELECT 
             COUNT(DISTINCT es.user_id) as users_with_expenses,
@@ -98,7 +111,14 @@ async function getGlobalStats() {
             SUM(CASE WHEN es.payment_status IN ('pending', 'overdue') THEN es.split_amount - es.paid_amount ELSE 0 END) as total_unpaid_amount,
             COUNT(CASE WHEN es.payment_status = 'overdue' THEN 1 END) as overdue_expenses
         FROM expense_splits es
-        WHERE es.split_amount > 0
+        JOIN users u ON es.user_id = u.id
+        WHERE u.id NOT IN (
+          SELECT ur.user_id 
+          FROM user_roles ur
+          JOIN roles r ON ur.role_id = r.id
+          WHERE r.is_system_role = TRUE
+        )
+        AND es.split_amount > 0
     ),
     -- 近期费用统计（最近30天）
     recent_expense_stats AS (
@@ -162,6 +182,12 @@ async function getGlobalStats() {
         LEFT JOIN dorms d ON ud.dorm_id = d.id AND d.status = 'active'
         LEFT JOIN expenses e ON d.id = e.dorm_id AND e.status = 'approved'
         WHERE u.status != 'banned'
+        AND u.id NOT IN (
+          SELECT ur.user_id 
+          FROM user_roles ur
+          JOIN roles r ON ur.role_id = r.id
+          WHERE r.is_system_role = TRUE
+        )
     )
 
     -- 组合所有统计数据
@@ -407,11 +433,18 @@ async function getTimeRangeStats(startDate, endDate) {
         COUNT(DISTINCT dorm_id) as active_dorms,
         SUM(monthly_share) as total_monthly_shares,
         AVG(monthly_share) as avg_monthly_share
-    FROM user_dorms
-    WHERE status = 'active'
-      AND created_at >= $1  -- 开始时间
-      AND created_at <= $2  -- 结束时间
-    GROUP BY DATE_TRUNC('month', created_at)
+    FROM user_dorms ud
+    JOIN users u ON ud.user_id = u.id
+    WHERE ud.status = 'active'
+      AND ud.created_at >= $1  -- 开始时间
+      AND ud.created_at <= $2  -- 结束时间
+      AND u.id NOT IN (
+        SELECT ur.user_id 
+        FROM user_roles ur
+        JOIN roles r ON ur.role_id = r.id
+        WHERE r.is_system_role = TRUE
+      )
+    GROUP BY DATE_TRUNC('month', ud.created_at)
     ORDER BY stat_month DESC
     LIMIT 6  -- 最近6个月
   `;

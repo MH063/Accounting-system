@@ -274,7 +274,7 @@ router.post('/log-event', authenticateToken, securityAudit({ trackApiCalls: fals
     
     // 将 eventData.type 映射为 operation，将 eventData.outcome 映射为 success
     const params = [
-      req.user.id,
+      req.user ? req.user.id : null,
       eventData.type || 'unknown_event',
       'security_event_log', // 区分于普通的验证日志
       eventData.outcome === 'success' || eventData.outcome === true,

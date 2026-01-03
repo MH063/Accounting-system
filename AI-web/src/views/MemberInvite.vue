@@ -250,7 +250,6 @@
             <template #default="{ row }">
               <div v-if="row.type === 'direct'">
                 <div>{{ row.name }}</div>
-                <div style="font-size: 12px; color: #909399;">学号：{{ row.studentId }}</div>
               </div>
               <div v-else-if="row.type === 'code'">
                 <div>邀请码：{{ row.code }}</div>
@@ -367,7 +366,7 @@
           <div class="section-actions">
             <el-input 
               v-model="memberSearch"
-              placeholder="搜索成员姓名或学号"
+              placeholder="搜索成员姓名"
               style="width: 300px;"
               clearable
             >
@@ -387,7 +386,6 @@
             style="width: 100%; margin-top: 20px;"
           >
             <el-table-column prop="name" label="姓名" width="120" />
-            <el-table-column prop="studentId" label="学号" width="140" />
             <el-table-column prop="room" label="房间" width="100" />
             <el-table-column label="邀请方式" width="120">
               <template #default="{ row }">
@@ -491,8 +489,7 @@ const filteredInvitedMembers = computed(() => {
     return invitedMembers.value
   }
   return invitedMembers.value.filter(member => 
-    member.name.includes(memberSearch.value) || 
-    member.studentId.includes(memberSearch.value)
+    member.name.includes(memberSearch.value)
   )
 })
 
@@ -512,7 +509,6 @@ const inviteHistory = ref([
     id: 1,
     type: 'direct',
     name: '张三',
-    studentId: '2021010101',
     status: 'accepted',
     time: '2024-12-19 14:30:00',
     expireTime: '2024-12-20 14:30:00'
@@ -541,7 +537,6 @@ const invitedMembers = ref([
   {
     id: 1,
     name: '张三',
-    studentId: '2021010101',
     joinTime: '2024-12-19 14:30:00',
     room: 'A-101',
     status: 'active',
@@ -550,7 +545,6 @@ const invitedMembers = ref([
   {
     id: 2,
     name: '李四',
-    studentId: '2021010102',
     joinTime: '2024-12-19 11:20:00',
     room: 'A-102',
     status: 'active',
@@ -745,7 +739,6 @@ const getInviteMethodText = (method: string) => {
 interface Member {
   id: number
   name: string
-  studentId: string
   phone: string
   room: string
   role: 'member' | 'admin'

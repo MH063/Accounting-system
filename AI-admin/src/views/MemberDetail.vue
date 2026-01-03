@@ -27,10 +27,6 @@
             </div>
             <div class="member-meta">
               <span class="meta-item">
-                <el-icon><User /></el-icon>
-                学号: {{ member.studentId }}
-              </span>
-              <span class="meta-item">
                 <el-icon><HomeFilled /></el-icon>
                 寝室: {{ member.dormitory }}
               </span>
@@ -96,14 +92,6 @@
                     <div class="info-item">
                       <label>生日:</label>
                       <span>{{ member.birthday ? formatDate(member.birthday) : '未填写' }}</span>
-                    </div>
-                    <div class="info-item">
-                      <label>专业:</label>
-                      <span>{{ member.major || '未填写' }}</span>
-                    </div>
-                    <div class="info-item">
-                      <label>年级:</label>
-                      <span>{{ member.grade || '未填写' }}</span>
                     </div>
                   </div>
                 </el-col>
@@ -258,14 +246,9 @@
         label-width="100px"
       >
         <el-row :gutter="20">
-          <el-col :span="12">
+          <el-col :span="24">
             <el-form-item label="姓名" prop="name">
               <el-input v-model="editForm.name" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="学号" prop="studentId">
-              <el-input v-model="editForm.studentId" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -302,10 +285,6 @@
             </el-form-item>
           </el-col>
         </el-row>
-        
-        <el-form-item label="专业" prop="major">
-          <el-input v-model="editForm.major" />
-        </el-form-item>
         
         <el-form-item label="个人简介" prop="bio">
           <el-input
@@ -348,7 +327,6 @@ const editFormRef = ref()
 const member = ref({
   id: 1,
   name: '张三',
-  studentId: '2021001',
   avatar: 'https://cube.elemecdn.com/0/88/03b0d39583f48206768a7534e55bcpng.png',
   role: 'leader',
   status: 'online',
@@ -358,8 +336,6 @@ const member = ref({
   joinDate: '2023-09-01',
   gender: 'male',
   birthday: '2002-05-15',
-  major: '计算机科学与技术',
-  grade: '大三',
   bio: '热爱编程和技术分享，喜欢篮球和音乐',
   emergencyContact: {
     name: '张父',
@@ -369,23 +345,21 @@ const member = ref({
 
 const editForm = reactive({
   name: '',
-  studentId: '',
   phone: '',
   email: '',
   gender: '',
   role: '',
-  major: '',
   bio: ''
 })
 
 const editFormRules = {
   name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
-  studentId: [{ required: true, message: '请输入学号', trigger: 'blur' }],
-  phone: [{ required: false, message: '请输入手机号', trigger: 'blur' }],
-  email: [{ required: false, message: '请输入邮箱', trigger: 'blur' }],
+  phone: [
+    { required: true, message: '请输入手机号', trigger: 'blur' },
+    { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号', trigger: 'blur' }
+  ],
   gender: [{ required: true, message: '请选择性别', trigger: 'change' }],
-  role: [{ required: true, message: '请选择角色', trigger: 'change' }],
-  major: [{ required: false, message: '请输入专业', trigger: 'blur' }]
+  role: [{ required: true, message: '请选择角色', trigger: 'change' }]
 }
 
 const expensesSummary = ref({
@@ -454,12 +428,10 @@ const goBack = () => {
 const editMember = () => {
   // 初始化编辑表单
   editForm.name = member.value.name
-  editForm.studentId = member.value.studentId
   editForm.phone = member.value.phone
   editForm.email = member.value.email
   editForm.gender = member.value.gender
   editForm.role = member.value.role
-  editForm.major = member.value.major
   editForm.bio = member.value.bio
   
   editDialogVisible.value = true
@@ -470,12 +442,10 @@ const saveMember = () => {
     if (valid) {
       // 更新成员信息
       member.value.name = editForm.name
-      member.value.studentId = editForm.studentId
       member.value.phone = editForm.phone
       member.value.email = editForm.email
       member.value.gender = editForm.gender
       member.value.role = editForm.role
-      member.value.major = editForm.major
       member.value.bio = editForm.bio
       
       editDialogVisible.value = false

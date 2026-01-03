@@ -7457,7 +7457,7 @@
             "approver": {
               "userId": 1004,
               "userName": "赵六",
-              "role": "super_admin"
+              "role": "system_admin"
             },
             "required": true,
             "conditions": {

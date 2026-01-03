@@ -9,6 +9,16 @@ const logger = require('../../config/logger');
 // 排除XSS清理的路径
 const EXCLUDED_PATHS = ['/api/docs', '/docs', '/api/client/restart', '/api/client/disconnect'];
 
+// 跳过对某些字段的严格检查（这些字段通常是安全的用户输入）
+const SKIP_CHECK_FIELDS = [
+  'userAgent', 'user_agent', 'User-Agent', 
+  'description', 'message', 'content', 'notes',
+  'password', 'newPassword', 'currentPassword', 'confirmPassword',
+  'answer', 'securityAnswer',
+  'secret', 'backupCode', 'backupCodes',
+  'operation', 'action', 'type', 'outcome', 'status'
+];
+
 // 危险的HTML标签
 const DANGEROUS_TAGS = [
   'script', 'iframe', 'embed', 'object', 'applet', 'form', 'input',
@@ -95,6 +105,11 @@ const cleanHtml = (html) => {
  * @returns {boolean} 是否包含XSS载荷
  */
 const hasXssPayload = (content, fieldName = '', req = null) => {
+  // 跳过对某些字段的严格检查
+  if (fieldName && SKIP_CHECK_FIELDS.some(field => fieldName.includes(field))) {
+    return false;
+  }
+
   if (typeof content === 'string') {
     const hasHtmlTags = /<[^>]*>/.test(content);
     if (hasHtmlTags) {

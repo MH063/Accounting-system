@@ -17,8 +17,7 @@
         <el-col :span="16">
           <el-descriptions title="基本信息" :column="2" border>
             <el-descriptions-item label="记录ID">{{ feeInfo.id }}</el-descriptions-item>
-            <el-descriptions-item label="学生姓名">{{ feeInfo.studentName }}</el-descriptions-item>
-            <el-descriptions-item label="学号">{{ feeInfo.studentId }}</el-descriptions-item>
+            <el-descriptions-item label="成员姓名">{{ feeInfo.studentName }}</el-descriptions-item>
             <el-descriptions-item label="费用类型">{{ getFeeTypeText(feeInfo.feeType) }}</el-descriptions-item>
             <el-descriptions-item label="金额">{{ feeInfo.amount }} 元</el-descriptions-item>
             <el-descriptions-item label="应缴日期">{{ feeInfo.dueDate }}</el-descriptions-item>
@@ -43,13 +42,9 @@
           
           <el-divider />
           
-          <el-descriptions title="学生信息" :column="2" border>
-            <el-descriptions-item label="学院">{{ studentInfo.college }}</el-descriptions-item>
-            <el-descriptions-item label="专业">{{ studentInfo.major }}</el-descriptions-item>
-            <el-descriptions-item label="年级">{{ studentInfo.grade }}</el-descriptions-item>
+          <el-descriptions title="成员信息" :column="2" border>
             <el-descriptions-item label="联系电话">{{ studentInfo.phone }}</el-descriptions-item>
             <el-descriptions-item label="寝室">{{ studentInfo.dormitory }}</el-descriptions-item>
-            <el-descriptions-item label="辅导员">{{ studentInfo.counselor }}</el-descriptions-item>
           </el-descriptions>
         </el-col>
         
@@ -149,15 +144,9 @@
     <el-dialog v-model="editDialogVisible" title="编辑费用信息" width="600px">
       <el-form :model="editFormData" :rules="editFormRules" ref="editFormRef" label-width="100px">
         <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="学生姓名" prop="studentName">
-              <el-input v-model="editFormData.studentName" placeholder="请输入学生姓名" />
-            </el-form-item>
-          </el-col>
-          
-          <el-col :span="12">
-            <el-form-item label="学号" prop="studentId">
-              <el-input v-model="editFormData.studentId" placeholder="请输入学号" />
+          <el-col :span="24">
+            <el-form-item label="成员姓名" prop="studentName">
+              <el-input v-model="editFormData.studentName" placeholder="请输入成员姓名" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -365,7 +354,6 @@ const isAdmin = ref(true) // 实际应用中应从用户信息中获取
 const feeInfo = ref({
   id: 1,
   studentName: '张三',
-  studentId: '2023001',
   feeType: 'accommodation',
   amount: 1200.00,
   dueDate: '2023-09-30',
@@ -375,9 +363,6 @@ const feeInfo = ref({
 })
 
 const studentInfo = ref({
-  college: '计算机学院',
-  major: '计算机科学与技术',
-  grade: '2023级',
   phone: '13800138001',
   dormitory: 'A栋101室',
   counselor: '李老师'
@@ -452,7 +437,6 @@ const previewDialogVisible = ref(false)
 const editFormData = ref({
   id: 1,
   studentName: '张三',
-  studentId: '2023001',
   feeType: 'accommodation',
   amount: 1200.00,
   dueDate: '2023-09-30',
@@ -484,7 +468,6 @@ const previewCertificateName = ref('')
 
 const editFormRules = {
   studentName: [{ required: true, message: '请输入学生姓名', trigger: 'blur' }],
-  studentId: [{ required: true, message: '请输入学号', trigger: 'blur' }],
   feeType: [{ required: true, message: '请选择费用类型', trigger: 'change' }],
   amount: [{ required: true, message: '请输入金额', trigger: 'blur' }],
   dueDate: [{ required: true, message: '请选择应缴日期', trigger: 'change' }],

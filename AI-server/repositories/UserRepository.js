@@ -406,7 +406,45 @@ class UserRepository extends BaseRepository {
   }
 
   /**
-   * 根据用户名或邮箱查找用户（包含角色信息）
+   * 根据ID查找用户（包含角色）
+   * @param {number} userId - 用户ID
+   * @returns {Promise<UserModel|null>} 用户模型实例
+   */
+  async findByIdWithRoles(userId) {
+    try {
+      const { query } = require('../config/database');
+      const result = await query(`
+        SELECT 
+          u.*,
+          r.role_name,
+          r.role_display_name,
+          r.permissions,
+          r.is_system_role
+        FROM users u
+        LEFT JOIN user_roles ur ON u.id = ur.user_id AND ur.is_active = true
+        LEFT JOIN roles r ON ur.role_id = r.id
+        WHERE u.id = $1
+        ORDER BY ur.assigned_at DESC
+        LIMIT 1
+      `, [userId]);
+
+      if (result.rows.length === 0) {
+        return null;
+      }
+
+      const userData = result.rows[0];
+      return UserModel.fromDatabase(userData);
+    } catch (error) {
+      logger.error('[UserRepository] 根据ID查找用户（包含角色）失败', { 
+        error: error.message, 
+        userId 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 查找用户（包含角色），支持用户名、邮箱
    * @param {string} identifier - 用户名或邮箱
    * @returns {Promise<UserModel|null>} 用户模型实例
    */

@@ -260,7 +260,7 @@ function logSecurityEvent(event) {
           : null;
 
         const params = [
-          userId,
+          userId || null,
           operation,
           'security_event_log',
           event.outcome === 'success',

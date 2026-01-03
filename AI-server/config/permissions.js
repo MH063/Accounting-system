@@ -61,17 +61,19 @@ const PERMISSIONS = {
 
 // 角色定义
 const ROLES = {
-  SUPER_ADMIN: {
-    id: 'super_admin',
-    name: '超级管理员',
-    description: '拥有系统所有权限',
+  SYSTEM_ADMIN: {
+    id: 'system_admin',
+    name: '系统管理员',
+    description: '系统最高管理员，拥有最高权限，负责系统安全、架构管理、权限监督和系统维护',
     permissions: Object.values(PERMISSIONS),
+    isSystemRole: true,
     level: 100
   },
   ADMIN: {
     id: 'admin',
     name: '管理员',
-    description: '拥有大部分管理权限',
+    description: '拥有大部分管理权限，负责宿舍管理和用户管理',
+    isSystemRole: true,
     permissions: [
       PERMISSIONS.USER_CREATE, PERMISSIONS.USER_READ, PERMISSIONS.USER_UPDATE, PERMISSIONS.USER_DELETE,
       PERMISSIONS.USER_LIST, PERMISSIONS.USER_ACTIVATE, PERMISSIONS.USER_DEACTIVATE,
@@ -83,65 +85,43 @@ const ROLES = {
     ],
     level: 80
   },
-  MANAGER: {
-    id: 'manager',
-    name: '经理',
-    description: '拥有部门管理权限',
-    permissions: [
-      PERMISSIONS.USER_READ, PERMISSIONS.USER_UPDATE, PERMISSIONS.USER_LIST,
-      PERMISSIONS.USER_ACTIVATE, PERMISSIONS.USER_DEACTIVATE,
-      PERMISSIONS.DATA_READ, PERMISSIONS.DATA_WRITE,
-      PERMISSIONS.REPORT_READ, PERMISSIONS.REPORT_CREATE, PERMISSIONS.REPORT_UPDATE,
-      PERMISSIONS.FINANCIAL_READ, PERMISSIONS.FINANCIAL_WRITE, PERMISSIONS.FINANCIAL_APPROVE
-    ],
-    level: 60
-  },
-  ACCOUNTANT: {
-    id: 'accountant',
-    name: '会计师',
-    description: '拥有财务相关权限',
+  DORM_LEADER: {
+    id: 'dorm_leader',
+    name: '宿舍长',
+    description: '宿舍管理人员，负责宿舍日常管理和费用分摊',
+    isSystemRole: true,
     permissions: [
       PERMISSIONS.USER_READ,
       PERMISSIONS.DATA_READ, PERMISSIONS.DATA_WRITE,
       PERMISSIONS.REPORT_READ, PERMISSIONS.REPORT_CREATE,
+      PERMISSIONS.FINANCIAL_READ, PERMISSIONS.FINANCIAL_WRITE, PERMISSIONS.FINANCIAL_APPROVE
+    ],
+    level: 60
+  },
+  PAYER: {
+    id: 'payer',
+    name: '付款人',
+    description: '宿舍成员，负责支付共同费用',
+    isSystemRole: true,
+    permissions: [
+      PERMISSIONS.USER_READ,
+      PERMISSIONS.DATA_READ, PERMISSIONS.DATA_WRITE,
+      PERMISSIONS.REPORT_READ,
       PERMISSIONS.FINANCIAL_READ, PERMISSIONS.FINANCIAL_WRITE
     ],
     level: 40
   },
-  AUDITOR: {
-    id: 'auditor',
-    name: '审计员',
-    description: '拥有审计和查看权限',
-    permissions: [
-      PERMISSIONS.USER_READ,
-      PERMISSIONS.DATA_READ, PERMISSIONS.DATA_EXPORT,
-      PERMISSIONS.REPORT_READ, PERMISSIONS.REPORT_EXPORT,
-      PERMISSIONS.FINANCIAL_READ, PERMISSIONS.FINANCIAL_AUDIT,
-      PERMISSIONS.SYSTEM_AUDIT, PERMISSIONS.SYSTEM_LOG
-    ],
-    level: 35
-  },
-  EMPLOYEE: {
-    id: 'employee',
-    name: '员工',
-    description: '拥有基本的查看和编辑权限',
+  USER: {
+    id: 'user',
+    name: '普通用户',
+    description: '基础用户角色，只能查看和操作自己的数据',
+    isSystemRole: true,
     permissions: [
       PERMISSIONS.USER_READ,
       PERMISSIONS.DATA_READ, PERMISSIONS.DATA_WRITE,
       PERMISSIONS.REPORT_READ
     ],
     level: 20
-  },
-  VIEWER: {
-    id: 'viewer',
-    name: '查看者',
-    description: '只有查看权限',
-    permissions: [
-      PERMISSIONS.USER_READ,
-      PERMISSIONS.DATA_READ,
-      PERMISSIONS.REPORT_READ
-    ],
-    level: 10
   }
 };
 
@@ -393,12 +373,11 @@ class UserManager {
         const roleName = userFromRequest.role.toUpperCase();
         // 映射数据库角色名到 ROLES 对象中的键
         const roleKeyMap = {
-          'SYSTEM_ADMIN': 'SUPER_ADMIN',
+          'SYSTEM_ADMIN': 'SYSTEM_ADMIN',
           'ADMIN': 'ADMIN',
-          'DORM_LEADER': 'MANAGER',
-          'PAYER': 'ACCOUNTANT',
-          'REGULAR_USER': 'EMPLOYEE',
-          'USER': 'EMPLOYEE' // 默认映射
+          'DORM_LEADER': 'DORM_LEADER',
+          'PAYER': 'PAYER',
+          'USER': 'USER'
         };
         const mappedRoleKey = roleKeyMap[roleName] || roleName;
         const role = ROLES[mappedRoleKey];
@@ -678,14 +657,14 @@ class PermissionChecker {
    * 创建管理员检查中间件
    */
   static requireAdmin() {
-    return PermissionChecker.requireAnyRole(['admin', 'super_admin']);
+    return PermissionChecker.requireAnyRole(['admin', 'system_admin']);
   }
   
   /**
-   * 创建超级管理员检查中间件
+   * 创建系统管理员检查中间件
    */
-  static requireSuperAdmin() {
-    return PermissionChecker.requireRole('super_admin');
+  static requireSystemAdmin() {
+    return PermissionChecker.requireRole('system_admin');
   }
   
   /**
@@ -797,11 +776,11 @@ async function initializeDefaultUsers() {
       lastName: '管理员'
     },
     {
-      username: 'manager',
-      email: 'manager@example.com',
-      password: process.env.DEFAULT_MANAGER_PASSWORD || 'CHANGE_ME_ON_FIRST_LOGIN',
-      firstName: '部门',
-      lastName: '经理'
+      username: 'dorm_leader',
+      email: 'dorm_leader@example.com',
+      password: process.env.DEFAULT_DORM_LEADER_PASSWORD || 'CHANGE_ME_ON_FIRST_LOGIN',
+      firstName: '宿舍',
+      lastName: '长'
     },
     {
       username: 'user',
@@ -816,9 +795,17 @@ async function initializeDefaultUsers() {
     try {
       const user = await UserManager.createUser(userData);
       
-      // 为管理员分配超级管理员角色
+      // 为管理员分配 system_admin 角色
       if (userData.username === 'admin') {
-        await UserManager.assignRole(user.id, 'super_admin');
+        await UserManager.assignRole(user.id, 'system_admin');
+      }
+      // 为宿舍长分配 dorm_leader 角色
+      if (userData.username === 'dorm_leader') {
+        await UserManager.assignRole(user.id, 'dorm_leader');
+      }
+      // 为普通用户分配 user 角色
+      if (userData.username === 'user') {
+        await UserManager.assignRole(user.id, 'user');
       }
     } catch (error) {
       logger.warn('创建默认用户失败', { error: error.message });

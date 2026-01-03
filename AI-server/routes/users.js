@@ -88,7 +88,7 @@ router.get('/', authenticateToken, responseWrapper(async (req, res) => {
       whereConditions.push(`EXISTS (
         SELECT 1 FROM user_dorms ud 
         JOIN dorms d ON ud.dorm_id = d.id 
-        WHERE ud.user_id = u.id AND (d.dorm_name ILIKE $${paramIndex} OR d.room_number ILIKE $${paramIndex})
+        WHERE ud.user_id = u.id AND ud.status = 'active' AND (d.dorm_name ILIKE $${paramIndex} OR d.room_number ILIKE $${paramIndex})
       )`);
       queryParams.push(`%${dormitory}%`);
       paramIndex++;
@@ -111,14 +111,14 @@ router.get('/', authenticateToken, responseWrapper(async (req, res) => {
         u.created_at,
         u.last_login_at,
         u.updated_at,
-        (SELECT json_agg(json_build_object('id', r.id, 'name', r.role_name)) 
+        (SELECT json_agg(json_build_object('id', r.id, 'name', r.role_name, 'is_system_role', r.is_system_role)) 
          FROM user_roles ur 
          JOIN roles r ON ur.role_id = r.id 
          WHERE ur.user_id = u.id) as roles,
         (SELECT d.dorm_name 
          FROM user_dorms ud 
          JOIN dorms d ON ud.dorm_id = d.id 
-         WHERE ud.user_id = u.id 
+         WHERE ud.user_id = u.id AND ud.status = 'active'
          LIMIT 1) as dormitory
       FROM users u
       ${whereClause}
@@ -132,20 +132,25 @@ router.get('/', authenticateToken, responseWrapper(async (req, res) => {
       console.log('📄 第一行数据样例:', JSON.stringify(usersResult.rows[0]));
     }
     
-    const users = usersResult.rows.map(user => ({
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      phone: user.phone || '',
-      status: user.status || 'active',
-      role: (user.roles && user.roles.length > 0) ? 
-        (user.roles.some(r => ['system_admin', 'admin'].includes(r.name)) ? 'admin' : 'user') : 'user',
-      dormitory: user.dormitory || '',
-      lastLoginTime: user.last_login_at ? (user.last_login_at instanceof Date ? user.last_login_at.toISOString() : user.last_login_at) : null,
-      createdAt: user.created_at ? (user.created_at instanceof Date ? user.created_at.toISOString() : user.created_at) : null,
-      updatedAt: user.updated_at ? (user.updated_at instanceof Date ? user.updated_at.toISOString() : user.updated_at) : null,
-      isActive: user.status === 'active'
-    }));
+    const users = usersResult.rows.map(user => {
+      const isSystemRole = user.roles && user.roles.some(r => r.is_system_role === true);
+      return {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        phone: user.phone || '',
+        status: user.status || 'active',
+        role: (user.roles && user.roles.length > 0) ? 
+          (user.roles.some(r => ['system_admin', 'admin'].includes(r.name)) ? 'admin' : 'user') : 'user',
+        roles: user.roles || [],
+        isSystemRole: isSystemRole,
+        dormitory: user.dormitory || '',
+        lastLoginTime: user.last_login_at ? (user.last_login_at instanceof Date ? user.last_login_at.toISOString() : user.last_login_at) : null,
+        createdAt: user.created_at ? (user.created_at instanceof Date ? user.created_at.toISOString() : user.created_at) : null,
+        updatedAt: user.updated_at ? (user.updated_at instanceof Date ? user.updated_at.toISOString() : user.updated_at) : null,
+        isActive: user.status === 'active'
+      };
+    });
 
     console.log('🚀 [Backend] 发送给前端的用户数据样例 (前2条):', JSON.stringify(users.slice(0, 2), null, 2));
     
@@ -206,7 +211,7 @@ router.get('/export', authenticateToken, PermissionChecker.requirePermission(PER
       whereConditions.push(`EXISTS (
         SELECT 1 FROM user_dorms ud 
         JOIN dorms d ON ud.dorm_id = d.id 
-        WHERE ud.user_id = u.id AND (d.dorm_name ILIKE $${paramIndex} OR d.room_number ILIKE $${paramIndex})
+        WHERE ud.user_id = u.id AND ud.status = 'active' AND (d.dorm_name ILIKE $${paramIndex} OR d.room_number ILIKE $${paramIndex})
       )`);
       queryParams.push(`%${dormitory}%`);
       paramIndex++;
@@ -224,14 +229,14 @@ router.get('/export', authenticateToken, PermissionChecker.requirePermission(PER
         u.created_at,
         u.last_login_at,
         u.updated_at,
-        (SELECT json_agg(json_build_object('id', r.id, 'name', r.role_name)) 
+        (SELECT json_agg(json_build_object('id', r.id, 'name', r.role_name, 'is_system_role', r.is_system_role)) 
          FROM user_roles ur 
          JOIN roles r ON ur.role_id = r.id 
          WHERE ur.user_id = u.id) as roles,
         (SELECT d.dorm_name 
          FROM user_dorms ud 
          JOIN dorms d ON ud.dorm_id = d.id 
-         WHERE ud.user_id = u.id 
+         WHERE ud.user_id = u.id AND ud.status = 'active'
          LIMIT 1) as dormitory
       FROM users u
       ${whereClause}
@@ -240,18 +245,21 @@ router.get('/export', authenticateToken, PermissionChecker.requirePermission(PER
 
     const usersResult = await pool.query(listQuery, queryParams);
     
-    const exportData = usersResult.rows.map(user => ({
-      'ID': user.id,
-      '用户名': user.username,
-      '邮箱': user.email,
-      '角色': (user.roles && user.roles.length > 0) ? 
-        (user.roles.some(r => ['system_admin', 'admin'].includes(r.name)) ? '管理员' : '普通用户') : '普通用户',
-      '手机号': user.phone || '',
-      '寝室号': user.dormitory || '',
-      '状态': user.status === 'active' ? '启用' : '禁用',
-      '最后登录时间': user.last_login_at ? new Date(user.last_login_at).toLocaleString() : '',
-      '创建时间': user.created_at ? new Date(user.created_at).toLocaleString() : ''
-    }));
+    const exportData = usersResult.rows.map(user => {
+      const isSystemRole = user.roles && user.roles.some(r => r.is_system_role === true);
+      return {
+        'ID': user.id,
+        '用户名': user.username,
+        '邮箱': user.email,
+        '角色': (user.roles && user.roles.length > 0) ? 
+          (isSystemRole ? '系统角色' : (user.roles.some(r => ['system_admin', 'admin'].includes(r.name)) ? '管理员' : '普通用户')) : '普通用户',
+        '手机号': user.phone || '',
+        '寝室号': user.dormitory || '',
+        '状态': user.status === 'active' ? '启用' : '禁用',
+        '最后登录时间': user.last_login_at ? new Date(user.last_login_at).toLocaleString() : '',
+        '创建时间': user.created_at ? new Date(user.created_at).toLocaleString() : ''
+      };
+    });
 
     logger.info('导出用户数据', { 
       count: exportData.length, 
@@ -319,7 +327,7 @@ router.get('/:userId', authenticateToken, responseWrapper(async (req, res) => {
         u.created_at,
         u.last_login_at,
         u.updated_at,
-        (SELECT json_agg(json_build_object('id', r.id, 'name', r.role_name)) 
+        (SELECT json_agg(json_build_object('id', r.id, 'name', r.role_name, 'is_system_role', r.is_system_role)) 
          FROM user_roles ur 
          JOIN roles r ON ur.role_id = r.id 
          WHERE ur.user_id = u.id) as roles,
@@ -343,6 +351,7 @@ router.get('/:userId', authenticateToken, responseWrapper(async (req, res) => {
     }
 
     const user = result.rows[0];
+    const isSystemRole = user.roles && user.roles.some(r => r.is_system_role === true);
     
     // 打印获取到的原始数据，方便排查 "-" 显示问题
     logger.info('[UsersRoute] 获取用户信息成功', { 
@@ -368,6 +377,7 @@ router.get('/:userId', authenticateToken, responseWrapper(async (req, res) => {
         role: (user.roles && user.roles.length > 0) ? 
           (user.roles.some(r => ['system_admin', 'admin'].includes(r.name)) ? 'admin' : 'user') : 'user',
         roles: user.roles || [],
+        isSystemRole: isSystemRole,
         dormitory: user.dormitory || '',
         createdAt: user.created_at || '',
         lastLoginTime: user.last_login_at || '',
@@ -557,6 +567,31 @@ router.get('/:userId/dormitory', authenticateToken, responseWrapper(async (req, 
     res.status(500).json({
       success: false,
       message: '获取用户寝室信息失败',
+      error: error.message
+    });
+  }
+}));
+
+/**
+ * PUT /api/users/batch/dormitory
+ * 批量分配宿舍
+ */
+router.put('/batch/dormitory', authenticateToken, PermissionChecker.requirePermission(PERMISSIONS.USER_UPDATE), responseWrapper(async (req, res) => {
+  try {
+    const { userIds, dormitoryInfo } = req.body;
+    const DormService = require('../services/DormService');
+    const dormService = new DormService();
+    
+    logger.info('[UsersRoute] 批量分配宿舍请求', { userIds, dormitoryInfo, operatorId: req.user?.id });
+    
+    const result = await dormService.batchAssignDormitory(userIds, dormitoryInfo, req.user);
+    
+    res.json(result);
+  } catch (error) {
+    logger.error('[UsersRoute] 批量分配宿舍失败', { error: error.message });
+    res.status(500).json({
+      success: false,
+      message: '批量分配宿舍失败',
       error: error.message
     });
   }

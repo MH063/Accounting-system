@@ -56,4 +56,7 @@ router.get('/export', expenseController.exportExpenses);
 // 保存草稿接口 - POST方法
 router.post('/draft', authenticateToken, expenseController.saveDraft);
 
+// 清空所有费用记录接口 - DELETE方法（仅管理员可用）
+router.delete('/clear-all', authenticateToken, expenseController.clearAllExpenses);
+
 module.exports = router;

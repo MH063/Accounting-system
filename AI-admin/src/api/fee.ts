@@ -55,7 +55,47 @@ export const feeApi = {
   
   // 获取待审核费用列表
   getPendingExpenses: (params?: any) => 
-    api.get('/expenses/pending', { params })
+    api.get('/expenses/pending', { params }),
+    
+  // 费用管理相关API（使用expenses接口）
+  getExpenseList: (params?: any) => 
+    api.get('/expenses', { params }),
+    
+  getExpenseDetail: (id: number) => 
+    api.get(`/expenses/${id}`),
+    
+  createExpense: (data: any) => 
+    api.post('/expenses', data),
+    
+  updateExpense: (id: number, data: any) => 
+    api.put(`/expenses/${id}`, data),
+    
+  deleteExpense: (id: number) => 
+    api.delete(`/expenses/${id}`),
+    
+  batchApproveExpenses: (ids: number[]) => 
+    api.put('/expenses/batch/approve', { ids }),
+    
+  batchRejectExpenses: (ids: number[], comment?: string) => 
+    api.put('/expenses/batch/reject', { ids, comment }),
+    
+  batchDeleteExpenses: (ids: number[]) => 
+    api.delete('/expenses/batch', { data: { ids } }),
+    
+  reviewExpense: (id: number, data: { status: string; comment?: string }) => 
+    api.put(`/expenses/${id}/review`, data),
+    
+  exportExpenses: (params?: any) => 
+    api.get('/expenses/export', { params }),
+    
+  getExpenseStatistics: (params?: any) => 
+    api.get('/expenses/statistics', { params }),
+    
+  saveDraft: (data: any) => 
+    api.post('/expenses/draft', data),
+    
+  clearAllExpenses: () => 
+    api.delete('/expenses/clear-all')
 }
 
 /**

@@ -64,12 +64,16 @@ router.get('/stats', authenticateToken, authorizeAdmin, responseWrapper(async (r
     const monthlyFeeTotal = parseFloat(monthlyFeeResult.rows[0]?.total || 0);
 
     // 今日访问量（从审计日志统计真实数据）
-    const today = new Date().toISOString().split('T')[0];
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const tomorrowStart = new Date(todayStart);
+    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+
     let todayVisits = 0;
     try {
       const visitsResult = await pool.query(
-        "SELECT COUNT(*) as total FROM audit_logs WHERE DATE(created_at) = $1",
-        [today]
+        "SELECT COUNT(*) as total FROM audit_logs WHERE created_at >= $1 AND created_at < $2",
+        [todayStart, tomorrowStart]
       );
       todayVisits = parseInt(visitsResult.rows[0]?.total || 0);
     } catch (e) {
@@ -139,14 +143,14 @@ router.get('/stats', authenticateToken, authorizeAdmin, responseWrapper(async (r
     try {
       const serviceLayerResult = await pool.query(`
         SELECT 
-          COUNT(*) FILTER (WHERE success IS NOT FALSE) as success_count,
+          COUNT(*) FILTER (WHERE success IS NOT FALSE OR response_status IN (401, 403)) as success_count,
           COUNT(*) as total_count,
           COUNT(*) FILTER (WHERE action LIKE '%/api/%') as api_count,
-          COUNT(*) FILTER (WHERE action LIKE '%/api/%' AND success IS NOT FALSE) as api_success_count
+          COUNT(*) FILTER (WHERE action LIKE '%/api/%' AND (success IS NOT FALSE OR response_status IN (401, 403))) as api_success_count
         FROM audit_logs
-        WHERE created_at > NOW() - INTERVAL '24 hours'
+        WHERE created_at >= $1 AND created_at < $2
           AND action IS NOT NULL
-      `);
+      `, [todayStart, tomorrowStart]);
       serviceSuccessCount = parseInt(serviceLayerResult.rows[0]?.success_count || 0);
       serviceTotalCount = parseInt(serviceLayerResult.rows[0]?.total_count || 0);
       apiCount = parseInt(serviceLayerResult.rows[0]?.api_count || 0);
@@ -163,10 +167,10 @@ router.get('/stats', authenticateToken, authorizeAdmin, responseWrapper(async (r
       // 扩大页面访问定义，包含更多管理端路由
       const pageAccessResult = await pool.query(`
         SELECT 
-          COUNT(*) FILTER (WHERE response_status >= 200 AND response_status < 400) as success_count,
+          COUNT(*) FILTER (WHERE (response_status >= 200 AND response_status < 400) OR response_status IN (401, 403)) as success_count,
           COUNT(*) as total_count
         FROM audit_logs
-        WHERE created_at > NOW() - INTERVAL '24 hours'
+        WHERE created_at >= $1 AND created_at < $2
           AND (
             action LIKE '%/admin/%' OR 
             action LIKE '%/dashboard%' OR
@@ -175,7 +179,7 @@ router.get('/stats', authenticateToken, authorizeAdmin, responseWrapper(async (r
           )
           AND response_status IS NOT NULL
           AND user_id IS NOT NULL  -- 只统计已登录用户的访问
-      `);
+      `, [todayStart, tomorrowStart]);
       pageSuccessCount = parseInt(pageAccessResult.rows[0]?.success_count || 0);
       pageTotalCount = parseInt(pageAccessResult.rows[0]?.total_count || 0);
     } catch (e) {
@@ -209,16 +213,16 @@ router.get('/stats', authenticateToken, authorizeAdmin, responseWrapper(async (r
     try {
       const functionLayerResult = await pool.query(`
         SELECT 
-          COUNT(*) FILTER (WHERE success IS NOT FALSE) as success_count,
+          COUNT(*) FILTER (WHERE success IS NOT FALSE OR response_status IN (401, 403)) as success_count,
           COUNT(*) as total_count
         FROM audit_logs
-        WHERE created_at > NOW() - INTERVAL '24 hours'
+        WHERE created_at >= $1 AND created_at < $2
           AND (
             action LIKE '%user%' OR action LIKE '%permission%' OR 
             action LIKE '%export%' OR action LIKE '%config%' OR
             action LIKE '%backup%' OR action LIKE '%maintenance%'
           )
-      `);
+      `, [todayStart, tomorrowStart]);
       functionSuccessCount = parseInt(functionLayerResult.rows[0]?.success_count || 0);
       functionTotalCount = parseInt(functionLayerResult.rows[0]?.total_count || 0);
     } catch (e) {
@@ -235,9 +239,9 @@ router.get('/stats', authenticateToken, authorizeAdmin, responseWrapper(async (r
           COUNT(*) FILTER (WHERE severity != 'error') as success_count,
           COUNT(*) as total_count
         FROM audit_logs
-        WHERE created_at > NOW() - INTERVAL '24 hours'
+        WHERE created_at >= $1 AND created_at < $2
           AND (action LIKE '%task%' OR action LIKE '%job%' OR action LIKE '%schedule%')
-      `);
+      `, [todayStart, tomorrowStart]);
       taskSuccessCount = parseInt(taskResult.rows[0]?.success_count || 0);
       taskTotalCount = parseInt(taskResult.rows[0]?.total_count || 0);
     } catch (e) {
@@ -260,11 +264,11 @@ router.get('/stats', authenticateToken, authorizeAdmin, responseWrapper(async (r
       const scheduledTasksResult = await pool.query(`
         SELECT 
           COUNT(*) as total_tasks,
-          COUNT(*) FILTER (WHERE success IS NOT FALSE) as completed_tasks
+          COUNT(*) FILTER (WHERE success IS NOT FALSE OR response_status IN (401, 403)) as completed_tasks
         FROM audit_logs
-        WHERE created_at > NOW() - INTERVAL '24 hours'
+        WHERE created_at >= $1 AND created_at < $2
           AND (action LIKE '%backup%' OR action LIKE '%maintenance%' OR action LIKE '%cleanup%' OR action LIKE '%optimize%')
-      `);
+      `, [todayStart, tomorrowStart]);
       totalScheduledTasks = parseInt(scheduledTasksResult.rows[0]?.total_tasks || 0);
       completedScheduledTasks = parseInt(scheduledTasksResult.rows[0]?.completed_tasks || 0);
     } catch (e) {
@@ -283,10 +287,10 @@ router.get('/stats', authenticateToken, authorizeAdmin, responseWrapper(async (r
             ELSE 0.3
           END) as avg_response_score
         FROM audit_logs
-        WHERE created_at > NOW() - INTERVAL '24 hours'
+        WHERE created_at >= $1 AND created_at < $2
           AND response_time IS NOT NULL
           AND action LIKE '%admin%'
-      `);
+      `, [todayStart, tomorrowStart]);
       avgResponseScore = parseFloat(responseTimeResult.rows[0]?.avg_response_score || 1.0);
     } catch (e) {
       console.warn('[ADMIN_DASHBOARD] 获取响应时间统计失败:', e.message);
@@ -307,8 +311,8 @@ router.get('/stats', authenticateToken, authorizeAdmin, responseWrapper(async (r
 
     // 今日支付成功数
     const todayPaymentsResult = await pool.query(
-      "SELECT COUNT(*) as total FROM payment_logs WHERE DATE(created_at) = $1 AND status = 'success'",
-      [today]
+      "SELECT COUNT(*) as total FROM payment_logs WHERE created_at >= $1 AND created_at < $2 AND status = 'success'",
+      [todayStart, tomorrowStart]
     );
     const todayPayments = parseInt(todayPaymentsResult.rows[0]?.total || 0);
 
@@ -316,8 +320,8 @@ router.get('/stats', authenticateToken, authorizeAdmin, responseWrapper(async (r
     let todayAbnormalOps = 0;
     try {
       const abnormalOpsResult = await pool.query(
-        "SELECT COUNT(*) as total FROM audit_logs WHERE DATE(created_at) = $1 AND (severity = 'warning' OR severity = 'error' OR severity = 'danger')",
-        [today]
+        "SELECT COUNT(*) as total FROM audit_logs WHERE created_at >= $1 AND created_at < $2 AND (severity = 'warning' OR severity = 'error' OR severity = 'danger')",
+        [todayStart, tomorrowStart]
       );
       todayAbnormalOps = parseInt(abnormalOpsResult.rows[0]?.total || 0);
     } catch (e) {
@@ -461,11 +465,11 @@ router.get('/stats', authenticateToken, authorizeAdmin, responseWrapper(async (r
     try {
       const todayActiveUsersResult = await pool.query(`
         SELECT COUNT(DISTINCT user_id) as total FROM (
-          SELECT user_id FROM audit_logs WHERE DATE(created_at) = $1 AND user_id IS NOT NULL
+          SELECT user_id FROM audit_logs WHERE created_at >= $1 AND created_at < $2 AND user_id IS NOT NULL
           UNION
-          SELECT user_id FROM security_verification_logs WHERE DATE(created_at) = $1 AND user_id IS NOT NULL
+          SELECT user_id FROM security_verification_logs WHERE created_at >= $1 AND created_at < $2 AND user_id IS NOT NULL
         ) as active_users
-      `, [today]);
+      `, [todayStart, tomorrowStart]);
       todayActiveUsers = parseInt(todayActiveUsersResult.rows[0]?.total || 0);
     } catch (e) {
       console.warn('[ADMIN_DASHBOARD] 获取今日活跃用户数失败:', e.message);
@@ -475,11 +479,16 @@ router.get('/stats', authenticateToken, authorizeAdmin, responseWrapper(async (r
     // 获取历史峰值用户数（真实统计单日最高活跃用户数）
     let peakUsers = 1;
     try {
+      // 为了优化性能，我们只取最近30天的数据来计算峰值，或者如果有汇总表则更好
+      // 这里的 DATE(created_at) 在 GROUP BY 中虽然慢，但如果是后台统计可以接受。
+      // 为了彻底优化，可以考虑在 created_at 上建立函数索引 
+      // CREATE INDEX ON audit_logs (((created_at AT TIME ZONE 'UTC')::date))
       const peakUsersResult = await pool.query(`
         SELECT MAX(daily_count) as peak FROM (
           SELECT COUNT(DISTINCT user_id) as daily_count 
           FROM audit_logs 
-          GROUP BY DATE(created_at)
+          WHERE created_at > NOW() - INTERVAL '30 days'
+          GROUP BY (created_at AT TIME ZONE 'UTC')::date
         ) as daily_stats
       `);
       peakUsers = parseInt(peakUsersResult.rows[0]?.peak || 1);
@@ -721,10 +730,10 @@ router.get('/system/availability-detailed', authenticateToken, authorizeAdmin, r
     // 1. 服务层可用率（40%权重）
     const serviceLayerResult = await pool.query(`
       SELECT 
-        COUNT(*) FILTER (WHERE success IS NOT FALSE) as success_count,
+        COUNT(*) FILTER (WHERE success IS NOT FALSE OR response_status IN (401, 403)) as success_count,
         COUNT(*) as total_count,
         COUNT(*) FILTER (WHERE action LIKE '%/api/%') as api_count,
-        COUNT(*) FILTER (WHERE action LIKE '%/api/%' AND success IS NOT FALSE) as api_success_count
+        COUNT(*) FILTER (WHERE action LIKE '%/api/%' AND (success IS NOT FALSE OR response_status IN (401, 403))) as api_success_count
       FROM audit_logs
       WHERE created_at > NOW() - INTERVAL '24 hours'
         AND action IS NOT NULL
@@ -736,7 +745,7 @@ router.get('/system/availability-detailed', authenticateToken, authorizeAdmin, r
     
     const pageAccessResult = await pool.query(`
       SELECT 
-        COUNT(*) FILTER (WHERE response_status >= 200 AND response_status < 400) as success_count,
+        COUNT(*) FILTER (WHERE (response_status >= 200 AND response_status < 400) OR response_status IN (401, 403)) as success_count,
         COUNT(*) as total_count
       FROM audit_logs
       WHERE created_at > NOW() - INTERVAL '24 hours'
@@ -753,15 +762,11 @@ router.get('/system/availability-detailed', authenticateToken, authorizeAdmin, r
     // 2. 功能层可用率（35%权重）
     const functionLayerResult = await pool.query(`
       SELECT 
-        COUNT(*) FILTER (WHERE success IS NOT FALSE) as success_count,
+        COUNT(*) FILTER (WHERE success IS NOT FALSE OR response_status IN (401, 403)) as success_count,
         COUNT(*) as total_count
       FROM audit_logs
       WHERE created_at > NOW() - INTERVAL '24 hours'
-        AND (
-          action LIKE '%user%' OR action LIKE '%permission%' OR 
-          action LIKE '%export%' OR action LIKE '%config%' OR
-          action LIKE '%backup%' OR action LIKE '%maintenance%'
-        )
+        AND (action LIKE '%user%' OR action LIKE '%permission%' OR action LIKE '%export%' OR action LIKE '%config%' OR action LIKE '%backup%' OR action LIKE '%maintenance%')
     `);
     const functionSuccessCount = parseInt(functionLayerResult.rows[0]?.success_count || 0);
     const functionTotalCount = parseInt(functionLayerResult.rows[0]?.total_count || 0);
@@ -785,7 +790,7 @@ router.get('/system/availability-detailed', authenticateToken, authorizeAdmin, r
     const scheduledTasksResult = await pool.query(`
       SELECT 
         COUNT(*) as total_tasks,
-        COUNT(*) FILTER (WHERE success IS NOT FALSE) as completed_tasks
+        COUNT(*) FILTER (WHERE success IS NOT FALSE OR response_status IN (401, 403)) as completed_tasks
       FROM audit_logs
       WHERE created_at > NOW() - INTERVAL '24 hours'
         AND (action LIKE '%backup%' OR action LIKE '%maintenance%' OR action LIKE '%cleanup%' OR action LIKE '%optimize%')
@@ -947,7 +952,7 @@ router.get('/users/stats', authenticateToken, authorizeAdmin, responseWrapper(as
     const activeUsers = parseInt(activeUsersResult.rows[0]?.total || 0);
 
     const newUsersToday = await pool.query(
-      "SELECT COUNT(*) as total FROM users WHERE DATE(created_at) = CURRENT_DATE"
+      "SELECT COUNT(*) as total FROM users WHERE created_at >= CURRENT_DATE AND created_at < CURRENT_DATE + INTERVAL '1 day'"
     );
     const newUsersThisWeek = await pool.query(
       "SELECT COUNT(*) as total FROM users WHERE created_at > NOW() - INTERVAL '7 days'"

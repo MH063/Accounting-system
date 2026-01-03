@@ -288,6 +288,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { User, Wallet } from '@element-plus/icons-vue'
+import { dormitoryApi } from '@/api/dormitory'
 
 // 路由实例
 const router = useRouter()
@@ -297,22 +298,19 @@ const route = useRoute()
 const editDialogVisible = ref(false)
 const editFormRef = ref()
 
+const loading = ref(false)
 const dormitory = ref({
-  id: 1,
-  name: 'A栋101室',
-  type: 'male',
-  building: 'A栋',
-  roomNumber: '101',
-  capacity: 4,
-  currentOccupancy: 3,
-  status: 'normal',
-  description: '一楼朝南，采光良好，靠近洗衣房',
-  createdAt: '2023-09-01T10:00:00Z',
-  members: [
-    { id: 1, name: '张三', role: 'leader', joinDate: '2023-09-01', phone: '13800138001' },
-    { id: 2, name: '李四', role: 'member', joinDate: '2023-09-05', phone: '13800138002' },
-    { id: 3, name: '王五', role: 'member', joinDate: '2023-09-10', phone: '13800138003' }
-  ]
+  id: 0,
+  name: '',
+  type: '',
+  building: '',
+  roomNumber: '',
+  capacity: 0,
+  currentOccupancy: 0,
+  status: '',
+  description: '',
+  createdAt: '',
+  members: [] as any[]
 })
 
 const editForm = reactive({
@@ -328,37 +326,15 @@ const editFormRules = {
 }
 
 const expenseStats = ref({
-  total: 1200,
-  paid: 950,
-  pending: 250,
+  total: 0,
+  paid: 0,
+  pending: 0,
   overdue: 0
 })
 
-const recentExpenses = ref([
-  {
-    id: 1,
-    title: '10月份电费分摊',
-    amount: 120,
-    date: '2023-10-15',
-    status: 'paid'
-  },
-  {
-    id: 2,
-    title: '寝室清洁用品采购',
-    amount: 85,
-    date: '2023-10-10',
-    status: 'pending'
-  },
-  {
-    id: 3,
-    title: '网费分摊',
-    amount: 50,
-    date: '2023-10-05',
-    status: 'paid'
-  }
-])
+const recentExpenses = ref([] as any[])
 
-const qrCodeUrl = ref('https://via.placeholder.com/200x200?text=寝室二维码')
+const qrCodeUrl = ref('https://picsum.photos/200/200')
 
 // 计算属性
 const leaderCount = computed(() => {
@@ -373,6 +349,59 @@ const guestCount = computed(() => {
   return dormitory.value.members.filter(member => member.role === 'guest').length
 })
 
+// 加载寝室数据
+const loadDormitoryData = async () => {
+  const id = Number(route.params.id)
+  if (!id) return
+  
+  try {
+    loading.value = true
+    console.log('🔄 加载寝室详情:', id)
+    const response = await dormitoryApi.getDormitoryDetail(id)
+    console.log('✅ 寝室详情响应:', response)
+    
+    // 兼容双层数据结构 (规则 5)
+    const data = response?.data?.dorm || response?.dorm || response?.data || response
+    
+    if (data) {
+      dormitory.value = {
+        id: data.id,
+        name: data.dormName || data.dorm_name,
+        type: data.type || 'male',
+        building: data.building,
+        roomNumber: data.roomNumber || data.room_number,
+        capacity: data.capacity,
+        currentOccupancy: data.currentOccupancy || 0,
+        status: data.status,
+        description: data.description,
+        createdAt: data.createdAt || data.created_at,
+        members: (data.currentUsers || []).map((m: any) => ({
+          id: m.id,
+          name: m.nickname || m.username,
+          role: m.memberRole || 'member',
+          joinDate: m.moveInDate || m.joinedAt,
+          phone: m.phone || '-'
+        }))
+      }
+      
+      // 更新费用统计
+      if (data.expenseStats) {
+        expenseStats.value = {
+          total: data.expenseStats.totalAmount || 0,
+          paid: data.expenseStats.paidAmount || 0,
+          pending: data.expenseStats.pendingAmount || 0,
+          overdue: 0 // 后端暂未返回
+        }
+      }
+    }
+  } catch (error: any) {
+    console.error('❌ 加载寝室详情失败:', error)
+    ElMessage.error('加载寝室详情失败')
+  } finally {
+    loading.value = false
+  }
+}
+
 // 方法
 const goBack = () => {
   router.back()
@@ -384,13 +413,21 @@ const editDormitory = () => {
   editDialogVisible.value = true
 }
 
-const saveDormitory = () => {
-  editFormRef.value?.validate((valid: boolean) => {
+const saveDormitory = async () => {
+  editFormRef.value?.validate(async (valid: boolean) => {
     if (valid) {
-      dormitory.value.name = editForm.name
-      dormitory.value.description = editForm.description
-      editDialogVisible.value = false
-      ElMessage.success('寝室信息更新成功')
+      try {
+        await dormitoryApi.updateDormitory(dormitory.value.id, {
+          dormName: editForm.name,
+          description: editForm.description
+        })
+        ElMessage.success('寝室信息更新成功')
+        editDialogVisible.value = false
+        loadDormitoryData()
+      } catch (error: any) {
+        console.error('❌ 更新寝室信息失败:', error)
+        ElMessage.error('更新寝室信息失败')
+      }
     } else {
       ElMessage.warning('请填写完整的寝室信息')
     }
@@ -513,9 +550,18 @@ const dissolveDormitory = async () => {
       }
     )
     
-    ElMessage.success('寝室已解散')
-  } catch {
-    // 用户取消操作
+    // 调用实际的解散确认接口 (物理删除)
+    const dormId = Number(route.params.id)
+    console.log('🗑️ 解散寝室:', dormId)
+    await dormitoryApi.confirmDismiss(dormId)
+    
+    ElMessage.success('寝室已成功解散并永久删除')
+    router.push('/dormitory/list')
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('❌ 解散寝室失败:', error)
+      ElMessage.error(error.response?.data?.message || '解散寝室失败')
+    }
   }
 }
 
@@ -526,6 +572,7 @@ const downloadQRCode = () => {
 // 组件挂载时的操作
 onMounted(() => {
   console.log('🏠 寝室信息页面加载完成', route.params.id)
+  loadDormitoryData()
 })
 </script>
 

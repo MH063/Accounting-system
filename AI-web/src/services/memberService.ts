@@ -4,7 +4,6 @@ import { request } from '@/utils/request'
 // 成员信息接口
 export interface Member {
   id: number
-  studentId: string
   name: string
   phone: string
   email?: string

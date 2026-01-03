@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 
 // 角色权限映射
 const ROLE_PERMISSIONS: Record<string, string[]> = {
-  'super_admin': [
+  'system_admin': [
     'manage_users',
     'manage_dormitories',
     'manage_fees',
@@ -25,17 +25,18 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'view_reports',
     'view_analytics'
   ],
-  'staff': [
+  'dorm_leader': [
     'manage_dormitories',
     'manage_fees',
     'manage_payments',
     'view_reports'
   ],
-  'student': [
-    'view_own_info',
-    'view_dormitory_info',
-    'view_fee_info',
-    'make_payment'
+  'payer': [
+    'manage_payments',
+    'view_reports'
+  ],
+  'user': [
+    'view_reports'
   ]
 };
 

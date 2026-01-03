@@ -33,9 +33,12 @@
             <el-option label="管理员" value="admin" />
             <el-option label="普通用户" value="user" />
           </el-select>
-          <el-tag v-else :type="userDetail.role === 'admin' ? 'success' : 'info'">
-            {{ userDetail.role === 'admin' ? '管理员' : '普通用户' }}
-          </el-tag>
+          <div v-else class="role-tags">
+            <el-tag v-if="userDetail.isSystemRole" type="info" effect="plain" style="margin-right: 5px;">系统角色</el-tag>
+            <el-tag :type="userDetail.role === 'admin' ? 'success' : 'info'">
+              {{ userDetail.role === 'admin' ? '管理员' : '普通用户' }}
+            </el-tag>
+          </div>
         </el-descriptions-item>
         <el-descriptions-item label="状态">
           <el-select v-model="userDetail.status" v-if="isEditing">

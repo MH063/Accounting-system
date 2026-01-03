@@ -235,8 +235,9 @@ class UserService extends BaseService {
 
     } catch (error) {
       await client.query('ROLLBACK');
-      logger.error('[UserService] 用户注册失败', { 
+      logger.error('[UserService] 用户注册失败，事务已回滚', { 
         error: error.message,
+        stack: error.stack,
         username: userData.username,
         email: userData.email 
       });
@@ -305,6 +306,15 @@ class UserService extends BaseService {
               created_at: new Date(),
               updated_at: new Date()
             });
+
+            // 检查是否为系统角色，如果是则强制清空宿舍关联 (规则 5.3)
+            const systemRoles = ['system_admin', 'admin'];
+            const userRole = Array.isArray(user.role) ? user.role : [user.role];
+            const isSystemRole = userRole.some(r => systemRoles.includes(r));
+            
+            if (isSystemRole) {
+              this.logger.info(`[UserService] 导入用户 ${user.username} 为系统角色，自动忽略其宿舍分配信息`);
+            }
 
             // 6. 转换为数据库格式并创建
             const dbData = user.toDatabaseFormat();
@@ -499,18 +509,22 @@ class UserService extends BaseService {
       await this.userRepository.updateLastLogin(user.id, ip);
 
       // 生成JWT双令牌
+      // 兼容多角色结构 (规则 5 类似思路，确保角色数据结构正确)
+      const userRoles = Array.isArray(user.role) ? user.role : [user.role || 'user'];
+      
       const tokenPair = generateTokenPair(user.id, {
         username: user.username,
         email: user.email,
-        role: user.role,
+        role: userRoles, // 统一使用数组形式，或保留原样但确保包含关键角色
         permissions: user.permissions || []
       });
 
       // 创建用户会话(传入JWT refreshToken)
+      const isAdmin = userRoles.some(r => ['admin', 'system_admin'].includes(r));
       const session = await this.createUserSession(user.id, ip, userAgent, {
         accessToken: tokenPair.accessToken,
         refreshToken: tokenPair.refreshToken,
-        clientType: user.role === 'admin' || user.role === 'system_admin' ? 'admin' : 'client'
+        clientType: isAdmin ? 'admin' : 'client'
       });
 
       logger.info('[UserService] 用户登录成功', { 

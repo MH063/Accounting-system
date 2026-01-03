@@ -360,7 +360,7 @@ export class DormService {
   /**
    * 加入寝室
    */
-  async joinDorm(dormId: string, joinData: { studentId: string; name: string; phone: string; appliedRoom?: string }): Promise<ApiResponse<boolean>> {
+  async joinDorm(dormId: string, joinData: { name: string; phone: string; appliedRoom?: string }): Promise<ApiResponse<boolean>> {
     try {
       const response = await request<{ success: boolean }>(`/dorms/${dormId}/join`, {
         method: 'POST',
@@ -414,7 +414,7 @@ export class DormService {
     description?: string
     maxCapacity?: number
     adminId?: number
-    initialMembers?: { studentId: string; name: string; phone: string }[]
+    initialMembers?: { name: string; phone: string }[]
   }): Promise<ApiResponse<number>> {
     try {
       const response = await request<any>('/dorms/create', {
@@ -471,7 +471,6 @@ export class DormService {
    * 邀请成员加入寝室
    */
   async inviteMembers(dormId: string, invitees: {
-    studentId: string
     name: string
     phone: string
     role?: 'member' | 'admin' | 'viewer'

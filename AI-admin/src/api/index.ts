@@ -19,9 +19,24 @@ api.interceptors.request.use(
     // 直接从 localStorage 获取管理员令牌
     const adminToken = localStorage.getItem('adminToken')
     
+    // 检查是否需要认证的接口（admin相关接口需要认证）
+    const isAdminApi = config.url?.includes('/admin/') || config.url?.includes('/system/')
+    
+    // 关键位置打印日志 (规则 7)
+    console.log('[API Interceptor] Token检查', {
+      url: config.url,
+      hasToken: !!adminToken,
+      isAdminApi,
+      tokenPreview: adminToken ? `${adminToken.substring(0, 30)}...` : 'null'
+    })
+    
     if (adminToken) {
       config.headers = config.headers || {}
       config.headers.Authorization = `Bearer ${adminToken}`
+      console.log('[API Interceptor] Authorization头已设置:', config.headers.Authorization?.substring(0, 30) + '...')
+    } else if (isAdminApi) {
+      // 只在需要认证的管理接口缺失token时警告
+      console.warn('[API Interceptor] adminToken不存在，可能导致401错误')
     }
     
     return config
@@ -113,6 +128,31 @@ api.interceptors.response.use(
     return resData
   },
   async (error) => {
+    // 处理后端服务异常退出的情况 (Network Error)
+    if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
+      console.warn('🚨 检测到后端服务不可用 (网络错误)')
+      
+      // 如果是在登录后的状态，且不是心跳接口报错，则提示并退出
+      const adminToken = localStorage.getItem('adminToken')
+      if (adminToken && !error.config?.url?.includes('/heartbeat')) {
+        // 记录强制退出日志
+        console.log('[LOG] 强制退出日志: 后端服务不可用 (网络错误)', {
+          time: new Date().toISOString(),
+          url: error.config?.url
+        })
+
+        ElMessage.error('后端服务异常，系统将强制退出。')
+        
+        // 清除 Token 并重定向
+        localStorage.removeItem('adminToken')
+        localStorage.removeItem('adminUser')
+        
+        setTimeout(() => {
+          window.location.href = '/login'
+        }, 2000)
+      }
+    }
+
     const { config, response } = error
     if (!config || !response) return Promise.reject(error)
 

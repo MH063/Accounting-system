@@ -2869,14 +2869,33 @@ class PaymentController extends BaseController {
         return errorResponse(res, '缺少必填字段或字段类型错误：expenses和members必须是数组', 400);
       }
       
+      // 自动过滤内置角色用户
+      // 如果成员列表中包含内置角色用户（根据用户名查询），则排除他们
+      const memberNames = members.map(m => m.name);
+      const systemRoleUsersSql = `
+        SELECT u.username 
+        FROM users u
+        JOIN user_roles ur ON u.id = ur.user_id
+        JOIN roles r ON ur.role_id = r.id
+        WHERE u.username = ANY($1) AND r.is_system_role = TRUE
+      `;
+      const systemRoleUsersResult = await query(systemRoleUsersSql, [memberNames]);
+      const systemRoleUsernames = systemRoleUsersResult.rows.map(r => r.username);
+      
+      const filteredMembers = members.filter(m => !systemRoleUsernames.includes(m.name));
+      
+      if (filteredMembers.length === 0 && members.length > 0) {
+        return errorResponse(res, '所选成员均为系统内置角色，无需参与分摊', 400);
+      }
+
       // 计算总费用
       const totalExpense = expenses.reduce((sum, expense) => sum + parseFloat(expense.amount || 0), 0);
       
       // 计算人均分摊金额
-      const perPersonShare = totalExpense / members.length;
+      const perPersonShare = totalExpense / filteredMembers.length;
       
       // 生成分摊结果
-      const sharingResults = members.map(member => {
+      const sharingResults = filteredMembers.map(member => {
         // 计算该成员已支付的金额
         const paid = expenses
           .filter(expense => expense.payer === member.name)
@@ -2906,8 +2925,9 @@ class PaymentController extends BaseController {
         totalExpense: parseFloat(totalExpense.toFixed(2)),
         perPersonShare: parseFloat(perPersonShare.toFixed(2)),
         totalPaid: parseFloat(totalPaid.toFixed(2)),
-        totalPending: parseFloat(totalPending.toFixed(2))
-      }, '费用分摊计算成功');
+        totalPending: parseFloat(totalPending.toFixed(2)),
+        filteredCount: members.length - filteredMembers.length
+      }, '费用分摊计算成功' + (members.length > filteredMembers.length ? `（已过滤${members.length - filteredMembers.length}名系统角色）` : ''));
     } catch (error) {
       console.error('费用分摊计算失败:', error);
       next(error);

@@ -234,6 +234,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { dormitoryApi } from '@/api/dormitory'
 
 // 路由实例
 const router = useRouter()
@@ -246,26 +247,23 @@ const expenseFormRef = ref()
 const notificationFormRef = ref()
 const dissolveFormRef = ref()
 
+const loading = ref(false)
 const savingBasic = ref(false)
 const savingExpense = ref(false)
 const savingNotification = ref(false)
 const dissolving = ref(false)
 
 const dormitory = ref({
-  id: 1,
-  name: 'A栋101室',
-  description: '一楼朝南，采光良好，靠近洗衣房'
+  id: 0,
+  name: '',
+  description: ''
 })
 
-const dormMembers = ref([
-  { id: 1, name: '张三' },
-  { id: 2, name: '李四' },
-  { id: 3, name: '王五' }
-])
+const dormMembers = ref<any[]>([])
 
 const basicForm = reactive({
-  name: 'A栋101室',
-  description: '一楼朝南，采光良好，靠近洗衣房'
+  name: '',
+  description: ''
 })
 
 const basicFormRules = {
@@ -328,18 +326,69 @@ const goBack = () => {
   router.back()
 }
 
-const saveBasicInfo = () => {
-  basicFormRef.value?.validate((valid: boolean) => {
-    if (valid) {
-      savingBasic.value = true
+/**
+ * 加载寝室设置数据
+ */
+const loadSettingsData = async () => {
+  const id = Number(route.params.id)
+  if (!id) return
+  
+  try {
+    loading.value = true
+    console.log('🔄 加载寝室设置:', id)
+    const response = await dormitoryApi.getDormitoryDetail(id)
+    console.log('✅ 寝室设置详情响应:', response)
+    
+    // 兼容双层数据结构 (规则 5)
+    const data = response?.data?.dorm || response?.dorm || response?.data || response
+    
+    if (data) {
+      dormitory.value = {
+        id: data.id,
+        name: data.dormName || data.dorm_name,
+        description: data.description || ''
+      }
       
-      // 模拟保存基本信息
-      setTimeout(() => {
+      // 更新表单
+      basicForm.name = dormitory.value.name
+      basicForm.description = dormitory.value.description
+      
+      // 更新成员列表
+      dormMembers.value = (data.currentUsers || []).map((m: any) => ({
+        id: m.id,
+        name: m.nickname || m.username
+      }))
+    }
+  } catch (error: any) {
+    console.error('❌ 加载寝室设置失败:', error)
+    ElMessage.error('加载寝室设置失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+const saveBasicInfo = () => {
+  basicFormRef.value?.validate(async (valid: boolean) => {
+    if (valid) {
+      try {
+        savingBasic.value = true
+        console.log('💾 保存寝室基本信息:', dormitory.value.id, basicForm)
+        
+        // 调用后端 API 保存
+        await dormitoryApi.updateDormitory(dormitory.value.id, {
+          dormName: basicForm.name,
+          description: basicForm.description
+        })
+        
         dormitory.value.name = basicForm.name
         dormitory.value.description = basicForm.description
         ElMessage.success('基本信息保存成功')
+      } catch (error: any) {
+        console.error('❌ 保存基本信息失败:', error)
+        ElMessage.error(error.response?.data?.message || '保存基本信息失败')
+      } finally {
         savingBasic.value = false
-      }, 1000)
+      }
     } else {
       ElMessage.warning('请填写完整的寝室基本信息')
     }
@@ -385,14 +434,19 @@ const dissolveDormitory = async () => {
     
     dissolving.value = true
     
-    // 模拟解散寝室
-    setTimeout(() => {
-      ElMessage.success('寝室已成功解散')
-      dissolving.value = false
-      router.push('/dormitory/list')
-    }, 1000)
-  } catch {
-    // 用户取消操作
+    // 调用实际的解散确认接口 (物理删除)
+    console.log('🗑️ 确认解散寝室:', dormitory.value.id)
+    await dormitoryApi.confirmDismiss(dormitory.value.id)
+    
+    ElMessage.success('寝室已成功解散并永久删除')
+    dissolving.value = false
+    router.push('/dormitory/list')
+  } catch (error: any) {
+    dissolving.value = false
+    if (error !== 'cancel') {
+      console.error('❌ 解散寝室失败:', error)
+      ElMessage.error(error.response?.data?.message || '解散寝室失败')
+    }
   }
 }
 
@@ -403,10 +457,7 @@ const formatDateTime = (dateString: string): string => {
 // 组件挂载时的操作
 onMounted(() => {
   console.log('⚙️ 寝室设置页面加载完成', route.params.id)
-  
-  // 初始化表单数据
-  basicForm.name = dormitory.value.name
-  basicForm.description = dormitory.value.description
+  loadSettingsData()
 })
 </script>
 

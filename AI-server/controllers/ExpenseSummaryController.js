@@ -69,6 +69,14 @@ class ExpenseSummaryController extends BaseController {
         paramIndex++;
       }
 
+      // 排除内置角色用户申请的费用
+      whereConditions += ` AND (e.applicant_id IS NULL OR e.applicant_id NOT IN (
+        SELECT ur.user_id 
+        FROM user_roles ur
+        JOIN roles r ON ur.role_id = r.id
+        WHERE r.is_system_role = TRUE
+      ))`;
+
       // 根据分组方式构建查询
       let groupByClause = '';
       let orderByClause = '';

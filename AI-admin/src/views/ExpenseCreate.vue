@@ -37,12 +37,14 @@
                 v-model="expenseForm.category"
                 placeholder="请选择费用类别"
                 style="width: 100%"
+                :loading="loadingCategories"
               >
-                <el-option label="住宿费" value="accommodation" />
-                <el-option label="水电费" value="utilities" />
-                <el-option label="维修费" value="maintenance" />
-                <el-option label="清洁费" value="cleaning" />
-                <el-option label="其他" value="other" />
+                <el-option
+                  v-for="item in categories"
+                  :key="item.value"
+                  :label="item.label"
+                  :value="item.value"
+                />
               </el-select>
             </el-form-item>
           </el-col>
@@ -102,7 +104,6 @@
           </el-radio-group>
         </el-form-item>
         
-        <!-- 自定义分摊详情 -->
         <div v-if="expenseForm.splitMethod === 'custom'" class="custom-split-section">
           <el-table :data="customSplitDetails" style="width: 100%">
             <el-table-column prop="name" label="成员" />
@@ -144,12 +145,13 @@
           <el-upload
             v-model:file-list="expenseForm.attachments"
             class="upload-demo"
-            action="/api/upload"
+            action="/api/upload/multiple"
             multiple
             :limit="5"
             :on-exceed="handleExceed"
             :on-success="handleUploadSuccess"
             :on-error="handleUploadError"
+            :before-upload="beforeUpload"
           >
             <el-button type="primary">点击上传</el-button>
             <template #tip>
@@ -168,14 +170,17 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { expenseCreateApi } from '@/api/expenseCreate'
 
-// 路由实例
 const router = useRouter()
-
-// 响应式数据
 const expenseFormRef = ref()
 const saving = ref(false)
 const submitting = ref(false)
+const loadingCategories = ref(false)
+const currentDormId = ref<number | null>(null)
+
+const categories = ref<Array<{ value: string; label: string; color?: string }>>([])
+const members = ref<Array<{ key: number; label: string }>>([])
 
 const expenseForm = reactive({
   title: '',
@@ -212,25 +217,8 @@ const expenseFormRules = {
   ]
 }
 
-// 成员数据
-const members = ref([
-  { key: 1, label: '张三 (寝室长)' },
-  { key: 2, label: '李四' },
-  { key: 3, label: '王五' },
-  { key: 4, label: '赵六' },
-  { key: 5, label: '钱七' }
-])
+const customSplitDetails = ref<Array<{ key: number; name: string; amount: string }>>([])
 
-// 自定义分摊详情
-const customSplitDetails = ref([
-  { key: 1, name: '张三 (寝室长)', amount: '' },
-  { key: 2, name: '李四', amount: '' },
-  { key: 3, name: '王五', amount: '' },
-  { key: 4, name: '赵六', amount: '' },
-  { key: 5, name: '钱七', amount: '' }
-])
-
-// 计算属性
 const allocatedAmount = computed(() => {
   return customSplitDetails.value.reduce((sum, item) => {
     const amount = parseFloat(item.amount) || 0
@@ -243,42 +231,112 @@ const remainingAmount = computed(() => {
   return parseFloat((total - allocatedAmount.value).toFixed(2))
 })
 
-// 方法
 const goBack = () => {
   router.back()
 }
 
-const saveDraft = () => {
-  expenseFormRef.value?.validate((valid: boolean) => {
+const loadExpenseCategories = async () => {
+  try {
+    loadingCategories.value = true
+    console.log('📂 加载费用类别列表...')
+    const response = await expenseCreateApi.getExpenseCategories()
+    console.log('✅ 费用类别列表加载成功:', response)
+    categories.value = response.categories || []
+  } catch (error: any) {
+    console.error('❌ 加载费用类别失败:', error)
+    ElMessage.error(error.message || '加载费用类别失败')
+  } finally {
+    loadingCategories.value = false
+  }
+}
+
+const loadDormMembers = async (dormId: number) => {
+  try {
+    console.log(`📂 加载宿舍 ${dormId} 的成员列表...`)
+    const response = await expenseCreateApi.getDormMembers(dormId)
+    console.log('✅ 宿舍成员列表加载成功:', response)
+    
+    const rawMembers = response.rawMembers || response.members || []
+    members.value = rawMembers.map((member: any) => ({
+      key: member.userId,
+      label: member.label || member.nickname || member.username
+    }))
+    
+    updateCustomSplitDetails()
+  } catch (error: any) {
+    console.error('❌ 加载宿舍成员失败:', error)
+    ElMessage.error(error.message || '加载宿舍成员失败')
+  }
+}
+
+const updateCustomSplitDetails = () => {
+  customSplitDetails.value = members.value.map(member => ({
+    key: member.key,
+    name: member.label,
+    amount: ''
+  }))
+  calculateSplit()
+}
+
+const saveDraft = async () => {
+  expenseFormRef.value?.validate(async (valid: boolean) => {
     if (valid) {
       saving.value = true
-      // 模拟保存草稿
-      setTimeout(() => {
+      try {
+        console.log('💾 保存费用草稿...', expenseForm)
+        const response = await expenseCreateApi.saveDraft({
+          title: expenseForm.title,
+          description: expenseForm.description,
+          amount: expenseForm.amount,
+          category: expenseForm.category,
+          date: expenseForm.date,
+          participants: expenseForm.participants,
+          splitMethod: expenseForm.splitMethod
+        })
+        console.log('✅ 草稿保存成功:', response)
         ElMessage.success('草稿保存成功')
+        router.push('/expense/list')
+      } catch (error: any) {
+        console.error('❌ 草稿保存失败:', error)
+        ElMessage.error(error.message || '草稿保存失败')
+      } finally {
         saving.value = false
-      }, 1000)
+      }
     } else {
       ElMessage.warning('请填写完整的费用信息')
     }
   })
 }
 
-const submitExpense = () => {
-  expenseFormRef.value?.validate((valid: boolean) => {
+const submitExpense = async () => {
+  expenseFormRef.value?.validate(async (valid: boolean) => {
     if (valid) {
-      // 检查自定义分摊是否平衡
       if (expenseForm.splitMethod === 'custom' && remainingAmount.value !== 0) {
         ElMessage.warning('自定义分摊金额不平衡，请检查分摊详情')
         return
       }
       
       submitting.value = true
-      // 模拟提交费用
-      setTimeout(() => {
+      try {
+        console.log('📤 提交费用...', expenseForm)
+        const response = await expenseCreateApi.createExpense({
+          title: expenseForm.title,
+          description: expenseForm.description,
+          amount: expenseForm.amount,
+          category: expenseForm.category,
+          date: expenseForm.date,
+          participants: expenseForm.participants,
+          splitMethod: expenseForm.splitMethod
+        })
+        console.log('✅ 费用提交成功:', response)
         ElMessage.success('费用提交成功')
-        submitting.value = false
         router.push('/expense/list')
-      }, 1000)
+      } catch (error: any) {
+        console.error('❌ 费用提交失败:', error)
+        ElMessage.error(error.message || '费用提交失败')
+      } finally {
+        submitting.value = false
+      }
     } else {
       ElMessage.warning('请填写完整的费用信息')
     }
@@ -286,9 +344,7 @@ const submitExpense = () => {
 }
 
 const handleAmountInput = (value: string) => {
-  // 限制只能输入数字和小数点
   expenseForm.amount = value.replace(/[^\d.]/g, '')
-  // 计算分摊
   calculateSplit()
 }
 
@@ -298,7 +354,6 @@ const calculateSplit = () => {
     const count = expenseForm.participants.length || 1
     const equalAmount = (total / count).toFixed(2)
     
-    // 更新自定义分摊详情
     customSplitDetails.value.forEach(item => {
       if (expenseForm.participants.includes(item.key)) {
         item.amount = equalAmount
@@ -310,7 +365,6 @@ const calculateSplit = () => {
 }
 
 const handleCustomSplitInput = (row: any) => {
-  // 限制只能输入数字和小数点
   row.amount = row.amount.replace(/[^\d.]/g, '')
 }
 
@@ -327,31 +381,47 @@ const handleExceed = () => {
 
 const handleUploadSuccess = (response: any, file: any) => {
   ElMessage.success('文件上传成功')
-  console.log('上传成功:', response, file)
+  console.log('📎 上传成功:', response, file)
 }
 
 const handleUploadError = (error: any, file: any) => {
   ElMessage.error('文件上传失败')
-  console.error('上传失败:', error, file)
+  console.error('❌ 上传失败:', error, file)
 }
 
-// 监听参与成员变化
+const beforeUpload = (file: any) => {
+  const isValidType = ['image/jpeg', 'image/png', 'application/pdf'].includes(file.type)
+  const isLt5M = file.size / 1024 / 1024 < 5
+  
+  if (!isValidType) {
+    ElMessage.error('只能上传jpg/png/pdf文件!')
+    return false
+  }
+  if (!isLt5M) {
+    ElMessage.error('文件大小不能超过5MB!')
+    return false
+  }
+  return true
+}
+
 watch(() => expenseForm.participants, () => {
-  calculateSplit()
+  updateCustomSplitDetails()
 })
 
-// 组件挂载时的操作
-onMounted(() => {
+onMounted(async () => {
   console.log('💸 费用创建页面加载完成')
   
-  // 设置默认日期为今天
   const today = new Date()
   expenseForm.date = today.toISOString().split('T')[0]
   
-  // 设置默认参与者为所有成员
-  expenseForm.participants = members.value.map(member => member.key)
+  await loadExpenseCategories()
   
-  // 初始化分摊详情
+  currentDormId.value = 1
+  if (currentDormId.value) {
+    await loadDormMembers(currentDormId.value)
+    expenseForm.participants = members.value.map(m => m.key)
+  }
+  
   calculateSplit()
 })
 </script>

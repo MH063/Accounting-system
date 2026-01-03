@@ -82,6 +82,16 @@ router.get('/', authenticateToken, responseWrapper(async (req, res) => {
     // 添加分页参数（确保是整数）
     const limitInt = parseInt(limit);
     const offsetInt = parseInt(offset);
+
+    // 增加内置角色过滤条件
+    const systemRoleFilter = `
+      AND (user_id IS NULL OR user_id NOT IN (
+        SELECT ur.user_id 
+        FROM user_roles ur
+        JOIN roles r ON ur.role_id = r.id
+        WHERE r.is_system_role = TRUE
+      ))
+    `;
     
     // 主查询SQL
     const activitiesQuery = `
@@ -215,7 +225,7 @@ router.get('/', authenticateToken, responseWrapper(async (req, res) => {
         JOIN dorms d ON ud.dorm_id = d.id
         WHERE 1=1 ${timeCondition} ${dormCondition}
       ) AS activities
-      WHERE 1=1 ${typeCondition}
+      WHERE 1=1 ${typeCondition} ${systemRoleFilter}
       ORDER BY activity_time DESC
       LIMIT ${limitInt} OFFSET ${offsetInt}
     `;
@@ -261,6 +271,7 @@ router.get('/', authenticateToken, responseWrapper(async (req, res) => {
         JOIN dorms d ON ud.dorm_id = d.id
         WHERE 1=1 ${timeCondition} ${dormCondition}
       ) AS all_activities
+      WHERE 1=1 ${typeCondition} ${systemRoleFilter}
     `;
     
     // 执行总数查询

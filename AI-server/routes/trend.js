@@ -54,6 +54,14 @@ router.get('/analysis', authenticateToken, async (req, res) => {
       // 默认查询到当前日期
       whereConditions += whereConditions.includes('WHERE') ? ` AND e.expense_date <= CURRENT_DATE` : ` WHERE e.expense_date <= CURRENT_DATE`;
     }
+
+    // 排除系统内置角色申请的费用
+    whereConditions += ` AND (e.applicant_id IS NULL OR e.applicant_id NOT IN (
+      SELECT ur.user_id 
+      FROM user_roles ur
+      JOIN roles r ON ur.role_id = r.id
+      WHERE r.is_system_role = TRUE
+    ))`;
     
     // 1. 趋势数据（按月）
     const trendSql = `
@@ -97,6 +105,12 @@ router.get('/analysis', authenticateToken, async (req, res) => {
             AND e.expense_date < ${comparisonType === 'yoy' ? 
               `DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')` : 
               `DATE_TRUNC('month', CURRENT_DATE)`}
+            AND (e.applicant_id IS NULL OR e.applicant_id NOT IN (
+              SELECT ur.user_id 
+              FROM user_roles ur
+              JOIN roles r ON ur.role_id = r.id
+              WHERE r.is_system_role = TRUE
+            ))
           GROUP BY TO_CHAR(e.expense_date, 'YYYY-MM')
         )
         SELECT 

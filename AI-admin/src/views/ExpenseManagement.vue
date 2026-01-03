@@ -253,6 +253,15 @@
             <div class="list-actions">
               <el-button 
                 type="text" 
+                :icon="Refresh"
+                @click="handleRefresh"
+                :loading="refreshing"
+                class="refresh-btn"
+              >
+                刷新
+              </el-button>
+              <el-button 
+                type="text" 
                 :icon="viewMode === 'table' ? Grid : List"
                 @click="toggleViewMode(viewMode === 'table' ? 'card' : 'table')"
                 class="view-mode-btn"
@@ -397,11 +406,7 @@
             v-if="filteredExpenses.length > 0 && viewMode === 'card'"
             class="card-view-container"
           >
-            <el-pullrefresh 
-              v-model="refreshing" 
-              @refresh="handleRefresh"
-              class="pullrefresh-wrapper"
-            >
+            <div class="pullrefresh-wrapper">
               <!-- 按月份分组展示 -->
               <div v-for="group in groupedExpenses" :key="group.month" class="month-group">
                 <div class="month-header">
@@ -542,7 +547,7 @@
                   加载中...
                 </el-button>
               </div>
-            </el-pullrefresh>
+            </div>
           </div>
 
           <!-- 空状态 -->
@@ -733,14 +738,14 @@ const expenses = ref<Expense[]>([])
 const totalExpense = computed(() => {
   return expenses.value
     .filter(e => e.status === 'approved')
-    .reduce((sum, e) => sum + e.amount, 0)
+    .reduce((sum, e) => sum + (typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount), 0)
 })
 
 const monthlyExpense = computed(() => {
   const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM
   return expenses.value
-    .filter(e => e.date.startsWith(currentMonth) && e.status === 'approved')
-    .reduce((sum, e) => sum + e.amount, 0)
+    .filter(e => e.date && e.date.startsWith(currentMonth) && e.status === 'approved')
+    .reduce((sum, e) => sum + (typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount), 0)
 })
 
 const pendingCount = computed(() => {
@@ -816,7 +821,7 @@ const groupedExpenses = computed(() => {
         month: 'long' 
       }),
       expenses: expenses.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-      totalAmount: expenses.reduce((sum, e) => sum + e.amount, 0)
+      totalAmount: expenses.reduce((sum, e) => sum + (typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount), 0)
     }))
     .sort((a, b) => b.month.localeCompare(a.month))
 })
@@ -1082,14 +1087,15 @@ const handleDelete = async (expense: Expense) => {
       }
     )
     
-    // 调用删除API
-    // await expenseApi.deleteExpense(expense.id)
-    
-    // 从列表中移除
-    const index = expenses.value.findIndex(e => e.id === expense.id)
-    if (index !== -1) {
-      expenses.value.splice(index, 1)
+    const response = await feeApi.deleteExpense(expense.id)
+    if (response.success) {
+      const index = expenses.value.findIndex(e => e.id === expense.id)
+      if (index !== -1) {
+        expenses.value.splice(index, 1)
+      }
       ElMessage.success('费用删除成功')
+    } else {
+      ElMessage.error(response.message || '删除费用失败')
     }
   } catch (error) {
     if (error !== 'cancel') {
@@ -1117,21 +1123,19 @@ const handleBatchApprove = async () => {
       }
     )
     
-    // 调用批量审核API
-    // await expenseApi.batchApprove(selectedItems.value.map(item => item.id))
-    
-    // 更新本地状态
-    selectedItems.value.forEach(item => {
-      const expense = expenses.value.find(e => e.id === item.id)
-      if (expense) {
-        expense.status = 'approved'
-      }
-    })
-    
-    // 清空选择
-    selectedItems.value = []
-    
-    ElMessage.success('批量审核通过成功')
+    const response = await feeApi.batchApproveExpenses(selectedItems.value.map(item => item.id))
+    if (response.success) {
+      selectedItems.value.forEach(item => {
+        const expense = expenses.value.find(e => e.id === item.id)
+        if (expense) {
+          expense.status = 'approved'
+        }
+      })
+      selectedItems.value = []
+      ElMessage.success('批量审核通过成功')
+    } else {
+      ElMessage.error(response.message || '批量审核通过失败')
+    }
   } catch (error) {
     if (error !== 'cancel') {
       console.error('批量审核通过失败:', error)
@@ -1158,21 +1162,19 @@ const handleBatchReject = async () => {
       }
     )
     
-    // 调用批量拒绝API
-    // await expenseApi.batchReject(selectedItems.value.map(item => item.id))
-    
-    // 更新本地状态
-    selectedItems.value.forEach(item => {
-      const expense = expenses.value.find(e => e.id === item.id)
-      if (expense) {
-        expense.status = 'rejected'
-      }
-    })
-    
-    // 清空选择
-    selectedItems.value = []
-    
-    ElMessage.success('批量拒绝成功')
+    const response = await feeApi.batchRejectExpenses(selectedItems.value.map(item => item.id), '批量拒绝')
+    if (response.success) {
+      selectedItems.value.forEach(item => {
+        const expense = expenses.value.find(e => e.id === item.id)
+        if (expense) {
+          expense.status = 'rejected'
+        }
+      })
+      selectedItems.value = []
+      ElMessage.success('批量拒绝成功')
+    } else {
+      ElMessage.error(response.message || '批量拒绝失败')
+    }
   } catch (error) {
     if (error !== 'cancel') {
       console.error('批量拒绝失败:', error)
@@ -1199,21 +1201,19 @@ const handleBatchDelete = async () => {
       }
     )
     
-    // 调用批量删除API
-    // await expenseApi.batchDelete(selectedItems.value.map(item => item.id))
-    
-    // 从列表中移除
-    selectedItems.value.forEach(item => {
-      const index = expenses.value.findIndex(e => e.id === item.id)
-      if (index !== -1) {
-        expenses.value.splice(index, 1)
-      }
-    })
-    
-    // 清空选择
-    selectedItems.value = []
-    
-    ElMessage.success('批量删除成功')
+    const response = await feeApi.batchDeleteExpenses(selectedItems.value.map(item => item.id))
+    if (response.success) {
+      selectedItems.value.forEach(item => {
+        const index = expenses.value.findIndex(e => e.id === item.id)
+        if (index !== -1) {
+          expenses.value.splice(index, 1)
+        }
+      })
+      selectedItems.value = []
+      ElMessage.success('批量删除成功')
+    } else {
+      ElMessage.error(response.message || '批量删除失败')
+    }
   } catch (error) {
     if (error !== 'cancel') {
       console.error('批量删除失败:', error)
@@ -1236,13 +1236,13 @@ const handleClearAll = async () => {
       }
     )
     
-    // 调用清空API
-    // await expenseApi.clearAll()
-    
-    // 清空本地列表
-    expenses.value = []
-    
-    ElMessage.success('已清空所有费用记录')
+    const response = await feeApi.clearAllExpenses()
+    if (response.success) {
+      expenses.value = []
+      ElMessage.success('已清空所有费用记录')
+    } else {
+      ElMessage.error(response.message || '清空所有记录失败')
+    }
   } catch (error) {
     if (error !== 'cancel') {
       console.error('清空所有记录失败:', error)
@@ -1316,10 +1316,7 @@ const handleCurrentChange = (val: number) => {
 const handleRefresh = async () => {
   refreshing.value = true
   try {
-    // 模拟刷新延迟
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    // 实际应该重新加载数据
-    // await loadExpenses()
+    await loadExpenses()
     ElMessage.success('刷新成功')
   } catch (error) {
     console.error('刷新失败:', error)
@@ -1347,6 +1344,30 @@ const handleLoadMore = async () => {
   }
 }
 
+// 加载费用数据
+const loadExpenses = async () => {
+  loading.value = true
+  try {
+      const response = await feeApi.getExpenseList({ page: 1, pageSize: 100 })
+      
+      // 根据规则 5：处理双层嵌套结构
+      if (response && response.data && Array.isArray(response.data)) {
+        expenses.value = response.data
+      } else if (response && response.items && Array.isArray(response.items)) {
+        expenses.value = response.items
+      } else if (response && Array.isArray(response)) {
+        expenses.value = response
+      } else {
+        expenses.value = []
+      }
+    } catch (error) {
+    console.error('获取费用数据失败:', error)
+    ElMessage.error('获取费用数据失败')
+  } finally {
+    loading.value = false
+  }
+}
+
 // 清除选择
 const clearSelection = () => {
   selectedItems.value = []
@@ -1355,7 +1376,7 @@ const clearSelection = () => {
 // 组件挂载时加载数据
 onMounted(() => {
   console.log('💰 费用管理页面加载完成')
-  // loadExpenses()
+  loadExpenses()
 })
 </script>
 
@@ -1474,26 +1495,32 @@ onMounted(() => {
 .operations-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 16px;
   align-items: center;
+  width: 100%;
 }
 
 .quick-filters {
   display: flex;
-  flex-wrap: wrap;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .search-input {
-  width: 200px;
+  width: 280px;
+  min-width: 220px;
+}
+
+.operations-row :deep(.el-select) {
+  width: 150px;
 }
 
 .reset-button {
-  margin-left: auto;
+  margin-left: 0;
 }
 
 .more-actions-btn {
-  margin-left: 8px;
+  margin-left: 0;
 }
 
 .expense-list-section {
@@ -1806,13 +1833,23 @@ onMounted(() => {
   .operations-row {
     flex-direction: column;
     align-items: stretch;
+    gap: 12px;
   }
   
-  .search-input {
+  .quick-filters {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .search-input, 
+  .operations-row :deep(.el-select) {
+    width: 100% !important;
+    min-width: unset;
+  }
+  
+  .reset-button,
+  .more-actions-btn {
     width: 100%;
-  }
-  
-  .reset-button {
     margin-left: 0;
   }
   

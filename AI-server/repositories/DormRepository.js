@@ -1,5 +1,6 @@
 const BaseRepository = require('./BaseRepository');
 const { query, pool } = require('../config/database');
+const logger = require('../config/logger');
 
 class DormRepository extends BaseRepository {
   constructor() {
@@ -16,9 +17,9 @@ class DormRepository extends BaseRepository {
     const { page = 1, limit = 10 } = pagination;
     const offset = (page - 1) * limit;
     
-    // 构建查询条件
-    let whereClause = 'WHERE d.status = $1';
-    let params = ['active'];
+    // 构建查询条件 (排除非活跃状态的寝室，物理删除的记录已不在数据库中)
+    let whereClause = 'WHERE d.status != $1';
+    let params = ['inactive'];
     let paramIndex = 2;
     
     // 添加搜索条件
@@ -185,13 +186,16 @@ class DormRepository extends BaseRepository {
   /**
    * 根据宿舍ID获取宿舍成员列表
    * @param {number} dormId - 宿舍ID
+   * @param {boolean} activeOnly - 是否只返回活跃成员，默认 true
    * @returns {Promise<Array>} 宿舍成员列表
    */
-  async getDormMembers(dormId) {
+  async getDormMembers(dormId, activeOnly = true) {
     try {
+      let statusCondition = activeOnly ? "AND ud.status = 'active'" : "";
       const queryText = `
         SELECT 
-          u.id,
+          ud.id as user_dorm_id,
+          u.id as user_id,
           u.username,
           u.nickname,
           u.real_name,
@@ -208,11 +212,30 @@ class DormRepository extends BaseRepository {
           ud.last_payment_date
         FROM user_dorms ud
         JOIN users u ON ud.user_id = u.id
-        WHERE ud.dorm_id = $1 AND ud.status = 'active'
+        WHERE ud.dorm_id = $1 ${statusCondition}
         ORDER BY ud.joined_at ASC
       `;
       const result = await query(queryText, [dormId]);
       return result.rows;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * 获取宿舍当前入住人数（统计 active 状态的成员）
+   * @param {number} dormId - 宿舍ID
+   * @returns {Promise<number>} 入住人数
+   */
+  async getDormCurrentOccupancy(dormId) {
+    try {
+      const queryText = `
+        SELECT COUNT(*) as count
+        FROM user_dorms ud
+        WHERE ud.dorm_id = $1 AND ud.status = 'active'
+      `;
+      const result = await query(queryText, [dormId]);
+      return parseInt(result.rows[0]?.count || 0);
     } catch (error) {
       throw error;
     }
@@ -249,7 +272,7 @@ class DormRepository extends BaseRepository {
    */
   async validateDormExists(dormId) {
     try {
-      const queryText = 'SELECT id, status, admin_id FROM dorms WHERE id = $1 AND status != \'deleted\'';
+      const queryText = 'SELECT id, status, admin_id FROM dorms WHERE id = CAST($1 AS INTEGER)';
       const result = await query(queryText, [dormId]);
       return result.rows[0] || null;
     } catch (error) {
@@ -274,15 +297,20 @@ class DormRepository extends BaseRepository {
   }
 
   /**
-   * 获取宿舍当前入住人数
-   * @param {number} dormId - 宿舍ID
-   * @returns {Promise<number>} 当前入住人数
+   * 根据位置信息查找宿舍
+   * @param {Object} info - 包含 building, floor, roomNumber
+   * @returns {Promise<Object|null>} 宿舍信息或null
    */
-  async getDormCurrentOccupancy(dormId) {
+  async findDormByInfo(info) {
     try {
-      const queryText = 'SELECT current_occupancy FROM dorms WHERE id = $1';
-      const result = await query(queryText, [dormId]);
-      return result.rows[0] ? parseInt(result.rows[0].current_occupancy) : 0;
+      const { building, floor, roomNumber } = info;
+      const queryText = `
+        SELECT * FROM dorms 
+        WHERE building = $1 AND floor = $2 AND room_number = $3 
+        AND status != 'inactive'
+      `;
+      const result = await query(queryText, [building, floor, roomNumber]);
+      return result.rows[0] || null;
     } catch (error) {
       throw error;
     }
@@ -300,16 +328,14 @@ class DormRepository extends BaseRepository {
       // 检查当前用户是否有权限更新状态
       const queryText = `
         SELECT ud.id, ud.user_id, ud.dorm_id, ud.status as current_status,
-               d.admin_id, d.dorm_name,
+               d.dorm_name,
                u.username, u.nickname
         FROM user_dorms ud
         JOIN dorms d ON ud.dorm_id = d.id
         JOIN users u ON ud.user_id = u.id
         WHERE ud.id = $1
           AND (
-              -- 管理员权限
-              d.admin_id = $2 OR
-              -- 系统管理员权限
+              -- 系统管理员或管理员权限
               EXISTS (SELECT 1 FROM user_roles ur 
                       JOIN roles r ON ur.role_id = r.id 
                       WHERE ur.user_id = $2 
@@ -476,6 +502,12 @@ class DormRepository extends BaseRepository {
       return updatedResult.rows[0];
     } catch (error) {
       await client.query('ROLLBACK');
+      logger.error('[DormRepository] 更新用户宿舍状态失败，事务已回滚', { 
+        error: error.message,
+        stack: error.stack,
+        userDormId, 
+        newStatus 
+      });
       throw error;
     } finally {
       client.release();
@@ -514,21 +546,54 @@ class DormRepository extends BaseRepository {
    */
   async validateOperatorPermission(userDormId, operatorId) {
     try {
-      // 检查当前用户是否有权限更新角色
-      const queryText = `
-        SELECT d.admin_id, ud.user_id
-        FROM dorms d
-        JOIN user_dorms ud ON d.id = ud.dorm_id
+      // 获取成员记录和宿舍信息
+      const memberQuery = `
+        SELECT ud.user_id, ud.dorm_id
+        FROM user_dorms ud
+        JOIN dorms d ON ud.dorm_id = d.id
         WHERE ud.id = $1
-          AND (d.admin_id = $2 OR 
-               EXISTS (SELECT 1 FROM user_roles ur 
-                       JOIN roles r ON ur.role_id = r.id 
-                       WHERE ur.user_id = $2 
-                         AND r.role_name IN ('system_admin', 'admin')))
       `;
-      const result = await query(queryText, [userDormId, operatorId]);
+      const memberResult = await query(memberQuery, [userDormId]);
+      
+      if (memberResult.rows.length === 0) {
+        logger.info('[DormRepository] 成员记录不存在', { userDormId });
+        return false;
+      }
+      
+      const member = memberResult.rows[0];
+      
+      // 检查权限：成员自己、或系统管理员/管理员
+      const permissionQuery = `
+        SELECT ud.user_id
+        FROM user_dorms ud
+        WHERE ud.id = $1
+          AND (
+            -- 成员自己可以移除自己
+            ud.user_id = $2 OR
+            -- 系统管理员或管理员
+            EXISTS (SELECT 1 FROM user_roles ur 
+                    JOIN roles r ON ur.role_id = r.id 
+                    WHERE ur.user_id = $2 
+                      AND r.role_name IN ('system_admin', 'admin'))
+          )
+      `;
+      
+      logger.info('[DormRepository] 权限验证查询', { 
+        userDormId, 
+        operatorId,
+        memberUserId: member.user_id
+      });
+      
+      const result = await query(permissionQuery, [userDormId, operatorId]);
+      logger.info('[DormRepository] 权限验证结果', { 
+        hasPermission: result.rows.length > 0, 
+        rows: result.rows,
+        memberUserId: member.user_id,
+        operatorId: operatorId
+      });
       return result.rows.length > 0;
     } catch (error) {
+      logger.error('[DormRepository] 权限验证异常', { error: error.message });
       throw error;
     }
   }
@@ -547,103 +612,196 @@ class DormRepository extends BaseRepository {
       
       // 1. 获取当前记录信息
       const getCurrentRecordQuery = `
-        SELECT 
-          ud.*, 
-          u.username, u.nickname, u.email,
-          d.dorm_name, d.admin_id as dorm_admin_id
+        SELECT ud.*, u.username, u.nickname, d.dorm_name
         FROM user_dorms ud
         JOIN users u ON ud.user_id = u.id
         JOIN dorms d ON ud.dorm_id = d.id
-        WHERE ud.id = $1 AND ud.status = 'active'
+        WHERE ud.id = $1
         FOR UPDATE
       `;
       const currentResult = await client.query(getCurrentRecordQuery, [userDormId]);
       
       if (currentResult.rows.length === 0) {
-        throw new Error('用户宿舍关系记录不存在或已失效');
+        throw new Error('用户宿舍关系记录不存在');
       }
       
-      const currentRecord = currentResult.rows[0];
-      
-      // 2. 更新成员角色
-      let updateFields = "member_role = $1";
+      // 2. 更新角色
+      let updateFields = "member_role = $1, updated_at = NOW()";
       const updateValues = [newRole];
       
-      // 3. 根据角色更新权限（如果需要）
+      // 3. 如果需要同时更新权限，根据角色设置默认权限
       if (updatePermissions) {
-        updateFields += `, 
-          can_approve_expenses = CASE 
-            WHEN $2 = 'admin' THEN TRUE 
-            ELSE FALSE 
-          END,
-          can_invite_members = CASE 
-            WHEN $2 IN ('admin', 'member') THEN TRUE 
-            ELSE FALSE 
-          END,
-          can_manage_facilities = CASE 
-            WHEN $2 = 'admin' THEN TRUE 
-            ELSE FALSE 
-          END`;
-        updateValues.push(newRole);
+        if (newRole === 'admin') {
+          updateFields += ", can_approve_expenses = TRUE, can_invite_members = TRUE, can_manage_facilities = TRUE";
+        } else if (newRole === 'member') {
+          updateFields += ", can_approve_expenses = FALSE, can_invite_members = FALSE, can_manage_facilities = FALSE";
+        }
       }
       
       updateValues.push(userDormId);
       
       const updateQuery = `
         UPDATE user_dorms 
-        SET 
-          ${updateFields},
-          updated_at = NOW()
+        SET ${updateFields}
         WHERE id = $${updateValues.length}
         RETURNING *
       `;
       
       const updateResult = await client.query(updateQuery, updateValues);
       
-      // 4. 处理宿舍管理员变更（如果需要）
-      if (newRole === 'admin') {
-        // 如果新角色是'admin'，则更新宿舍的管理员
-        const updateDormAdminQuery = `
-          UPDATE dorms 
-          SET admin_id = $1
-          WHERE id = $2 
-            AND (admin_id IS NULL OR admin_id != $1)
-        `;
-        await client.query(updateDormAdminQuery, [currentRecord.user_id, currentRecord.dorm_id]);
-      } else if (currentRecord.member_role === 'admin' && currentRecord.dorm_admin_id === currentRecord.user_id) {
-        // 如果从'admin'降级为其他角色，并且该用户是宿舍管理员，需要清除宿舍管理员
-        const clearDormAdminQuery = `
-          UPDATE dorms 
-          SET admin_id = NULL 
-          WHERE id = $1 AND admin_id = $2
-        `;
-        await client.query(clearDormAdminQuery, [currentRecord.dorm_id, currentRecord.user_id]);
-      }
-      
-      // 5. 获取更新后的详细信息
-      const getUpdatedRecordQuery = `
-        SELECT 
-          ud.*, 
-          u.username, u.nickname, u.email,
-          d.dorm_name, d.admin_id as dorm_admin_id
-        FROM user_dorms ud
-        JOIN users u ON ud.user_id = u.id
-        JOIN dorms d ON ud.dorm_id = d.id
-        WHERE ud.id = $1
-      `;
-      const updatedResult = await client.query(getUpdatedRecordQuery, [userDormId]);
-      
       await client.query('COMMIT');
-      
-      return updatedResult.rows[0];
+      return updateResult.rows[0];
     } catch (error) {
       await client.query('ROLLBACK');
+      logger.error('[DormRepository] 更新用户宿舍角色失败，事务已回滚', { 
+        error: error.message,
+        stack: error.stack,
+        userDormId, 
+        newRole 
+      });
       throw error;
     } finally {
       client.release();
     }
   }
 
+  /**
+   * 获取所有楼栋列表
+   * @returns {Promise<Array<string>>} 楼栋名称列表
+   */
+  async getBuildings() {
+    try {
+      const queryText = 'SELECT DISTINCT building FROM dorms WHERE building IS NOT NULL AND status NOT IN (\'deleted\', \'inactive\') ORDER BY building';
+      const result = await query(queryText);
+      return result.rows.map(row => row.building);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * 获取宿舍统计信息
+   * @returns {Promise<Object>} 统计信息
+   */
+  async getDormStats() {
+    try {
+      const queryText = `
+        SELECT 
+          COUNT(*) as total,
+          COUNT(CASE WHEN status IN ('active', 'normal') THEN 1 END) as normal_count,
+          COUNT(CASE WHEN status = 'maintenance' THEN 1 END) as maintenance,
+          COUNT(CASE WHEN current_occupancy >= capacity AND capacity > 0 THEN 1 END) as full
+        FROM dorms
+        WHERE status != 'inactive'
+      `;
+      const result = await query(queryText);
+      const row = result.rows[0];
+      
+      console.log('📊 宿舍统计原始数据:', row);
+      
+      // PostgreSQL COUNT 返回的是字符串，需要转换为数字
+      return {
+        total: parseInt(row.total || 0),
+        normal: parseInt(row.normal_count || 0),
+        maintenance: parseInt(row.maintenance || 0),
+        full: parseInt(row.full || 0)
+      };
+    } catch (error) {
+      console.error('❌ 获取宿舍统计失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 批量物理删除宿舍及其关联数据
+   * @param {Array<number>} ids - 宿舍ID列表
+   * @param {number} userId - 执行操作的用户ID
+   * @returns {Promise<Object>} 操作结果
+   */
+  async batchDeleteDorms(ids, userId) {
+    try {
+      // 获取数据库连接
+      const client = await pool.connect();
+      
+      try {
+        // 开始事务
+        await client.query('BEGIN');
+
+        // 1. 检查要删除的宿舍是否存在
+        const dormsCheckQuery = 'SELECT id, dorm_name FROM dorms WHERE id = ANY($1)';
+        const dormsCheckResult = await client.query(dormsCheckQuery, [ids]);
+        const existingDorms = dormsCheckResult.rows;
+
+        if (existingDorms.length === 0) {
+          await client.query('ROLLBACK');
+          return { success: false, message: '未找到指定的宿舍' };
+        }
+
+        const foundIds = existingDorms.map(d => d.id);
+        logger.info('[DormRepository] 准备批量物理删除宿舍', { ids: foundIds });
+
+        // 2. 处理关联数据 (手动处理 RESTRICT 约束的数据)
+        // 删除相关的费用记录
+        const deleteExpensesQuery = 'DELETE FROM expenses WHERE dorm_id = ANY($1)';
+        await client.query(deleteExpensesQuery, [foundIds]);
+
+        // 其他 CASCADE 约束的表由数据库自动处理
+
+        // 3. 执行物理删除
+        const deleteQuery = 'DELETE FROM dorms WHERE id = ANY($1) RETURNING id';
+        const deleteResult = await client.query(deleteQuery, [foundIds]);
+        const deletedCount = deleteResult.rowCount;
+
+        // 4. 记录审计日志
+        for (const dorm of existingDorms) {
+          await this.logAudit(client, {
+            tableName: 'dorms',
+            operation: 'DELETE',
+            recordId: dorm.id,
+            oldValues: dorm,
+            newValues: null,
+            userId: userId
+          });
+        }
+
+        // 5. 提交事务
+        await client.query('COMMIT');
+
+        return {
+          success: true,
+          deletedCount: deletedCount,
+          message: `成功永久删除 ${deletedCount} 个宿舍及其关联数据`
+        };
+
+      } catch (error) {
+        // 回滚事务
+        await client.query('ROLLBACK');
+        logger.error('[DormRepository] 批量删除宿舍事务失败', { error: error.message, ids });
+        throw error;
+      } finally {
+        // 释放客户端连接
+        client.release();
+      }
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * 批量更新宿舍状态
+   * @param {Array<number>} ids - 宿舍ID列表
+   * @param {string} status - 新状态
+   * @returns {Promise<number>} 受影响的行数
+   */
+  async batchUpdateDormStatus(ids, status) {
+    try {
+      const queryText = 'UPDATE dorms SET status = $1, updated_at = NOW() WHERE id = ANY($2)';
+      const result = await query(queryText, [status, ids]);
+      return result.rowCount;
+    } catch (error) {
+      throw error;
+    }
+  }
   /**
    * 记录审计日志
    * @param {Object} auditData - 审计日志数据
@@ -982,7 +1140,7 @@ class DormRepository extends BaseRepository {
         dormData.address,
         dormData.capacity,
         dormData.description || null,
-        dormData.status || 'active',
+        dormData.status || 'normal',
         dormData.type || 'standard',
         dormData.area || null,
         dormData.genderLimit || null,
@@ -1021,76 +1179,75 @@ class DormRepository extends BaseRepository {
       try {
         // 开始事务
         await client.query('BEGIN');
-        // 1. 检查宿舍是否存在且未被删除
+
+        // 1. 检查宿舍是否存在
         const dormCheckQuery = `
-          SELECT id, dorm_name, current_occupancy, status 
+          SELECT id, dorm_name, status 
           FROM dorms 
-          WHERE id = $1 AND status != 'deleted'
+          WHERE id = $1
         `;
         const dormCheckResult = await client.query(dormCheckQuery, [dormId]);
         
         if (dormCheckResult.rowCount === 0) {
           await client.query('ROLLBACK');
-          return { success: false, message: '宿舍不存在或已被删除' };
+          return { success: false, message: '宿舍不存在' };
         }
         
         const dorm = dormCheckResult.rows[0];
+
+        // 记录删除前的状态用于审计
+        logger.info('[DormRepository] 准备物理删除宿舍', { dormId, dormName: dorm.dorm_name });
+
+        // 2. 处理关联数据 (除了已有的 CASCADE 约束外，手动处理 RESTRICT 约束的数据)
+        // 主要是 expenses 表，它有 ON DELETE RESTRICT
         
-        // 2. 检查宿舍是否为空
-        if (dorm.current_occupancy > 0) {
-          await client.query('ROLLBACK');
-          return { success: false, message: '宿舍仍有成员入住，无法删除' };
-        }
+        // 删除相关的费用分摊记录 (虽然 expense_splits 对 expenses 是 CASCADE，但为了保险手动处理或直接删除 expenses)
+        // 注意：因为 expense_splits 对 dorm_id 也是 CASCADE，所以删除 dorm 会自动删除 splits。
+        // 但 expenses 对 dorm_id 是 RESTRICT，所以必须先删除 expenses。
         
-        // 3. 检查是否有未完成的费用记录
-        const expenseCheckQuery = `
-          SELECT COUNT(*) as count 
-          FROM expenses 
-          WHERE dorm_id = $1 AND status NOT IN ('cancelled', 'paid')
-        `;
-        const expenseCheckResult = await client.query(expenseCheckQuery, [dormId]);
-        const pendingExpenses = parseInt(expenseCheckResult.rows[0].count);
-        
-        if (pendingExpenses > 0) {
-          await client.query('ROLLBACK');
-          return { success: false, message: `宿舍有关联的未完成费用记录(${pendingExpenses}条)，无法删除` };
-        }
-        
-        // 4. 检查是否有未完成的报修申请
-        const maintenanceCheckQuery = `
-          SELECT COUNT(*) as count 
-          FROM maintenance_requests 
-          WHERE dorm_id = $1 AND status NOT IN ('completed', 'cancelled')
-        `;
-        const maintenanceCheckResult = await client.query(maintenanceCheckQuery, [dormId]);
-        const pendingRequests = parseInt(maintenanceCheckResult.rows[0].count);
-        
-        if (pendingRequests > 0) {
-          await client.query('ROLLBACK');
-          return { success: false, message: `宿舍有关联的未完成报修申请(${pendingRequests}条)，无法删除` };
-        }
-        
-        // 5. 执行软删除（更新状态为inactive）
+        // 删除该宿舍的所有费用记录
+        const deleteExpensesQuery = 'DELETE FROM expenses WHERE dorm_id = $1';
+        await client.query(deleteExpensesQuery, [dormId]);
+
+        // 其他有 ON DELETE CASCADE 约束的表（user_dorms, maintenance_requests, notifications, expense_splits）
+        // 将在删除 dorms 记录时由数据库自动处理。
+
+        // 3. 执行物理删除
         const deleteQuery = `
-          UPDATE dorms 
-          SET status = 'inactive', updated_at = NOW() 
+          DELETE FROM dorms 
           WHERE id = $1 
           RETURNING *
         `;
         const deleteResult = await client.query(deleteQuery, [dormId]);
         
-        // 6. 提交事务
+        if (deleteResult.rowCount === 0) {
+          await client.query('ROLLBACK');
+          return { success: false, message: '物理删除失败' };
+        }
+
+        // 4. 记录审计日志 (规则 7)
+        await this.logAudit(client, {
+          tableName: 'dorms',
+          operation: 'DELETE',
+          recordId: dormId,
+          oldValues: dorm,
+          newValues: null,
+          userId: userId
+        });
+        
+        // 5. 提交事务
         await client.query('COMMIT');
         
         return { 
           success: true, 
           data: deleteResult.rows[0],
-          message: '宿舍删除成功' 
+          message: '宿舍及相关数据已永久删除' 
         };
         
       } catch (error) {
         // 回滚事务
         await client.query('ROLLBACK');
+        logger.error('[DormRepository] 删除宿舍事务失败', { error: error.message, dormId });
         throw error;
       } finally {
         // 释放客户端连接
@@ -1099,6 +1256,24 @@ class DormRepository extends BaseRepository {
     } catch (error) {
       throw error;
     }
+  }
+
+  /**
+   * 记录审计日志内部方法
+   */
+  async logAudit(client, { tableName, operation, recordId, oldValues, newValues, userId }) {
+    const queryText = `
+      INSERT INTO audit_logs (table_name, operation, record_id, old_values, new_values, user_id, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, NOW())
+    `;
+    await client.query(queryText, [
+      tableName,
+      operation,
+      recordId,
+      oldValues ? JSON.stringify(oldValues) : null,
+      newValues ? JSON.stringify(newValues) : null,
+      userId
+    ]);
   }
 
   /**
@@ -1145,18 +1320,53 @@ class DormRepository extends BaseRepository {
   }
 
   /**
+   * 同步宿舍入住人数
+   * 根据 user_dorms 表中 status='active' 的记录数更新 dorms.current_occupancy
+   * @param {number} dormId - 宿舍ID
+   * @returns {Promise<void>}
+   */
+  async syncOccupancy(dormId) {
+    try {
+      const syncQuery = `
+        UPDATE dorms
+        SET current_occupancy = (
+            SELECT COUNT(*) 
+            FROM user_dorms ud
+            WHERE ud.dorm_id = $1 AND ud.status = 'active'
+        ),
+        updated_at = NOW()
+        WHERE id = $1
+      `;
+      await query(syncQuery, [dormId]);
+      console.log(`[DormRepository] 已同步宿舍 ${dormId} 的入住人数`);
+    } catch (error) {
+      console.error(`[DormRepository] 同步入住人数失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * 物理删除成员
    * @param {number} userDormId - user_dorms表的ID
    * @returns {Promise<Object>} 删除的记录
    */
   async physicalDeleteMember(userDormId) {
     try {
+      const getDormIdQuery = `SELECT dorm_id FROM user_dorms WHERE id = $1`;
+      const dormResult = await query(getDormIdQuery, [userDormId]);
+      const dormId = dormResult.rows[0]?.dorm_id;
+
       const queryText = `
         DELETE FROM user_dorms 
         WHERE id = $1
         RETURNING *
       `;
       const result = await query(queryText, [userDormId]);
+      
+      if (result.rows.length > 0 && dormId) {
+        await this.syncOccupancy(dormId);
+      }
+      
       return result.rows[0];
     } catch (error) {
       throw error;
@@ -1171,6 +1381,10 @@ class DormRepository extends BaseRepository {
    */
   async logicalDeleteMember(userDormId, handleUnpaidExpenses) {
     try {
+      const getDormIdQuery = `SELECT dorm_id FROM user_dorms WHERE id = $1`;
+      const dormResult = await query(getDormIdQuery, [userDormId]);
+      const dormId = dormResult.rows[0]?.dorm_id;
+
       const queryText = `
         UPDATE user_dorms 
         SET 
@@ -1187,6 +1401,11 @@ class DormRepository extends BaseRepository {
         RETURNING *
       `;
       const result = await query(queryText, [userDormId]);
+
+      if (result.rows.length > 0 && dormId) {
+        await this.syncOccupancy(dormId);
+      }
+
       return result.rows[0];
     } catch (error) {
       throw error;
@@ -1452,32 +1671,38 @@ class DormRepository extends BaseRepository {
         `;
         const dismissResult = await client.query(updateDismissQuery, [userId, dormId]);
         
-        // 更新所有成员状态为inactive
-        const updateMembersQuery = `
-          UPDATE user_dorms 
-          SET 
-            status = 'inactive',
-            move_out_date = NOW(),
-            updated_at = NOW()
-          WHERE dorm_id = $1 AND status = 'active'
-        `;
-        await client.query(updateMembersQuery, [dormId]);
+        // 物理删除相关的费用记录 (expenses 对 dorm_id 是 RESTRICT)
+        const deleteExpensesQuery = 'DELETE FROM expenses WHERE dorm_id = $1';
+        await client.query(deleteExpensesQuery, [dormId]);
         
-        // 更新宿舍状态为inactive
-        const updateDormStatusQuery = `
-          UPDATE dorms 
-          SET 
-            status = 'inactive',
-            updated_at = NOW()
-          WHERE id = $1
+        // 执行物理删除 (其他关联表如 user_dorms, expense_splits 有 ON DELETE CASCADE)
+        const deleteDormQuery = `
+          DELETE FROM dorms 
+          WHERE id = $1 
+          RETURNING *
         `;
-        await client.query(updateDormStatusQuery, [dormId]);
+        const deleteDormResult = await client.query(deleteDormQuery, [dormId]);
+        
+        if (deleteDormResult.rowCount === 0) {
+          await client.query('ROLLBACK');
+          throw new Error('物理删除宿舍失败');
+        }
+
+        // 记录审计日志
+        await this.logAudit(client, {
+          tableName: 'dorms',
+          operation: 'DELETE',
+          recordId: dormId,
+          oldValues: dormResult.rows[0],
+          newValues: null,
+          userId: userId
+        });
         
         await client.query('COMMIT');
         
         return {
           success: true,
-          dorm: dormResult.rows[0],
+          dorm: deleteDormResult.rows[0],
           dismissal: dismissResult.rows[0]
         };
       } catch (error) {
@@ -1612,6 +1837,398 @@ class DormRepository extends BaseRepository {
       `;
       const result = await query(queryText, [userId]);
       return result.rows[0] || null;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * 添加宿舍成员
+   * @param {number} dormId - 宿舍ID
+   * @param {number} userId - 用户ID
+   * @param {Object} memberData - 成员数据
+   * @returns {Promise<Object>} 添加的成员记录
+   */
+  async addDormMember(dormId, userId, memberData) {
+    try {
+      const { bedNumber, roomNumber, moveInDate, memberRole = 'member' } = memberData;
+
+      const checkQuery = `
+        SELECT id, status FROM user_dorms 
+        WHERE user_id = $1 AND dorm_id = $2
+      `;
+      const existingRecord = await query(checkQuery, [userId, dormId]);
+
+      let queryText;
+      let values;
+
+      if (existingRecord.rows.length > 0) {
+        const existingId = existingRecord.rows[0].id;
+        const existingStatus = existingRecord.rows[0].status;
+        
+        if (existingStatus === 'active') {
+          queryText = `
+            UPDATE user_dorms SET
+              member_role = $1,
+              bed_number = $2,
+              room_number = $3,
+              move_in_date = $4,
+              updated_at = NOW()
+            WHERE id = $5
+            RETURNING *
+          `;
+          values = [
+            memberRole,
+            bedNumber === '' ? null : bedNumber,
+            roomNumber === '' ? null : roomNumber,
+            moveInDate ? new Date(moveInDate) : new Date(),
+            existingId
+          ];
+        } else if (existingStatus === 'inactive') {
+          queryText = `
+            UPDATE user_dorms SET
+              member_role = $1,
+              bed_number = $2,
+              room_number = $3,
+              move_in_date = $4,
+              status = 'active',
+              updated_at = NOW()
+            WHERE id = $5
+            RETURNING *
+          `;
+          values = [
+            memberRole,
+            bedNumber === '' ? null : bedNumber,
+            roomNumber === '' ? null : roomNumber,
+            moveInDate ? new Date(moveInDate) : new Date(),
+            existingId
+          ];
+        } else {
+          queryText = `
+            UPDATE user_dorms SET
+              member_role = $1,
+              bed_number = $2,
+              room_number = $3,
+              move_in_date = $4,
+              updated_at = NOW()
+            WHERE id = $5
+            RETURNING *
+          `;
+          values = [
+            memberRole,
+            bedNumber === '' ? null : bedNumber,
+            roomNumber === '' ? null : roomNumber,
+            moveInDate ? new Date(moveInDate) : new Date(),
+            existingId
+          ];
+        }
+      } else {
+        queryText = `
+          INSERT INTO user_dorms (
+            user_id, dorm_id, member_role, status, bed_number, room_number, move_in_date, joined_at
+          ) VALUES (
+            $1, $2, $3, 'active', $4, $5, $6, NOW()
+          )
+          RETURNING *
+        `;
+        values = [
+          userId,
+          dormId,
+          memberRole,
+          bedNumber === '' ? null : bedNumber,
+          roomNumber === '' ? null : roomNumber,
+          moveInDate ? new Date(moveInDate) : new Date()
+        ];
+      }
+
+      const result = await query(queryText, values);
+
+      if (result.rows.length > 0) {
+        await this.syncOccupancy(dormId);
+      }
+
+      return result.rows[0];
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * 获取可添加到宿舍的用户列表
+   * @param {number} dormId - 宿舍ID
+   * @param {Object} options - 查询选项
+   * @returns {Promise<Array>} 可添加的用户列表
+   */
+  async getAvailableUsers(dormId, options = {}) {
+    try {
+      const { search, limit = 50, offset = 0 } = options;
+
+      let queryText = `
+        SELECT DISTINCT
+          u.id,
+          u.username,
+          u.nickname,
+          u.real_name,
+          u.phone,
+          u.avatar_url,
+          u.status
+        FROM users u
+        WHERE u.status = 'active'
+          AND u.id NOT IN (
+            SELECT user_id FROM user_dorms WHERE status = 'active'
+          )
+          -- 排除系统内置角色用户（系统管理员、管理员等）
+          AND u.id NOT IN (
+            SELECT ur.user_id 
+            FROM user_roles ur
+            JOIN roles r ON ur.role_id = r.id
+            WHERE r.is_system_role = TRUE
+          )
+      `;
+
+      const params = [];
+      let paramIndex = 1;
+
+      if (search) {
+        queryText += ` AND (
+          u.username ILIKE CAST($${paramIndex} AS TEXT) OR
+          u.nickname ILIKE CAST($${paramIndex} AS TEXT) OR
+          u.real_name ILIKE CAST($${paramIndex} AS TEXT)
+        )`;
+        params.push(`%${search}%`);
+        paramIndex++;
+      }
+
+      queryText += ` ORDER BY u.id LIMIT CAST($${paramIndex} AS INTEGER) OFFSET CAST($${paramIndex + 1} AS INTEGER)`;
+      params.push(parseInt(limit), parseInt(offset));
+
+      const result = await query(queryText, params);
+      return result.rows;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * 获取宿舍费用统计摘要
+   * @param {number} dormId - 宿舍ID
+   * @returns {Promise<Object>} 费用统计信息
+   */
+  async getDormFeeSummary(dormId) {
+    try {
+      // 1. 获取费用总额统计 (基于 expenses 表)
+      const expenseQuery = `
+        SELECT
+          COALESCE(SUM(CASE WHEN status != 'cancelled' THEN amount ELSE 0 END), 0) as total_expenses,
+          COUNT(CASE WHEN status != 'cancelled' THEN 1 END) as total_count,
+          COALESCE(SUM(CASE WHEN status != 'cancelled' AND expense_date >= date_trunc('month', CURRENT_DATE) THEN amount ELSE 0 END), 0) as monthly_total,
+          COUNT(CASE WHEN status != 'cancelled' AND expense_date >= date_trunc('month', CURRENT_DATE) THEN 1 END) as monthly_count
+        FROM expenses
+        WHERE dorm_id = $1
+      `;
+      const expenseResult = await query(expenseQuery, [dormId]);
+      const expenseRow = expenseResult.rows[0];
+
+      // 2. 获取支付统计 (基于 expense_splits 表)
+      const splitQuery = `
+        SELECT
+          COALESCE(SUM(paid_amount), 0) as total_paid,
+          COUNT(CASE WHEN payment_status = 'paid' THEN 1 END) as paid_count,
+          COALESCE(SUM(split_amount - paid_amount), 0) as total_unpaid,
+          COUNT(CASE WHEN payment_status IN ('pending', 'overdue') THEN 1 END) as unpaid_count,
+          COUNT(CASE WHEN payment_status = 'pending' THEN 1 END) as pending_count,
+          COUNT(CASE WHEN payment_status = 'overdue' THEN 1 END) as overdue_count,
+          COALESCE(SUM(CASE WHEN payment_status = 'pending' THEN split_amount - paid_amount ELSE 0 END), 0) as total_pending,
+          COALESCE(SUM(CASE WHEN payment_status = 'overdue' THEN split_amount - paid_amount ELSE 0 END), 0) as total_overdue
+        FROM expense_splits
+        WHERE dorm_id = $1
+      `;
+      const splitResult = await query(splitQuery, [dormId]);
+      const splitRow = splitResult.rows[0];
+
+      const totalExpenses = parseFloat(expenseRow.total_expenses) || 0;
+      const totalPaid = parseFloat(splitRow.total_paid) || 0;
+      const totalUnpaid = parseFloat(splitRow.total_unpaid) || 0;
+
+      let status = 'paid';
+            if (totalUnpaid > 0) {
+              if (totalPaid > 0) {
+                status = 'partial';
+              } else {
+                status = 'unpaid';
+              }
+              
+              if (parseInt(splitRow.overdue_count) > 0) {
+                status = 'overdue';
+              }
+            }
+
+      return {
+        totalExpenses: totalExpenses,
+        totalCount: parseInt(expenseRow.total_count) || 0,
+        totalPaid: totalPaid,
+        paidCount: parseInt(splitRow.paid_count) || 0,
+        totalPending: parseFloat(splitRow.total_pending) || 0,
+        pendingCount: parseInt(splitRow.pending_count) || 0,
+        totalOverdue: parseFloat(splitRow.total_overdue) || 0,
+        overdueCount: parseInt(splitRow.overdue_count) || 0,
+        monthlyTotal: parseFloat(expenseRow.monthly_total) || 0,
+        monthlyCount: parseInt(expenseRow.monthly_count) || 0,
+        status: status,
+        unpaid: totalUnpaid
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * 获取宿舍维修记录
+   * @param {number} dormId - 宿舍ID
+   * @param {Object} options - 查询选项
+   * @returns {Promise<Object>} 维修记录列表
+   */
+  async getDormMaintenanceRecords(dormId, options = {}) {
+    try {
+      const { page = 1, limit = 10, status } = options;
+      const offset = (page - 1) * limit;
+
+      let whereClause = 'WHERE mr.dorm_id = $1';
+      const params = [dormId];
+      let paramIndex = 2;
+
+      if (status) {
+        whereClause += ` AND mr.status = $${paramIndex}`;
+        params.push(status);
+        paramIndex++;
+      }
+
+      const queryText = `
+        SELECT
+          mr.id,
+          mr.title,
+          mr.description,
+          mr.type,
+          mr.urgency_level,
+          mr.status,
+          mr.requester_id,
+          mr.assigned_to,
+          mr.assigned_at,
+          mr.started_at,
+          mr.completed_at,
+          mr.completion_notes,
+          mr.rating,
+          mr.feedback,
+          mr.created_at,
+          mr.updated_at,
+          u.username as requester_name,
+          u.nickname as requester_nickname,
+          au.username as assigned_name,
+          au.nickname as assigned_nickname
+        FROM maintenance_requests mr
+        LEFT JOIN users u ON mr.requester_id = u.id
+        LEFT JOIN users au ON mr.assigned_to = au.id
+        ${whereClause}
+        ORDER BY mr.created_at DESC
+        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+      `;
+
+      params.push(limit, offset);
+
+      const countQuery = `
+        SELECT COUNT(*) as total
+        FROM maintenance_requests mr
+        ${whereClause}
+      `;
+
+      const countParams = params.slice(0, params.length - 2);
+
+      const [result, countResult] = await Promise.all([
+        query(queryText, params),
+        query(countQuery, countParams)
+      ]);
+
+      return {
+        records: result.rows,
+        total: parseInt(countResult.rows[0].total),
+        page: parseInt(page),
+        limit: parseInt(limit)
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * 验证用户是否可以添加到宿舍
+   * @param {number} dormId - 宿舍ID
+   * @param {number} userId - 用户ID
+   * @returns {Promise<Object>} 验证结果
+   */
+  async validateUserCanAddToDorm(dormId, userId) {
+    try {
+      const dormQuery = 'SELECT id, capacity, current_occupancy, status FROM dorms WHERE id = $1 AND status != \'deleted\'';
+      const dormResult = await query(dormQuery, [dormId]);
+
+      if (dormResult.rows.length === 0) {
+        return { canAdd: false, message: '宿舍不存在' };
+      }
+
+      const dorm = dormResult.rows[0];
+
+      if (dorm.status === 'inactive' || dorm.status === 'dissolved') {
+        return { canAdd: false, message: '宿舍当前状态不允许添加成员' };
+      }
+
+      if (parseInt(dorm.current_occupancy) >= parseInt(dorm.capacity)) {
+        return { canAdd: false, message: '宿舍已满员' };
+      }
+
+      const userQuery = 'SELECT id, status FROM users WHERE id = $1';
+      const userResult = await query(userQuery, [userId]);
+
+      if (userResult.rows.length === 0) {
+        return { canAdd: false, message: '用户不存在' };
+      }
+
+      if (userResult.rows[0].status !== 'active') {
+        return { canAdd: false, message: '用户状态不允许' };
+      }
+
+      // 检查用户是否为系统内置角色
+      const roleQuery = `
+        SELECT EXISTS (
+          SELECT 1 
+          FROM user_roles ur
+          JOIN roles r ON ur.role_id = r.id
+          WHERE ur.user_id = $1 AND r.is_system_role = TRUE
+        ) as is_system_role
+      `;
+      const roleResult = await query(roleQuery, [userId]);
+      if (roleResult.rows[0].is_system_role) {
+        return { canAdd: false, message: '系统内置角色用户无需分配宿舍' };
+      }
+
+      const existingQuery = `
+        SELECT id, dorm_id FROM user_dorms
+        WHERE user_id = $1 AND status = 'active'
+      `;
+      const existingResult = await query(existingQuery, [userId]);
+
+      if (existingResult.rows.length > 0) {
+        const existingDormId = existingResult.rows[0].dorm_id;
+        if (existingDormId == dormId) {
+          return { canAdd: false, message: '用户已在该宿舍中' };
+        } else {
+          return { 
+            canAdd: false, 
+            message: '用户已在其他宿舍中，需要先从原宿舍移除',
+            existingDormId: existingDormId
+          };
+        }
+      }
+
+      return { canAdd: true };
     } catch (error) {
       throw error;
     }

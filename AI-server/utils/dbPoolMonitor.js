@@ -126,26 +126,39 @@ class DatabasePoolMonitor extends EventEmitter {
    * 检查异常状态
    */
   checkAnomalies(snapshot) {
-    // 检查连接池耗尽
-    if (snapshot.totalCount >= snapshot.maxConnections * 0.9) {
-      this.emit('warning', {
-        type: 'pool_exhaustion',
-        message: '连接池使用率超过90%',
-        data: snapshot
-      });
+    // 增加缓冲检查：只有连续 3 次超过阈值才发出警告
+    if (!this.anomaliesCount) this.anomaliesCount = { exhaustion: 0, highWaiting: 0 };
+
+    // 检查连接池耗尽 (使用率超过 95%)
+    if (snapshot.totalCount >= snapshot.maxConnections * 0.95) {
+      this.anomaliesCount.exhaustion++;
+      if (this.anomaliesCount.exhaustion >= 3) {
+        this.emit('warning', {
+          type: 'pool_exhaustion',
+          message: '连接池使用率持续超过95%',
+          data: snapshot
+        });
+      }
+    } else {
+      this.anomaliesCount.exhaustion = 0;
     }
 
-    // 检查等待客户端
-    if (snapshot.waitingCount > 5) {
-      this.emit('warning', {
-        type: 'high_waiting_clients',
-        message: `有${snapshot.waitingCount}个客户端在等待连接`,
-        data: snapshot
-      });
+    // 检查等待客户端 (超过 10 个)
+    if (snapshot.waitingCount > 10) {
+      this.anomaliesCount.highWaiting++;
+      if (this.anomaliesCount.highWaiting >= 3) {
+        this.emit('warning', {
+          type: 'high_waiting_clients',
+          message: `持续有${snapshot.waitingCount}个客户端在等待连接`,
+          data: snapshot
+        });
+      }
+    } else {
+      this.anomaliesCount.highWaiting = 0;
     }
 
-    // 检查空闲连接过多
-    if (snapshot.idleCount > snapshot.maxConnections * 0.8) {
+    // 检查空闲连接过多 (不做连续性检查，仅作为信息记录)
+    if (snapshot.idleCount > snapshot.maxConnections * 0.9) {
       this.emit('info', {
         type: 'high_idle_connections',
         message: '空闲连接过多，考虑减少连接池大小',

@@ -15,6 +15,6 @@ export default defineConfig({
     // 添加这行来支持Vue Router的history模式
     host: true
   },
-  // 添加这个配置来支持Vue Router的history模式
-  base: './'
+  // 使用绝对路径作为基础URL，确保资源正确加载
+  base: '/'
 })

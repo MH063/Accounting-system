@@ -15,19 +15,16 @@ describe('权限控制中间件测试', () => {
   let next: sinon.SinonSpy;
 
   beforeEach(() => {
-    // 模拟请求对象
     req = {
       headers: {},
       params: {}
     };
 
-    // 模拟响应对象
     res = {
       status: sinon.stub().returnsThis(),
       json: sinon.stub()
     };
 
-    // 模拟next函数
     next = sinon.spy();
   });
 
@@ -56,9 +53,8 @@ describe('权限控制中间件测试', () => {
     });
 
     it('应该拒绝没有足够权限的用户', () => {
-      // 创建一个学生角色的token
-      const studentToken = jwt.sign({ role: 'student' }, 'default_secret');
-      req.headers.authorization = `Bearer ${studentToken}`;
+      const userToken = jwt.sign({ role: 'user' }, 'default_secret');
+      req.headers.authorization = `Bearer ${userToken}`;
       
       const middleware = permissionMiddleware('manage_users');
       middleware(req, res, next);
@@ -69,7 +65,6 @@ describe('权限控制中间件测试', () => {
     });
 
     it('应该允许具有足够权限的用户', () => {
-      // 创建一个管理员角色的token
       const adminToken = jwt.sign({ role: 'admin' }, 'default_secret');
       req.headers.authorization = `Bearer ${adminToken}`;
       
@@ -84,9 +79,8 @@ describe('权限控制中间件测试', () => {
 
   describe('clientFeaturePermission', () => {
     it('应该拒绝没有客户端功能控制权限的用户', () => {
-      // 创建一个学生角色的token
-      const studentToken = jwt.sign({ role: 'student' }, 'default_secret');
-      req.headers.authorization = `Bearer ${studentToken}`;
+      const userToken = jwt.sign({ role: 'user' }, 'default_secret');
+      req.headers.authorization = `Bearer ${userToken}`;
       
       clientFeaturePermission(req, res, next);
 
@@ -96,7 +90,6 @@ describe('权限控制中间件测试', () => {
     });
 
     it('应该允许具有客户端功能控制权限的用户', () => {
-      // 创建一个管理员角色的token
       const adminToken = jwt.sign({ role: 'admin' }, 'default_secret');
       req.headers.authorization = `Bearer ${adminToken}`;
       
@@ -110,9 +103,8 @@ describe('权限控制中间件测试', () => {
 
   describe('newFeaturePermission', () => {
     it('应该拒绝没有新功能发布权限的用户', () => {
-      // 创建一个学生角色的token
-      const studentToken = jwt.sign({ role: 'student' }, 'default_secret');
-      req.headers.authorization = `Bearer ${studentToken}`;
+      const userToken = jwt.sign({ role: 'user' }, 'default_secret');
+      req.headers.authorization = `Bearer ${userToken}`;
       
       newFeaturePermission(req, res, next);
 
@@ -122,9 +114,8 @@ describe('权限控制中间件测试', () => {
     });
 
     it('应该允许具有新功能发布权限的用户', () => {
-      // 创建一个超级管理员角色的token
-      const superAdminToken = jwt.sign({ role: 'super_admin' }, 'default_secret');
-      req.headers.authorization = `Bearer ${superAdminToken}`;
+      const systemAdminToken = jwt.sign({ role: 'system_admin' }, 'default_secret');
+      req.headers.authorization = `Bearer ${systemAdminToken}`;
       
       newFeaturePermission(req, res, next);
 
@@ -136,9 +127,8 @@ describe('权限控制中间件测试', () => {
 
   describe('grayReleasePermission', () => {
     it('应该拒绝没有灰度发布控制权限的用户', () => {
-      // 创建一个学生角色的token
-      const studentToken = jwt.sign({ role: 'student' }, 'default_secret');
-      req.headers.authorization = `Bearer ${studentToken}`;
+      const userToken = jwt.sign({ role: 'user' }, 'default_secret');
+      req.headers.authorization = `Bearer ${userToken}`;
       
       grayReleasePermission(req, res, next);
 
@@ -148,7 +138,6 @@ describe('权限控制中间件测试', () => {
     });
 
     it('应该允许具有灰度发布控制权限的用户', () => {
-      // 创建一个管理员角色的token
       const adminToken = jwt.sign({ role: 'admin' }, 'default_secret');
       req.headers.authorization = `Bearer ${adminToken}`;
       

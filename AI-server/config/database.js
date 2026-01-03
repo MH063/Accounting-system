@@ -6,7 +6,8 @@ const { Pool } = require('pg');
 const dotenv = require('dotenv');
 const { getSecureEnv, getSafeEnvDisplay } = require('../utils/secureEnv');
 
-dotenv.config({ path: '.env' });
+const path = require('path');
+dotenv.config({ path: path.join(__dirname, '../.env') });
 
 // 获取数据库配置
 function getDatabaseConfig() {

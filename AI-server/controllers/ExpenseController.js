@@ -10,6 +10,7 @@ const { successResponse, errorResponse } = require('../middleware/response');
 class ExpenseController extends BaseController {
   constructor() {
     super();
+    this.clearAllExpenses = this.clearAllExpenses.bind(this);
   }
   
   /**
@@ -53,7 +54,14 @@ class ExpenseController extends BaseController {
           MAX(e.amount) as maxAmount
         FROM expenses e
         LEFT JOIN expense_categories ec ON e.category_id = ec.id
+        LEFT JOIN users u ON e.applicant_id = u.id
         ${whereConditions}
+        ${whereConditions.includes('WHERE') ? 'AND' : 'WHERE'} (u.id IS NULL OR u.id NOT IN (
+          SELECT ur.user_id 
+          FROM user_roles ur
+          JOIN roles r ON ur.role_id = r.id
+          WHERE r.is_system_role = TRUE
+        ))
       `;
       
       const totalResult = await query(totalSql, params);
@@ -76,7 +84,14 @@ class ExpenseController extends BaseController {
         SELECT e.status, COUNT(*) as count, SUM(e.amount) as total
         FROM expenses e
         LEFT JOIN expense_categories ec ON e.category_id = ec.id
+        LEFT JOIN users u ON e.applicant_id = u.id
         ${whereConditions}
+        ${whereConditions.includes('WHERE') ? 'AND' : 'WHERE'} (u.id IS NULL OR u.id NOT IN (
+          SELECT ur.user_id 
+          FROM user_roles ur
+          JOIN roles r ON ur.role_id = r.id
+          WHERE r.is_system_role = TRUE
+        ))
         GROUP BY e.status
         ORDER BY count DESC
       `;
@@ -88,7 +103,14 @@ class ExpenseController extends BaseController {
         SELECT ec.category_name as category, COUNT(*) as count, SUM(e.amount) as total
         FROM expenses e
         LEFT JOIN expense_categories ec ON e.category_id = ec.id
+        LEFT JOIN users u ON e.applicant_id = u.id
         ${whereConditions}
+        ${whereConditions.includes('WHERE') ? 'AND' : 'WHERE'} (u.id IS NULL OR u.id NOT IN (
+          SELECT ur.user_id 
+          FROM user_roles ur
+          JOIN roles r ON ur.role_id = r.id
+          WHERE r.is_system_role = TRUE
+        ))
         GROUP BY ec.category_name
         ORDER BY total DESC
       `;
@@ -102,6 +124,12 @@ class ExpenseController extends BaseController {
         LEFT JOIN users u ON e.applicant_id = u.id
         LEFT JOIN expense_categories ec ON e.category_id = ec.id
         ${whereConditions}
+        ${whereConditions.includes('WHERE') ? 'AND' : 'WHERE'} (u.id IS NULL OR u.id NOT IN (
+          SELECT ur.user_id 
+          FROM user_roles ur
+          JOIN roles r ON ur.role_id = r.id
+          WHERE r.is_system_role = TRUE
+        ))
         GROUP BY u.nickname
         ORDER BY amount DESC
       `;
@@ -117,7 +145,14 @@ class ExpenseController extends BaseController {
           SUM(e.amount) as amount
         FROM expenses e
         LEFT JOIN expense_categories ec ON e.category_id = ec.id
+        LEFT JOIN users u ON e.applicant_id = u.id
         ${timeRange}
+        AND (u.id IS NULL OR u.id NOT IN (
+          SELECT ur.user_id 
+          FROM user_roles ur
+          JOIN roles r ON ur.role_id = r.id
+          WHERE r.is_system_role = TRUE
+        ))
         GROUP BY DATE_TRUNC('day', e.expense_date)
         ORDER BY date ASC
       `;
@@ -132,7 +167,14 @@ class ExpenseController extends BaseController {
           SUM(e.amount) as total
         FROM expenses e
         LEFT JOIN expense_categories ec ON e.category_id = ec.id
+        LEFT JOIN users u ON e.applicant_id = u.id
         WHERE e.expense_date >= NOW() - INTERVAL '30 days' ${whereConditions.replace('WHERE', 'AND')}
+        AND (u.id IS NULL OR u.id NOT IN (
+          SELECT ur.user_id 
+          FROM user_roles ur
+          JOIN roles r ON ur.role_id = r.id
+          WHERE r.is_system_role = TRUE
+        ))
         GROUP BY DATE_TRUNC('day', e.expense_date)
         ORDER BY date ASC
       `;
@@ -147,7 +189,14 @@ class ExpenseController extends BaseController {
           SUM(e.amount) as total
         FROM expenses e
         LEFT JOIN expense_categories ec ON e.category_id = ec.id
+        LEFT JOIN users u ON e.applicant_id = u.id
         ${whereConditions}
+        ${whereConditions.includes('WHERE') ? 'AND' : 'WHERE'} (u.id IS NULL OR u.id NOT IN (
+          SELECT ur.user_id 
+          FROM user_roles ur
+          JOIN roles r ON ur.role_id = r.id
+          WHERE r.is_system_role = TRUE
+        ))
         GROUP BY TO_CHAR(e.expense_date, 'YYYY-MM')
         ORDER BY month ASC
       `;
@@ -174,6 +223,12 @@ class ExpenseController extends BaseController {
         LEFT JOIN expense_categories ec ON e.category_id = ec.id
         LEFT JOIN users u ON e.applicant_id = u.id
         ${detailWhereConditions}
+        ${detailWhereConditions.includes('WHERE') ? 'AND' : 'WHERE'} (u.id IS NULL OR u.id NOT IN (
+          SELECT ur.user_id 
+          FROM user_roles ur
+          JOIN roles r ON ur.role_id = r.id
+          WHERE r.is_system_role = TRUE
+        ))
         ORDER BY e.expense_date DESC
         LIMIT $${detailParamIndex} OFFSET $${detailParamIndex + 1}
       `;
@@ -186,7 +241,14 @@ class ExpenseController extends BaseController {
         SELECT ec.category_name as category
         FROM expenses e
         LEFT JOIN expense_categories ec ON e.category_id = ec.id
+        LEFT JOIN users u ON e.applicant_id = u.id
         ${whereConditions}
+        ${whereConditions.includes('WHERE') ? 'AND' : 'WHERE'} (u.id IS NULL OR u.id NOT IN (
+          SELECT ur.user_id 
+          FROM user_roles ur
+          JOIN roles r ON ur.role_id = r.id
+          WHERE r.is_system_role = TRUE
+        ))
         ORDER BY e.amount DESC
         LIMIT 1
       `;
@@ -382,6 +444,8 @@ class ExpenseController extends BaseController {
       updateParams.push(id);
       
       // 执行更新
+      console.log('执行费用更新 SQL:', updateSql);
+      console.log('执行费用更新 参数:', JSON.stringify(updateParams));
       const updateResult = await query(updateSql, updateParams);
       
       if (updateResult.rows.length === 0) {
@@ -492,6 +556,14 @@ class ExpenseController extends BaseController {
       
       // 处理日期字段，确保它们被正确序列化为字符串
       const processedRows = listResult.rows.map(row => {
+        // 关键位置打印日志方便控制台查看日志调试
+        console.log('处理费用原始行数据:', JSON.stringify(row));
+        
+        // PostgreSQL 通常返回小写字段名，处理可能的兼容性问题
+        const reviewDateVal = row.reviewdate || row.reviewDate;
+        const reviewCommentVal = row.reviewcomment || row.reviewComment;
+        const createdAtVal = row.createdat || row.createdAt;
+
         // 创建一个新对象，只包含需要的字段，避免重复键
         const processed = {
           id: row.id,
@@ -503,9 +575,9 @@ class ExpenseController extends BaseController {
           date: row.date ? (typeof row.date === 'object' && row.date.toISOString ? row.date.toISOString().split('T')[0] : row.date.toString()) : null,
           status: row.status,
           reviewer: row.reviewer,
-          reviewDate: row.reviewDate ? (typeof row.reviewDate === 'object' && row.reviewDate.toISOString ? row.reviewDate.toISOString() : row.reviewDate.toString()) : null,
-          reviewComment: row.reviewComment,
-          createdAt: row.createdAt ? (typeof row.createdAt === 'object' && row.createdAt.toISOString ? row.createdAt.toISOString() : row.createdAt.toString()) : null
+          reviewDate: reviewDateVal ? (typeof reviewDateVal === 'object' && reviewDateVal.toISOString ? reviewDateVal.toISOString() : reviewDateVal.toString()) : null,
+          reviewComment: reviewCommentVal,
+          createdAt: createdAtVal ? (typeof createdAtVal === 'object' && createdAtVal.toISOString ? createdAtVal.toISOString() : createdAtVal.toString()) : null
         };
         return processed;
       });
@@ -1322,6 +1394,54 @@ class ExpenseController extends BaseController {
       }
     } catch (error) {
       console.error('从预算中移除费用失败:', error);
+    }
+  }
+
+  /**
+   * 清空所有费用记录（仅管理员可用）
+   * DELETE /api/expenses/clear-all
+   */
+  async clearAllExpenses(req, res, next) {
+    try {
+      // 检查是否为管理员
+      if (!req.user || !req.user.is_admin) {
+        return errorResponse(res, '只有管理员才能清空所有费用记录', 403);
+      }
+
+      // 获取用户所属宿舍ID
+      const userDormQuery = await query(
+        'SELECT dorm_id FROM user_dorms WHERE user_id = $1 AND status = $2 LIMIT 1',
+        [req.user.id, 'active']
+      );
+
+      let dormId = null;
+      if (userDormQuery.rows.length > 0) {
+        dormId = userDormQuery.rows[0].dorm_id;
+      }
+
+      // 如果没有宿舍ID，则删除所有费用记录（超级管理员）
+      let deleteSql;
+      let deleteParams;
+
+      if (dormId) {
+        // 删除当前用户宿舍的费用记录
+        deleteSql = `DELETE FROM expenses WHERE dorm_id = $1 RETURNING id`;
+        deleteParams = [dormId];
+      } else {
+        // 超级管理员可以删除所有记录
+        deleteSql = `DELETE FROM expenses RETURNING id`;
+        deleteParams = [];
+      }
+
+      const result = await query(deleteSql, deleteParams);
+
+      return successResponse(res, {
+        deletedCount: result.rowCount,
+        message: `成功清空 ${result.rowCount} 条费用记录`
+      }, '清空所有费用记录成功');
+    } catch (error) {
+      console.error('清空所有费用记录失败:', error);
+      next(error);
     }
   }
 }

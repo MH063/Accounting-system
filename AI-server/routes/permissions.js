@@ -22,9 +22,9 @@ const router = express.Router();
 const requireAdmin = PermissionChecker.requireAdmin();
 
 /**
- * 中间件：需要超级管理员权限
+ * 中间件：需要系统管理员权限
  */
-const requireSuperAdmin = PermissionChecker.requireSuperAdmin();
+const requireSystemAdmin = PermissionChecker.requireSystemAdmin();
 
 /**
  * POST /api/permissions/users

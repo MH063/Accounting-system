@@ -18,10 +18,10 @@ export interface AutoLogoutConfig {
 
 const DEFAULT_CONFIG: AutoLogoutConfig = {
   enabled: true,
-  timeoutMinutes: 30,
-  warningMinutes: 2,
-  timeoutMs: 30 * 60 * 1000,
-  warningMs: 2 * 60 * 1000
+  timeoutMinutes: 0.5,
+  warningMinutes: 0.2,
+  timeoutMs: 0.5 * 60 * 1000,
+  warningMs: 0.2 * 60 * 1000
 }
 
 const CONFIG_KEY = 'auto_logout_config'
@@ -33,7 +33,7 @@ const showWarning = ref(false)
 const remainingSeconds = ref(0)
 const lastActivityTime = ref(Date.now())
 const isOnline = ref(navigator.onLine)
-const warningSessionId = ref<number>(0)
+const warningSessionId = ref<number | string>(0)
 
 let router: any = null
 let inactivityTimer: number | null = null
@@ -51,7 +51,7 @@ const loadConfig = (): AutoLogoutConfig => {
     const stored = localStorage.getItem(CONFIG_KEY)
     if (stored) {
       const parsed = JSON.parse(stored)
-      const timeoutMinutes = Math.max(1, Math.min(120, parsed.timeoutMinutes ?? DEFAULT_CONFIG.timeoutMinutes))
+      const timeoutMinutes = Math.max(0.1, Math.min(120, parsed.timeoutMinutes ?? DEFAULT_CONFIG.timeoutMinutes))
       let warningMinutes = parsed.warningMinutes ?? DEFAULT_CONFIG.warningMinutes
       
       let adjusted = false
@@ -142,10 +142,8 @@ const isAuthenticated = (): boolean => {
 }
 
 const logActivity = (action: string): void => {
-  if (process.env.NODE_ENV === 'development') {
-    const now = new Date().toLocaleTimeString()
-    console.log(`[AutoLogout] ${now} - ${action}`)
-  }
+  const now = new Date().toLocaleTimeString()
+  console.log(`[AutoLogout] ${now} - ${action}`)
 }
 
 const clearWarningTimers = (): void => {
@@ -173,7 +171,7 @@ const clearAllTimers = (): void => {
 
 const performAutoLogout = (): void => {
   clearAllTimers()
-  const currentSessionId = warningSessionId.value + 1
+  const currentSessionId = Date.now() + '_logout'
   warningSessionId.value = currentSessionId
   showWarning.value = false
 
@@ -191,7 +189,7 @@ const performAutoLogout = (): void => {
   }
 }
 
-const startWarningPhase = (sessionId: number): void => {
+const startWarningPhase = (sessionId: number | string): void => {
   const now = Date.now()
   const idleTime = now - lastActivityTime.value
 
@@ -201,7 +199,8 @@ const startWarningPhase = (sessionId: number): void => {
     return
   }
 
-  if (idleTime < warningThresholdMs.value - 100) {
+  // 放宽阈值检查，只要接近阈值即可触发
+  if (idleTime < warningThresholdMs.value - 2000) {
     logActivity(`未达到警告阈值 (空闲${idleTime}ms < ${warningThresholdMs.value}ms), 忽略`)
     return
   }
@@ -218,19 +217,26 @@ const startWarningPhase = (sessionId: number): void => {
 
   logActivity(`触发警告对话框 (会话ID: ${sessionId}, 剩余${remainingSeconds.value}秒, 空闲${idleTime}ms)`)
 
-  clearInterval(countdownTimer)
+  if (countdownTimer) {
+    clearInterval(countdownTimer)
+  }
+  
   countdownTimer = window.setInterval(() => {
     if (!showWarning.value || warningSessionId.value !== sessionId) {
-      clearInterval(countdownTimer!)
-      countdownTimer = null
+      if (countdownTimer) {
+        clearInterval(countdownTimer)
+        countdownTimer = null
+      }
       return
     }
 
     remainingSeconds.value--
 
     if (remainingSeconds.value <= 0) {
-      clearInterval(countdownTimer!)
-      countdownTimer = null
+      if (countdownTimer) {
+        clearInterval(countdownTimer)
+        countdownTimer = null
+      }
 
       logActivity(`倒计时结束，执行自动登出 (会话ID: ${sessionId})`)
 
@@ -265,28 +271,36 @@ const resetTimer = (): void => {
   const sessionId = Date.now()
 
   if (warningMs.value > 0 && warningMs.value < timeoutMs.value) {
+    const delay = Math.max(0, warningThresholdMs.value)
     warningTimer = window.setTimeout(() => {
       if (!isAuthenticated()) {
+        logActivity('warningTimer 触发，但用户未认证，忽略')
         return
       }
 
       const currentIdleTime = Date.now() - lastActivityTime.value
-      if (currentIdleTime >= warningThresholdMs.value - 100) {
+      logActivity(`warningTimer 触发: currentIdleTime=${currentIdleTime}ms, warningThresholdMs=${warningThresholdMs.value}ms`)
+      if (currentIdleTime >= warningThresholdMs.value - 500) {
         startWarningPhase(sessionId)
+      } else {
+        logActivity('尚未达到警告阈值')
       }
-    }, warningThresholdMs.value)
+    }, delay)
   }
 
   inactivityTimer = window.setTimeout(() => {
     if (!isAuthenticated()) {
+      logActivity('inactivityTimer 触发，但用户未认证，忽略')
       return
     }
 
     const currentIdleTime = Date.now() - lastActivityTime.value
-    if (currentIdleTime >= timeoutMs.value - 100) {
+    logActivity(`inactivityTimer 触发: currentIdleTime=${currentIdleTime}ms, timeoutMs=${timeoutMs.value}ms`)
+    if (currentIdleTime >= timeoutMs.value - 500) {
       logActivity(`空闲超时，执行自动登出 (会话ID: ${sessionId})`)
       performAutoLogout()
     } else {
+      logActivity('尚未达到超时阈值，重新设置定时器')
       resetTimer()
     }
   }, timeoutMs.value)
@@ -326,8 +340,10 @@ const handleUserActivity = (eventOrManual?: any): void => {
   if (isOnline.value && document.visibilityState === 'visible' && document.hasFocus()) {
     if (showWarning.value && eventOrManual !== true) {
       logActivity('检测到活动，自动保持会话活跃')
+      resetTimer()
+    } else if (!showWarning.value) {
+      resetTimer()
     }
-    resetTimer()
   }
 }
 

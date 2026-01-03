@@ -13,7 +13,6 @@
           :data="availableDormitories" 
           style="width: 100%" 
           v-loading="loading.students"
-          @row-click="selectDormitory"
           class="dormitory-select-table"
         >
           <el-table-column prop="id" label="ID" width="80" />
@@ -73,29 +72,45 @@
         
         <el-row :gutter="20">
           <el-col :span="8">
-            <el-statistic title="寝室号" :value="dormitoryInfo.dormNumber" />
+            <div class="statistic-item">
+              <div class="statistic-title">寝室号</div>
+              <div class="statistic-value">{{ dormitoryInfo.dormNumber || '-' }}</div>
+            </div>
           </el-col>
           <el-col :span="8">
-            <el-statistic title="楼栋" :value="dormitoryInfo.building" />
+            <div class="statistic-item">
+              <div class="statistic-title">楼栋</div>
+              <div class="statistic-value">{{ dormitoryInfo.building || '-' }}</div>
+            </div>
           </el-col>
           <el-col :span="8">
-            <el-statistic title="容量" :value="dormitoryInfo.capacity" />
+            <div class="statistic-item">
+              <div class="statistic-title">容量</div>
+              <div class="statistic-value">{{ dormitoryInfo.capacity || 0 }}</div>
+            </div>
           </el-col>
         </el-row>
         
         <el-row :gutter="20" style="margin-top: 20px;">
           <el-col :span="8">
-            <el-statistic title="当前入住" :value="dormitoryInfo.currentOccupancy" />
+            <div class="statistic-item">
+              <div class="statistic-title">当前入住</div>
+              <div class="statistic-value">{{ dormitoryInfo.currentOccupancy || 0 }}</div>
+            </div>
           </el-col>
           <el-col :span="8">
-            <el-statistic title="空床位" :value="dormitoryInfo.capacity - dormitoryInfo.currentOccupancy" />
+            <div class="statistic-item">
+              <div class="statistic-title">空床位</div>
+              <div class="statistic-value">{{ (dormitoryInfo.capacity || 0) - (dormitoryInfo.currentOccupancy || 0) }}</div>
+            </div>
           </el-col>
           <el-col :span="8">
-            <el-statistic title="状态">
-              <el-tag :type="getStatusTagType(dormitoryInfo.status)">
+            <div class="statistic-item">
+              <div class="statistic-title">状态</div>
+              <el-tag :type="getStatusTagType(dormitoryInfo.status)" size="default">
                 {{ getStatusText(dormitoryInfo.status) }}
               </el-tag>
-            </el-statistic>
+            </div>
           </el-col>
         </el-row>
         
@@ -113,7 +128,7 @@
         <template #header>
           <div class="card-header">
             <span>寝室成员 ({{ students.length }})</span>
-            <el-button type="primary" @click="addMemberDialogVisible = true" size="small">
+            <el-button type="primary" @click="openAddMemberDialog" size="small">
               添加成员
             </el-button>
           </div>
@@ -122,8 +137,6 @@
         <el-table :data="students" style="width: 100%" v-loading="loading.students">
           <el-table-column prop="id" label="ID" width="80" />
           <el-table-column prop="name" label="姓名" />
-          <el-table-column prop="studentId" label="学号" />
-          <el-table-column prop="class" label="班级" />
           <el-table-column prop="phone" label="联系电话" />
           <el-table-column label="床位">
             <template #default="scope">
@@ -147,23 +160,23 @@
       <!-- 费用统计卡片 -->
       <el-row :gutter="20" style="margin-top: 20px;">
         <el-col :span="8">
-          <el-card>
+          <el-card shadow="hover">
             <el-statistic title="本月费用" :value="feeStats.totalAmount" prefix="¥" />
             <div style="margin-top: 10px;">
-              <el-tag :type="feeStats.status === 'paid' ? 'success' : 'warning'">
-                {{ feeStats.status === 'paid' ? '已缴费' : '未缴费' }}
+              <el-tag :type="feeStats.status === 'paid' ? 'success' : (feeStats.status === 'overdue' ? 'danger' : 'warning')">
+                {{ getFeeStatusText(feeStats.status) }}
               </el-tag>
             </div>
           </el-card>
         </el-col>
         <el-col :span="8">
-          <el-card>
-            <el-statistic title="累计费用" :value="feeStats.totalPaid" prefix="¥" />
+          <el-card shadow="hover">
+            <el-statistic title="累计费用" :value="feeStats.totalCumulative" prefix="¥" />
           </el-card>
         </el-col>
         <el-col :span="8">
-          <el-card>
-            <el-statistic title="未缴费" :value="feeStats.unpaid" prefix="¥" />
+          <el-card shadow="hover">
+            <el-statistic title="未缴费" :value="feeStats.unpaid" prefix="¥" :value-style="{ color: feeStats.unpaid > 0 ? '#f56c6c' : '#67c23a' }" />
           </el-card>
         </el-col>
       </el-row>
@@ -208,12 +221,11 @@
         </el-form-item>
         
         <el-form-item label="状态" prop="status">
-          <el-select v-model="editFormData.status" placeholder="请选择状态" :disabled="dormitoryInfo.status === 'dissolved'">
-            <el-option label="正常" value="normal" />
+          <el-select v-model="editFormData.status" placeholder="请选择状态" :disabled="dormitoryInfo.status === 'deleted'">
+            <el-option label="正常" value="active" />
             <el-option label="维修中" value="maintenance" />
-            <el-option label="已满" value="full" />
-            <el-option label="冻结" value="frozen" />
-            <el-option label="已解散" value="dissolved" />
+            <el-option label="冻结" value="inactive" />
+            <el-option label="已删除" value="deleted" />
           </el-select>
         </el-form-item>
         
@@ -261,7 +273,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
@@ -275,54 +287,37 @@ const route = useRoute()
 // 从路由参数获取寝室ID
 const dormitoryId = computed(() => {
   const id = route.params.id
-  return id ? Number(id) : null
+  if (!id) return null
+  const numId = Number(id)
+  return isNaN(numId) ? null : numId
 })
 
 // 响应式数据
 const dormitoryInfo = ref({
-  id: 1,
-  dormNumber: 'A101',
-  building: 'A栋',
+  id: 0,
+  dormNumber: '',
+  building: '',
   capacity: 4,
-  currentOccupancy: 3,
-  status: 'normal',
-  createdAt: '2023-01-01 10:00:00',
-  description: '一楼朝南，采光良好'
+  currentOccupancy: 0,
+  status: 'active',
+  createdAt: '',
+  description: ''
 })
 
-const students = ref([
-  { id: 1, name: '张三', studentId: '2021001', class: '计算机1班', phone: '13800138001', bedNumber: 1 },
-  { id: 2, name: '李四', studentId: '2021002', class: '计算机1班', phone: '13800138002', bedNumber: 2 },
-  { id: 3, name: '王五', studentId: '2021003', class: '计算机1班', phone: '13800138003', bedNumber: 3 }
-])
+const students = ref<any[]>([])
 
-const availableDormitories = ref([
-  { id: 1, dormNumber: 'A101', building: 'A栋', capacity: 4, currentOccupancy: 3, status: 'normal', createdAt: '2023-01-01 10:00:00' },
-  { id: 2, dormNumber: 'A102', building: 'A栋', capacity: 4, currentOccupancy: 2, status: 'normal', createdAt: '2023-01-01 10:00:00' },
-  { id: 3, dormNumber: 'B201', building: 'B栋', capacity: 6, currentOccupancy: 5, status: 'normal', createdAt: '2023-01-01 10:00:00' }
-])
+const availableDormitories = ref<any[]>([])
 
-const availableUsers = ref([
-  { id: 4, name: '赵六', studentId: '2021004' },
-  { id: 5, name: '钱七', studentId: '2021005' },
-  { id: 6, name: '孙八', studentId: '2021006' }
-])
+const availableUsers = ref<any[]>([])
 
 const feeStats = ref({
-  totalAmount: 1200,
-  totalPaid: 3600,
+  totalAmount: 0,
+  totalCumulative: 0,
   unpaid: 0,
   status: 'paid'
 })
 
-const maintenanceRecords = ref([
-  {
-    date: '2023-11-15',
-    title: '水龙头维修',
-    description: '更换损坏的水龙头',
-    maintainer: '维修工张三'
-  }
-])
+const maintenanceRecords = ref<any[]>([])
 
 // 对话框状态
 const editDialogVisible = ref(false)
@@ -333,7 +328,7 @@ const editFormData = ref({
   dormNumber: '',
   building: '',
   capacity: 4,
-  status: 'normal',
+  status: 'active',
   description: ''
 })
 
@@ -358,11 +353,6 @@ const loading = ref({
 
 // 组件挂载时加载数据
 onMounted(() => {
-  console.log('🏨 寝室详情页面加载完成', {
-    hasId: !!dormitoryId.value,
-    id: dormitoryId.value
-  })
-  
   if (dormitoryId.value) {
     // 如果有ID，加载具体寝室详情
     loadDormitoryDetail()
@@ -372,6 +362,28 @@ onMounted(() => {
   }
 })
 
+// 监听路由参数变化，当进入或返回页面时加载对应数据
+watch(dormitoryId, (newId, oldId) => {
+  if (newId && !oldId) {
+    loadDormitoryDetail()
+  } else if (!newId && oldId) {
+    loadDormitoryList()
+  }
+})
+
+// 监听 dormitoryInfo 变化，自动更新编辑表单数据
+watch(dormitoryInfo, (newInfo) => {
+  if (newInfo && newInfo.id) {
+    editFormData.value = {
+      dormNumber: newInfo.dormNumber || '',
+      building: newInfo.building || '',
+      capacity: newInfo.capacity || 4,
+      status: (newInfo.status === 'normal' || !newInfo.status) ? 'active' : newInfo.status,
+      description: newInfo.description || ''
+    }
+  }
+}, { immediate: true })
+
 // 数据加载函数
 const loadDormitoryDetail = async () => {
   if (!dormitoryId.value) {
@@ -380,18 +392,31 @@ const loadDormitoryDetail = async () => {
   }
   
   try {
-    console.log('🔄 加载寝室详情:', dormitoryId.value)
     const response = await dormitoryApi.getDormitoryDetail(dormitoryId.value)
     
-    // 处理后端返回的数据结构
-    const detailData = response || {}
-    dormitoryInfo.value = { ...detailData }
+    // 处理响应数据结构：后端返回 {success: true, data: {dorm: {...}}}，拦截器返回 data
+    // 所以 response 就是 {dorm: {...}}
+    const detailData = response?.dorm || response || {}
     
-    // 加载相关数据
+    // 更新 dormitoryInfo
+    const newInfo = { 
+      id: detailData.id || 0,
+      dormNumber: detailData.dormNumber || detailData.dormName || detailData.dorm_name || '',
+      building: detailData.building || '',
+      capacity: detailData.capacity || 4,
+      currentOccupancy: detailData.currentOccupancy || detailData.current_occupancy || 0,
+      status: (detailData.status === 'normal' || !detailData.status) ? 'active' : detailData.status,
+      createdAt: detailData.createdAt || detailData.created_at || new Date().toISOString(),
+      description: detailData.description || ''
+    }
+    
+    dormitoryInfo.value = newInfo
+    
     await Promise.all([
       loadStudents(),
       loadFeeStats(),
-      loadMaintenanceRecords()
+      loadMaintenanceRecords(),
+      loadAvailableUsers()
     ])
     
   } catch (error: any) {
@@ -402,10 +427,18 @@ const loadDormitoryDetail = async () => {
 
 const loadDormitoryList = async () => {
   try {
-    console.log('🔄 加载寝室列表')
     const response = await dormitoryApi.getDormitoryList()
-    const listData = response || []
-    availableDormitories.value = listData
+    const listData = response?.dorms || response || []
+    availableDormitories.value = listData.map((dorm: any) => ({
+      id: dorm.id,
+      dormNumber: dorm.dormName || dorm.dormNumber || '',
+      building: dorm.building || '',
+      capacity: dorm.capacity || 0,
+      currentOccupancy: dorm.currentOccupancy || 0,
+      status: (dorm.status === 'normal' || !dorm.status) ? 'active' : dorm.status,
+      createdAt: dorm.createdAt || dorm.created_at || new Date().toISOString(),
+      description: dorm.description || ''
+    }))
   } catch (error: any) {
     console.error('❌ 加载寝室列表失败:', error)
     ElMessage.error('加载寝室列表失败')
@@ -413,46 +446,116 @@ const loadDormitoryList = async () => {
 }
 
 const loadStudents = async () => {
+  if (!dormitoryId.value) return
+  
   try {
     loading.value.students = true
-    console.log('🔄 加载寝室成员')
-    // 这里应该调用获取寝室成员的API
-    // const response = await dormitoryApi.getDormitoryStudents(dormitoryId.value)
+    const response = await dormitoryApi.getDormitoryMembers(dormitoryId.value)
+    const membersData = response?.members || response || []
+    students.value = membersData.map((member: any) => ({
+      id: member.user_dorm_id || member.id,  // 使用 user_dorms 表的 ID
+      userId: member.user_id,  // 保存用户 ID 备用
+      name: member.nickname || member.username || member.realName || '未知',
+      phone: member.phone || '',
+      bedNumber: member.bedNumber || member.bed_number || 0,
+      memberRole: member.memberRole || member.member_role || 'member',
+      moveInDate: member.moveInDate || member.move_in_date || '',
+      avatarUrl: member.avatarUrl || member.avatar_url || ''
+    }))
   } catch (error: any) {
     console.error('❌ 加载寝室成员失败:', error)
+    students.value = []
   } finally {
     loading.value.students = false
   }
 }
 
 const loadFeeStats = async () => {
+  if (!dormitoryId.value) return
+  
   try {
-    console.log('🔄 加载费用统计')
-    // 这里应该调用获取费用统计的API
+    const response = await dormitoryApi.getDormFeeSummary(dormitoryId.value)
+    console.log('📊 费用统计原始数据:', response)
+    const feeSummary = response?.feeSummary || response || {}
+    feeStats.value = {
+      totalAmount: feeSummary.monthlyTotal || 0,
+      totalCumulative: feeSummary.totalExpenses || 0,
+      unpaid: feeSummary.unpaid || 0,
+      status: feeSummary.status || 'paid'
+    }
   } catch (error: any) {
     console.error('❌ 加载费用统计失败:', error)
+    feeStats.value = {
+      totalAmount: 0,
+      totalCumulative: 0,
+      unpaid: 0,
+      status: 'paid'
+    }
   }
 }
 
 const loadMaintenanceRecords = async () => {
+  if (!dormitoryId.value) return
+  
   try {
-    console.log('🔄 加载维修记录')
-    // 这里应该调用获取维修记录的API
+    const response = await dormitoryApi.getDormMaintenanceRecords(dormitoryId.value, {
+      page: 1,
+      limit: 10
+    })
+    const recordsData = response?.records || response || []
+    maintenanceRecords.value = recordsData.map((record: any) => ({
+      id: record.id,
+      date: record.completedAt || record.createdAt || new Date().toISOString(),
+      title: record.title || '维修申请',
+      description: record.description || '',
+      maintainer: record.assignedTo || '待分配',
+      type: record.type || '',
+      status: record.status || '',
+      statusText: record.statusText || ''
+    }))
   } catch (error: any) {
     console.error('❌ 加载维修记录失败:', error)
+    maintenanceRecords.value = []
+  }
+}
+
+const loadAvailableUsers = async () => {
+  if (!dormitoryId.value) return
+  
+  try {
+    const response = await dormitoryApi.getAvailableUsers(dormitoryId.value, {
+      limit: 50
+    })
+    const usersData = response?.users || response || []
+    availableUsers.value = usersData.map((user: any) => ({
+      id: user.id,
+      name: user.nickname || user.realName || user.username || '未知'
+    }))
+  } catch (error: any) {
+    console.error('❌ 加载可添加用户列表失败:', error)
+    availableUsers.value = []
   }
 }
 
 // 返回寝室列表
 const returnToDormitoryList = () => {
-  console.log('⬅️ 返回寝室列表页面')
   router.push('/dormitory-detail')
 }
 
 // 选择寝室
 const selectDormitory = (dormitory: any) => {
-  console.log('🏠 选择寝室:', dormitory)
   router.push(`/dormitory-detail/${dormitory.id}`)
+}
+
+// 获取费用状态文本
+const getFeeStatusText = (status: string) => {
+  const statusMap: Record<string, string> = {
+    'paid': '已缴清',
+    'partial': '部分缴纳',
+    'unpaid': '未缴费',
+    'overdue': '已逾期'
+  }
+  return statusMap[status] || '未知'
 }
 
 // 移除学生
@@ -464,11 +567,22 @@ const removeStudent = async (student: any) => {
       type: 'warning'
     })
     
-    console.log('🗑️ 移除学生:', student)
+    await dormitoryApi.removeDormitoryMember(student.id)
+    
     ElMessage.success('移除成功')
     
-  } catch {
-    console.log('❌ 取消移除')
+    await Promise.all([
+      loadStudents(),
+      loadAvailableUsers(),
+      loadDormitoryDetail()  // 重新加载宿舍详情，更新当前入住人数
+    ])
+    
+  } catch (error: any) {
+    if (error === 'cancel' || error === 'close') {
+      return
+    }
+    console.error('❌ 移除学生失败:', error)
+    ElMessage.error(error?.message || '移除失败')
   }
 }
 
@@ -476,9 +590,17 @@ const removeStudent = async (student: any) => {
 const submitEditForm = async () => {
   try {
     loading.value.editForm = true
-    console.log('📝 提交编辑表单:', editFormData.value)
     
-    await dormitoryApi.updateDormitory(dormitoryId.value, editFormData.value)
+    // 字段映射：将前端字段名映射到后端期望的字段名
+    const updateData = {
+      dormName: editFormData.value.dormNumber,  // dormNumber -> dormName
+      building: editFormData.value.building,
+      capacity: editFormData.value.capacity,
+      status: editFormData.value.status,
+      description: editFormData.value.description
+    }
+    
+    await dormitoryApi.updateDormitory(dormitoryId.value, updateData)
     
     ElMessage.success('编辑成功')
     editDialogVisible.value = false
@@ -503,7 +625,6 @@ const handleAddMember = async () => {
   
   try {
     loading.value.addMember = true
-    console.log('👥 添加成员:', addMemberForm.value)
     
     await dormitoryApi.addDormitoryMember(dormitoryId.value, addMemberForm.value.userId)
     
@@ -511,36 +632,52 @@ const handleAddMember = async () => {
     addMemberDialogVisible.value = false
     addMemberForm.value.userId = null
     
-    // 重新加载成员列表
-    loadStudents()
+    await Promise.all([
+      loadStudents(),
+      loadAvailableUsers(),
+      loadDormitoryDetail()  // 重新加载宿舍详情，更新当前入住人数和空床位
+    ])
     
   } catch (error: any) {
     console.error('❌ 添加成员失败:', error)
-    ElMessage.error('添加成员失败')
+    ElMessage.error(error?.message || '添加成员失败')
   } finally {
     loading.value.addMember = false
   }
 }
 
+// 打开添加成员对话框
+const openAddMemberDialog = async () => {
+  addMemberForm.value.userId = null
+  addMemberDialogVisible.value = true
+  await loadAvailableUsers()
+}
+
 // 工具函数
 const getStatusTagType = (status: string) => {
   const statusMap: Record<string, string> = {
+    active: 'success',
     normal: 'success',
     maintenance: 'warning',
-    full: 'info',
+    inactive: 'danger',
     frozen: 'danger',
-    dissolved: 'info'
+    deleted: 'info',
+    dissolved: 'info',
+    full: 'info'
   }
   return statusMap[status] || 'info'
 }
 
 const getStatusText = (status: string) => {
   const statusMap: Record<string, string> = {
+    active: '正常',
     normal: '正常',
     maintenance: '维修中',
-    full: '已满',
+    inactive: '冻结',
     frozen: '冻结',
-    dissolved: '已解散'
+    deleted: '已删除',
+    dissolved: '已解散',
+    full: '已满'
   }
   return statusMap[status] || '未知'
 }
@@ -620,5 +757,22 @@ const formatDate = (dateString: string) => {
 
 .occupant, .vacant {
   margin-top: 10px;
+}
+
+.statistic-item {
+  text-align: center;
+  padding: 10px 0;
+}
+
+.statistic-title {
+  font-size: 14px;
+  color: #909399;
+  margin-bottom: 8px;
+}
+
+.statistic-value {
+  font-size: 24px;
+  font-weight: 600;
+  color: #303133;
 }
 </style>

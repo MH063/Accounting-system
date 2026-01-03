@@ -19,22 +19,29 @@
         class="dorm-form"
       >
         <el-row :gutter="20">
-          <el-col :span="12">
+          <el-col :span="8">
+            <el-form-item label="宿舍编码" prop="dormCode">
+              <el-input
+                v-model="dormForm.dormCode"
+                placeholder="请输入宿舍编码"
+                maxlength="20"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
             <el-form-item label="寝室名称" prop="name">
               <el-input
                 v-model="dormForm.name"
                 placeholder="请输入寝室名称"
                 maxlength="30"
-                show-word-limit
               />
             </el-form-item>
           </el-col>
-          
-          <el-col :span="12">
+          <el-col :span="8">
             <el-form-item label="寝室类型" prop="type">
               <el-select
                 v-model="dormForm.type"
-                placeholder="请选择寝室类型"
+                placeholder="请选择"
                 style="width: 100%"
               >
                 <el-option label="男生寝室" value="male" />
@@ -179,6 +186,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { dormitoryApi } from '@/api/dormitory'
 
 // 路由实例
 const router = useRouter()
@@ -188,6 +196,7 @@ const dormFormRef = ref()
 const submitting = ref(false)
 
 const dormForm = reactive({
+  dormCode: '',
   name: '',
   type: '',
   building: '',
@@ -201,6 +210,10 @@ const dormForm = reactive({
 })
 
 const dormFormRules = {
+  dormCode: [
+    { required: true, message: '请输入宿舍编码', trigger: 'blur' },
+    { min: 2, max: 20, message: '长度在 2 到 20 个字符', trigger: 'blur' }
+  ],
   name: [
     { required: true, message: '请输入寝室名称', trigger: 'blur' },
     { min: 2, max: 30, message: '长度在 2 到 30 个字符', trigger: 'blur' }
@@ -307,14 +320,31 @@ const confirmRules = async () => {
   submitting.value = true
   
   try {
-    // 模拟提交创建寝室
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    const submitData = {
+      dormName: dormForm.name,
+      dormCode: dormForm.dormCode,
+      type: dormForm.type,
+      building: dormForm.building,
+      roomNumber: dormForm.roomNumber,
+      capacity: dormForm.capacity,
+      description: dormForm.description,
+      // 如果是自定义规则，使用 customRules，否则使用模板名称
+      rules: dormForm.rules === 'custom' ? dormForm.customRules : dormForm.rules,
+      status: 'normal' // 默认创建为正常状态
+    }
     
-    ElMessage.success('寝室创建成功')
-    rulesDialogVisible.value = false
-    router.push('/dormitory/list')
-  } catch (error) {
-    ElMessage.error('寝室创建失败')
+    const response = await dormitoryApi.createDormitory(submitData)
+    
+    if (response.data && (response.data.success || response.data.code === 200)) {
+      ElMessage.success('寝室创建成功')
+      rulesDialogVisible.value = false
+      router.push('/dormitory/list')
+    } else {
+      throw new Error(response.data?.message || '创建失败')
+    }
+  } catch (error: any) {
+    console.error('创建寝室出错:', error)
+    ElMessage.error(error.message || '寝室创建失败')
   } finally {
     submitting.value = false
   }

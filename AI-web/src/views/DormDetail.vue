@@ -477,15 +477,18 @@
                 :key="member.id"
               >
                 <div class="member-avatar">
-                  <el-avatar :size="32" :src="getUserAvatar(member.avatar || member.avatar_url, member.email, member.name)">
-                    {{ member.name?.charAt(0) || '成' }}
+                  <el-avatar :size="32" :src="getUserAvatar(member.avatarUrl, member.username, member.nickname || member.realName)">
+                    {{ (member.nickname || member.realName || member.username || '成').charAt(0) }}
                   </el-avatar>
                 </div>
                 <div class="member-info">
-                  <div class="member-name">{{ member.name }}</div>
+                  <div class="member-name">{{ member.nickname || member.realName || member.username }}</div>
                   <div class="member-status">
-                    <el-tag :type="member.status === 'active' ? 'success' : 'info'" size="small">
-                      {{ member.status === 'active' ? '活跃' : '非活跃' }}
+                    <el-tag :type="member.memberStatus === 'active' ? 'success' : 'info'" size="small">
+                      {{ member.memberStatus === 'active' ? '活跃' : '已搬出' }}
+                    </el-tag>
+                    <el-tag :type="getRoleTagType(member.memberRole)" size="small" style="margin-left: 4px;">
+                      {{ getRoleText(member.memberRole) }}
                     </el-tag>
                   </div>
                 </div>
@@ -554,9 +557,9 @@
         </el-form-item>
         <el-form-item label="成员角色">
           <el-select v-model="addMemberForm.role" style="width: 100%;">
-            <el-option label="普通成员" value="member"></el-option>
-            <el-option label="管理员" value="admin"></el-option>
-            <el-option label="财务" value="treasurer"></el-option>
+            <el-option label="宿舍长" value="dorm_leader"></el-option>
+            <el-option label="付款人" value="payer"></el-option>
+            <el-option label="普通成员" value="user"></el-option>
           </el-select>
         </el-form-item>
       </el-form>
@@ -605,6 +608,24 @@ const userPermissions = reactive({
   canViewStatistics: true
 })
 
+// 宿舍成员类型
+interface DormMember {
+  id: number
+  username: string
+  nickname: string | null
+  realName: string | null
+  phone: string | null
+  avatarUrl: string | null
+  memberRole: string
+  memberStatus: 'active' | 'inactive' | 'pending'
+  moveInDate: string | null
+  moveOutDate: string | null
+  bedNumber: string | null
+  roomNumber: string | null
+  monthlyShare: string
+  depositPaid: string
+}
+
 // 宿舍数据
 const dormData = ref({
   id: 0,
@@ -633,7 +654,7 @@ const dormData = ref({
   createdAt: '',
   updatedAt: '',
   adminInfo: null as any,
-  currentUsers: [] as any[],
+  currentUsers: [] as DormMember[],
   occupancyRate: 0
 })
 
@@ -684,18 +705,13 @@ const editRules: FormRules = {
   ]
 }
 
-// 成员数据
-const membersData = ref([
-  { id: 1, name: '张三', role: 'admin', joinDate: '2024-01-15', status: 'active' },
-  { id: 2, name: '李四', role: 'treasurer', joinDate: '2024-01-20', status: 'active' },
-  { id: 3, name: '王五', role: 'member', joinDate: '2024-02-01', status: 'active' },
-  { id: 4, name: '赵六', role: 'member', joinDate: '2024-02-10', status: 'active' }
-])
+// 成员数据 - 从API加载，初始为空数组
+const membersData = ref<Array<{id: number, name: string, role: string, joinDate: string, status: string}>>([])
 
 // 添加成员表单
 const addMemberForm = reactive({
   name: '',
-  role: 'member'
+  role: 'user'
 })
 
 // 最近动态数据
@@ -836,9 +852,11 @@ const getSafePercentage = (percentage: any): number => {
 // 获取角色标签类型
 const getRoleTagType = (role: string) => {
   const types = {
+    system_admin: 'danger',
     admin: 'danger',
-    treasurer: 'warning',
-    member: 'info'
+    dorm_leader: 'warning',
+    payer: 'success',
+    user: 'info'
   }
   return types[role as keyof typeof types] || 'info'
 }
@@ -846,9 +864,11 @@ const getRoleTagType = (role: string) => {
 // 获取角色文本
 const getRoleText = (role: string) => {
   const texts = {
+    system_admin: '系统管理员',
     admin: '管理员',
-    treasurer: '财务',
-    member: '成员'
+    dorm_leader: '宿舍长',
+    payer: '付款人',
+    user: '普通成员'
   }
   return texts[role as keyof typeof texts] || '未知'
 }
@@ -1018,7 +1038,7 @@ const addMember = () => {
   dormData.value.currentOccupancy++
   
   addMemberForm.name = ''
-  addMemberForm.role = 'member'
+  addMemberForm.role = 'user'
   showAddMemberDialog.value = false
   
   ElMessage.success('成员添加成功')

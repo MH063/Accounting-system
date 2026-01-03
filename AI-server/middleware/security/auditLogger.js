@@ -222,7 +222,10 @@ const logAnomaly = (req, anomalyType, anomalyData = {}) => {
     fs.appendFileSync(anomalyLogFile, JSON.stringify(anomalyEntry) + '\n');
     
     // 持久化到数据库
-    persistToDatabase({ ...anomalyEntry, severity: 'warning' });
+    persistToDatabase({ 
+      ...anomalyEntry, 
+      severity: anomalyData.severity || 'warning' 
+    });
     
     // 同时记录到安全日志
     logger.security(req, `异常访问: ${anomalyType}`, anomalyData);
@@ -274,11 +277,11 @@ const detectAnomaly = (req) => {
   const userAgent = req.get('User-Agent') || '';
   const ip = req.ip || req.connection.remoteAddress;
   
-  // 检测爬虫或机器人访问
-  const botPatterns = [
-    /bot/i, /crawler/i, /spider/i, /scraper/i,
-    /curl/i, /wget/i, /postman/i, /http/i
-  ];
+    // 检测爬虫或机器人访问
+    const botPatterns = [
+      /bot/i, /crawler/i, /spider/i, /scraper/i,
+      /curl/i, /wget/i, /postman/i, /^http$/i, /python/i, /axios/i
+    ];
   
   const isBotRequest = botPatterns.some(pattern => pattern.test(userAgent));
   if (isBotRequest) {
@@ -327,10 +330,18 @@ const enhancedSecurityAuditMiddleware = () => {
       
       // 记录异常状态码
       if (statusCode >= 400) {
+        // 5xx 视为 error，4xx 视为 info (不计入首页异常统计)，除非是特定的安全威胁
+        const errorSeverity = statusCode >= 500 ? 'error' : 'info';
+        
+        // 忽略一些常见的、不影响系统健康的 4xx 错误
+        const ignoredPaths = ['/favicon.ico', '/robots.txt'];
+        if (ignoredPaths.includes(req.path)) return;
+
         logAnomaly(req, 'HTTP_ERROR_RESPONSE', {
           statusCode,
           responseTime: duration,
-          reason: `返回错误状态码 ${statusCode}`
+          reason: `返回状态码 ${statusCode}`,
+          severity: errorSeverity
         });
       }
       

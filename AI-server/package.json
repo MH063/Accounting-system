@@ -59,6 +59,7 @@
     "swagger-ui-express": "^5.0.1",
     "uuid": "^11.0.3",
     "winston": "^3.18.3",
+    "ws": "^8.18.3",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "yaml": "^2.8.2"
   },

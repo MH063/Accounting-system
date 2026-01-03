@@ -172,7 +172,9 @@
         <el-form-item label="寝室号" prop="dormNumber">
           <el-input v-model="formData.dormNumber" placeholder="请输入寝室号" />
         </el-form-item>
-        
+        <el-form-item label="寝室编码" prop="dormCode">
+          <el-input v-model="formData.dormCode" placeholder="请输入寝室编码" />
+        </el-form-item>
         <el-form-item label="楼栋" prop="building">
           <el-input v-model="formData.building" placeholder="请输入楼栋" />
         </el-form-item>
@@ -232,7 +234,7 @@ const stats = ref({
 })
 
 // 楼栋列表
-const buildings = ref<string[]>(['A栋', 'B栋', 'C栋', 'D栋'])
+const buildings = ref<string[]>([])
 
 const searchForm = ref({
   dormNumber: '',
@@ -247,6 +249,7 @@ const isEdit = ref(false)
 const formData = ref({
   id: 0,
   dormNumber: '',
+  dormCode: '',
   building: '',
   capacity: 4,
   status: 'normal',
@@ -254,9 +257,10 @@ const formData = ref({
 })
 
 const formRules = {
-  dormNumber: commonRules.name,
-  building: commonRules.name,
-  capacity: commonRules.integer
+  dormNumber: [{ required: true, message: '请输入寝室号', trigger: 'blur' }],
+  dormCode: [{ required: true, message: '请输入寝室编码', trigger: 'blur' }],
+  building: [{ required: true, message: '请输入楼栋', trigger: 'blur' }],
+  capacity: [{ required: true, message: '请输入容量', trigger: 'blur' }]
 }
 
 const formRef = ref()// 格式化日期
@@ -305,30 +309,29 @@ const loadDormitoryList = async () => {
     
     const params = {
       page: currentPage.value,
-      pageSize: pageSize.value,
-      ...searchForm.value
+      limit: pageSize.value, // 后端使用的是 limit
+      search: searchForm.value.dormNumber, // 映射搜索字段
+      building: searchForm.value.building,
+      status: searchForm.value.status
     }
     
     const response = await dormitoryApi.getDormitoryList(params)
     console.log('✅ 寝室列表响应:', response)
     
     // 处理后端返回的数据结构 (符合规则 5: response.data.data.xxx)
-    // 此时 response 已经是拦截器返回的 response.data
+    // 根据拦截器配置，这里 response 已经是后端返回的 response.data.data
     const innerData = response?.data || response
-    const dormitoryData = innerData?.items || (Array.isArray(innerData) ? innerData : [])
-    const totalCount = innerData?.total || innerData?.count || (Array.isArray(innerData) ? innerData.length : 0)
+    const dormitoryData = innerData?.dorms || (Array.isArray(innerData) ? innerData : [])
+    const paginationInfo = innerData?.pagination
+    const totalCount = paginationInfo?.total || (Array.isArray(innerData) ? innerData.length : 0)
     
     tableData.value = dormitoryData
     total.value = totalCount
-    
-    // 更新统计信息
-    updateStats(dormitoryData)
     
   } catch (error: any) {
     console.error('❌ 加载寝室列表失败:', error)
     ElMessage.error('加载寝室列表失败，请检查网络连接')
     
-    // 使用空数组作为默认值
     tableData.value = []
     total.value = 0
   } finally {
@@ -336,14 +339,29 @@ const loadDormitoryList = async () => {
   }
 }
 
-// 更新统计信息
-const updateStats = (data: any[]) => {
-  const total = data.length
-  const normal = data.filter(item => item.status === 'normal').length
-  const maintenance = data.filter(item => item.status === 'maintenance').length
-  const full = data.filter(item => item.status === 'full').length
-  
-  stats.value = { total, normal, maintenance, full }
+// 加载统计信息
+const loadDormitoryStats = async () => {
+  try {
+    const response = await dormitoryApi.getDormitoryStats()
+    console.log('✅ 统计信息响应:', response)
+    
+    // 统一处理后端返回的数据结构 (符合规则 5: response.data.data.xxx)
+    // 根据拦截器配置，这里 response 应该是后端返回的 response.data.data
+    const statsData = response?.data || response
+    
+    if (statsData) {
+      // 兼容两种结构：扁平结构 { total, normal, ... } 和 嵌套结构 { totalCount, statusCounts: { normal, ... } }
+      stats.value = {
+        total: statsData.total !== undefined ? statsData.total : (statsData.totalCount || 0),
+        normal: statsData.normal !== undefined ? statsData.normal : (statsData.statusCounts?.normal || 0),
+        maintenance: statsData.maintenance !== undefined ? statsData.maintenance : (statsData.statusCounts?.maintenance || 0),
+        full: statsData.full !== undefined ? statsData.full : (statsData.statusCounts?.full || 0)
+      }
+      console.log('📊 页面更新后的统计数据:', stats.value)
+    }
+  } catch (error: any) {
+    console.error('❌ 加载统计信息失败:', error)
+  }
 }
 
 // 加载楼栋列表
@@ -352,13 +370,11 @@ const loadBuildings = async () => {
     const response = await dormitoryApi.getBuildings()
     console.log('✅ 楼栋列表响应:', response)
     
-    // 处理后端返回的数据结构 (符合规则 5: response.data.data.xxx)
     const buildingsData = response?.data || response || []
     buildings.value = Array.isArray(buildingsData) ? buildingsData : []
     
   } catch (error: any) {
     console.error('❌ 加载楼栋列表失败:', error)
-    // 使用默认楼栋列表
   }
 }
 
@@ -388,7 +404,15 @@ const handleView = (row: any) => {
 const handleEdit = (row: any) => {
   dialogTitle.value = '编辑寝室'
   isEdit.value = true
-  formData.value = { ...row }
+  formData.value = { 
+    id: row.id,
+    dormNumber: row.dormNumber,
+    dormCode: row.dormCode || row.dormNumber, // 如果没有编码，默认使用寝室号
+    building: row.building,
+    capacity: row.capacity,
+    status: row.status,
+    description: row.description || ''
+  }
   dialogVisible.value = true
 }
 
@@ -409,8 +433,9 @@ const handleDelete = async (row: any) => {
     await dormitoryApi.deleteDormitory(row.id)
     ElMessage.success('寝室删除成功')
     
-    // 重新加载寝室列表
+    // 重新加载寝室列表和统计信息
     loadDormitoryList()
+    loadDormitoryStats()
   } catch (error: any) {
     if (error !== 'cancel') {
       console.error('❌ 删除寝室失败:', error)
@@ -439,8 +464,9 @@ const handleStatus = async (row: any) => {
     await dormitoryApi.updateDormitoryStatus(row.id, newStatus)
     ElMessage.success(`寝室${statusText}成功`)
     
-    // 重新加载寝室列表
+    // 重新加载数据
     loadDormitoryList()
+    loadDormitoryStats()
   } catch (error: any) {
     if (error !== 'cancel') {
       console.error('❌ 更新寝室状态失败:', error)
@@ -464,13 +490,12 @@ const handleBatchNormal = async () => {
     const ids = selectedDormitories.value.map(item => item.id)
     console.log('🔄 批量设置正常状态:', ids)
     
-    for (const id of ids) {
-      await dormitoryApi.updateDormitoryStatus(id, 'normal')
-    }
+    await dormitoryApi.batchUpdateDormitoryStatus(ids, 'normal')
     
     ElMessage.success(`成功设置 ${selectedDormitories.value.length} 个寝室为正常状态`)
     selectedDormitories.value = []
     loadDormitoryList()
+    loadDormitoryStats()
   } catch (error: any) {
     console.error('❌ 批量设置正常状态失败:', error)
     ElMessage.error('批量设置正常状态失败')
@@ -487,13 +512,12 @@ const handleBatchMaintenance = async () => {
     const ids = selectedDormitories.value.map(item => item.id)
     console.log('🔄 批量设置维修状态:', ids)
     
-    for (const id of ids) {
-      await dormitoryApi.updateDormitoryStatus(id, 'maintenance')
-    }
+    await dormitoryApi.batchUpdateDormitoryStatus(ids, 'maintenance')
     
     ElMessage.success(`成功设置 ${selectedDormitories.value.length} 个寝室为维修状态`)
     selectedDormitories.value = []
     loadDormitoryList()
+    loadDormitoryStats()
   } catch (error: any) {
     console.error('❌ 批量设置维修状态失败:', error)
     ElMessage.error('批量设置维修状态失败')
@@ -510,13 +534,12 @@ const handleBatchFull = async () => {
     const ids = selectedDormitories.value.map(item => item.id)
     console.log('🔄 批量设置满员状态:', ids)
     
-    for (const id of ids) {
-      await dormitoryApi.updateDormitoryStatus(id, 'full')
-    }
+    await dormitoryApi.batchUpdateDormitoryStatus(ids, 'full')
     
     ElMessage.success(`成功设置 ${selectedDormitories.value.length} 个寝室为满员状态`)
     selectedDormitories.value = []
     loadDormitoryList()
+    loadDormitoryStats()
   } catch (error: any) {
     console.error('❌ 批量设置满员状态失败:', error)
     ElMessage.error('批量设置满员状态失败')
@@ -547,6 +570,7 @@ const handleBatchDelete = async () => {
     ElMessage.success(`成功删除 ${selectedDormitories.value.length} 个寝室`)
     selectedDormitories.value = []
     loadDormitoryList()
+    loadDormitoryStats()
   } catch (error: any) {
     if (error !== 'cancel') {
       console.error('❌ 批量删除寝室失败:', error)
@@ -576,6 +600,7 @@ const submitForm = () => {
         }
         dialogVisible.value = false
         loadDormitoryList()
+        loadDormitoryStats()
       } catch (error: any) {
         console.error('❌ 提交表单失败:', error)
         ElMessage.error('提交失败')
@@ -622,17 +647,20 @@ const handleExportCommand = async (command: 'excel' | 'csv') => {
 const handleSizeChange = (val: number) => {
   pageSize.value = val
   currentPage.value = 1
-  console.log(`📈 每页显示 ${val} 条`)
+  loadDormitoryList()
 }
 
 const handleCurrentChange = (val: number) => {
   currentPage.value = val
-  console.log(`📄 当前页: ${val}`)
+  loadDormitoryList()
 }
 
 // 组件挂载
 onMounted(() => {
   console.log('🏠 寝室列表页面加载完成')
+  loadDormitoryList()
+  loadBuildings()
+  loadDormitoryStats()
 })
 
 /**

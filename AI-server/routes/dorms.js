@@ -39,6 +39,50 @@ router.post('/',
 );
 
 /**
+ * 获取楼栋列表路由
+ * GET /api/dorms/buildings
+ */
+router.get('/buildings', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await dormController.getBuildings(req, res);
+  }))
+);
+
+/**
+ * 获取宿舍统计信息路由
+ * GET /api/dorms/stats
+ */
+router.get('/stats', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await dormController.getDormStats(req, res);
+  }))
+);
+
+/**
+ * 批量删除宿舍路由
+ * POST /api/dorms/batch-delete
+ */
+router.post('/batch-delete', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await dormController.batchDeleteDorms(req, res);
+  }))
+);
+
+/**
+ * 批量更新宿舍状态路由
+ * POST /api/dorms/batch-update-status
+ */
+router.post('/batch-update-status', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await dormController.batchUpdateDormStatus(req, res);
+  }))
+);
+
+/**
  * 获取宿舍详情路由
  * GET /api/dorms/:id
  * 需要有效的JWT令牌才能访问
@@ -59,6 +103,18 @@ router.put('/:id',
   authenticateToken, 
   responseWrapper(asyncHandler(async (req, res) => {
     return await dormController.updateDorm(req, res);
+  }))
+);
+
+/**
+ * 更新宿舍状态路由
+ * PATCH /api/dorms/:id/status
+ * 需要有效的JWT令牌才能访问
+ */
+router.patch('/:id/status', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await dormController.updateDormStatus(req, res);
   }))
 );
 
@@ -227,6 +283,54 @@ router.get('/:id/members',
   authenticateToken, 
   responseWrapper(asyncHandler(async (req, res) => {
     return await dormController.getDormMembers(req, res);
+  }))
+);
+
+/**
+ * 添加宿舍成员路由
+ * POST /api/dorms/:id/members
+ * 需要有效的JWT令牌才能访问
+ */
+router.post('/:id/members', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await dormController.addDormMember(req, res);
+  }))
+);
+
+/**
+ * 获取可添加用户列表路由
+ * GET /api/dorms/:id/available-users
+ * 需要有效的JWT令牌才能访问
+ */
+router.get('/:id/available-users', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await dormController.getAvailableUsers(req, res);
+  }))
+);
+
+/**
+ * 获取宿舍费用统计摘要路由
+ * GET /api/dorms/:id/fee-summary
+ * 需要有效的JWT令牌才能访问
+ */
+router.get('/:id/fee-summary', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await dormController.getDormFeeSummary(req, res);
+  }))
+);
+
+/**
+ * 获取宿舍维修记录路由
+ * GET /api/dorms/:id/maintenance
+ * 需要有效的JWT令牌才能访问
+ */
+router.get('/:id/maintenance', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res) => {
+    return await dormController.getDormMaintenanceRecords(req, res);
   }))
 );
 

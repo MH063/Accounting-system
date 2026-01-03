@@ -3,6 +3,30 @@ const { logManager } = require('./logManager');
 const { logger } = require('../config/logger');
 const databaseOptimizer = require('./databaseOptimizer');
 const systemStatusService = require('../services/systemStatusService');
+const auditCleanupService = require('../services/auditCleanupService');
+
+/**
+ * 审计日志自动清理任务
+ * 每天凌晨2点执行，处理无效请求记录、过期普通日志并进行备份
+ */
+const auditCleanupTask = cron.schedule('0 2 * * *', async () => {
+  logger.info('[CRON] 开始执行审计日志自动清理任务');
+  
+  try {
+    const result = await auditCleanupService.performCleanup();
+    
+    if (!result.success) {
+      logger.error(`[CRON] 审计日志清理任务失败: ${result.errors.join(', ')}`);
+    } else {
+      logger.info(`[CRON] 审计日志清理任务完成: 备份 ${result.backedUpCount} 条, 清理 ${result.cleanedCount} 条, 物理删除 ${result.physicalDeletedCount} 条`);
+    }
+  } catch (error) {
+    logger.error(`[CRON] 审计日志清理任务异常: ${error.message}`);
+  }
+}, {
+  scheduled: false,
+  timezone: 'Asia/Shanghai'
+});
 
 /**
  * 系统指标记录任务
@@ -102,6 +126,7 @@ function startScheduledTasks() {
   logCleanupTask.start();
   dbHealthCheckTask.start();
   systemMetricsTask.start();
+  auditCleanupTask.start();
   logger.info('[CRON] 所有定时任务已启动');
 }
 
@@ -112,11 +137,13 @@ function stopScheduledTasks() {
   logCleanupTask.stop();
   dbHealthCheckTask.stop();
   systemMetricsTask.stop();
+  auditCleanupTask.stop();
   logger.info('[CRON] 所有定时任务已停止');
 }
 
 module.exports = {
   logCleanupTask,
+  auditCleanupTask,
   startScheduledTasks,
   stopScheduledTasks
 };

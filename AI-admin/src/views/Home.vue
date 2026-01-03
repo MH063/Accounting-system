@@ -1932,6 +1932,7 @@ const refreshSystemStatusOverview = async () => {
         
         backendStats.value.status = backendDataTyped.status || backendStats.value.status
         backendStats.value.statusType = backendDataTyped.statusType || backendStats.value.statusType
+        backendStats.value.statusText = backendDataTyped.statusText || backendStats.value.statusText
         backendStats.value.healthScore = backendDataTyped.healthScore || backendStats.value.healthScore
         
         // 优先从 metrics 获取指标
@@ -3044,6 +3045,7 @@ const fetchSystemStats = async () => {
         const backendDataTyped = backendData as any
         backendStats.value.status = backendDataTyped.status || backendStats.value.status
         backendStats.value.statusType = backendDataTyped.statusType || backendStats.value.statusType
+        backendStats.value.statusText = backendDataTyped.statusText || backendStats.value.statusText
         backendStats.value.healthScore = backendDataTyped.healthScore || backendStats.value.healthScore
         
         // 优先从 metrics 获取指标

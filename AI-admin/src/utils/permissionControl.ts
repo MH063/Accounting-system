@@ -149,8 +149,8 @@ export const getInheritedPermissions = (roles: PermissionRole[]): Record<string,
   roles.forEach(role => {
     // 根据角色代码确定继承关系
     switch (role.code) {
-      case 'super_admin':
-        // 超级管理员继承所有权限
+      case 'system_admin':
+        // 系统管理员继承所有权限
         permissionMap[role.code] = ['*']
         break
       case 'admin':
@@ -162,13 +162,13 @@ export const getInheritedPermissions = (roles: PermissionRole[]): Record<string,
           'system_management.view'
         ]
         break
-      case 'operator':
-        // 操作员继承基本操作权限
+      case 'dorm_leader':
+        // 宿舍长继承宿舍管理权限
         permissionMap[role.code] = [
-          'user_management.view',
-          'user_management.edit',
           'dormitory_management.view',
-          'fee_management.view'
+          'dormitory_management.edit',
+          'fee_management.view',
+          'fee_management.create'
         ]
         break
       default:

@@ -680,7 +680,7 @@ const expenseData = ref<ExpenseItem | null>(null)
 const currentUser = ref<UserType>({
   id: 1,
   name: '当前用户',
-  role: 'system_admin', // admin | system_admin | auditor | member
+  role: 'system_admin', // admin | system_admin | dorm_leader | payer | user
   avatar: '',
   permissions: ['read', 'write', 'delete', 'review'] // 权限列表
 })
@@ -1097,14 +1097,14 @@ const canReviewExpense = computed(() => {
   // 只有状态为待审核的费用才能审核
   if (expenseData.value.status !== 'pending') return false
   
-  // 系统管理员和审核员可以审核
-  if (['system_admin', 'admin', 'auditor'].includes(currentUser.value.role)) {
+  // 系统管理员和管理员可以审核
+  if (['system_admin', 'admin'].includes(currentUser.value.role)) {
     return true
   }
   
-  // 寝室长可以审核本寝室的费用
+  // 宿舍长可以审核本寝室的费用
   if (currentUser.value.role === 'dorm_leader') {
-    // 这里应该检查费用是否属于当前用户管理的寝室
+    // 这里应该检查费用是否属于当前用户管理的宿舍
     // 暂时简化处理，假设都为 true
     return true
   }
@@ -1130,8 +1130,8 @@ const canDeleteExpense = computed(() => {
 const canViewFinancialInfo = computed(() => {
   if (!expenseData.value) return false
   
-  // 系统管理员、超级管理员、审核员和寝室长可以查看财务信息
-  return ['system_admin', 'admin', 'auditor', 'dorm_leader'].includes(currentUser.value.role) ||
+  // 系统管理员、管理员和宿舍长可以查看财务信息
+  return ['system_admin', 'admin', 'dorm_leader'].includes(currentUser.value.role) ||
          // 费用申请人可以查看自己费用的财务信息
          expenseData.value.applicant === currentUser.value.name ||
          expenseData.value.applicantId === currentUser.value.id

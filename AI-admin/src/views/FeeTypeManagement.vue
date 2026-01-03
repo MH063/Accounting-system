@@ -138,7 +138,6 @@
           <el-select v-model="formData.allocationRule" placeholder="请选择默认分摊规则" style="width: 100%;">
             <el-option label="按人平均分摊" value="average" />
             <el-option label="按寝室分摊" value="dormitory" />
-            <el-option label="按专业分摊" value="major" />
             <el-option label="不分摊" value="none" />
           </el-select>
         </el-form-item>
@@ -303,7 +302,7 @@ const tableData = ref([
     description: '教材购买费用',
     defaultAmount: 800.00,
     billingCycle: 'semester',
-    allocationRule: 'major',
+    allocationRule: 'dormitory',
     usageCount: 980,
     sortOrder: 4,
     status: 'disabled',
@@ -393,8 +392,6 @@ const getAllocationRuleText = (rule: string) => {
       return '按人平均分摊'
     case 'dormitory':
       return '按寝室分摊'
-    case 'major':
-      return '按专业分摊'
     case 'none':
       return '不分摊'
     default:

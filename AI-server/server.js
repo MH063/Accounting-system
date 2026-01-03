@@ -471,6 +471,8 @@ app.get('/api/tables', responseWrapper(async (req, res) => {
   }
 }));
 
+const websocketService = require('./services/websocketService');
+
 // 启动服务器
 const startServer = async () => {
   try {
@@ -492,7 +494,7 @@ const startServer = async () => {
     
     logger.info('\n🚀 启动API服务器...');
     
-    app.listen(PORT, '0.0.0.0', () => {
+    const server = app.listen(PORT, '0.0.0.0', () => {
       logger.info(`✅ 服务器已启动，端口: ${PORT}`);
       logger.info(`📝 API文档: http://[SERVER_HOST]:${PORT}/`);
       logger.info(`🔧 数据库测试: http://[SERVER_HOST]:${PORT}/api/db-test`);
@@ -503,6 +505,9 @@ const startServer = async () => {
         logger.warn('⚠️ 注意：数据库连接失败，部分功能可能不可用');
       }
     });
+
+    // 初始化 WebSocket 服务
+    websocketService.init(server);
     
   } catch (error) {
     logger.error('服务器启动失败:', error);
@@ -610,19 +615,39 @@ app.delete = function(path, ...handlers) {
 process.on('SIGINT', () => {
   console.log('\n收到SIGINT信号，正在关闭服务器...');
   const { stopScheduledTasks } = require('./utils/scheduledTasks');
+  
+  // 发送强制退出广播
+  if (websocketService) {
+    websocketService.broadcastForceLogout();
+  }
+
   stopScheduledTasks();
-  pool.end(() => {
-    console.log('数据库连接池已关闭');
-    process.exit(0);
-  });
+  
+  // 给一点时间让广播发送出去
+  setTimeout(() => {
+    pool.end(() => {
+      console.log('数据库连接池已关闭');
+      process.exit(0);
+    });
+  }, 1000);
 });
 
 process.on('SIGTERM', () => {
   console.log('\n收到SIGTERM信号，正在关闭服务器...');
   const { stopScheduledTasks } = require('./utils/scheduledTasks');
+  
+  // 发送强制退出广播
+  if (websocketService) {
+    websocketService.broadcastForceLogout();
+  }
+
   stopScheduledTasks();
-  pool.end(() => {
-    console.log('数据库连接池已关闭');
-    process.exit(0);
-  });
+  
+  // 给一点时间让广播发送出去
+  setTimeout(() => {
+    pool.end(() => {
+      console.log('数据库连接池已关闭');
+      process.exit(0);
+    });
+  }, 1000);
 });

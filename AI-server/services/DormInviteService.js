@@ -110,6 +110,28 @@ class DormInviteService {
       
       let result = await query(queryText, queryParams);
       
+      if (result.rows.length > 0) {
+        const user = result.rows[0];
+        
+        // 检查是否为系统内置角色
+        const roleCheckQuery = `
+          SELECT EXISTS (
+            SELECT 1 
+            FROM user_roles ur
+            JOIN roles r ON ur.role_id = r.id
+            WHERE ur.user_id = $1 AND r.is_system_role = TRUE
+          ) as is_system_role
+        `;
+        const roleCheck = await query(roleCheckQuery, [user.id]);
+        
+        if (roleCheck.rows[0].is_system_role) {
+          return {
+            success: false,
+            message: '系统内置角色无法被邀请加入宿舍'
+          };
+        }
+      }
+
       // 如果用户不存在，创建新用户
       if (result.rows.length === 0) {
         const client = await pool.connect();
@@ -144,6 +166,11 @@ class DormInviteService {
           };
         } catch (error) {
           await client.query('ROLLBACK');
+          logger.error('[DormInviteService] 创建新用户事务失败，事务已回滚', { 
+            error: error.message,
+            stack: error.stack,
+            inviteData
+          });
           throw error;
         } finally {
           client.release();

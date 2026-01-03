@@ -47,7 +47,8 @@ const sqlInjectionProtection = () => {
       'description', 'message', 'content', 'notes',
       'password', 'newPassword', 'currentPassword', 'confirmPassword',
       'answer', 'securityAnswer',
-      'secret', 'backupCode', 'backupCodes'
+      'secret', 'backupCode', 'backupCodes',
+      'operation', 'action', 'type', 'outcome', 'status'
     ];
     if (fieldName && SKIP_STRICT_CHECK_FIELDS.some(field => fieldName.includes(field))) {
       return false;

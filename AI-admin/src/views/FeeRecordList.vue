@@ -122,7 +122,6 @@
         <el-table-column type="selection" width="55" />
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="studentName" label="学生姓名" />
-        <el-table-column prop="studentId" label="学号" />
         <el-table-column prop="feeType" label="费用类型">
           <template #default="scope">
             {{ getFeeTypeText(scope.row.feeType) }}
@@ -171,15 +170,9 @@
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px">
       <el-form :model="formData" :rules="formRules" ref="formRef" label-width="100px">
         <el-row :gutter="20">
-          <el-col :span="12">
+          <el-col :span="24">
             <el-form-item label="学生姓名" prop="studentName">
               <el-input v-model="formData.studentName" placeholder="请输入学生姓名" />
-            </el-form-item>
-          </el-col>
-          
-          <el-col :span="12">
-            <el-form-item label="学号" prop="studentId">
-              <el-input v-model="formData.studentId" placeholder="请输入学号" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -270,7 +263,6 @@ const tableData = ref([
   {
     id: 1,
     studentName: '张三',
-    studentId: '2023001',
     feeType: 'accommodation',
     amount: 1200.00,
     dueDate: '2023-09-30',
@@ -282,7 +274,6 @@ const tableData = ref([
   {
     id: 2,
     studentName: '李四',
-    studentId: '2023002',
     feeType: 'utilities',
     amount: 150.50,
     dueDate: '2023-10-15',
@@ -294,7 +285,6 @@ const tableData = ref([
   {
     id: 3,
     studentName: '王五',
-    studentId: '2023003',
     feeType: 'internet',
     amount: 80.00,
     dueDate: '2023-10-10',
@@ -306,7 +296,6 @@ const tableData = ref([
   {
     id: 4,
     studentName: '赵六',
-    studentId: '2023004',
     feeType: 'accommodation',
     amount: 1200.00,
     dueDate: '2023-10-20',
@@ -348,21 +337,21 @@ const isEdit = ref(false)
 const formData = ref({
   id: 0,
   studentName: '',
-  studentId: '',
   feeType: '',
   amount: 0,
   dueDate: '',
   paymentDate: '',
   status: 'unpaid',
+  auditStatus: 'pending',
   remark: ''
 })
 
 const formRules = {
   studentName: commonRules.name,
-  studentId: commonRules.name,
-  feeType: commonRules.select,
-  amount: commonRules.amount,
-  dueDate: commonRules.date
+  feeType: [{ required: true, message: '请选择费用类型', trigger: 'change' }],
+  amount: [{ required: true, message: '请输入金额', trigger: 'blur' }],
+  dueDate: [{ required: true, message: '请选择应缴日期', trigger: 'change' }],
+  status: [{ required: true, message: '请选择缴费状态', trigger: 'change' }]
 }
 
 const formRef = ref()
@@ -477,12 +466,12 @@ const handleAdd = () => {
   formData.value = {
     id: 0,
     studentName: '',
-    studentId: '',
     feeType: '',
     amount: 0,
     dueDate: '',
     paymentDate: '',
     status: 'unpaid',
+    auditStatus: 'pending',
     remark: ''
   }
   dialogVisible.value = true
