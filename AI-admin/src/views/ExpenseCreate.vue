@@ -68,6 +68,7 @@
                 v-model="expenseForm.amount"
                 placeholder="请输入费用金额"
                 @input="handleAmountInput"
+                @blur="handleAmountBlur"
               >
                 <template #prepend>¥</template>
               </el-input>
@@ -88,30 +89,98 @@
         </el-row>
         
         <el-form-item label="参与成员" prop="participants">
-          <el-transfer
-            v-model="expenseForm.participants"
-            :data="members"
-            :titles="['未选择', '已选择']"
-            filterable
-            filter-placeholder="请输入成员姓名"
-          />
+          <div class="transfer-container">
+            <div v-if="currentDormId === 'all'" class="transfer-filter">
+              <el-row :gutter="10" style="width: 500px; margin-bottom: 10px;">
+                <el-col :span="10">
+                  <el-input
+                    v-model="dormSearchName"
+                    placeholder="寝室号 (模糊匹配)"
+                    clearable
+                    @input="debouncedFilter"
+                  >
+                    <template #prefix>
+                      <el-icon><HomeFilled /></el-icon>
+                    </template>
+                  </el-input>
+                </el-col>
+                <el-col :span="10">
+                  <el-input
+                    v-model="dormSearchCode"
+                    placeholder="宿舍编码 (精确匹配)"
+                    clearable
+                    @input="debouncedFilter"
+                  >
+                    <template #prefix>
+                      <el-icon><OfficeBuilding /></el-icon>
+                    </template>
+                  </el-input>
+                </el-col>
+                <el-col :span="4">
+                  <div v-if="isFiltering" class="filter-loading">
+                    <el-icon class="is-loading"><Loading /></el-icon>
+                    <span>筛选中...</span>
+                  </div>
+                </el-col>
+              </el-row>
+            </div>
+            <el-transfer
+              v-model="expenseForm.participants"
+              :data="filteredMembers"
+              :titles="['未选择', '已选择']"
+              filterable
+              :filter-method="filterMethod"
+              filter-placeholder="搜索姓名/用户名"
+              :props="{
+                key: 'key',
+                label: 'label'
+              }"
+            >
+              <template #default="{ option }">
+                <div class="member-item">
+                  <span class="member-label">{{ option.label }}</span>
+                  <el-tag v-if="option.dormName" size="small" type="info" class="member-dorm-tag">
+                    {{ option.dormName }}
+                  </el-tag>
+                </div>
+              </template>
+              <template #left-footer>
+                <div class="transfer-footer">
+                  待选 {{ filteredMembers.filter(m => !expenseForm.participants.includes(m.key)).length }} 人
+                </div>
+              </template>
+              <template #right-footer>
+                <div class="transfer-footer">
+                  已选 {{ expenseForm.participants.length }} 人
+                </div>
+              </template>
+            </el-transfer>
+          </div>
         </el-form-item>
         
         <el-form-item label="分摊方式" prop="splitMethod">
           <el-radio-group v-model="expenseForm.splitMethod" @change="calculateSplit">
-            <el-radio label="equal">平均分摊</el-radio>
-            <el-radio label="custom">自定义分摊</el-radio>
+            <el-radio label="equal">等额分摊</el-radio>
+            <el-radio label="days">按天数分摊</el-radio>
+            <el-radio label="custom">自定义比例</el-radio>
           </el-radio-group>
         </el-form-item>
         
-        <div v-if="expenseForm.splitMethod === 'custom'" class="custom-split-section">
+        <div v-if="expenseForm.splitMethod === 'custom' || expenseForm.splitMethod === 'days'" class="custom-split-section">
           <el-table :data="customSplitDetails" style="width: 100%">
             <el-table-column prop="name" label="成员" />
-            <el-table-column label="分摊金额">
+            <el-table-column v-if="expenseForm.splitMethod === 'days'" label="居住天数">
+              <template #default="{ row }">
+                <span>{{ row.days }} 天</span>
+              </template>
+            </el-table-column>
+            <el-table-column :label="expenseForm.splitMethod === 'days' ? '计算金额' : '分摊金额'">
               <template #default="{ row }">
                 <el-input
                   v-model="row.amount"
+                  :readonly="expenseForm.splitMethod === 'days'"
                   @input="handleCustomSplitInput(row)"
+                  @blur="handleCustomSplitBlur(row)"
                   placeholder="请输入金额"
                 >
                   <template #prepend>¥</template>
@@ -134,7 +203,7 @@
               <span>已分配:</span>
               <span>¥{{ allocatedAmount }}</span>
             </div>
-            <div class="summary-item" :class="{ 'warning': remainingAmount !== 0 }">
+            <div class="summary-item" :class="{ 'warning': Math.abs(remainingAmount) > 0.01 }">
               <span>剩余:</span>
               <span>¥{{ remainingAmount }}</span>
             </div>
@@ -146,6 +215,7 @@
             v-model:file-list="expenseForm.attachments"
             class="upload-demo"
             action="/api/upload/multiple"
+            name="files"
             multiple
             :limit="5"
             :on-exceed="handleExceed"
@@ -170,17 +240,56 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { HomeFilled, OfficeBuilding, Loading } from '@element-plus/icons-vue'
 import { expenseCreateApi } from '@/api/expenseCreate'
+import { userApi } from '@/api/user'
+import { getCurrentUser, hasAnyRole } from '@/utils/permissionControl'
+import { normalizeAmount } from '@/utils/amount'
 
 const router = useRouter()
 const expenseFormRef = ref()
 const saving = ref(false)
 const submitting = ref(false)
 const loadingCategories = ref(false)
-const currentDormId = ref<number | null>(null)
+const currentDormId = ref<number | string | null>(null)
 
 const categories = ref<Array<{ value: string; label: string; color?: string }>>([])
-const members = ref<Array<{ key: number; label: string }>>([])
+const members = ref<Array<{ 
+  key: number; 
+  label: string; 
+  username: string; 
+  nickname: string; 
+  realName: string; 
+  dormName: string; 
+  building: string; 
+}>>([])
+
+const dormSearchName = ref('')
+const dormSearchCode = ref('')
+const isFiltering = ref(false)
+let debounceTimer: any = null
+
+const debouncedFilter = () => {
+  isFiltering.value = true
+  if (debounceTimer) clearTimeout(debounceTimer)
+  debounceTimer = setTimeout(() => {
+    isFiltering.value = false
+  }, 300)
+}
+
+const filteredMembers = computed(() => {
+  return members.value.filter(m => {
+    // 寝室号模糊匹配
+    const matchName = !dormSearchName.value || 
+      (m.dormName && m.dormName.toLowerCase().includes(dormSearchName.value.toLowerCase()))
+    
+    // 宿舍编码精确匹配 (假设后端返回的数据中有 building 或 dormCode 字段，这里先兼容 m.building)
+    const matchCode = !dormSearchCode.value || 
+      (m.building && m.building === dormSearchCode.value)
+    
+    return matchName && matchCode
+  })
+})
 
 const expenseForm = reactive({
   title: '',
@@ -217,7 +326,7 @@ const expenseFormRules = {
   ]
 }
 
-const customSplitDetails = ref<Array<{ key: number; name: string; amount: string }>>([])
+const customSplitDetails = ref<Array<{ key: number; name: string; amount: string; weight: number; days: number }>>([])
 
 const allocatedAmount = computed(() => {
   return customSplitDetails.value.reduce((sum, item) => {
@@ -250,31 +359,118 @@ const loadExpenseCategories = async () => {
   }
 }
 
-const loadDormMembers = async (dormId: number) => {
+const loadDormMembers = async (dormId: number | string) => {
   try {
-    console.log(`📂 加载宿舍 ${dormId} 的成员列表...`)
+    console.log(`� 加载宿舍成员列表 (ID: ${dormId})...`)
     const response = await expenseCreateApi.getDormMembers(dormId)
     console.log('✅ 宿舍成员列表加载成功:', response)
     
-    const rawMembers = response.rawMembers || response.members || []
-    members.value = rawMembers.map((member: any) => ({
-      key: member.userId,
-      label: member.label || member.nickname || member.username
-    }))
+    // 转换格式以适配 el-transfer (Rule 5)
+    // 根据用户规则 5：实际上应该访问 response.data.data.xxx
+    // 这里的 response 已经是拦截器返回的 resData.data
+    const membersData = (response && response.members) || 
+                       (response && response.data && response.data.members) || 
+                       response || []
+    
+    console.log('📦 处理成员数据:', {
+      count: Array.isArray(membersData) ? membersData.length : 'not an array',
+      firstMember: Array.isArray(membersData) && membersData.length > 0 ? membersData[0] : 'none'
+    })
+
+    members.value = (Array.isArray(membersData) ? membersData : []).map((m: any) => {
+      const realName = m.realName || ''
+      const nickname = m.nickname || ''
+      const username = m.username || ''
+      const displayName = nickname || realName || username
+      
+      // 优化标签显示：只有当实名或用户名与显示名称不同时，才在括号中显示
+      const details = []
+      if (realName && realName !== displayName) details.push(realName)
+      if (username && username !== displayName) details.push(username)
+      
+      const detailInfo = details.join('/')
+      const label = detailInfo ? `${displayName}(${detailInfo})` : displayName
+      
+      // 关键：确保 dormName 能够正确获取，增加对多种命名风格的兼容
+      const dormName = m.dormName || m.dorm_name || m.dorm?.dorm_name || m.dorm?.name
+      
+      return {
+        key: m.key || m.userId || m.id,
+        label: label,
+        username: username,
+        nickname: nickname,
+        realName: realName,
+        dormName: dormName || '未分配',
+        building: m.building || m.dorm?.building || ''
+      }
+    })
+    
+    // 如果没有选择过参与者，保持为空（Rule: 初始状态右侧“已选择人员”列表初始为空）
+    if (expenseForm.participants.length === 0) {
+      expenseForm.participants = []
+    }
     
     updateCustomSplitDetails()
   } catch (error: any) {
     console.error('❌ 加载宿舍成员失败:', error)
     ElMessage.error(error.message || '加载宿舍成员失败')
+    members.value = []
   }
 }
 
+const filterMethod = (query: string, item: any) => {
+  return (
+    item.label.toLowerCase().includes(query.toLowerCase()) ||
+    item.username.toLowerCase().includes(query.toLowerCase()) ||
+    (item.realName && item.realName.toLowerCase().includes(query.toLowerCase()))
+  )
+}
+
 const updateCustomSplitDetails = () => {
-  customSplitDetails.value = members.value.map(member => ({
-    key: member.key,
-    name: member.label,
-    amount: ''
-  }))
+  // 保持现有的分摊详情，只添加新增的成员，删除移除的成员
+  const currentDetails = [...customSplitDetails.value]
+  const expenseDate = new Date(expenseForm.date || new Date())
+  expenseDate.setHours(0, 0, 0, 0)
+  
+  customSplitDetails.value = members.value
+    .filter(member => expenseForm.participants.includes(member.key))
+    .map(member => {
+      const existing = currentDetails.find(d => d.key === member.key)
+      
+      // 计算居住天数 (与后端逻辑一致)
+      let days = 1
+      // @ts-ignore
+      const moveIn = member.moveInDate ? new Date(member.moveInDate) : null
+      // @ts-ignore
+      const moveOut = member.moveOutDate ? new Date(member.moveOutDate) : null
+      
+      if (moveIn) {
+        moveIn.setHours(0, 0, 0, 0)
+        if (moveIn > expenseDate) {
+          days = 0
+        } else {
+          const end = (moveOut && moveOut <= expenseDate) ? moveOut : expenseDate
+          end.setHours(0, 0, 0, 0)
+          days = Math.floor((end.getTime() - moveIn.getTime()) / (1000 * 60 * 60 * 24)) + 1
+        }
+      }
+
+      // 默认权重逻辑 (保持兼容)
+      let defaultWeight = 1.0
+      // @ts-ignore
+      if (member.memberRole === 'admin') defaultWeight = 1.5
+      // @ts-ignore
+      else if (member.memberRole === 'deputy') defaultWeight = 1.2
+
+      return {
+        key: member.key,
+        name: member.label,
+        amount: existing ? existing.amount : '',
+        weight: existing ? (existing.weight || defaultWeight) : defaultWeight,
+        days: days
+      }
+    })
+  
   calculateSplit()
 }
 
@@ -291,7 +487,8 @@ const saveDraft = async () => {
           category: expenseForm.category,
           date: expenseForm.date,
           participants: expenseForm.participants,
-          splitMethod: expenseForm.splitMethod
+          splitMethod: expenseForm.splitMethod,
+          customSplitDetails: expenseForm.splitMethod === 'custom' ? customSplitDetails.value : undefined
         })
         console.log('✅ 草稿保存成功:', response)
         ElMessage.success('草稿保存成功')
@@ -326,7 +523,8 @@ const submitExpense = async () => {
           category: expenseForm.category,
           date: expenseForm.date,
           participants: expenseForm.participants,
-          splitMethod: expenseForm.splitMethod
+          splitMethod: expenseForm.splitMethod,
+          customSplitDetails: expenseForm.splitMethod === 'custom' ? customSplitDetails.value : undefined
         })
         console.log('✅ 费用提交成功:', response)
         ElMessage.success('费用提交成功')
@@ -343,29 +541,87 @@ const submitExpense = async () => {
   })
 }
 
+const handleAmountBlur = () => {
+  expenseForm.amount = normalizeAmount(expenseForm.amount)
+  calculateSplit()
+}
+
+const handleCustomSplitBlur = (row: any) => {
+  row.amount = normalizeAmount(row.amount)
+  calculateSplit()
+}
+
+/**
+ * 实时过滤金额输入，仅保留数字和小数点，限制两位小数
+ */
+const filterAmount = (value: string): string => {
+  let cleanValue = value.replace(/[^\d.]/g, '')
+  
+  // 确保只有一个小数点
+  const dotCount = (cleanValue.match(/\./g) || []).length
+  if (dotCount > 1) {
+    const firstDotIndex = cleanValue.indexOf('.')
+    cleanValue = cleanValue.slice(0, firstDotIndex + 1) + 
+                 cleanValue.slice(firstDotIndex + 1).replace(/\./g, '')
+  }
+  
+  // 限制小数点后最多两位
+  if (cleanValue.includes('.')) {
+    const parts = cleanValue.split('.')
+    if (parts[1].length > 2) {
+      cleanValue = `${parts[0]}.${parts[1].slice(0, 2)}`
+    }
+  }
+  return cleanValue
+}
+
 const handleAmountInput = (value: string) => {
-  expenseForm.amount = value.replace(/[^\d.]/g, '')
+  expenseForm.amount = filterAmount(value)
   calculateSplit()
 }
 
 const calculateSplit = () => {
+  const total = parseFloat(expenseForm.amount) || 0
+  const participantsCount = expenseForm.participants.length || 0
+  
+  if (participantsCount === 0) return
+
   if (expenseForm.splitMethod === 'equal') {
-    const total = parseFloat(expenseForm.amount) || 0
-    const count = expenseForm.participants.length || 1
-    const equalAmount = (total / count).toFixed(2)
-    
+    const equalAmount = (total / participantsCount).toFixed(2)
     customSplitDetails.value.forEach(item => {
-      if (expenseForm.participants.includes(item.key)) {
+      item.amount = equalAmount
+    })
+  } else if (expenseForm.splitMethod === 'days') {
+    let totalDays = 0
+    customSplitDetails.value.forEach(item => {
+      totalDays += item.days
+    })
+
+    if (totalDays > 0) {
+      customSplitDetails.value.forEach(item => {
+        item.amount = ((total * item.days) / totalDays).toFixed(2)
+      })
+    } else {
+      // 如果总天数为0，回退到等额分摊
+      const equalAmount = (total / participantsCount).toFixed(2)
+      customSplitDetails.value.forEach(item => {
         item.amount = equalAmount
-      } else {
-        item.amount = ''
+      })
+    }
+  } else if (expenseForm.splitMethod === 'custom') {
+    // 自定义模式下不自动计算金额，由用户输入
+    // 但如果金额为空，可以默认一个等额分摊作为起始
+    customSplitDetails.value.forEach(item => {
+      if (!item.amount) {
+        item.amount = (total / participantsCount).toFixed(2)
       }
     })
   }
 }
 
 const handleCustomSplitInput = (row: any) => {
-  row.amount = row.amount.replace(/[^\d.]/g, '')
+  row.amount = filterAmount(row.amount)
+  // 如果是自定义分摊，输入时不需要实时计算分摊逻辑，但可能需要更新比例
 }
 
 const calculatePercentage = (amount: string) => {
@@ -382,6 +638,20 @@ const handleExceed = () => {
 const handleUploadSuccess = (response: any, file: any) => {
   ElMessage.success('文件上传成功')
   console.log('📎 上传成功:', response, file)
+  
+  // 更新表单中的附件信息，确保存储后端返回的文件路径
+  if (response.success && response.data && response.data.files) {
+    // 找到当前上传的文件并更新其 url
+    const uploadedFile = expenseForm.attachments.find(f => f.uid === file.uid)
+    if (uploadedFile) {
+      // 假设后端返回的数据中包含文件路径，这里根据 Rule 5 处理双层嵌套
+      const fileData = response.data.files[0] // 对应单次上传中的第一个文件
+      // @ts-ignore
+      uploadedFile.url = fileData.url || fileData.path
+      // @ts-ignore
+      uploadedFile.id = fileData.id
+    }
+  }
 }
 
 const handleUploadError = (error: any, file: any) => {
@@ -416,10 +686,37 @@ onMounted(async () => {
   
   await loadExpenseCategories()
   
-  currentDormId.value = 1
-  if (currentDormId.value) {
-    await loadDormMembers(currentDormId.value)
-    expenseForm.participants = members.value.map(m => m.key)
+  // 动态获取当前用户所属宿舍或权限 (Rule 2)
+  const user = getCurrentUser()
+  if (user) {
+    console.log('👤 当前用户:', user)
+    // 使用权限控制工具检查角色 (兼容不同数据结构)
+    const isAdmin = hasAnyRole(['超级管理员', '管理员', 'system_admin', 'admin'])
+    
+    if (isAdmin) {
+      console.log('👑 管理员角色，加载全系统用户')
+      currentDormId.value = 'all'
+      await loadDormMembers('all')
+    } else {
+      console.log('🏠 普通用户角色，尝试获取所属宿舍')
+      try {
+        const response = await userApi.getUserDormitory(user.id)
+        if (response && response.dorm) {
+          currentDormId.value = response.dorm.id
+          await loadDormMembers(currentDormId.value!)
+        } else {
+          console.warn('⚠️ 未找到所属宿舍信息')
+          ElMessage.warning('您尚未加入任何宿舍，可能无法选择参与成员')
+        }
+      } catch (error) {
+        console.error('❌ 获取宿舍信息失败:', error)
+      }
+    }
+  } else {
+    console.warn('⚠️ 未获取到用户信息')
+    // 降级处理：尝试加载默认宿舍
+    currentDormId.value = 1
+    await loadDormMembers(1)
   }
   
   calculateSplit()
@@ -438,7 +735,7 @@ onMounted(async () => {
 }
 
 .expense-form {
-  max-width: 800px;
+  max-width: 1000px;
   margin: 0 auto;
 }
 
@@ -447,6 +744,8 @@ onMounted(async () => {
   background: #f5f7fa;
   border-radius: 8px;
   margin-bottom: 20px;
+  max-width: 1000px;
+  margin: 0 auto 20px;
 }
 
 .split-summary {
@@ -472,6 +771,98 @@ onMounted(async () => {
   width: 100%;
 }
 
+.transfer-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  align-items: stretch;
+  gap: 15px;
+}
+
+.filter-container {
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 4px;
+  border: 1px solid #ebeef5;
+}
+
+.member-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.member-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  margin-right: 8px;
+}
+
+.member-dorm-tag {
+  flex-shrink: 0;
+}
+
+.transfer-footer {
+  padding: 6px 15px;
+  font-size: 12px;
+  color: #909399;
+  border-top: 1px solid #ebeef5;
+}
+
+.filter-loading {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  color: #409eff;
+  font-size: 13px;
+}
+
+:deep(.el-transfer) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+:deep(.el-transfer-panel) {
+  flex: 1;
+  min-width: 200px;
+  max-width: 450px;
+}
+
+:deep(.el-transfer__buttons) {
+  padding: 0 15px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+:deep(.el-transfer__button) {
+  margin-left: 0 !important;
+  padding: 8px 12px;
+}
+
+:deep(.el-transfer-panel__body) {
+  height: 350px;
+}
+
+:deep(.el-transfer-panel__list) {
+  height: 300px;
+}
+
+@media (max-width: 992px) {
+  :deep(.el-transfer-panel) {
+    max-width: none;
+  }
+}
+
 @media (max-width: 768px) {
   .expense-form {
     max-width: 100%;
@@ -480,6 +871,29 @@ onMounted(async () => {
   .split-summary {
     flex-direction: column;
     align-items: flex-end;
+  }
+
+  :deep(.el-transfer) {
+    flex-direction: column;
+    height: auto;
+  }
+
+  :deep(.el-transfer-panel) {
+    width: 100%;
+    max-width: none;
+  }
+
+  :deep(.el-transfer__buttons) {
+    flex-direction: row;
+    padding: 10px 0;
+  }
+
+  :deep(.el-transfer__button:first-child) {
+    transform: rotate(90deg);
+  }
+
+  :deep(.el-transfer__button:last-child) {
+    transform: rotate(90deg);
   }
 }
 </style>

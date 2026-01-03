@@ -6,6 +6,7 @@
 const BaseController = require('./BaseController');
 const { query } = require('../config/database');
 const { successResponse, errorResponse } = require('../middleware/response');
+const logger = require('../config/logger');
 
 class ExpenseController extends BaseController {
   constructor() {
@@ -456,13 +457,15 @@ class ExpenseController extends BaseController {
       const selectSql = `
         SELECT 
           e.id, e.title, e.description, e.amount, ec.category_name as category, 
+          ec.category_code as categoryCode,
           applicant.nickname as applicant, e.expense_date as date, e.status,
           reviewer_user.nickname as reviewer, e.approved_at as reviewDate, e.review_comment as reviewComment,
-          e.created_at as createdAt, e.updated_at as updatedAt
+          e.created_at as createdAt, e.updated_at as updatedAt, d.dorm_name as dormName
         FROM expenses e
         LEFT JOIN expense_categories ec ON e.category_id = ec.id
         LEFT JOIN users applicant ON e.applicant_id = applicant.id
         LEFT JOIN users reviewer_user ON e.approved_by = reviewer_user.id
+        LEFT JOIN dorms d ON e.dorm_id = d.id
         WHERE e.id = $1
       `;
       
@@ -472,6 +475,8 @@ class ExpenseController extends BaseController {
       const row = selectResult.rows[0];
       const processedRow = {
         ...row,
+        categoryCode: row.categorycode || row.categoryCode,
+        dormName: row.dormname || row.dormName,
         date: row.date ? (typeof row.date === 'object' && row.date.toISOString ? row.date.toISOString().split('T')[0] : row.date.toString()) : null,
         reviewDate: row.reviewDate ? (typeof row.reviewDate === 'object' && row.reviewDate.toISOString ? row.reviewDate.toISOString() : row.reviewDate.toString()) : null,
         createdAt: row.createdAt ? (typeof row.createdAt === 'object' && row.createdAt.toISOString ? row.createdAt.toISOString() : row.createdAt.toString()) : null,
@@ -503,6 +508,7 @@ class ExpenseController extends BaseController {
         LEFT JOIN expense_categories ec ON e.category_id = ec.id
         LEFT JOIN users applicant ON e.applicant_id = applicant.id
         LEFT JOIN users reviewer_user ON e.approved_by = reviewer_user.id
+        LEFT JOIN dorms d ON e.dorm_id = d.id
       `;
       let params = [];
       let paramIndex = 1;
@@ -541,15 +547,16 @@ class ExpenseController extends BaseController {
       
       // 查询费用列表
       const listSql = `
-        SELECT 
-          e.id, e.title, e.description, e.amount, ec.category_name as category, 
-          applicant.nickname as applicant, e.expense_date as date, e.status,
-          reviewer_user.nickname as reviewer, e.approved_at as reviewDate, e.review_comment as reviewComment,
-          e.created_at as createdAt
-        FROM expenses e${whereConditions}
-        ORDER BY e.created_at DESC
-        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
-      `;
+          SELECT 
+            e.id, e.title, e.description, e.amount, ec.category_name as category, 
+            ec.category_code as categoryCode,
+            applicant.nickname as applicant, e.expense_date as date, e.status,
+            reviewer_user.nickname as reviewer, e.approved_at as reviewDate, e.review_comment as reviewComment,
+            e.created_at as createdAt, d.dorm_name as dormName
+          FROM expenses e${whereConditions}
+          ORDER BY e.created_at DESC
+          LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+        `;
       params.push(parseInt(pageSize), offset);
       
       const listResult = await query(listSql, params);
@@ -571,10 +578,12 @@ class ExpenseController extends BaseController {
           description: row.description,
           amount: row.amount,
           category: row.category,
+          categoryCode: row.categorycode || row.categoryCode,
           applicant: row.applicant,
           date: row.date ? (typeof row.date === 'object' && row.date.toISOString ? row.date.toISOString().split('T')[0] : row.date.toString()) : null,
           status: row.status,
           reviewer: row.reviewer,
+          dormName: row.dormname || row.dormName,
           reviewDate: reviewDateVal ? (typeof reviewDateVal === 'object' && reviewDateVal.toISOString ? reviewDateVal.toISOString() : reviewDateVal.toString()) : null,
           reviewComment: reviewCommentVal,
           createdAt: createdAtVal ? (typeof createdAtVal === 'object' && createdAtVal.toISOString ? createdAtVal.toISOString() : createdAtVal.toString()) : null
@@ -612,13 +621,15 @@ class ExpenseController extends BaseController {
       const sql = `
         SELECT 
           e.id, e.title, e.description, e.amount, ec.category_name as category, 
+          ec.category_code as categoryCode,
           applicant.nickname as applicant, e.expense_date as date, e.status,
           reviewer_user.nickname as reviewer, e.approved_at as reviewDate, e.review_comment as reviewComment,
-          e.created_at as createdAt
+          e.created_at as createdAt, d.dorm_name as dormName
         FROM expenses e
         LEFT JOIN expense_categories ec ON e.category_id = ec.id
         LEFT JOIN users applicant ON e.applicant_id = applicant.id
         LEFT JOIN users reviewer_user ON e.approved_by = reviewer_user.id
+        LEFT JOIN dorms d ON e.dorm_id = d.id
         WHERE e.id = $1
       `;
       
@@ -632,6 +643,8 @@ class ExpenseController extends BaseController {
       const row = result.rows[0];
       const processedRow = {
         ...row,
+        categoryCode: row.categorycode || row.categoryCode,
+        dormName: row.dormname || row.dormName,
         date: row.date ? (typeof row.date === 'object' && row.date.toISOString ? row.date.toISOString().split('T')[0] : row.date.toString()) : null,
         reviewDate: row.reviewDate ? (typeof row.reviewDate === 'object' && row.reviewDate.toISOString ? row.reviewDate.toISOString() : row.reviewDate.toString()) : null,
         createdAt: row.createdAt ? (typeof row.createdAt === 'object' && row.createdAt.toISOString ? row.createdAt.toISOString() : row.createdAt.toString()) : null
@@ -650,13 +663,37 @@ class ExpenseController extends BaseController {
    */
   async createExpense(req, res, next) {
     try {
-      const { title, description, amount, category, date } = req.body;
+      const { title, description, amount, category, date, participants, splitMethod, customSplitDetails } = req.body;
       
+      // 记录费用创建尝试
+      logger.audit(req, '创建费用', { 
+        timestamp: new Date().toISOString(),
+        title,
+        amount,
+        participantCount: participants?.length
+      });
+
       // 验证必填字段
       if (!title || !amount || !category || !date) {
         return errorResponse(res, '缺少必填字段', 400);
       }
       
+      // 校验参与者中是否包含管理员角色 (Rule 18/Rule 2)
+      const { query } = require('../config/database');
+      const adminCheckQuery = `
+        SELECT u.id, u.username, r.role_name
+        FROM users u
+        JOIN user_roles ur ON u.id = ur.user_id
+        JOIN roles r ON ur.role_id = r.id
+        WHERE u.id = ANY($1) AND r.is_system_role = TRUE
+      `;
+      const adminCheckResult = await query(adminCheckQuery, [participants]);
+      if (adminCheckResult.rows.length > 0) {
+        const adminNames = adminCheckResult.rows.map(r => r.username).join(', ');
+        logger.warn('[ExpenseController] 尝试添加管理员到费用分摊', { adminNames });
+        return errorResponse(res, `以下用户是管理员，不能参与费用分摊: ${adminNames}`, 400);
+      }
+
       // 先查询费用类别ID（支持类别名称或类别代码）
       const categoryQuery = await query(
         'SELECT id FROM expense_categories WHERE category_name = $1 OR category_code = $1', 
@@ -669,8 +706,8 @@ class ExpenseController extends BaseController {
       
       const categoryId = categoryQuery.rows[0].id;
       
-      // 假设申请人是当前登录用户（这里使用默认ID 4）
-      const applicantId = 4; // 实际应用中应该从登录信息获取
+      // 使用当前登录用户
+      const applicantId = req.user.id;
       
       // 查询用户所属的宿舍ID
       const dormQuery = await query(
@@ -678,50 +715,112 @@ class ExpenseController extends BaseController {
         [applicantId, 'active']
       );
       
-      if (dormQuery.rows.length === 0) {
-        return errorResponse(res, '用户未加入任何宿舍', 400);
+      let dormId = null; // 允许为 null
+      if (dormQuery.rows.length > 0) {
+        dormId = dormQuery.rows[0].dorm_id;
+      } else {
+        // 检查用户是否为系统管理员或管理员 (Rule 18/Rule 2)
+        const adminCheck = await query(`
+          SELECT 1 FROM user_roles ur 
+          JOIN roles r ON ur.role_id = r.id 
+          WHERE ur.user_id = $1 AND r.is_system_role = TRUE
+        `, [applicantId]);
+        
+        if (adminCheck.rows.length === 0) {
+          return errorResponse(res, '用户未加入任何宿舍', 400);
+        }
+        console.log('管理员创建费用，无需宿舍信息');
+        
+        // 尝试从第一个参与者获取宿舍ID，以满足数据库 NOT NULL 约束
+        if (participants && participants.length > 0) {
+          const participantDormQuery = await query(
+            'SELECT dorm_id FROM user_dorms WHERE user_id = $1 AND status = $2 LIMIT 1',
+            [participants[0], 'active']
+          );
+          if (participantDormQuery.rows.length > 0) {
+            dormId = participantDormQuery.rows[0].dorm_id;
+            console.log('使用第一个参与者的宿舍ID:', dormId);
+          }
+        }
+      }
+
+      if (!dormId) {
+        // 如果仍然没有宿舍ID，返回错误，提醒用户数据库约束或分配宿舍
+        return errorResponse(res, '无法确定费用所属宿舍，请确保至少有一名参与者属于某个宿舍', 400);
       }
       
-      const dormId = dormQuery.rows[0].dorm_id;
-      
-      // 先插入费用记录
+    // 开启事务处理费用创建和分摊记录
+    const client = await require('../config/database').pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // 1. 插入费用主表
       const insertSql = `
-        INSERT INTO expenses (title, description, amount, category_id, applicant_id, dorm_id, expense_date, status, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', NOW())
+        INSERT INTO expenses (
+          title, description, amount, category_id, applicant_id, dorm_id, 
+          expense_date, status, split_type, created_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, NOW())
         RETURNING id
       `;
       
-      const insertResult = await query(insertSql, [title, description, amount, categoryId, applicantId, dormId, date]);
+      const insertResult = await client.query(insertSql, [
+        title, description, amount, categoryId, applicantId, dormId, date, splitMethod
+      ]);
       const expenseId = insertResult.rows[0].id;
       
-      // 查询刚插入的费用详情
-      const selectSql = `
-        SELECT 
-          e.id, e.title, e.description, e.amount, ec.category_name as category, 
-          applicant.nickname as applicant, e.expense_date as date, e.status,
-          reviewer_user.nickname as reviewer, e.approved_at as reviewDate, e.review_comment as reviewComment,
-          e.created_at as createdAt
-        FROM expenses e
-        LEFT JOIN expense_categories ec ON e.category_id = ec.id
-        LEFT JOIN users applicant ON e.applicant_id = applicant.id
-        LEFT JOIN users reviewer_user ON e.approved_by = reviewer_user.id
-        WHERE e.id = $1
-      `;
+      // 2. 调用存储过程计算并存储分摊结果
+      // calculate_expense_split(p_expense_id, p_split_type, p_participant_ids, p_split_details, p_due_date)
+      const splitDetailsJson = splitMethod === 'custom' ? JSON.stringify(customSplitDetails) : '{}';
+      const calculateSql = `SELECT calculate_expense_split($1, $2, $3, $4, $5)`;
+      const dueDate = new Date(date);
+      dueDate.setDate(dueDate.getDate() + 7); // 默认7天后到期
       
-      const selectResult = await query(selectSql, [expenseId]);
-      
-      // 处理日期字段，确保它们被正确序列化为字符串
-      const row = selectResult.rows[0];
-      const processedRow = {
-        ...row,
-        date: row.date ? (typeof row.date === 'object' && row.date.toISOString ? row.date.toISOString().split('T')[0] : row.date.toString()) : null,
-        reviewDate: row.reviewDate ? (typeof row.reviewDate === 'object' && row.reviewDate.toISOString ? row.reviewDate.toISOString() : row.reviewDate.toString()) : null,
-        createdAt: row.createdAt ? (typeof row.createdAt === 'object' && row.createdAt.toISOString ? row.createdAt.toISOString() : row.createdAt.toString()) : null
-      };
-      
-      return successResponse(res, processedRow, '费用创建成功');
+      await client.query(calculateSql, [
+        expenseId, 
+        splitMethod, 
+        participants, 
+        splitDetailsJson, 
+        dueDate.toISOString().split('T')[0]
+      ]);
+
+      await client.query('COMMIT');
+
+        // 查询完整信息返回
+        const selectSql = `
+          SELECT 
+            e.id, e.title, e.description, e.amount, ec.category_name as category, 
+            ec.category_code as categoryCode,
+            applicant.nickname as applicant, e.expense_date as date, e.status,
+            e.created_at as createdAt, d.dorm_name as dormName
+          FROM expenses e
+          LEFT JOIN expense_categories ec ON e.category_id = ec.id
+          LEFT JOIN users applicant ON e.applicant_id = applicant.id
+          LEFT JOIN dorms d ON e.dorm_id = d.id
+          WHERE e.id = $1
+        `;
+        
+        const selectResult = await client.query(selectSql, [expenseId]);
+        const row = selectResult.rows[0];
+        
+        logger.audit(req, '费用创建成功', { expenseId });
+
+        return successResponse(res, {
+          ...row,
+          categoryCode: row.categorycode || row.categoryCode,
+          dormName: row.dormname || row.dormName,
+          date: row.date ? (typeof row.date === 'object' && row.date.toISOString ? row.date.toISOString().split('T')[0] : row.date.toString()) : null,
+          createdAt: row.createdAt ? (typeof row.createdAt === 'object' && row.createdAt.toISOString ? row.createdAt.toISOString() : row.createdAt.toString()) : null
+        }, '费用创建成功');
+
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
     } catch (error) {
-      console.error('创建费用失败:', error);
+      logger.error('创建费用失败:', { error: error.message });
       next(error);
     }
   }
@@ -1008,7 +1107,7 @@ class ExpenseController extends BaseController {
       const { format = 'csv', status = '', category = '', startDate = '', endDate = '' } = req.query;
       
       // 构建查询条件
-      let whereConditions = ' LEFT JOIN expense_categories ec ON e.category_id = ec.id';
+      let whereConditions = '';
       let params = [];
       let paramIndex = 1;
       
@@ -1025,13 +1124,13 @@ class ExpenseController extends BaseController {
       }
       
       if (startDate) {
-        whereConditions += whereConditions.includes('WHERE') ? ` AND e.date >= $${paramIndex}` : ` WHERE e.date >= $${paramIndex}`;
+        whereConditions += whereConditions.includes('WHERE') ? ` AND e.expense_date >= $${paramIndex}` : ` WHERE e.expense_date >= $${paramIndex}`;
         params.push(startDate);
         paramIndex++;
       }
       
       if (endDate) {
-        whereConditions += whereConditions.includes('WHERE') ? ` AND e.date <= $${paramIndex}` : ` WHERE e.date <= $${paramIndex}`;
+        whereConditions += whereConditions.includes('WHERE') ? ` AND e.expense_date <= $${paramIndex}` : ` WHERE e.expense_date <= $${paramIndex}`;
         params.push(endDate);
         paramIndex++;
       }
@@ -1039,10 +1138,16 @@ class ExpenseController extends BaseController {
       // 查询费用数据
       const sql = `
         SELECT 
-          e.id, e.title, e.description, e.amount, ec.category_name as category, e.applicant, e.date, e.status,
-          e.approved_by as reviewer, e.approved_at as reviewDate, e.review_comment as reviewComment,
-          e.created_at as createdAt
-        FROM expenses e${whereConditions}
+          e.id, e.title, e.description, e.amount, ec.category_name as category, 
+          applicant.nickname as applicant, e.expense_date as date, e.status,
+          reviewer_user.nickname as reviewer, e.approved_at as reviewDate, e.review_comment as reviewComment,
+          e.created_at as createdAt, d.dorm_name as dormName
+        FROM expenses e
+        LEFT JOIN expense_categories ec ON e.category_id = ec.id
+        LEFT JOIN users applicant ON e.applicant_id = applicant.id
+        LEFT JOIN users reviewer_user ON e.approved_by = reviewer_user.id
+        LEFT JOIN dorms d ON e.dorm_id = d.id
+        ${whereConditions}
         ORDER BY e.created_at DESC
       `;
       
@@ -1055,7 +1160,7 @@ class ExpenseController extends BaseController {
         res.setHeader('Content-Disposition', `attachment; filename=expenses_${new Date().toISOString().split('T')[0]}.csv`);
         
         // 构建CSV内容
-        const headers = ['ID', '标题', '描述', '金额', '类别', '申请人', '日期', '状态', '审核人', '审核日期', '审核意见', '创建时间'];
+        const headers = ['ID', '标题', '描述', '金额', '类别', '申请人', '寝室', '日期', '状态', '审核人', '审核日期', '审核意见', '创建时间'];
         const csvContent = [
           headers.join(','),
           ...result.rows.map(row => [
@@ -1065,6 +1170,7 @@ class ExpenseController extends BaseController {
             row.amount,
             row.category,
             row.applicant,
+            `"${row.dormName || row.dormname || ''}"`,
             row.date,
             row.status,
             row.reviewer || '',
@@ -1091,7 +1197,7 @@ class ExpenseController extends BaseController {
    */
   async saveDraft(req, res, next) {
     try {
-      const { title, description, amount, category, date, dorm_id } = req.body;
+      const { title, description, amount, category, date, dorm_id, splitMethod, customSplitDetails } = req.body;
       
       console.log('保存草稿请求参数:', req.body);
       
@@ -1129,16 +1235,44 @@ class ExpenseController extends BaseController {
         if (userDormQuery.rows.length > 0) {
           dormId = userDormQuery.rows[0].dorm_id;
         } else {
-          console.log('用户未加入任何宿舍');
-          return errorResponse(res, '用户未加入任何宿舍', 400);
+          // 检查用户是否为系统管理员或管理员 (Rule 18/Rule 2)
+          const adminCheck = await query(`
+            SELECT 1 FROM user_roles ur 
+            JOIN roles r ON ur.role_id = r.id 
+            WHERE ur.user_id = $1 AND r.is_system_role = TRUE
+          `, [applicantId]);
+          
+          if (adminCheck.rows.length > 0) {
+            console.log('管理员保存草稿，尝试从参与者获取宿舍信息');
+            // 尝试从第一个参与者获取宿舍ID
+            const participants = req.body.participants;
+            if (participants && participants.length > 0) {
+              const participantDormQuery = await query(
+                'SELECT dorm_id FROM user_dorms WHERE user_id = $1 AND status = $2 LIMIT 1',
+                [participants[0], 'active']
+              );
+              if (participantDormQuery.rows.length > 0) {
+                dormId = participantDormQuery.rows[0].dorm_id;
+                console.log('使用第一个参与者的宿舍ID:', dormId);
+              }
+            }
+          } else {
+            console.log('普通用户未加入任何宿舍');
+            return errorResponse(res, '用户未加入任何宿舍', 400);
+          }
         }
+      }
+      
+      if (!dormId) {
+        // 如果仍然没有宿舍ID，返回错误，提醒用户
+        return errorResponse(res, '无法确定费用所属宿舍，请确保至少有一名参与者属于某个宿舍', 400);
       }
       console.log('使用的宿舍ID:', dormId);
       
       // 查询费用类别ID
       console.log('查询费用类别:', category);
       const categoryQuery = await query(
-        'SELECT id FROM expense_categories WHERE category_name = $1', 
+        'SELECT id FROM expense_categories WHERE category_name = $1 OR category_code = $1', 
         [category]
       );
       
@@ -1155,12 +1289,23 @@ class ExpenseController extends BaseController {
       // 插入或更新草稿
       // 这里简化处理，直接插入新的草稿记录，使用数据库允许的status值'pending'
       const insertSql = `
-        INSERT INTO expenses (title, description, amount, currency, category_id, applicant_id, dorm_id, expense_date, status, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', NOW(), NOW())
+        INSERT INTO expenses (title, description, amount, currency, category_id, applicant_id, dorm_id, expense_date, status, split_type, split_details, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10, NOW(), NOW())
         RETURNING id, title, description, amount, currency, category_id, applicant_id, dorm_id, expense_date as date, status, created_at, updated_at
       `;
       
-      const insertParams = [title, description || '', amount || 0, 'CNY', categoryId, applicantId, dormId, date || new Date().toISOString().split('T')[0]];
+      const insertParams = [
+        title, 
+        description || '', 
+        amount || 0, 
+        'CNY', 
+        categoryId, 
+        applicantId, 
+        dormId, 
+        date || new Date().toISOString().split('T')[0],
+        splitMethod || 'equal',
+        splitMethod === 'custom' ? JSON.stringify(customSplitDetails) : null
+      ];
       console.log('插入草稿SQL:', insertSql);
       console.log('插入草稿参数:', insertParams);
       

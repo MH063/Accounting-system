@@ -416,7 +416,7 @@ CREATE TABLE expenses (
     
     -- 申请信息
     applicant_id BIGINT NOT NULL,
-    dorm_id INTEGER NOT NULL,
+    dorm_id INTEGER, -- 修改：允许为空，支持管理员或全局费用
     payer_id BIGINT,
     
     -- 审批流程
@@ -514,7 +514,7 @@ CREATE TABLE expense_splits (
     id BIGSERIAL PRIMARY KEY,
     expense_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
-    dorm_id INTEGER NOT NULL,
+    dorm_id INTEGER, -- 修改：允许为空
     
     -- 分摊信息
     split_amount DECIMAL(15,2) NOT NULL CHECK (split_amount >= 0),
@@ -1438,21 +1438,24 @@ ORDER BY month DESC, d.dorm_name, u.username;
 CREATE OR REPLACE FUNCTION calculate_expense_split(
     p_expense_id BIGINT,
     p_split_type VARCHAR DEFAULT 'equal', -- equal, days, custom
+    p_participant_ids BIGINT[] DEFAULT NULL, -- 参与分摊的用户ID列表，如果为NULL则默认为宿舍所有活跃成员
     p_split_details JSONB DEFAULT '{}', -- 自定义分摊详情
     p_due_date DATE DEFAULT NULL  -- 截止日期
 ) RETURNS BOOLEAN AS $$
 DECLARE
     v_dorm_id INTEGER;
     v_total_amount DECIMAL(15,2);
+    v_expense_date DATE;
     v_user_count INTEGER;
     v_user_record RECORD;
     v_split_amount DECIMAL(15,2);
     v_split_percentage DECIMAL(5,2);
     v_total_days INTEGER := 0;
     v_user_days INTEGER;
+    v_participant_ids BIGINT[];
 BEGIN
     -- 获取费用记录信息
-    SELECT dorm_id, amount INTO v_dorm_id, v_total_amount
+    SELECT dorm_id, amount, expense_date INTO v_dorm_id, v_total_amount, v_expense_date
     FROM expenses
     WHERE id = p_expense_id;
     
@@ -1461,6 +1464,27 @@ BEGIN
         RETURN FALSE;
     END IF;
     
+    -- 如果未指定参与者，则查询宿舍所有活跃成员
+    IF p_participant_ids IS NULL OR array_length(p_participant_ids, 1) IS NULL THEN
+        SELECT array_agg(user_id) INTO v_participant_ids
+        FROM user_dorms ud
+        WHERE ud.dorm_id = v_dorm_id 
+        AND ud.status = 'active'
+        AND (ud.move_out_date IS NULL OR ud.move_out_date > v_expense_date)
+        AND NOT EXISTS (
+            SELECT 1 FROM user_roles ur 
+            JOIN roles r ON ur.role_id = r.id 
+            WHERE ur.user_id = ud.user_id AND r.is_system_role = TRUE
+        );
+    ELSE
+        v_participant_ids := p_participant_ids;
+    END IF;
+
+    IF v_participant_ids IS NULL OR array_length(v_participant_ids, 1) IS NULL THEN
+        RAISE EXCEPTION '没有可参与分摊的用户';
+        RETURN FALSE;
+    END IF;
+
     -- 删除现有分摊记录
     DELETE FROM expense_splits WHERE expense_id = p_expense_id;
     
@@ -1475,178 +1499,130 @@ BEGIN
     
     -- 根据分摊类型处理
     IF p_split_type = 'equal' THEN
-        -- 等额分摊：总金额平均分配给所有被选中的寝室成员
-        SELECT COUNT(*) INTO v_user_count
-        FROM user_dorms ud
-        WHERE ud.dorm_id = v_dorm_id 
-        AND ud.status = 'active'
-        AND (ud.move_out_date IS NULL OR ud.move_out_date > CURRENT_DATE)
-        AND NOT EXISTS (
-            SELECT 1 FROM user_roles ur 
-            JOIN roles r ON ur.role_id = r.id 
-            WHERE ur.user_id = ud.user_id AND r.is_system_role = TRUE
-        );
+        -- 等额分摊
+        v_user_count := array_length(v_participant_ids, 1);
+        v_split_amount := ROUND(v_total_amount / v_user_count, 2);
+        v_split_percentage := ROUND(100.0 / v_user_count, 2);
         
-        IF v_user_count = 0 THEN
-            RAISE EXCEPTION '宿舍中没有活跃用户: %', v_dorm_id;
-            RETURN FALSE;
-        END IF;
-        
-        v_split_amount := v_total_amount / v_user_count;
-        v_split_percentage := 100.0 / v_user_count;
-        
-        FOR v_user_record IN 
-            SELECT ud.user_id 
-            FROM user_dorms ud
-            WHERE ud.dorm_id = v_dorm_id 
-            AND ud.status = 'active'
-            AND (ud.move_out_date IS NULL OR ud.move_out_date > CURRENT_DATE)
-            AND NOT EXISTS (
-                SELECT 1 FROM user_roles ur 
-                JOIN roles r ON ur.role_id = r.id 
-                WHERE ur.user_id = ud.user_id AND r.is_system_role = TRUE
-            )
-        LOOP
-            INSERT INTO expense_splits (
-                expense_id, 
-                user_id, 
-                split_amount, 
-                split_percentage, 
-                payment_status, 
-                due_date,
-                created_at
-            ) VALUES (
-                p_expense_id, 
-                v_user_record.user_id, 
-                v_split_amount, 
-                v_split_percentage, 
-                'pending', 
-                COALESCE(p_due_date, CURRENT_DATE + INTERVAL '7 days'),
-                NOW()
-            );
-        END LOOP;
-    
-    ELSIF p_split_type = 'days' THEN
-        -- 按在寝室天数分摊：根据被选中成员在寝室的居住天数比例分摊
-        -- 首先计算总天数
-        FOR v_user_record IN 
-            SELECT 
-                ud.user_id,
-                CASE 
-                    WHEN ud.move_in_date IS NULL THEN 1
-                    WHEN ud.move_in_date > CURRENT_DATE THEN 0
-                    WHEN ud.move_out_date IS NULL THEN CURRENT_DATE - ud.move_in_date + 1
-                    WHEN ud.move_out_date > CURRENT_DATE THEN CURRENT_DATE - ud.move_in_date + 1
-                    ELSE ud.move_out_date - ud.move_in_date + 1
-                END AS days_in_dorm
-            FROM user_dorms ud
-            WHERE ud.dorm_id = v_dorm_id 
-            AND ud.status = 'active'
-            AND (ud.move_out_date IS NULL OR ud.move_out_date > CURRENT_DATE)
-            AND NOT EXISTS (
-                SELECT 1 FROM user_roles ur 
-                JOIN roles r ON ur.role_id = r.id 
-                WHERE ur.user_id = ud.user_id AND r.is_system_role = TRUE
-            )
-        LOOP
-            v_total_days := v_total_days + v_user_record.days_in_dorm;
-        END LOOP;
-        
-        IF v_total_days = 0 THEN
-            RAISE EXCEPTION '宿舍中没有有效的居住天数记录: %', v_dorm_id;
-            RETURN FALSE;
-        END IF;
-        
-        -- 根据天数比例分摊
-        FOR v_user_record IN 
-            SELECT 
-                ud.user_id,
-                CASE 
-                    WHEN ud.move_in_date IS NULL THEN 1
-                    WHEN ud.move_in_date > CURRENT_DATE THEN 0
-                    WHEN ud.move_out_date IS NULL THEN CURRENT_DATE - ud.move_in_date + 1
-                    WHEN ud.move_out_date > CURRENT_DATE THEN CURRENT_DATE - ud.move_in_date + 1
-                    ELSE ud.move_out_date - ud.move_in_date + 1
-                END AS days_in_dorm
-            FROM user_dorms ud
-            WHERE ud.dorm_id = v_dorm_id 
-            AND ud.status = 'active'
-            AND (ud.move_out_date IS NULL OR ud.move_out_date > CURRENT_DATE)
-            AND NOT EXISTS (
-                SELECT 1 FROM user_roles ur 
-                JOIN roles r ON ur.role_id = r.id 
-                WHERE ur.user_id = ud.user_id AND r.is_system_role = TRUE
-            )
-        LOOP
-            v_user_days := v_user_record.days_in_dorm;
-            v_split_percentage := (v_user_days::DECIMAL(15,2) / v_total_days::DECIMAL(15,2)) * 100.0;
-            v_split_amount := v_total_amount * v_split_percentage / 100.0;
-            
-            INSERT INTO expense_splits (
-                expense_id, 
-                user_id, 
-                split_amount, 
-                split_percentage, 
-                payment_status, 
-                due_date,
-                created_at
-            ) VALUES (
-                p_expense_id, 
-                v_user_record.user_id, 
-                v_split_amount, 
-                v_split_percentage, 
-                'pending', 
-                COALESCE(p_due_date, CURRENT_DATE + INTERVAL '7 days'),
-                NOW()
-            );
-        END LOOP;
-    
-    ELSIF p_split_type = 'custom' THEN
-        -- 自定义比例：缴费人自定义每个被选中成员的分摊比例
+        -- 处理余数，确保总额一致
         DECLARE
-            v_total_percentage DECIMAL(5,2) := 0;
+            v_current_sum DECIMAL(15,2) := 0;
+            v_i INTEGER := 1;
         BEGIN
-            -- 验证百分比总和是否为100%
-            FOR v_user_record IN 
-                SELECT (value->>'percentage')::DECIMAL(5,2) AS percentage
-                FROM jsonb_each_text(p_split_details)
-            LOOP
-                v_total_percentage := v_total_percentage + v_user_record.percentage;
-            END LOOP;
-            
-            IF ABS(v_total_percentage - 100.0) > 0.01 THEN
-                RAISE EXCEPTION '自定义分摊百分比总和必须等于100%%，当前总和为: %', v_total_percentage;
-                RETURN FALSE;
-            END IF;
-            
-            -- 按百分比分摊
-            FOR v_user_record IN 
-                SELECT key::BIGINT AS user_id, 
-                       (value->>'percentage')::DECIMAL(5,2) AS percentage
-                FROM jsonb_each_text(p_split_details)
-            LOOP
-                v_split_amount := v_total_amount * v_user_record.percentage / 100.0;
+            FOR v_i IN 1..v_user_count LOOP
+                IF v_i = v_user_count THEN
+                    v_split_amount := v_total_amount - v_current_sum;
+                END IF;
                 
                 INSERT INTO expense_splits (
-                    expense_id, 
-                    user_id, 
-                    split_amount, 
-                    split_percentage, 
-                    payment_status, 
-                    due_date,
-                    created_at
+                    expense_id, user_id, dorm_id, split_amount, split_percentage, 
+                    payment_status, due_date, created_at
                 ) VALUES (
-                    p_expense_id, 
-                    v_user_record.user_id, 
-                    v_split_amount, 
-                    v_user_record.percentage, 
-                    'pending', 
-                    COALESCE(p_due_date, CURRENT_DATE + INTERVAL '7 days'),
-                    NOW()
+                    p_expense_id, v_participant_ids[v_i], v_dorm_id, v_split_amount, v_split_percentage, 
+                    'pending', COALESCE(p_due_date, v_expense_date + INTERVAL '7 days'), NOW()
                 );
+                
+                v_current_sum := v_current_sum + v_split_amount;
             END LOOP;
         END;
     
+    ELSIF p_split_type = 'days' THEN
+        -- 按在寝室天数分摊
+        -- 计算总天数
+        FOR v_i IN 1..array_length(v_participant_ids, 1) LOOP
+            SELECT 
+                CASE 
+                    WHEN ud.move_in_date IS NULL THEN 1
+                    WHEN ud.move_in_date > v_expense_date THEN 0
+                    WHEN ud.move_out_date IS NULL THEN v_expense_date - ud.move_in_date + 1
+                    WHEN ud.move_out_date > v_expense_date THEN v_expense_date - ud.move_in_date + 1
+                    ELSE ud.move_out_date - ud.move_in_date + 1
+                END INTO v_user_days
+            FROM user_dorms ud
+            WHERE ud.user_id = v_participant_ids[v_i] AND ud.dorm_id = v_dorm_id;
+            
+            v_total_days := v_total_days + COALESCE(v_user_days, 0);
+        END LOOP;
+        
+        IF v_total_days = 0 THEN
+            -- 如果总天数为0，退化为等额分摊
+            RETURN calculate_expense_split(p_expense_id, 'equal', p_participant_ids, p_split_details, p_due_date);
+        END IF;
+        
+        -- 根据天数比例分摊
+        DECLARE
+            v_current_sum DECIMAL(15,2) := 0;
+            v_user_count INTEGER := array_length(v_participant_ids, 1);
+            v_i INTEGER := 1;
+        BEGIN
+            FOR v_i IN 1..v_user_count LOOP
+                SELECT 
+                    CASE 
+                        WHEN ud.move_in_date IS NULL THEN 1
+                        WHEN ud.move_in_date > v_expense_date THEN 0
+                        WHEN ud.move_out_date IS NULL THEN v_expense_date - ud.move_in_date + 1
+                        WHEN ud.move_out_date > v_expense_date THEN v_expense_date - ud.move_in_date + 1
+                        ELSE ud.move_out_date - ud.move_in_date + 1
+                    END INTO v_user_days
+                FROM user_dorms ud
+                WHERE ud.user_id = v_participant_ids[v_i] AND ud.dorm_id = v_dorm_id;
+                
+                v_user_days := COALESCE(v_user_days, 0);
+                v_split_percentage := ROUND((v_user_days::DECIMAL / v_total_days::DECIMAL) * 100.0, 2);
+                
+                IF v_i = v_user_count THEN
+                    v_split_amount := v_total_amount - v_current_sum;
+                ELSE
+                    v_split_amount := ROUND(v_total_amount * v_user_days / v_total_days, 2);
+                END IF;
+                
+                INSERT INTO expense_splits (
+                    expense_id, user_id, dorm_id, split_amount, split_percentage, 
+                    payment_status, due_date, created_at
+                ) VALUES (
+                    p_expense_id, v_participant_ids[v_i], v_dorm_id, v_split_amount, v_split_percentage, 
+                    'pending', COALESCE(p_due_date, v_expense_date + INTERVAL '7 days'), NOW()
+                );
+                
+                v_current_sum := v_current_sum + v_split_amount;
+            END LOOP;
+        END;
+    
+    ELSIF p_split_type = 'custom' THEN
+        -- 自定义分摊
+        DECLARE
+            v_current_sum DECIMAL(15,2) := 0;
+            v_user_count INTEGER := array_length(v_participant_ids, 1);
+            v_uid BIGINT;
+            v_i INTEGER := 1;
+        BEGIN
+            -- 验证并计算
+            FOR v_i IN 1..v_user_count LOOP
+                v_uid := v_participant_ids[v_i];
+                -- 从 JSON 中获取该用户的金额
+                -- 这里假设 p_split_details 格式为 [{"userId": 1, "amount": 50}, ...]
+                SELECT (item->>'amount')::DECIMAL INTO v_split_amount
+                FROM jsonb_array_elements(p_split_details) AS item
+                WHERE (item->>'userId')::BIGINT = v_uid;
+                
+                v_split_amount := COALESCE(v_split_amount, 0);
+                v_split_percentage := ROUND((v_split_amount / v_total_amount) * 100.0, 2);
+                
+                IF v_i = v_user_count THEN
+                    v_split_amount := v_total_amount - v_current_sum;
+                END IF;
+                
+                INSERT INTO expense_splits (
+                    expense_id, user_id, dorm_id, split_amount, split_percentage, 
+                    payment_status, due_date, created_at
+                ) VALUES (
+                    p_expense_id, v_uid, v_dorm_id, v_split_amount, v_split_percentage, 
+                    'pending', COALESCE(p_due_date, v_expense_date + INTERVAL '7 days'), NOW()
+                );
+                
+                v_current_sum := v_current_sum + v_split_amount;
+            END LOOP;
+        END;
     ELSE
         RAISE EXCEPTION '不支持的分摊类型: %。支持的类型包括: equal(等额分摊), days(按天数分摊), custom(自定义比例)', p_split_type;
         RETURN FALSE;

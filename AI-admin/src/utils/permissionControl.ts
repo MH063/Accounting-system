@@ -5,8 +5,10 @@ import { AdminAccount, PermissionRole } from '@/api/adminPermission'
  * 提供更精细化的权限控制功能
  */
 
-// 当前用户信息（从本地存储获取）
-const getCurrentUser = (): AdminAccount | null => {
+/**
+ * 获取当前用户信息（从本地存储获取）
+ */
+export const getCurrentUser = (): AdminAccount | null => {
   const userStr = localStorage.getItem('adminUser')
   if (userStr) {
     try {
@@ -22,7 +24,18 @@ const getCurrentUser = (): AdminAccount | null => {
 // 获取当前用户的角色
 const getCurrentUserRoles = (): string[] => {
   const user = getCurrentUser()
-  return user?.roleNames || []
+  if (!user) return []
+  
+  // 兼容不同的用户信息结构
+  if (Array.isArray(user.roleNames)) {
+    return user.roleNames
+  }
+  
+  if (typeof user.role === 'string') {
+    return [user.role]
+  }
+  
+  return []
 }
 
 // 获取当前用户的权限列表
@@ -30,10 +43,12 @@ const getCurrentUserPermissions = (): string[] => {
   const user = getCurrentUser()
   if (!user) return []
   
-  // 合并所有角色的权限
-  const permissions: string[] = []
-  // 这里需要从后端获取角色对应的权限，暂时模拟
-  return permissions
+  // 兼容不同的用户信息结构
+  if (Array.isArray(user.permissions)) {
+    return user.permissions
+  }
+  
+  return []
 }
 
 /**
@@ -46,13 +61,19 @@ export const hasPermission = (permission: string): boolean => {
   const user = getCurrentUser()
   if (!user) return false
   
+  const roles = getCurrentUserRoles()
+  
   // 超级管理员拥有所有权限
-  if (user.roleNames.includes('超级管理员')) {
+  if (roles.includes('超级管理员') || roles.includes('system_admin')) {
     return true
   }
   
   // 获取用户权限列表并检查
   const userPermissions = getCurrentUserPermissions()
+  if (userPermissions.includes('*')) {
+    return true
+  }
+  
   return userPermissions.includes(permission)
 }
 

@@ -209,10 +209,19 @@ class DormRepository extends BaseRepository {
           ud.room_number,
           ud.monthly_share,
           ud.deposit_paid,
-          ud.last_payment_date
+          ud.last_payment_date,
+          d.dorm_name,
+          d.building
         FROM user_dorms ud
         JOIN users u ON ud.user_id = u.id
+        JOIN dorms d ON ud.dorm_id = d.id
         WHERE ud.dorm_id = $1 ${statusCondition}
+        AND u.id NOT IN (
+          SELECT ur.user_id 
+          FROM user_roles ur
+          JOIN roles r ON ur.role_id = r.id
+          WHERE r.is_system_role = TRUE
+        )
         ORDER BY ud.joined_at ASC
       `;
       const result = await query(queryText, [dormId]);

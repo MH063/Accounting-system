@@ -485,8 +485,12 @@ const createExpense = () => {
   router.push('/expense/create')
 }
 
+/**
+ * 查看费用详情
+ * @param expense 费用对象
+ */
 const viewExpenseDetail = (expense: any) => {
-  router.push(`/expense/detail/${expense.id}`)
+  router.push(`/fee-detail/${expense.id}`)
 }
 
 const reviewExpense = (expense: any) => {

@@ -114,6 +114,38 @@ if (authChannel) {
 }
 
 /**
+ * URL-safe base64 解码
+ * JWT 使用 URL-safe base64 编码，标准 atob() 不支持
+ */
+const base64UrlDecode = (str: string): string => {
+  let output = str.replace(/-/g, '+').replace(/_/g, '/')
+  
+  switch (output.length % 4) {
+    case 2:
+      output += '=='
+      break
+    case 3:
+      output += '='
+      break
+    case 0:
+      break
+    default:
+      // 如果不是标准长度，尝试去除末尾的非法字符
+      output = output.replace(/[^A-Za-z0-9+/]/g, '')
+      break
+  }
+  
+  try {
+    return decodeURIComponent(atob(output).split('').map(c => {
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+    }).join(''))
+  } catch (e) {
+    // 如果不是 UTF-8 编码，尝试直接解码
+    return atob(output)
+  }
+}
+
+/**
  * 保存认证令牌
  */
 const saveAuthToken = (accessToken: string, refreshToken?: string): void => {
@@ -121,7 +153,7 @@ const saveAuthToken = (accessToken: string, refreshToken?: string): void => {
   
   // 解析并保存过期时间
   try {
-    const payload = JSON.parse(atob(accessToken.split('.')[1]))
+    const payload = JSON.parse(base64UrlDecode(accessToken.split('.')[1]))
     if (payload && typeof payload.exp === 'number') {
       localStorage.setItem('token_expires', (payload.exp * 1000).toString())
     } else {
@@ -134,7 +166,7 @@ const saveAuthToken = (accessToken: string, refreshToken?: string): void => {
   if (refreshToken) {
     localStorage.setItem('refresh_token', refreshToken)
     try {
-      const payload = JSON.parse(atob(refreshToken.split('.')[1]))
+      const payload = JSON.parse(base64UrlDecode(refreshToken.split('.')[1]))
       if (payload && typeof payload.exp === 'number') {
         localStorage.setItem('refresh_token_expires', (payload.exp * 1000).toString())
       }

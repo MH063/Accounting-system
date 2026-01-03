@@ -1826,11 +1826,14 @@ class DormService extends BaseService {
             avatarUrl: member.avatar_url,
             memberRole: member.member_role,
             moveInDate: member.move_in_date,
+            moveOutDate: member.move_out_date,
             bedNumber: member.bed_number,
             roomNumber: member.room_number,
             monthlyShare: member.monthly_share,
             depositPaid: member.deposit_paid,
-            lastPaymentDate: member.last_payment_date
+            lastPaymentDate: member.last_payment_date,
+            dormName: member.dorm_name,
+            building: member.building
           }))
         },
         message: '寝室成员列表获取成功'

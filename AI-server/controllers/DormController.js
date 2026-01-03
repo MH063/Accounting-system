@@ -810,14 +810,102 @@ class DormController extends BaseController {
       logger.audit(req, '获取寝室成员列表', { 
         timestamp: new Date().toISOString(),
         ip: req.ip,
-        dormId: req.params.id
+        dormId: req.params.id,
+        user: req.user ? { id: req.user.id, role: req.user.role } : '未认证'
       });
 
       // 获取宿舍ID
       const { id } = req.params;
+      const currentUser = req.user;
 
-      // 调用服务层获取寝室成员列表
-      const result = await this.dormService.getDormMembers(id);
+      let result;
+      
+      // 权限控制逻辑 (Rule 2)
+      const isAdmin = currentUser && (currentUser.role === 'admin' || currentUser.role === 'system_admin' || currentUser.isAdmin);
+      
+      if (id === 'all') {
+        if (isAdmin) {
+          // 管理员可以获取系统中所有用户
+          logger.info('[DormController] 管理员获取全系统用户列表');
+          const { query } = require('../config/database');
+          const allUsers = await query(`
+            SELECT 
+              u.id as user_id,
+              u.username,
+              u.nickname,
+              u.real_name,
+              u.phone,
+              u.avatar_url,
+              'member' as member_role,
+              d.dorm_name as dorm_name,
+              d.building as building,
+              ud.status as dorm_status
+            FROM users u
+            LEFT JOIN user_dorms ud ON u.id = ud.user_id AND (ud.status = 'active' OR ud.status = 'pending')
+            LEFT JOIN dorms d ON ud.dorm_id = d.id
+            WHERE u.status = 'active'
+            AND u.id NOT IN (
+              SELECT ur.user_id 
+              FROM user_roles ur
+              JOIN roles r ON ur.role_id = r.id
+              WHERE r.is_system_role = TRUE
+            )
+            ORDER BY u.username ASC
+          `);
+
+          result = {
+            success: true,
+            data: {
+              members: allUsers.rows.map(user => ({
+                userId: user.user_id,
+                username: user.username,
+                nickname: user.nickname,
+                realName: user.real_name,
+                phone: user.phone,
+                avatarUrl: user.avatar_url,
+                memberRole: user.member_role,
+                dormName: user.dorm_name,
+                building: user.building,
+                dormStatus: user.dorm_status
+              }))
+            }
+          };
+        } else {
+          logger.warn('[DormController] 非管理员尝试获取全系统用户列表', { userId: currentUser.id });
+          return errorResponse(res, '权限不足，无法查看所有用户', 403);
+        }
+      } else {
+        // 获取特定宿舍的成员
+        // 如果不是管理员，需要校验是否是自己的宿舍
+        if (!isAdmin) {
+          const { query } = require('../config/database');
+          const userDorm = await query(
+            'SELECT dorm_id FROM user_dorms WHERE user_id = $1 AND status = $2 LIMIT 1',
+            [currentUser.id, 'active']
+          );
+          
+          const userDormId = userDorm.rows[0]?.dorm_id;
+          if (!userDormId || userDormId.toString() !== id.toString()) {
+            logger.warn('[DormController] 用户尝试查看非所属宿舍成员', { 
+              userId: currentUser.id, 
+              requestedDormId: id,
+              userDormId: userDormId
+            });
+            // 缴费人和寝室长只能查看与自己寝室相关的用户
+            if (userDormId) {
+              logger.info('[DormController] 自动切换到用户所属宿舍', { userDormId });
+              result = await this.dormService.getDormMembers(userDormId);
+            } else {
+              return errorResponse(res, '您未加入任何宿舍，无法查看成员', 403);
+            }
+          } else {
+            result = await this.dormService.getDormMembers(id);
+          }
+        } else {
+          // 管理员可以直接查看特定宿舍成员
+          result = await this.dormService.getDormMembers(id);
+        }
+      }
       
       if (!result.success) {
         logger.error('[DormController] 获取寝室成员列表失败', { 
@@ -848,10 +936,14 @@ class DormController extends BaseController {
           label: label,
           nickname: member.nickname,
           username: member.username,
+          realName: member.realName,
           phone: member.phone,
           avatarUrl: member.avatarUrl,
           memberRole: member.memberRole,
-          moveInDate: member.moveInDate
+          moveInDate: member.moveInDate,
+          dormName: member.dormName,
+          building: member.building,
+          dormStatus: member.dormStatus
         };
       });
 
@@ -861,7 +953,7 @@ class DormController extends BaseController {
         count: formattedMembers.length
       });
 
-      // 返回成功响应，格式化为前端需要的格式
+      // 返回成功响应，格式化为前端需要的格式 (Rule 5)
       return successResponse(res, { 
         members: formattedMembers,
         rawMembers: members

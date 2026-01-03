@@ -15,9 +15,9 @@ export const expenseCreateApi = {
   /**
    * 获取宿舍成员列表
    * GET /api/dorms/:dormId/members
-   * @param dormId 宿舍 ID
+   * @param dormId 宿舍 ID，支持 'all' 获取所有用户（仅限管理员）
    */
-  getDormMembers: (dormId: number) => 
+  getDormMembers: (dormId: number | string) => 
     api.get(`/dorms/${dormId}/members`),
 
   /**
@@ -33,6 +33,7 @@ export const expenseCreateApi = {
     date: string
     participants: number[]
     splitMethod: string
+    customSplitDetails?: any[]
     attachments?: any[]
   }) => 
     api.post('/expenses', data),
@@ -50,6 +51,7 @@ export const expenseCreateApi = {
     date?: string
     participants?: number[]
     splitMethod?: string
+    customSplitDetails?: any[]
     attachments?: any[]
   }) => 
     api.post('/expenses/draft', data),

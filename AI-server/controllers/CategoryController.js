@@ -194,10 +194,10 @@ class CategoryController extends BaseController {
       
       // 转换为前端需要的格式
       const expenseCategories = result.data.map(category => ({
-        value: category.category_code,
-        label: category.category_name,
-        color: category.color_code || '#409EFF',
-        icon: category.icon_name || 'category',
+        value: category.categoryCode,
+        label: category.categoryName,
+        color: category.colorCode || '#409EFF',
+        icon: category.iconName || 'category',
         description: category.description || ''
       }));
       

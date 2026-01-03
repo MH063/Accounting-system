@@ -30,7 +30,7 @@ router.get('/statistics', expenseController.getStatistics);
 router.get('/:id', expenseController.getExpenseDetail);
 
 // 创建费用接口 - POST方法
-router.post('/', expenseController.createExpense);
+router.post('/', authenticateToken, expenseController.createExpense);
 
 // 审核费用接口 - PUT方法
 router.put('/:id/review', (req, res, next) => expenseController.reviewExpense(req, res, next));

@@ -33,6 +33,18 @@ router.get('/active',
 );
 
 /**
+ * 费用类别列表接口 - GET方法
+ * 路由: /api/categories/expense
+ * 专用于费用创建页面，返回费用类别列表
+ * 必须放在 /:id 路由之前，否则会被 /:id 路由匹配
+ */
+router.get('/expense', 
+  responseWrapper(asyncHandler(async (req, res, next) => {
+    return await categoryController.getExpenseCategories(req, res, next);
+  }))
+);
+
+/**
  * 分类详情接口 - GET方法
  * 路由: /api/categories/:id
  */
@@ -85,17 +97,6 @@ router.delete('/:id',
 router.get('/statistics', 
   responseWrapper(asyncHandler(async (req, res, next) => {
     return await categoryController.getCategoryStatistics(req, res, next);
-  }))
-);
-
-/**
- * 费用类别列表接口 - GET方法
- * 路由: /api/categories/expense
- * 专用于费用创建页面，返回费用类别列表
- */
-router.get('/expense', 
-  responseWrapper(asyncHandler(async (req, res, next) => {
-    return await categoryController.getExpenseCategories(req, res, next);
   }))
 );
 

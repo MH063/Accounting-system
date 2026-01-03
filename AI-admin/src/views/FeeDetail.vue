@@ -17,8 +17,10 @@
         <el-col :span="16">
           <el-descriptions title="基本信息" :column="2" border>
             <el-descriptions-item label="记录ID">{{ feeInfo.id }}</el-descriptions-item>
+            <el-descriptions-item label="费用标题">{{ feeInfo.title }}</el-descriptions-item>
             <el-descriptions-item label="成员姓名">{{ feeInfo.studentName }}</el-descriptions-item>
             <el-descriptions-item label="费用类型">{{ getFeeTypeText(feeInfo.feeType) }}</el-descriptions-item>
+            <el-descriptions-item label="关联宿舍">{{ studentInfo.dormitory }}</el-descriptions-item>
             <el-descriptions-item label="金额">{{ feeInfo.amount }} 元</el-descriptions-item>
             <el-descriptions-item label="应缴日期">{{ feeInfo.dueDate }}</el-descriptions-item>
             <el-descriptions-item label="缴费日期">{{ feeInfo.paymentDate || '未缴费' }}</el-descriptions-item>
@@ -336,6 +338,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
 import { validateCustomFile, createCustomFileType } from '@/utils/fileUploadValidator'
+import { feeApi } from '@/api/fee'
 
 // 路由相关
 const router = useRouter()
@@ -352,81 +355,45 @@ const isAdmin = ref(true) // 实际应用中应从用户信息中获取
 
 // 响应式数据
 const feeInfo = ref({
-  id: 1,
-  studentName: '张三',
-  feeType: 'accommodation',
-  amount: 1200.00,
-  dueDate: '2023-09-30',
-  paymentDate: '2023-09-25',
-  status: 'paid',
-  remark: '按时缴费'
+  id: 0,
+  title: '',
+  studentName: '',
+  feeType: '',
+  amount: 0,
+  dueDate: '',
+  paymentDate: '',
+  status: '',
+  remark: ''
 })
 
 const studentInfo = ref({
-  phone: '13800138001',
-  dormitory: 'A栋101室',
-  counselor: '李老师'
+  phone: '-',
+  dormitory: '-',
+  counselor: '-'
 })
 
 const statistics = ref({
-  totalAmount: 1500.00,
-  paidAmount: 1200.00,
-  arrearsAmount: 300.00,
-  paymentRate: 80
+  totalAmount: 0,
+  paidAmount: 0,
+  arrearsAmount: 0,
+  paymentRate: 0
 })
 
-const paymentHistory = ref([
-  {
-    date: '2023-09-25',
-    type: '住宿费缴纳',
-    amount: 1200.00,
-    operator: '财务处-王会计'
-  },
-  {
-    date: '2023-09-15',
-    type: '网费缴纳',
-    amount: 80.00,
-    operator: '自助缴费机'
-  }
-])
+const paymentHistory = ref([])
 
 // 分摊计算结果
 const allocationResult = ref({
-  totalAmount: 1200.00,
-  personCount: 4,
-  perPersonAmount: 300.00,
-  calculationDescription: '按寝室成员平均分摊'
+  totalAmount: 0,
+  personCount: 0,
+  perPersonAmount: 0,
+  calculationDescription: '-'
 })
 
 // 审核历史记录
-const auditHistory = ref([
-  {
-    date: '2023-09-20 14:30:00',
-    auditor: '张主任',
-    status: 'approved',
-    comment: '费用明细清晰，符合收费标准'
-  },
-  {
-    date: '2023-09-15 10:15:00',
-    auditor: '李科长',
-    status: 'pending',
-    comment: '待核实学生信息'
-  }
-])
+const auditHistory = ref([])
 
 // 费用凭证
-const certificates = ref([
-  {
-    name: '住宿费收据',
-    url: 'https://fuss10.elemecdn.com/e/5d/4a731a90594a4af544c0c25941171jpeg.jpeg',
-    uploadDate: '2023-09-25'
-  },
-  {
-    name: '银行转账凭证',
-    url: 'https://fuss10.elemecdn.com/a/3f/3302e58f9a181d2509f3dc0fa68b0jpeg.jpeg',
-    uploadDate: '2023-09-24'
-  }
-])
+const certificates = ref([])
 
 const editDialogVisible = ref(false)
 const paymentDialogVisible = ref(false)
@@ -488,36 +455,6 @@ const editFormRef = ref()
 const paymentFormRef = ref()
 const statusFormRef = ref()
 
-// 获取费用类型文本
-const getFeeTypeText = (type: string) => {
-  switch (type) {
-    case 'accommodation':
-      return '住宿费'
-    case 'utilities':
-      return '水电费'
-    case 'internet':
-      return '网费'
-    case 'other':
-      return '其他'
-    default:
-      return '未知'
-  }
-}
-
-// 获取状态标签类型
-const getStatusTagType = (status: string) => {
-  switch (status) {
-    case 'paid':
-      return 'success'
-    case 'unpaid':
-      return 'danger'
-    case 'partial':
-      return 'warning'
-    default:
-      return 'info'
-  }
-}
-
 // 获取状态文本
 const getStatusText = (status: string) => {
   switch (status) {
@@ -527,8 +464,57 @@ const getStatusText = (status: string) => {
       return '未缴费'
     case 'partial':
       return '部分缴费'
+    case 'pending':
+      return '待审核'
+    case 'approved':
+      return '已通过'
+    case 'rejected':
+      return '已拒绝'
     default:
-      return '未知'
+      return status || '未知'
+  }
+}
+
+// 获取费用类型文本
+const getFeeTypeText = (type: string) => {
+  if (!type) return '未知'
+  // 如果已经是中文，直接返回
+  if (/[\u4e00-\u9fa5]/.test(type)) return type
+  
+  switch (type) {
+    case 'accommodation':
+      return '住宿费'
+    case 'utilities':
+      return '水电费'
+    case 'internet':
+      return '网费'
+    case 'maintenance':
+      return '维修费'
+    case 'cleaning':
+      return '清洁费'
+    case 'rent':
+      return '房租'
+    case 'other':
+      return '其他'
+    default:
+      return type || '未知'
+  }
+}
+
+// 获取状态标签类型
+const getStatusTagType = (status: string) => {
+  switch (status) {
+    case 'paid':
+    case 'approved':
+      return 'success'
+    case 'unpaid':
+    case 'rejected':
+      return 'danger'
+    case 'partial':
+    case 'pending':
+      return 'warning'
+    default:
+      return 'info'
   }
 }
 
@@ -740,23 +726,88 @@ onMounted(() => {
 })
 
 // 加载费用详情
-const loadFeeDetail = () => {
+const loadFeeDetail = async () => {
   if (!feeId.value) {
     ElMessage.warning('缺少费用ID参数')
     return
   }
   
-  // 这里应该调用API获取费用详情
   console.log('🔄 加载费用详情:', feeId.value)
-  // 模拟根据ID获取费用详情
-  // const response = await feeApi.getFeeDetail(feeId.value)
+  try {
+    const response = await feeApi.getExpenseDetail(feeId.value)
+    // 根据规则 5：处理双层嵌套结构
+    const data = response.data?.data || response.data || response
+    
+    if (data) {
+      console.log('✅ 获取到费用详情数据:', data)
+      feeInfo.value = {
+        id: data.id,
+        title: data.title,
+        studentName: data.applicant || data.studentName || '-',
+        feeType: data.category || data.feeType || '-',
+        amount: Number(data.amount) || 0,
+        dueDate: data.date || data.dueDate || '-',
+        paymentDate: data.paymentDate || data.reviewDate || '',
+        status: data.status,
+        remark: data.description || data.remark || '-'
+      }
+      
+      studentInfo.value = {
+        phone: data.phone || '-',
+        dormitory: data.dormName || data.dormitory || '未分配',
+        counselor: data.counselor || '-'
+      }
+      
+      // 更新统计信息
+      statistics.value = {
+        totalAmount: Number(data.amount) || 0,
+        paidAmount: data.status === 'paid' ? Number(data.amount) : 0,
+        arrearsAmount: data.status === 'paid' ? 0 : Number(data.amount),
+        paymentRate: data.status === 'paid' ? 100 : 0
+      }
+
+      // 如果有分摊信息
+      if (data.splitDetails || data.participants) {
+        const personCount = data.participants?.length || (Array.isArray(data.splitDetails) ? data.splitDetails.length : 0)
+        allocationResult.value = {
+          totalAmount: Number(data.amount) || 0,
+          personCount: personCount,
+          perPersonAmount: personCount > 0 ? (Number(data.amount) / personCount).toFixed(2) : 0,
+          calculationDescription: data.splitMethod === 'equal' ? '按成员平均分摊' : '自定义分摊'
+        }
+      }
+
+      // 如果有审核信息，添加到审核历史
+      if (data.reviewer || data.reviewer_user) {
+        auditHistory.value = [{
+          date: data.reviewDate || data.updatedAt || '-',
+          auditor: data.reviewer || (data.reviewer_user?.username) || '-',
+          status: data.status === 'approved' || data.status === 'paid' ? 'approved' : data.status,
+          comment: data.reviewComment || '无'
+        }]
+      }
+
+      // 处理附件/凭证
+      if (data.attachments && Array.isArray(data.attachments)) {
+        certificates.value = data.attachments.map((url: string, index: number) => ({
+          name: `附件 ${index + 1}`,
+          url: url.startsWith('http') ? url : `${window.location.origin}${url}`,
+          uploadDate: data.createdAt || '-'
+        }))
+      } else {
+        certificates.value = []
+      }
+    }
+  } catch (error) {
+    console.error('获取费用详情失败:', error)
+    ElMessage.error('获取费用详情失败')
+  }
 }
 
 // 加载费用列表
-const loadFeeList = () => {
-  console.log('🔄 加载费用列表')
-  // 这里应该调用API获取费用列表
-  // const response = await feeApi.getFeeList()
+const loadFeeList = async () => {
+  console.log('🔄 未提供费用ID，准备返回列表页')
+  router.push('/expense-management')
 }
 
 /**

@@ -303,16 +303,18 @@
           >
             <el-table-column prop="title" label="费用标题" min-width="150">
               <template #default="{ row }">
-                <div class="title-cell">
-                  <span class="expense-title">{{ row.title }}</span>
-                  <el-tag 
-                    :type="getCategoryType(row.category)" 
-                    size="small"
-                    class="category-tag"
-                  >
-                    {{ getCategoryText(row.category) }}
-                  </el-tag>
-                </div>
+                <span class="expense-title">{{ row.title }}</span>
+              </template>
+            </el-table-column>
+
+            <el-table-column prop="category" label="费用类别" width="120">
+              <template #default="{ row }">
+                <el-tag 
+                  :type="getCategoryType(row.categoryCode || row.category)" 
+                  size="small"
+                >
+                  {{ row.category }}
+                </el-tag>
               </template>
             </el-table-column>
 
@@ -323,6 +325,13 @@
             </el-table-column>
 
             <el-table-column prop="applicant" label="申请人" width="100" />
+            
+            <el-table-column prop="dormName" label="寝室" width="120">
+              <template #default="{ row }">
+                <el-tag v-if="row.dormName" size="small" type="info">{{ row.dormName }}</el-tag>
+                <span v-else class="text-gray-400">-</span>
+              </template>
+            </el-table-column>
 
             <el-table-column prop="date" label="费用日期" width="120">
               <template #default="{ row }">
@@ -430,7 +439,7 @@
                       <div class="card-title-section">
                         <h4 class="card-title">{{ expense.title }}</h4>
                         <el-tag 
-                          :type="getCategoryType(expense.category)" 
+                          :type="getCategoryType(expense.categoryCode || expense.category)" 
                           size="small"
                           class="category-tag"
                         >
@@ -451,6 +460,10 @@
                         <div class="info-item">
                           <el-icon><User /></el-icon>
                           <span>{{ expense.applicant }}</span>
+                        </div>
+                        <div class="info-item" v-if="expense.dormName">
+                          <el-icon><HomeFilled /></el-icon>
+                          <span>{{ expense.dormName }}</span>
                         </div>
                       </div>
                       
@@ -677,7 +690,7 @@ import { useRouter } from 'vue-router'
 import { 
   Plus, Search, Refresh, Wallet, Clock, CircleCheck,
   Calendar, Money, DocumentChecked, Download, View, Edit, Delete, Grid, List, User, More,
-  CreditCard, ChatLineRound, Money as BankIcon, SuccessFilled, Picture, Close, InfoFilled
+  CreditCard, ChatLineRound, Money as BankIcon, SuccessFilled, Picture, Close, InfoFilled, HomeFilled
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { feeApi } from '@/api/fee'
@@ -690,8 +703,10 @@ interface Expense {
   title: string
   description: string
   amount: number
-  category: 'accommodation' | 'utilities' | 'maintenance' | 'cleaning' | 'other'
+  category: string
+  categoryCode?: string
   applicant: string
+  dormName?: string
   date: string
   status: 'pending' | 'approved' | 'rejected' | 'paid'
   reviewer?: string
@@ -1042,31 +1057,58 @@ const getStatusDescription = (status: 'pending' | 'approved' | 'rejected' | stri
   }
 }
 
-const getCategoryType = (category: 'accommodation' | 'utilities' | 'maintenance' | 'cleaning' | 'other') => {
+const getCategoryType = (category: string) => {
   switch (category) {
-    case 'accommodation': return 'primary'
-    case 'utilities': return 'success'
-    case 'maintenance': return 'warning'
-    case 'cleaning': return 'info'
-    case 'other': return ''
+    case 'accommodation':
+    case 'rent': 
+      return 'primary'
+    case 'utilities': 
+      return 'success'
+    case 'maintenance': 
+      return 'warning'
+    case 'cleaning': 
+      return 'info'
+    case 'food':
+      return 'danger'
+    case 'activities':
+      return 'warning'
+    case 'insurance':
+      return 'success'
+    case 'other': 
+    case 'supplies':
+      return ''
     default: return 'info'
   }
 }
 
-const getCategoryText = (category: 'accommodation' | 'utilities' | 'maintenance' | 'cleaning' | 'other') => {
+const getCategoryText = (category: string) => {
+  if (!category) return '未知'
+  // 如果已经是中文，直接返回
+  if (/[\u4e00-\u9fa5]/.test(category)) return category
+  
   switch (category) {
     case 'accommodation': return '住宿费'
     case 'utilities': return '水电费'
     case 'maintenance': return '维修费'
     case 'cleaning': return '清洁费'
+    case 'rent': return '房租'
+    case 'food': return '食品饮料'
+    case 'supplies': return '日用品'
+    case 'activities': return '活动费用'
+    case 'insurance': return '保险费用'
     case 'other': return '其他'
-    default: return '未知'
+    default: return category || '未知'
   }
 }
 
 // 处理查看
+/**
+ * 查看费用详情
+ * @param expense 费用记录对象
+ */
 const handleView = (expense: Expense) => {
-  router.push(`/expense/detail/${expense.id}`)
+  console.log('🔍 查看费用详情:', expense.id)
+  router.push(`/fee-detail/${expense.id}`)
 }
 
 // 处理审核
