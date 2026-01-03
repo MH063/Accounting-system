@@ -195,16 +195,38 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, computed, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Document } from '@element-plus/icons-vue'
+import { feeApi } from '@/api/fee'
 
 // 路由实例
 const router = useRouter()
+const route = useRoute()
+
+// 从路由参数获取费用ID
+const routeId = computed(() => {
+  const id = route.params.id
+  return id ? Number(id) : null
+})
+
+// 监听路由 ID 变化
+watch(() => route.params.id, (newId) => {
+  if (newId) {
+    const id = Number(newId)
+    const target = pendingExpenses.value.find(e => e.id === id)
+    if (target) {
+      reviewExpense(target)
+    } else {
+      loadSpecificExpense(id)
+    }
+  }
+})
 
 // 响应式数据 - 初始化为空数组，通过API获取真实数据
-const pendingExpenses = ref([])
+const pendingExpenses = ref<any[]>([])
+const loading = ref(false)
 
 const selectedExpenses = ref<any[]>([])
 const batchProcessing = ref(false)
@@ -218,6 +240,61 @@ const submittingReview = ref(false)
 // 方法
 const goBack = () => {
   router.back()
+}
+
+// 获取待审核列表
+const fetchPendingExpenses = async () => {
+  loading.value = true
+  console.log('🔄 获取待审核费用列表...')
+  try {
+    const response = await feeApi.getPendingExpenses()
+    // 根据规则 5 处理嵌套结构
+    const data = response.data?.data || response.data || response
+    
+    if (Array.isArray(data)) {
+      pendingExpenses.value = data
+      console.log(`✅ 获取到 ${data.length} 条待审核费用`)
+      
+      // 如果路由中有 ID，尝试自动打开对应的审核对话框
+      if (routeId.value) {
+        const target = pendingExpenses.value.find(e => e.id === routeId.value)
+        if (target) {
+          reviewExpense(target)
+        } else {
+          // 如果在待审核列表中找不到，可能已经审核过或者不存在，尝试直接获取详情
+          loadSpecificExpense(routeId.value)
+        }
+      }
+    } else {
+      console.warn('⚠️ 获取待审核费用返回数据格式不正确:', data)
+      pendingExpenses.value = []
+    }
+  } catch (error) {
+    console.error('获取待审核费用失败:', error)
+    ElMessage.error('获取待审核费用失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+// 加载特定费用详情
+const loadSpecificExpense = async (id: number) => {
+  console.log(`🔄 加载特定费用详情: ${id}`)
+  try {
+    const response = await feeApi.getExpenseDetail(id)
+    const data = response.data?.data || response.data || response
+    
+    if (data) {
+      // 如果状态不是待审核，提示用户
+      if (data.status !== 'pending' && data.status !== 'waiting') {
+        ElMessage.info(`该费用状态为 ${data.status}，无需审核`)
+        return
+      }
+      reviewExpense(data)
+    }
+  } catch (error) {
+    console.error('获取费用详情失败:', error)
+  }
 }
 
 const handleSelectionChange = (selection: any[]) => {
@@ -254,18 +331,34 @@ const submitReview = async () => {
   submittingReview.value = true
   
   try {
-    // 模拟提交审核
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    const status = reviewResult.value === 'approved' ? 'approved' : 'rejected'
+    const response = await feeApi.reviewExpense(currentExpense.value.id, {
+      status,
+      comment: rejectReason.value
+    })
     
-    // 更新费用状态
-    const index = pendingExpenses.value.findIndex(e => e.id === currentExpense.value.id)
-    if (index !== -1) {
-      pendingExpenses.value.splice(index, 1)
+    // 根据规则 5 处理嵌套结构
+    const data = response.data?.data || response.data || response
+    
+    if (response.data?.success || response.success) {
+      // 从待审核列表中移除
+      const index = pendingExpenses.value.findIndex(e => e.id === currentExpense.value.id)
+      if (index !== -1) {
+        pendingExpenses.value.splice(index, 1)
+      }
+      
+      ElMessage.success(`费用审核已提交，结果：${reviewResult.value === 'approved' ? '通过' : '拒绝'}`)
+      reviewDialogVisible.value = false
+      
+      // 如果是通过路由进入的，审核完后可以考虑返回
+      if (routeId.value) {
+        setTimeout(() => router.push('/expense-management'), 1500)
+      }
+    } else {
+      ElMessage.error(response.data?.message || '审核提交失败')
     }
-    
-    ElMessage.success(`费用审核已提交，结果：${reviewResult.value === 'approved' ? '通过' : '拒绝'}`)
-    reviewDialogVisible.value = false
   } catch (error) {
+    console.error('审核提交失败:', error)
     ElMessage.error('审核提交失败')
   } finally {
     submittingReview.value = false
@@ -279,23 +372,33 @@ const batchApprove = async () => {
   }
   
   try {
-    batchProcessing.value = true
-    
-    // 模拟批量通过
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    
-    // 从待审核列表中移除
-    selectedExpenses.value.forEach(expense => {
-      const index = pendingExpenses.value.findIndex(e => e.id === expense.id)
-      if (index !== -1) {
-        pendingExpenses.value.splice(index, 1)
-      }
+    await ElMessageBox.confirm(`确定要批量审核通过这 ${selectedExpenses.value.length} 项费用吗？`, '批量审核', {
+      type: 'warning'
     })
     
-    ElMessage.success(`批量审核通过 ${selectedExpenses.value.length} 项费用`)
-    selectedExpenses.value = []
+    batchProcessing.value = true
+    const ids = selectedExpenses.value.map(e => e.id)
+    const response = await feeApi.batchApproveExpenses(ids)
+    
+    if (response.data?.success || response.success) {
+      // 从待审核列表中移除
+      selectedExpenses.value.forEach(expense => {
+        const index = pendingExpenses.value.findIndex(e => e.id === expense.id)
+        if (index !== -1) {
+          pendingExpenses.value.splice(index, 1)
+        }
+      })
+      
+      ElMessage.success(`成功批量审核通过 ${selectedExpenses.value.length} 项费用`)
+      selectedExpenses.value = []
+    } else {
+      ElMessage.error(response.data?.message || '批量审核失败')
+    }
   } catch (error) {
-    ElMessage.error('批量审核失败')
+    if (error !== 'cancel') {
+      console.error('批量审核失败:', error)
+      ElMessage.error('批量审核失败')
+    }
   } finally {
     batchProcessing.value = false
   }
@@ -308,30 +411,54 @@ const batchReject = async () => {
   }
   
   try {
-    batchProcessing.value = true
-    
-    // 模拟批量拒绝
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    
-    // 从待审核列表中移除
-    selectedExpenses.value.forEach(expense => {
-      const index = pendingExpenses.value.findIndex(e => e.id === expense.id)
-      if (index !== -1) {
-        pendingExpenses.value.splice(index, 1)
+    const { value: reason } = await ElMessageBox.prompt('请输入批量拒绝的原因', '批量拒绝', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      inputPlaceholder: '拒绝原因',
+      inputValidator: (value) => {
+        if (!value) return '拒绝原因不能为空'
+        return true
       }
     })
     
-    ElMessage.success(`批量拒绝 ${selectedExpenses.value.length} 项费用`)
-    selectedExpenses.value = []
+    batchProcessing.value = true
+    const ids = selectedExpenses.value.map(e => e.id)
+    const response = await feeApi.batchRejectExpenses(ids, reason)
+    
+    if (response.data?.success || response.success) {
+      // 从待审核列表中移除
+      selectedExpenses.value.forEach(expense => {
+        const index = pendingExpenses.value.findIndex(e => e.id === expense.id)
+        if (index !== -1) {
+          pendingExpenses.value.splice(index, 1)
+        }
+      })
+      
+      ElMessage.success(`成功批量拒绝 ${selectedExpenses.value.length} 项费用`)
+      selectedExpenses.value = []
+    } else {
+      ElMessage.error(response.data?.message || '批量拒绝失败')
+    }
   } catch (error) {
-    ElMessage.error('批量拒绝失败')
+    if (error !== 'cancel') {
+      console.error('批量拒绝失败:', error)
+      ElMessage.error('批量拒绝失败')
+    }
   } finally {
     batchProcessing.value = false
   }
 }
 
-const formatCurrency = (amount: number): string => {
-  return amount.toFixed(2)
+const formatCurrency = (amount: number | string): string => {
+  // 处理可能不是数字的值
+  const num = typeof amount === 'number' ? amount : parseFloat(amount)
+  
+  // 如果转换失败，返回默认值
+  if (isNaN(num)) {
+    return '0.00'
+  }
+  
+  return num.toFixed(2)
 }
 
 const formatDate = (dateString: string): string => {
@@ -349,24 +476,48 @@ const formatFileSize = (bytes: number): string => {
 }
 
 const getCategoryType = (category: string) => {
+  if (!category) return 'info'
+  
   switch (category) {
-    case 'accommodation': return 'primary'
-    case 'utilities': return 'success'
-    case 'maintenance': return 'warning'
-    case 'cleaning': return 'info'
-    case 'other': return ''
+    case 'accommodation':
+    case 'rent': 
+      return 'primary'
+    case 'utilities': 
+      return 'success'
+    case 'maintenance': 
+      return 'warning'
+    case 'cleaning': 
+      return 'info'
+    case 'food':
+      return 'danger'
+    case 'activities':
+      return 'warning'
+    case 'insurance':
+      return 'success'
+    case 'other': 
+    case 'supplies':
+      return ''
     default: return 'info'
   }
 }
 
 const getCategoryText = (category: string) => {
+  if (!category) return '未知'
+  // 如果已经是中文，直接返回
+  if (/[\u4e00-\u9fa5]/.test(category)) return category
+  
   switch (category) {
     case 'accommodation': return '住宿费'
     case 'utilities': return '水电费'
     case 'maintenance': return '维修费'
     case 'cleaning': return '清洁费'
+    case 'rent': return '房租'
+    case 'food': return '食品饮料'
+    case 'supplies': return '日用品'
+    case 'activities': return '活动费用'
+    case 'insurance': return '保险费用'
     case 'other': return '其他'
-    default: return '未知'
+    default: return category || '未知'
   }
 }
 
@@ -375,8 +526,20 @@ const downloadAttachment = (attachment: any) => {
 }
 
 // 组件挂载时的操作
-onMounted(() => {
+onMounted(async () => {
   console.log('🔍 费用审核页面加载完成')
+  await fetchPendingExpenses()
+  
+  // 如果 URL 中有 ID，直接打开该费用的审核对话框
+  if (route.params.id) {
+    const id = Number(route.params.id)
+    const target = pendingExpenses.value.find(e => e.id === id)
+    if (target) {
+      reviewExpense(target)
+    } else {
+      loadSpecificExpense(id)
+    }
+  }
 })
 </script>
 
