@@ -7,6 +7,7 @@ const BaseController = require('./BaseController');
 const { query } = require('../config/database');
 const fs = require('fs');
 const path = require('path');
+const logger = require('../config/logger');
 const { successResponse, errorResponse } = require('../middleware/response');
 
 /**
@@ -110,7 +111,7 @@ class PaymentController extends BaseController {
         pages: 1
       }, '获取收款码列表成功');
     } catch (error) {
-      console.error('获取收款码列表失败:', error);
+      logger.error('获取收款码列表失败', { error: error.message });
       next(error);
     }
   }
@@ -194,7 +195,7 @@ class PaymentController extends BaseController {
       
       return successResponse(res, result.rows[0], '创建收款码成功', 201);
     } catch (error) {
-      console.error('创建收款码失败:', error);
+      logger.error('创建收款码失败', { error: error.message });
       next(error);
     }
   }
@@ -1203,14 +1204,15 @@ class PaymentController extends BaseController {
   async uploadQRCodeImage(req, res, next) {
     try {
       // 调试日志：输出请求信息
-      console.log('[uploadQRCodeImage] 开始处理上传请求');
-      console.log('[uploadQRCodeImage] req.file:', req.file);
-      console.log('[uploadQRCodeImage] req.body:', req.body);
-      console.log('[uploadQRCodeImage] req.headers:', req.headers);
+      logger.info('[uploadQRCodeImage] 开始处理上传请求', {
+        hasFile: !!req.file,
+        platform: req.body.platform,
+        userId: req.user?.id
+      });
       
       // 验证上传的文件
       if (!req.file) {
-        console.error('[uploadQRCodeImage] 文件上传失败：req.file为undefined');
+        logger.error('[uploadQRCodeImage] 文件上传失败：req.file为undefined');
         return errorResponse(res, '请上传收款码图片文件', 400);
       }
       
@@ -1263,7 +1265,7 @@ class PaymentController extends BaseController {
       
       return successResponse(res, result.rows[0], '收款码上传成功');
     } catch (error) {
-      console.error('上传收款码图片失败:', error);
+      logger.error('上传收款码图片失败', { error: error.message });
       next(error);
     }
   }
@@ -2955,7 +2957,7 @@ class PaymentController extends BaseController {
     try {
       const { keyword = '', status = '', category = '', startDate = '', endDate = '' } = req.query;
 
-      console.log('[PaymentController] 获取支付确认统计数据:', {
+      logger.info('[PaymentController] 获取支付确认统计数据', {
         keyword, status, category, startDate, endDate,
         userId: req.user?.id
       });
@@ -3064,7 +3066,7 @@ class PaymentController extends BaseController {
       const totalCountResult = await query(totalCountSql, params);
       const totalCount = parseInt(totalCountResult.rows[0]?.count) || 0;
 
-      console.log('[PaymentController] 支付确认统计数据:', {
+      logger.info('[PaymentController] 支付确认统计数据', {
         pendingAmount,
         paidAmount,
         pendingCount,
@@ -3078,7 +3080,7 @@ class PaymentController extends BaseController {
         totalCount
       }, '获取支付确认统计数据成功');
     } catch (error) {
-      console.error('获取支付确认统计数据失败:', error);
+      logger.error('获取支付确认统计数据失败', { error: error.message });
       next(error);
     }
   }
@@ -3092,7 +3094,7 @@ class PaymentController extends BaseController {
       const { enabled, methods, intervalMinutes } = req.body;
       const userId = req.user.id;
 
-      console.log('[PaymentController] 保存提醒设置:', { userId, enabled, methods, intervalMinutes });
+      logger.info('[PaymentController] 保存提醒设置', { userId, enabled, methods, intervalMinutes });
 
       // 检查记录是否存在
       const checkSql = 'SELECT id FROM reminder_settings WHERE user_id = $1';
@@ -3119,7 +3121,7 @@ class PaymentController extends BaseController {
         return successResponse(res, insertResult.rows[0], '提醒设置创建成功');
       }
     } catch (error) {
-      console.error('保存提醒设置失败:', error);
+      logger.error('保存提醒设置失败', { error: error.message });
       next(error);
     }
   }
@@ -3131,7 +3133,7 @@ class PaymentController extends BaseController {
   async getReminderSettings(req, res, next) {
     try {
       const userId = req.user.id;
-      console.log('[PaymentController] 获取提醒设置:', { userId });
+      logger.info('[PaymentController] 获取提醒设置', { userId });
 
       const sql = 'SELECT enabled, methods, interval_minutes as "intervalMinutes" FROM reminder_settings WHERE user_id = $1';
       const result = await query(sql, [userId]);
@@ -3147,7 +3149,7 @@ class PaymentController extends BaseController {
         });
       }
     } catch (error) {
-      console.error('获取提醒设置失败:', error);
+      logger.error('获取提醒设置失败', { error: error.message });
       next(error);
     }
   }

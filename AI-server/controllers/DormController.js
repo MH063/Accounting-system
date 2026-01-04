@@ -831,6 +831,7 @@ class DormController extends BaseController {
           const allUsers = await query(`
             SELECT 
               u.id as user_id,
+              ud.id as user_dorm_id,
               u.username,
               u.nickname,
               u.real_name,
@@ -857,7 +858,9 @@ class DormController extends BaseController {
             success: true,
             data: {
               members: allUsers.rows.map(user => ({
+                id: user.user_dorm_id || user.user_id, // 尽量提供一个ID
                 userId: user.user_id,
+                user_id: user.user_id,
                 username: user.username,
                 nickname: user.nickname,
                 realName: user.real_name,
@@ -932,6 +935,10 @@ class DormController extends BaseController {
         }
         
         return {
+          id: member.id,
+          user_dorm_id: member.id,
+          userId: member.userId,
+          user_id: member.userId,
           key: member.userId,
           label: label,
           nickname: member.nickname,

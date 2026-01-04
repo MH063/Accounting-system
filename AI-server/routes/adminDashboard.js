@@ -985,7 +985,7 @@ router.get('/users/stats', authenticateToken, authorizeAdmin, responseWrapper(as
  * GET /api/maintenance/status
  * 获取维护模式状态
  */
-router.get('/maintenance/status', authenticateToken, authorizeAdmin, responseWrapper(async (req, res) => {
+router.get('/maintenance/status', authenticateToken, responseWrapper(async (req, res) => {
   try {
     console.log('[ADMIN_DASHBOARD] 获取维护状态');
 
@@ -1017,7 +1017,7 @@ router.get('/maintenance/status', authenticateToken, authorizeAdmin, responseWra
  * GET /api/network/status
  * 检查网络状态
  */
-router.get('/network/status', authenticateToken, authorizeAdmin, responseWrapper(async (req, res) => {
+router.get('/network/status', authenticateToken, responseWrapper(async (req, res) => {
   try {
     console.log('[ADMIN_DASHBOARD] 检查网络状态');
 

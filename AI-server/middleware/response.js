@@ -28,7 +28,7 @@ const successResponse = (res, data = null, message = '操作成功', statusCode 
     }
   }
   
-  logger.info(`[RESPONSE] ${message}`, {
+  logger.debug(`[RESPONSE] ${message}`, {
     statusCode,
     success: true,
     hasData: data !== null

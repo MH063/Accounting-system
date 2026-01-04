@@ -127,9 +127,15 @@ router.get('/', authenticateToken, responseWrapper(async (req, res) => {
     `;
 
     const usersResult = await pool.query(listQuery, [...queryParams, parseInt(pageSize), offset]);
-    console.log('📦 后端查询到的原始行数:', usersResult.rows.length);
-    if (usersResult.rows.length > 0) {
-      console.log('📄 第一行数据样例:', JSON.stringify(usersResult.rows[0]));
+    logger.info('[UsersRoute] 查询用户列表完成', {
+      page: parseInt(page),
+      pageSize: parseInt(pageSize),
+      rowCount: usersResult.rows.length
+    });
+    if (process.env.NODE_ENV !== 'production' && usersResult.rows.length > 0) {
+      logger.debug('[UsersRoute] 用户列表首行字段', {
+        keys: Object.keys(usersResult.rows[0])
+      });
     }
     
     const users = usersResult.rows.map(user => {
@@ -151,8 +157,12 @@ router.get('/', authenticateToken, responseWrapper(async (req, res) => {
         isActive: user.status === 'active'
       };
     });
-
-    console.log('🚀 [Backend] 发送给前端的用户数据样例 (前2条):', JSON.stringify(users.slice(0, 2), null, 2));
+    if (process.env.NODE_ENV !== 'production') {
+      logger.debug('[UsersRoute] 返回用户列表', {
+        count: users.length,
+        sampleIds: users.slice(0, 2).map(u => u.id)
+      });
+    }
     
     res.json({
       success: true,

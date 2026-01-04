@@ -50,12 +50,12 @@ class AdminAuthService {
 
   /**
    * 管理员登录验证
-   * @param {Object} loginData - 登录数据
-   * @param {string} loginData.username - 用户名
-   * @param {string} loginData.password - 密码
+   * @param {string} username - 用户名/邮箱
+   * @param {string} password - 密码
+   * @param {Object} req - 请求对象 (用于审计等)
    * @returns {Object} 登录结果
    */
-  async adminLogin({ username, password }) {
+  async login(username, password, req = null) {
     try {
       logger.info('[AdminAuthService] 管理员登录开始', { username });
 

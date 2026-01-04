@@ -16,22 +16,32 @@ async function executeSqlFile(sqlFilePath) {
             statement.trim().length > 0 && !statement.trim().startsWith('--')
         );
         
-        console.log(`📄 读取到 ${sqlStatements.length} 条SQL语句`);
+        if (process.env.NODE_ENV !== 'production') {
+            console.log(`📄 读取到 ${sqlStatements.length} 条SQL语句`);
+        }
         
         // 执行每条SQL语句
         for (let i = 0; i < sqlStatements.length; i++) {
             const sql = sqlStatements[i].trim();
             if (sql) {
-                console.log(`🔄 执行第 ${i + 1} 条SQL: ${sql.substring(0, 50)}${sql.length > 50 ? '...' : ''}`);
+                if (process.env.NODE_ENV !== 'production') {
+                    console.log(`🔄 执行第 ${i + 1} 条SQL: ${sql.substring(0, 50)}${sql.length > 50 ? '...' : ''}`);
+                }
                 await query(sql);
-                console.log(`✅ 第 ${i + 1} 条SQL执行成功`);
+                if (process.env.NODE_ENV !== 'production') {
+                    console.log(`✅ 第 ${i + 1} 条SQL执行成功`);
+                }
             }
         }
         
-        console.log('🎉 所有SQL语句执行完成');
+        if (process.env.NODE_ENV !== 'production') {
+            console.log('🎉 所有SQL语句执行完成');
+        }
         return true;
     } catch (error) {
-        console.error('❌ 执行SQL文件失败:', error.message);
+        if (process.env.NODE_ENV !== 'production') {
+            console.error('❌ 执行SQL文件失败:', error.message);
+        }
         return false;
     }
 }
@@ -40,25 +50,33 @@ async function executeSqlFile(sqlFilePath) {
  * 主函数
  */
 async function main() {
-    console.log('🚀 开始执行SQL脚本');
-    console.log('=' . repeat(60));
+    if (process.env.NODE_ENV !== 'production') {
+        console.log('🚀 开始执行SQL脚本');
+        console.log('=' . repeat(60));
+    }
     
     const sqlFilePath = path.join(__dirname, 'create-contacts-table.sql');
     
     if (!fs.existsSync(sqlFilePath)) {
-        console.error('❌ SQL文件不存在:', sqlFilePath);
+        if (process.env.NODE_ENV !== 'production') {
+            console.error('❌ SQL文件不存在:', sqlFilePath);
+        }
         process.exit(1);
     }
     
     const result = await executeSqlFile(sqlFilePath);
     
-    console.log('=' . repeat(60));
-    console.log(result ? '✅ SQL脚本执行成功' : '❌ SQL脚本执行失败');
+    if (process.env.NODE_ENV !== 'production') {
+        console.log('=' . repeat(60));
+        console.log(result ? '✅ SQL脚本执行成功' : '❌ SQL脚本执行失败');
+    }
     
     process.exit(result ? 0 : 1);
 }
 
 main().catch(error => {
-    console.error('❌ 主函数执行失败:', error);
+    if (process.env.NODE_ENV !== 'production') {
+        console.error('❌ 主函数执行失败:', error);
+    }
     process.exit(1);
 });

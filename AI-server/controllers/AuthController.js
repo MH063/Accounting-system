@@ -129,15 +129,14 @@ class AuthController extends BaseController {
       // 实时记录心跳到审计日志，确保管理后台在线人数实时更新
       try {
         const { pool } = require('../config/database');
-        console.log('[HEARTBEAT_DEBUG] 准备写入审计日志:', { userId, ip: req.ip, userAgent: req.get('User-Agent') });
+        logger.info('[HEARTBEAT_DEBUG] 准备写入审计日志', { userId, ip: req.ip, userAgent: req.get('User-Agent') });
         const insertResult = await pool.query(
           'INSERT INTO audit_logs (user_id, action, ip_address, user_agent, success, severity, record_id, operation, table_name, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW()) RETURNING id',
           [userId, 'HEARTBEAT', req.ip, req.get('User-Agent'), true, 'info', 0, 'INSERT', 'users']
         );
-        console.log('[HEARTBEAT_DEBUG] 审计日志写入成功, ID:', insertResult.rows[0].id);
+        logger.info('[HEARTBEAT_DEBUG] 审计日志写入成功', { logId: insertResult.rows[0].id });
       } catch (logError) {
-        console.error('[HEARTBEAT_DEBUG] 心跳日志持久化失败:', logError.message, logError.stack);
-        logger.error('[AuthController] 心跳日志持久化失败', { error: logError.message });
+        logger.error('[HEARTBEAT_DEBUG] 心跳日志持久化失败', { error: logError.message });
       }
 
       if (success) {

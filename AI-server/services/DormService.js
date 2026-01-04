@@ -267,9 +267,13 @@ class DormService extends BaseService {
       }
       
       // 3. 获取当前的成员信息和宿舍信息
-      console.log('[DEBUG] DormService calling getUserDormById with userDormId:', userDormId);
+      if (process.env.NODE_ENV !== 'production') {
+        logger.debug('[DormService] calling getUserDormById', { userDormId });
+      }
       const currentRecord = await this.dormRepository.getUserDormById(userDormId);
-      console.log('[DEBUG] DormService currentRecord:', currentRecord);
+      if (process.env.NODE_ENV !== 'production') {
+        logger.debug('[DormService] currentRecord', { currentRecord });
+      }
       logger.info('[DormService] 获取当前记录', { currentRecord });
       if (!currentRecord) {
         return {
@@ -2093,7 +2097,9 @@ class DormService extends BaseService {
    */
   async batchDeleteDorms(ids, currentUser) {
     try {
-      console.log('[DormService] 批量删除宿舍', { ids, userId: currentUser?.id });
+      if (process.env.NODE_ENV !== 'production') {
+        logger.debug('[DormService] 批量删除宿舍', { ids, userId: currentUser?.id });
+      }
       
       if (!Array.isArray(ids) || ids.length === 0) {
         return {
@@ -2119,7 +2125,9 @@ class DormService extends BaseService {
         };
       }
 
-      console.log('[DormService] 批量删除成功', { deletedCount: result.deletedCount });
+      if (process.env.NODE_ENV !== 'production') {
+        logger.debug('[DormService] 批量删除成功', { deletedCount: result.deletedCount });
+      }
       
       return {
         success: true,
@@ -2127,7 +2135,7 @@ class DormService extends BaseService {
         message: result.message
       };
     } catch (error) {
-      console.error('[DormService] 批量删除宿舍失败', { error: error.message, ids });
+      logger.error('[DormService] 批量删除宿舍失败', { error: error.message, ids });
       return {
         success: false,
         message: '批量删除宿舍失败: ' + error.message

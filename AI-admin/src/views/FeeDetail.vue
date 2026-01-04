@@ -1,6 +1,53 @@
 <template>
   <div class="fee-detail-container">
-    <el-card>
+    <!-- 如果没有费用ID，显示费用选择列表 -->
+    <div v-if="!feeId">
+      <el-card>
+        <template #header>
+          <div class="card-header">
+            <span>请选择费用记录查看详情</span>
+          </div>
+        </template>
+        
+        <el-table :data="feeList" style="width: 100%" v-loading="loading" border>
+          <el-table-column prop="id" label="ID" width="80"></el-table-column>
+          <el-table-column prop="title" label="费用标题"></el-table-column>
+          <el-table-column prop="applicant" label="申请人"></el-table-column>
+          <el-table-column prop="amount" label="金额">
+            <template #default="scope">
+              {{ formatCurrency(scope.row.amount) }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="status" label="状态">
+            <template #default="scope">
+              <el-tag :type="getStatusTagType(scope.row.status)">
+                {{ getStatusText(scope.row.status) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="120">
+            <template #default="scope">
+              <el-button type="primary" size="small" @click="viewDetail(scope.row.id)">查看详情</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        
+        <div class="pagination-container" style="margin-top: 20px; display: flex; justify-content: flex-end;">
+          <el-pagination
+            v-model:current-page="queryParams.page"
+            v-model:page-size="queryParams.pageSize"
+            :page-sizes="[10, 20, 50, 100]"
+            layout="total, sizes, prev, pager, next, jumper"
+            :total="total"
+            @size-change="handleSizeChange"
+            @current-change="handleCurrentChange"
+          />
+        </div>
+      </el-card>
+    </div>
+
+    <!-- 如果有费用ID，显示费用详情 -->
+    <el-card v-else>
       <template #header>
         <div class="card-header">
           <span>费用详情</span>
@@ -96,50 +143,50 @@
           </el-card>
         </el-col>
       </el-row>
-    </el-card>
-    
-    <!-- 审核历史记录 -->
-    <el-card style="margin-top: 20px;">
-      <template #header>
-        <span>审核历史记录</span>
-      </template>
-      <el-table :data="auditHistory" style="width: 100%" border>
-        <el-table-column prop="date" label="审核时间" width="180"></el-table-column>
-        <el-table-column prop="auditor" label="审核人" width="150"></el-table-column>
-        <el-table-column prop="status" label="审核状态" width="120">
-          <template #default="scope">
-            <el-tag :type="getAuditStatusTagType(scope.row.status)">
-              {{ getAuditStatusText(scope.row.status) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="comment" label="审核意见"></el-table-column>
-      </el-table>
-    </el-card>
-    
-    <!-- 费用凭证管理 -->
-    <el-card style="margin-top: 20px;">
-      <template #header>
-        <div class="card-header">
-          <span>费用凭证</span>
-          <el-button type="primary" @click="handleUploadCertificate" size="small">上传凭证</el-button>
-        </div>
-      </template>
-      <el-row :gutter="20">
-        <el-col :span="6" v-for="(certificate, index) in certificates" :key="index">
-          <el-card :body-style="{ padding: '0px' }" shadow="hover">
-            <img :src="certificate.url" class="image" />
-            <div style="padding: 14px;">
-              <div class="certificate-title">{{ certificate.name }}</div>
-              <div class="certificate-info">{{ certificate.uploadDate }}</div>
-              <div class="certificate-actions">
-                <el-button type="primary" link @click="handleViewCertificate(certificate)">查看</el-button>
-                <el-button type="danger" link @click="handleDeleteCertificate(certificate, index)">删除</el-button>
+
+      <!-- 审核历史记录 -->
+      <el-card style="margin-top: 20px;">
+        <template #header>
+          <span>审核历史记录</span>
+        </template>
+        <el-table :data="auditHistory" style="width: 100%" border>
+          <el-table-column prop="date" label="审核时间" width="180"></el-table-column>
+          <el-table-column prop="auditor" label="审核人" width="150"></el-table-column>
+          <el-table-column prop="status" label="审核状态" width="120">
+            <template #default="scope">
+              <el-tag :type="getAuditStatusTagType(scope.row.status)">
+                {{ getAuditStatusText(scope.row.status) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="comment" label="审核意见"></el-table-column>
+        </el-table>
+      </el-card>
+      
+      <!-- 费用凭证管理 -->
+      <el-card style="margin-top: 20px;">
+        <template #header>
+          <div class="card-header">
+            <span>费用凭证</span>
+            <el-button type="primary" @click="handleUploadCertificate" size="small">上传凭证</el-button>
+          </div>
+        </template>
+        <el-row :gutter="20">
+          <el-col :span="6" v-for="(certificate, index) in certificates" :key="index">
+            <el-card :body-style="{ padding: '0px' }" shadow="hover">
+              <img :src="certificate.url" class="image" />
+              <div style="padding: 14px;">
+                <div class="certificate-title">{{ certificate.name }}</div>
+                <div class="certificate-info">{{ certificate.uploadDate }}</div>
+                <div class="certificate-actions">
+                  <el-button type="primary" link @click="handleViewCertificate(certificate)">查看</el-button>
+                  <el-button type="danger" link @click="handleDeleteCertificate(certificate, index)">删除</el-button>
+                </div>
               </div>
-            </div>
-          </el-card>
-        </el-col>
-      </el-row>
+            </el-card>
+          </el-col>
+        </el-row>
+      </el-card>
     </el-card>
     
     <!-- 编辑对话框 -->
@@ -333,7 +380,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
@@ -354,6 +401,14 @@ const feeId = computed(() => {
 const isAdmin = ref(true) // 实际应用中应从用户信息中获取
 
 // 响应式数据
+const loading = ref(false)
+const feeList = ref([])
+const total = ref(0)
+const queryParams = ref({
+  page: 1,
+  pageSize: 10
+})
+
 const feeInfo = ref({
   id: 0,
   title: '',
@@ -546,6 +601,33 @@ const getAuditStatusText = (status: string) => {
   }
 }
 
+// 格式化货币
+const formatCurrency = (value: number | string) => {
+  const amount = Number(value)
+  if (isNaN(amount)) return '¥0.00'
+  return new Intl.NumberFormat('zh-CN', {
+    style: 'currency',
+    currency: 'CNY'
+  }).format(amount)
+}
+
+// 查看详情
+const viewDetail = (id: number) => {
+  router.push(`/fee-detail/${id}`)
+}
+
+// 分页大小变化
+const handleSizeChange = (val: number) => {
+  queryParams.value.pageSize = val
+  loadFeeList()
+}
+
+// 当前页变化
+const handleCurrentChange = (val: number) => {
+  queryParams.value.page = val
+  loadFeeList()
+}
+
 // 返回上一页
 const goBack = () => {
   router.back()
@@ -720,7 +802,17 @@ onMounted(() => {
     // 如果有ID，加载具体费用详情
     loadFeeDetail()
   } else {
-    // 如果没有ID，显示费用列表选择
+    // 如果没有ID，加载费用列表供选择
+    loadFeeList()
+  }
+})
+
+// 监听路由参数变化，当进入或返回页面时加载对应数据
+watch(() => feeId.value, (newId, oldId) => {
+  console.log('🔄 路由参数变化:', { newId, oldId })
+  if (newId) {
+    loadFeeDetail()
+  } else {
     loadFeeList()
   }
 })
@@ -728,10 +820,10 @@ onMounted(() => {
 // 加载费用详情
 const loadFeeDetail = async () => {
   if (!feeId.value) {
-    ElMessage.warning('缺少费用ID参数')
     return
   }
   
+  loading.value = true
   console.log('🔄 加载费用详情:', feeId.value)
   try {
     const response = await feeApi.getExpenseDetail(feeId.value)
@@ -739,12 +831,11 @@ const loadFeeDetail = async () => {
     const data = response.data?.data || response.data || response
     
     if (data) {
-      console.log('✅ 获取到费用详情数据:', data)
       feeInfo.value = {
         id: data.id,
         title: data.title,
         studentName: data.applicant || data.studentName || '-',
-        feeType: data.category || data.feeType || '-',
+        feeType: data.categoryCode || data.category || data.feeType || '-',
         amount: Number(data.amount) || 0,
         dueDate: data.date || data.dueDate || '-',
         paymentDate: data.paymentDate || data.reviewDate || '',
@@ -801,13 +892,29 @@ const loadFeeDetail = async () => {
   } catch (error) {
     console.error('获取费用详情失败:', error)
     ElMessage.error('获取费用详情失败')
+  } finally {
+    loading.value = false
   }
 }
 
 // 加载费用列表
 const loadFeeList = async () => {
-  console.log('🔄 未提供费用ID，准备返回列表页')
-  router.push('/expense-management')
+  loading.value = true
+  try {
+    const response = await feeApi.getExpenseList(queryParams.value)
+    // 处理嵌套结构
+    const result = response.data?.data || response.data || response
+    
+    if (result) {
+      feeList.value = result.list || result.records || (Array.isArray(result) ? result : [])
+      total.value = result.total || feeList.value.length
+    }
+  } catch (error) {
+    console.error('获取费用列表失败:', error)
+    ElMessage.error('获取费用列表失败')
+  } finally {
+    loading.value = false
+  }
 }
 
 /**

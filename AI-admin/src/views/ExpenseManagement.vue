@@ -144,6 +144,13 @@
             </el-button>
             <el-button 
               size="small"
+              :type="quickFilter === 'draft' ? 'primary' : 'default'"
+              @click="quickFilter = 'draft'; statusFilter = 'draft'; resetPagination()"
+            >
+              草稿箱
+            </el-button>
+            <el-button 
+              size="small"
               :type="quickFilter === 'approved' ? 'primary' : 'default'"
               @click="quickFilter = 'approved'; statusFilter = 'approved'; resetPagination()"
             >
@@ -174,6 +181,7 @@
           clearable
         >
           <el-option label="全部状态" value="" />
+          <el-option label="草稿" value="draft" />
           <el-option label="待审核" value="pending" />
           <el-option label="已通过" value="approved" />
           <el-option label="已拒绝" value="rejected" />
@@ -300,7 +308,10 @@
             style="width: 100%"
             class="expense-table"
             v-if="filteredExpenses.length > 0 && viewMode === 'table'"
+            @selection-change="handleSelectionChange"
           >
+            <el-table-column type="selection" width="55" />
+
             <el-table-column prop="title" label="费用标题" min-width="150">
               <template #default="{ row }">
                 <span class="expense-title">{{ row.title }}</span>
@@ -364,10 +375,31 @@
 
             <el-table-column prop="reviewer" label="审核人" width="100" />
 
-            <el-table-column label="操作" width="180" fixed="right">
+            <el-table-column label="操作" width="240" fixed="right">
               <template #default="{ row }">
                 <div class="table-actions">
                   <el-button 
+                    v-if="row.status === 'draft'"
+                    type="primary" 
+                    size="small" 
+                    text
+                    @click.stop="handleEditDraft(row)"
+                    :icon="Edit"
+                  >
+                    编辑
+                  </el-button>
+                  <el-button 
+                    v-if="row.status === 'draft'"
+                    type="success" 
+                    size="small" 
+                    text
+                    @click.stop="handleSubmitDraft(row)"
+                    :icon="CircleCheck"
+                  >
+                    提交
+                  </el-button>
+                  <el-button 
+                    v-if="row.status !== 'draft'"
                     type="primary" 
                     size="small" 
                     text
@@ -425,7 +457,7 @@
                     <span class="month-total">总计: {{ formatCurrency(group.totalAmount) }}</span>
                   </div>
                 </div>
-                <div class="card-grid">
+                <transition-group name="list" tag="div" class="card-grid">
                   <el-card 
                     v-for="expense in group.expenses" 
                     :key="expense.id"
@@ -437,6 +469,12 @@
                   >
                     <div class="card-header">
                       <div class="card-title-section">
+                        <el-checkbox 
+                          v-model="expense.selected" 
+                          @change="(val: any) => handleCardSelect(expense, val)"
+                          class="card-checkbox"
+                          @click.stop
+                        />
                         <h4 class="card-title">{{ expense.title }}</h4>
                         <el-tag 
                           :type="getCategoryType(expense.categoryCode || expense.category)" 
@@ -497,6 +535,27 @@
                     
                     <div class="card-actions" @click.stop>
                       <el-button 
+                        v-if="expense.status === 'draft'"
+                        type="primary" 
+                        size="small" 
+                        text
+                        @click="handleEditDraft(expense)"
+                        :icon="Edit"
+                      >
+                        编辑
+                      </el-button>
+                      <el-button 
+                        v-if="expense.status === 'draft'"
+                        type="success" 
+                        size="small" 
+                        text
+                        @click="handleSubmitDraft(expense)"
+                        :icon="CircleCheck"
+                      >
+                        提交
+                      </el-button>
+                      <el-button 
+                        v-if="expense.status !== 'draft'"
                         type="primary" 
                         size="small" 
                         text
@@ -536,7 +595,7 @@
                       </el-button>
                     </div>
                   </el-card>
-                </div>
+                </transition-group>
               </div>
               
               <!-- 加载更多按钮 -->
@@ -708,12 +767,13 @@ interface Expense {
   applicant: string
   dormName?: string
   date: string
-  status: 'pending' | 'approved' | 'rejected' | 'paid'
+  status: 'draft' | 'pending' | 'approved' | 'rejected' | 'paid'
   reviewer?: string
   reviewDate?: string
   reviewComment?: string
   attachments?: string[]
   createdAt: string
+  selected?: boolean
 }
 
 const router = useRouter()
@@ -1021,38 +1081,50 @@ const formatDate = (dateString: string): string => {
   return new Date(dateString).toLocaleDateString('zh-CN')
 }
 
-const getStatusType = (status: 'pending' | 'approved' | 'rejected' | string) => {
+const getStatusType = (status: string) => {
   switch (status) {
+    case 'draft': return 'info'
     case 'pending': return 'warning'
     case 'approved': return 'success'
     case 'rejected': return 'danger'
+    case 'paid': return 'success'
+    case 'cancelled': return 'info'
     default: return 'info'
   }
 }
 
-const getStatusText = (status: 'pending' | 'approved' | 'rejected' | string) => {
+const getStatusText = (status: string) => {
   switch (status) {
+    case 'draft': return '草稿'
     case 'pending': return '待审核'
     case 'approved': return '已通过'
     case 'rejected': return '已拒绝'
-    default: return '未知'
+    case 'paid': return '已支付'
+    case 'cancelled': return '已取消'
+    default: return status || '未知'
   }
 }
 
-const getStatusIcon = (status: 'pending' | 'approved' | 'rejected' | string) => {
+const getStatusIcon = (status: string) => {
   switch (status) {
+    case 'draft': return Edit
     case 'pending': return Clock
     case 'approved': return CircleCheck
     case 'rejected': return Close
+    case 'paid': return Money
+    case 'cancelled': return CircleClose
     default: return InfoFilled
   }
 }
 
-const getStatusDescription = (status: 'pending' | 'approved' | 'rejected' | string) => {
+const getStatusDescription = (status: string) => {
   switch (status) {
+    case 'draft': return '草稿已保存，尚未提交'
     case 'pending': return '等待审核'
     case 'approved': return '审核已通过'
     case 'rejected': return '审核被拒绝'
+    case 'paid': return '费用已完成支付'
+    case 'cancelled': return '费用已取消'
     default: return '未知状态'
   }
 }
@@ -1076,7 +1148,7 @@ const getCategoryType = (category: string) => {
       return 'success'
     case 'other': 
     case 'supplies':
-      return ''
+      return 'info'
     default: return 'info'
   }
 }
@@ -1107,13 +1179,64 @@ const getCategoryText = (category: string) => {
  * @param expense 费用记录对象
  */
 const handleView = (expense: Expense) => {
-  console.log('🔍 查看费用详情:', expense.id)
   router.push(`/fee-detail/${expense.id}`)
 }
 
 // 处理审核
 const handleReview = (expense: Expense) => {
   router.push(`/expense/review/${expense.id}`)
+}
+
+/**
+ * 编辑草稿
+ * @param expense 费用记录对象
+ */
+const handleEditDraft = (expense: Expense) => {
+  router.push({
+    path: '/expense/create',
+    query: { id: expense.id }
+  })
+}
+
+/**
+ * 提交草稿（变更为待审核状态）
+ * @param expense 费用记录对象
+ */
+const handleSubmitDraft = async (expense: Expense) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要提交费用草稿 "${expense.title}" 吗？提交后将进入审核流程。`,
+      '提交草稿',
+      {
+        confirmButtonText: '提交',
+        cancelButtonText: '取消',
+        type: 'info'
+      }
+    )
+    
+    loading.value = true
+    const response = await feeApi.updateExpense(expense.id, { 
+      status: 'pending' 
+    })
+    
+    if (response.success) {
+      ElMessage.success('草稿提交成功，已进入待审核流程')
+      // 更新本地列表状态
+      const index = expenses.value.findIndex(e => e.id === expense.id)
+      if (index !== -1) {
+        expenses.value[index].status = 'pending'
+      }
+    } else {
+      ElMessage.error(response.message || '提交草稿失败')
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('提交草稿失败:', error)
+      ElMessage.error('提交草稿失败')
+    }
+  } finally {
+    loading.value = false
+  }
 }
 
 // 处理删除
@@ -1125,25 +1248,42 @@ const handleDelete = async (expense: Expense) => {
       {
         confirmButtonText: '确定',
         cancelButtonText: '取消',
-        type: 'warning'
+        type: 'warning',
+        confirmButtonClass: 'el-button--danger'
       }
     )
     
+    loading.value = true
     const response = await feeApi.deleteExpense(expense.id)
     if (response.success) {
-      const index = expenses.value.findIndex(e => e.id === expense.id)
-      if (index !== -1) {
-        expenses.value.splice(index, 1)
+      ElMessage({
+        type: 'success',
+        message: '费用删除成功',
+        duration: 3000,
+        showClose: true
+      })
+      await loadExpenses()
+      
+      // 检查当前页是否还有数据，如果没有则返回上一页
+      const maxPage = Math.ceil(filteredExpenses.value.length / pageSize.value)
+      if (currentPage.value > maxPage && maxPage > 0) {
+        currentPage.value = maxPage
       }
-      ElMessage.success('费用删除成功')
     } else {
       ElMessage.error(response.message || '删除费用失败')
     }
   } catch (error) {
     if (error !== 'cancel') {
       console.error('删除费用失败:', error)
-      ElMessage.error('删除费用失败')
+      ElMessage({
+        type: 'error',
+        message: '删除费用失败，请稍后重试',
+        duration: 3000,
+        showClose: true
+      })
     }
+  } finally {
+    loading.value = false
   }
 }
 
@@ -1154,9 +1294,11 @@ const handleBatchApprove = async () => {
     return
   }
   
+  const count = selectedItems.value.length
+  
   try {
     await ElMessageBox.confirm(
-      `确定要批量审核通过选中的 ${selectedItems.value.length} 项费用吗？`,
+      `确定要批量审核通过选中的 ${count} 项费用吗？`,
       '批量审核通过',
       {
         confirmButtonText: '确定',
@@ -1165,16 +1307,17 @@ const handleBatchApprove = async () => {
       }
     )
     
+    batchProcessing.value = true
     const response = await feeApi.batchApproveExpenses(selectedItems.value.map(item => item.id))
     if (response.success) {
-      selectedItems.value.forEach(item => {
-        const expense = expenses.value.find(e => e.id === item.id)
-        if (expense) {
-          expense.status = 'approved'
-        }
+      ElMessage({
+        type: 'success',
+        message: `已成功审核通过 ${count} 条费用记录`,
+        duration: 3000,
+        showClose: true
       })
       selectedItems.value = []
-      ElMessage.success('批量审核通过成功')
+      await loadExpenses()
     } else {
       ElMessage.error(response.message || '批量审核通过失败')
     }
@@ -1183,6 +1326,8 @@ const handleBatchApprove = async () => {
       console.error('批量审核通过失败:', error)
       ElMessage.error('批量审核通过失败')
     }
+  } finally {
+    batchProcessing.value = false
   }
 }
 
@@ -1193,9 +1338,11 @@ const handleBatchReject = async () => {
     return
   }
   
+  const count = selectedItems.value.length
+  
   try {
     await ElMessageBox.confirm(
-      `确定要批量拒绝选中的 ${selectedItems.value.length} 项费用吗？`,
+      `确定要批量拒绝选中的 ${count} 项费用吗？`,
       '批量拒绝',
       {
         confirmButtonText: '确定',
@@ -1204,16 +1351,17 @@ const handleBatchReject = async () => {
       }
     )
     
+    batchProcessing.value = true
     const response = await feeApi.batchRejectExpenses(selectedItems.value.map(item => item.id), '批量拒绝')
     if (response.success) {
-      selectedItems.value.forEach(item => {
-        const expense = expenses.value.find(e => e.id === item.id)
-        if (expense) {
-          expense.status = 'rejected'
-        }
+      ElMessage({
+        type: 'success',
+        message: `已成功拒绝 ${count} 条费用记录`,
+        duration: 3000,
+        showClose: true
       })
       selectedItems.value = []
-      ElMessage.success('批量拒绝成功')
+      await loadExpenses()
     } else {
       ElMessage.error(response.message || '批量拒绝失败')
     }
@@ -1222,6 +1370,8 @@ const handleBatchReject = async () => {
       console.error('批量拒绝失败:', error)
       ElMessage.error('批量拒绝失败')
     }
+  } finally {
+    batchProcessing.value = false
   }
 }
 
@@ -1232,35 +1382,56 @@ const handleBatchDelete = async () => {
     return
   }
   
+  const count = selectedItems.value.length
+  
   try {
     await ElMessageBox.confirm(
-      `确定要批量删除选中的 ${selectedItems.value.length} 项费用吗？此操作不可恢复！`,
+      `确定要批量删除选中的 ${count} 条费用吗？此操作不可恢复！`,
       '批量删除',
       {
         confirmButtonText: '确定',
         cancelButtonText: '取消',
-        type: 'warning'
+        type: 'warning',
+        confirmButtonClass: 'el-button--danger'
       }
     )
     
+    batchProcessing.value = true
     const response = await feeApi.batchDeleteExpenses(selectedItems.value.map(item => item.id))
+    
     if (response.success) {
-      selectedItems.value.forEach(item => {
-        const index = expenses.value.findIndex(e => e.id === item.id)
-        if (index !== -1) {
-          expenses.value.splice(index, 1)
-        }
+      // 批量删除成功提示优化
+      ElMessage({
+        type: 'success',
+        message: `已成功删除选中的 ${count} 条费用记录`,
+        duration: 3000,
+        showClose: true
       })
+      
+      // 列表自动刷新功能：保持当前分页和筛选状态
       selectedItems.value = []
-      ElMessage.success('批量删除成功')
+      await loadExpenses()
+      
+      // 检查当前页是否还有数据，如果没有则返回上一页
+      const maxPage = Math.ceil(filteredExpenses.value.length / pageSize.value)
+      if (currentPage.value > maxPage && maxPage > 0) {
+        currentPage.value = maxPage
+      }
     } else {
       ElMessage.error(response.message || '批量删除失败')
     }
   } catch (error) {
     if (error !== 'cancel') {
       console.error('批量删除失败:', error)
-      ElMessage.error('批量删除失败')
+      ElMessage({
+        type: 'error',
+        message: '批量删除失败，请稍后重试',
+        duration: 3000,
+        showClose: true
+      })
     }
+  } finally {
+    batchProcessing.value = false
   }
 }
 
@@ -1354,6 +1525,32 @@ const handleCurrentChange = (val: number) => {
   currentPage.value = val
 }
 
+/**
+ * 处理表格选择变化
+ * @param val 选中的记录数组
+ */
+const handleSelectionChange = (val: Expense[]) => {
+  selectedItems.value = val
+}
+
+/**
+ * 处理卡片视图的选择变化
+ * @param expense 费用记录
+ * @param selected 是否选中
+ */
+const handleCardSelect = (expense: Expense, selected: boolean) => {
+  if (selected) {
+    if (!selectedItems.value.find(item => item.id === expense.id)) {
+      selectedItems.value.push(expense)
+    }
+  } else {
+    const index = selectedItems.value.findIndex(item => item.id === expense.id)
+    if (index !== -1) {
+      selectedItems.value.splice(index, 1)
+    }
+  }
+}
+
 // 处理刷新
 const handleRefresh = async () => {
   refreshing.value = true
@@ -1413,6 +1610,7 @@ const loadExpenses = async () => {
 // 清除选择
 const clearSelection = () => {
   selectedItems.value = []
+  expenses.value.forEach(e => e.selected = false)
 }
 
 // 组件挂载时加载数据
@@ -1423,6 +1621,20 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* 列表过渡动画 */
+.list-enter-active,
+.list-leave-active {
+  transition: all 0.5s ease;
+}
+.list-enter-from,
+.list-leave-to {
+  opacity: 0;
+  transform: translateY(30px);
+}
+.list-move {
+  transition: transform 0.5s ease;
+}
+
 .expense-management {
   padding: 20px;
   background-color: #f5f7fa;
@@ -1679,9 +1891,13 @@ onMounted(() => {
 
 .card-title-section {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
   flex: 1;
+}
+
+.card-checkbox {
+  margin-right: 4px;
 }
 
 .card-title {

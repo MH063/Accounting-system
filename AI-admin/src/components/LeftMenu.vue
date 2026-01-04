@@ -135,7 +135,18 @@ import { HomeFilled, User, Document, DataLine, Setting, House, Coin, CreditCard,
 const route = useRoute()
 
 // 当前激活的菜单项
-const activeMenu = computed(() => route.path)
+const activeMenu = computed(() => {
+  const { path } = route
+  // 处理费用详情的子路径，让其在菜单中保持高亮
+  if (path.startsWith('/fee-detail')) return '/fee-detail'
+  // 处理寝室详情的子路径
+  if (path.startsWith('/dormitory-detail')) return '/dormitory-detail'
+  // 处理用户详情的子路径
+  if (path.startsWith('/user-detail')) return '/users'
+  // 费用审核页面也归类到费用管理
+  if (path.startsWith('/expense/review')) return '/expense-management'
+  return path
+})
 
 /**
  * 左侧菜单栏组件

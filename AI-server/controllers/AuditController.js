@@ -52,7 +52,11 @@ class AuditController extends BaseController {
       }).filter(entry => entry !== null);
       
     } catch (error) {
-      logger.error('读取审计日志文件失败:', error);
+      logger.error('读取审计日志文件失败', { 
+        error: error.message,
+        filePath,
+        stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined 
+      });
       return [];
     }
   }

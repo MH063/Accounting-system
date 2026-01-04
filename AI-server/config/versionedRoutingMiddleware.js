@@ -113,7 +113,7 @@ class VersionedRoutingMiddleware {
         }
 
         // 记录版本请求
-        logger.info(`[VERSION_MIDDLEWARE] 版本化路由请求`, {
+        logger.debug(`[VERSION_MIDDLEWARE] 版本化路由请求`, {
           version: requestedVersion,
           path: req.path,
           method: req.method,
@@ -151,8 +151,6 @@ class VersionedRoutingMiddleware {
       const apiVersion = req.apiVersion;
       const originalPath = req.path;
       const fullPath = req.originalUrl;
-      
-      console.log(`🔍 [VERSION_DEBUG] path: ${originalPath}, originalUrl: ${fullPath}, apiVersion: ${apiVersion}`);
       
       // 不需要版本化的路由列表
       const excludedPaths = [

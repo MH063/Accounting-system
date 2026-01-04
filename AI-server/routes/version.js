@@ -7,17 +7,22 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
+const logger = require('../config/logger');
 
 // 获取版本信息的通用函数
 const getVersionInfo = (jsonPath, defaultVersion = '1.0.0') => {
   try {
     const fullPath = path.join(__dirname, '..', jsonPath);
-    console.log(`[Version] 尝试读取文件: ${fullPath}`)
-    console.log(`[Version] 文件存在: ${fs.existsSync(fullPath)}`)
+    const exists = fs.existsSync(fullPath);
+    if (process.env.NODE_ENV !== 'production') {
+      logger.debug('[Version] 读取版本文件', {
+        jsonPath,
+        exists
+      });
+    }
     
-    if (fs.existsSync(fullPath)) {
+    if (exists) {
       const content = fs.readFileSync(fullPath, 'utf8');
-      console.log(`[Version] 文件内容: ${content}`)
       const data = JSON.parse(content);
       return {
         version: data.version || defaultVersion,
@@ -26,7 +31,7 @@ const getVersionInfo = (jsonPath, defaultVersion = '1.0.0') => {
       };
     }
   } catch (e) {
-    console.warn(`[Version] 无法读取版本文件 ${jsonPath}: ${e.message}`);
+    logger.warn('[Version] 无法读取版本文件', { jsonPath, error: e.message });
   }
   return {
     version: defaultVersion,

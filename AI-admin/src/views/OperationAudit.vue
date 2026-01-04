@@ -272,9 +272,9 @@ const getOperationTypeTag = (type: string) => {
     case 'export':
       return 'primary'
     case 'login':
-      return ''
+      return 'info'
     case 'logout':
-      return ''
+      return 'info'
     default:
       return 'info'
   }

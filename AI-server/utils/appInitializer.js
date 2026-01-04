@@ -47,7 +47,10 @@ async function initializeApplication() {
       });
     
   } catch (error) {
-    console.error('❌ 配置初始化失败:', error);
+    logger.error('配置初始化失败', { 
+      error: error.message,
+      stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined 
+    });
     process.exit(1);
   }
 }

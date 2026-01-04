@@ -21,12 +21,18 @@ api.interceptors.request.use(
     
     // 检查是否需要认证的接口（admin相关接口需要认证）
     const isAdminApi = config.url?.includes('/admin/') || config.url?.includes('/system/')
+    // 排除公开接口
+    const isPublicApi = config.url?.includes('/login') || 
+                       config.url?.includes('/heartbeat') || 
+                       config.url?.includes('/refresh-token') ||
+                       config.url?.includes('/register')
     
     // 关键位置打印日志 (规则 7)
     console.log('[API Interceptor] Token检查', {
       url: config.url,
       hasToken: !!adminToken,
       isAdminApi,
+      isPublicApi,
       tokenPreview: adminToken ? `${adminToken.substring(0, 30)}...` : 'null'
     })
     
@@ -34,7 +40,7 @@ api.interceptors.request.use(
       config.headers = config.headers || {}
       config.headers.Authorization = `Bearer ${adminToken}`
       console.log('[API Interceptor] Authorization头已设置:', config.headers.Authorization?.substring(0, 30) + '...')
-    } else if (isAdminApi) {
+    } else if (isAdminApi && !isPublicApi) {
       // 只在需要认证的管理接口缺失token时警告
       console.warn('[API Interceptor] adminToken不存在，可能导致401错误')
     }

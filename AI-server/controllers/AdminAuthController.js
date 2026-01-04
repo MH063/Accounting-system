@@ -74,11 +74,12 @@ class AdminAuthController extends BaseController {
    */
   async adminLogin(req, res, next) {
     try {
-      console.log('🔍 [AdminAuthController] 收到管理员登录请求');
-      console.log('  - 请求URL:', req.originalUrl);
-      console.log('  - 请求方法:', req.method);
-      console.log('  - 请求IP:', req.ip);
-      console.log('  - 请求体:', JSON.stringify(req.body, null, 2));
+      logger.info('收到管理员登录请求', {
+        url: req.originalUrl,
+        method: req.method,
+        ip: req.ip,
+        identifier: req.body.username || req.body.email
+      });
       
       const { username, email, password } = req.body;
       const loginIdentifier = username || email;
@@ -90,7 +91,7 @@ class AdminAuthController extends BaseController {
         loginType: 'admin'
       });
 
-      console.log('🔍 [AdminAuthController] 开始验证输入字段');
+      logger.debug('开始验证输入字段');
       // 验证输入
       if (!loginIdentifier) {
         throw new Error('缺少必需字段: username 或 email');
@@ -98,15 +99,16 @@ class AdminAuthController extends BaseController {
       if (!password) {
         throw new Error('缺少必需字段: password');
       }
-      console.log('✅ [AdminAuthController] 输入验证通过');
 
-      console.log('🔍 [AdminAuthController] 调用AdminAuthService进行登录验证');
-      // 调用服务层进行管理员登录验证
-      const loginResult = await this.adminAuthService.adminLogin({ username: loginIdentifier, password });
-      console.log('📋 [AdminAuthController] AdminAuthService返回结果:', JSON.stringify(loginResult, null, 2));
+      logger.debug('输入验证通过');
+
+      logger.debug('调用AdminAuthService进行登录验证');
+      const loginResult = await this.adminAuthService.login(loginIdentifier, password, req);
       
+      logger.debug('AdminAuthService返回结果', { success: loginResult.success, message: loginResult.message });
+
       if (!loginResult.success) {
-        console.log('❌ [AdminAuthController] 登录失败:', loginResult.message);
+        logger.warn('登录失败', { message: loginResult.message });
         // 登录失败，记录安全日志
         logger.auth('管理员登录失败', { username, reason: loginResult.message });
         logger.security(req, '管理员登录尝试失败', { 
@@ -153,7 +155,7 @@ class AdminAuthController extends BaseController {
         // 会话创建失败不应中断登录流程，但会记录日志
       }
 
-      console.log('✅ [AdminAuthController] 登录成功，准备返回响应');
+      logger.debug('登录成功，准备返回响应');
       logger.auth('管理员登录成功', { username, userId: user.id, role: user.role });
       logger.audit(req, '管理员登录成功', { 
         username,
@@ -196,9 +198,7 @@ class AdminAuthController extends BaseController {
       }, '管理员登录成功');
 
     } catch (error) {
-      console.log('💥 [AdminAuthController] 发生异常:', error.message);
-      console.log('  - 错误堆栈:', error.stack);
-      logger.error('[AdminAuthController] 管理员登录失败', { error: error.message });
+      logger.error('[AdminAuthController] 发生异常', { error: error.message, stack: error.stack });
       next(error);
     }
   }
@@ -279,15 +279,15 @@ class AdminAuthController extends BaseController {
    * POST /api/admin/refresh-token
    */
   async refreshAdminToken(req, res, next) {
+    const { refreshToken } = req.body;
+    const ip = req.ip;
+    const ua = req.get('User-Agent') || 'unknown';
+
     try {
-      const { refreshToken } = req.body;
-      const ip = req.ip;
-      const ua = req.get('User-Agent');
-
-      console.log(`🔄 [AdminAuthController] 收到令牌刷新请求 | IP: ${ip} | UA: ${ua.substring(0, 30)}...`);
-
+      logger.info('收到令牌刷新请求', { ip, ua: ua.substring(0, 30) });
+      
       if (!refreshToken) {
-        console.warn('⚠️ [AdminAuthController] 刷新令牌为空');
+        logger.warn('刷新令牌为空');
         return errorResponse(res, '刷新令牌不能为空', 400);
       }
 

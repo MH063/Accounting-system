@@ -158,9 +158,11 @@ app.use(performanceMonitorMiddleware());
 // 安全审计中间件 - 记录所有API请求到审计日志
 if (typeof securityAuditMiddleware === 'function') {
   app.use(securityAuditMiddleware());
-  console.log('已成功注册安全审计中间件');
+  if (process.env.NODE_ENV !== 'production') {
+    logger.info('已成功注册安全审计中间件');
+  }
 } else {
-  console.error('错误: securityAuditMiddleware 不是一个函数:', typeof securityAuditMiddleware);
+  logger.error('securityAuditMiddleware 不是一个函数', { type: typeof securityAuditMiddleware });
 }
 
 // CSRF保护中间件 - 仅对API请求生效
@@ -321,56 +323,53 @@ const PORT = process.env.PORT || 4000;
  */
 async function testDatabaseConnection() {
   try {
-    console.log('正在尝试连接数据库...');
+    if (process.env.NODE_ENV !== 'production') {
+      logger.info('正在尝试连接数据库...');
+    }
     
     // 使用数据库配置中的测试连接函数
     const isConnected = await testConnection();
     
     if (!isConnected) {
-      console.log('❌ 数据库连接测试失败');
+      logger.error('数据库连接测试失败');
       return false;
     }
     
-    console.log(`连接信息: [USER]@[HOST]:[PORT]/[DATABASE]`); // 不显示实际的连接信息
-    console.log(`数据库用户: ${getSafeEnvDisplay('DB_USER')}`);
-    console.log(`数据库主机: ${getSafeEnvDisplay('DB_HOST')}`);
-    console.log(`数据库端口: ${getSafeEnvDisplay('DB_PORT')}`);
-    console.log(`数据库名称: ${getSafeEnvDisplay('DB_NAME')}`);
+    if (process.env.NODE_ENV !== 'production') {
+      logger.info('连接信息: [USER]@[HOST]:[PORT]/[DATABASE]');
+      logger.info(`数据库用户: ${getSafeEnvDisplay('DB_USER')}`);
+      logger.info(`数据库主机: ${getSafeEnvDisplay('DB_HOST')}`);
+      logger.info(`数据库端口: ${getSafeEnvDisplay('DB_PORT')}`);
+      logger.info(`数据库名称: ${getSafeEnvDisplay('DB_NAME')}`);
+    }
     
     // 查询所有数据库
     try {
       const databases = await getDatabases();
-      console.log('\n📋 可用数据库列表:');
-      databases.forEach(db => {
-        console.log(`  - ${db}`);
-      });
+      if (process.env.NODE_ENV !== 'production') {
+        logger.info('可用数据库列表:', { databases });
+      }
     } catch (dbError) {
-      console.warn('⚠️ 查询数据库列表失败:', dbError.message);
+      logger.warn('无法获取数据库列表', { error: dbError.message });
     }
     
-    // 如果指定了数据库，查询其中的表
-    if (process.env.DB_NAME) {
-      try {
-        const tables = await getTables();
-        
-        if (tables.length > 0) {
-          console.log(`\n📊 数据库 "${process.env.DB_NAME}" 中的表:`);
-          tables.forEach(table => {
-            console.log(`  - ${table}`);
-          });
-        } else {
-          console.log(`\n⚠️ 数据库 "${process.env.DB_NAME}" 中没有表`);
-        }
-      } catch (err) {
-        console.error(`查询数据库 "${process.env.DB_NAME}" 中的表时出错:`, err.message);
+    // 查询所有表
+    try {
+      const tables = await getTables();
+      if (process.env.NODE_ENV !== 'production') {
+        logger.info('可用表列表:', { tables });
       }
-    } else {
-      console.log('\n⚠️ 未指定数据库名称，请在.env文件中设置DB_NAME');
+    } catch (tableError) {
+      logger.warn('无法获取表列表', { error: tableError.message });
     }
     
     return true;
   } catch (error) {
-    console.error('❌ 数据库连接失败:', error.message);
+    if (process.env.NODE_ENV !== 'production') {
+      logger.error('数据库连接失败', { error: error.message, stack: error.stack });
+    } else {
+      logger.error('数据库连接失败', { error: error.message });
+    }
     return false;
   }
 }
@@ -418,7 +417,10 @@ app.get('/api/db-test', responseWrapper(async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('数据库测试路由错误:', error);
+    logger.error('数据库测试路由错误', { 
+      error: error.message,
+      stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined 
+    });
     return res.status(503).json({
       success: false,
       message: '数据库服务暂时不可用',
@@ -462,7 +464,10 @@ app.get('/api/tables', responseWrapper(async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('获取表列表路由错误:', error);
+    logger.error('获取表列表路由错误', { 
+      error: error.message,
+      stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined 
+    });
     return res.status(503).json({
       success: false,
       message: '数据库服务暂时不可用',

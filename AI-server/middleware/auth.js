@@ -185,6 +185,16 @@ const authorizeAdmin = (req, res, next) => {
   const isAdminRole = hasAdminRole(req.user.role);
   const isAdminFlag = req.user.isAdmin === true;
   
+  // 关键位置打印日志 (规则 7)
+  logger.debug('[AuthMiddleware] 管理员权限检查', {
+    userId: req.user.id,
+    role: req.user.role,
+    isAdmin: req.user.isAdmin,
+    isAdminRole,
+    isAdminFlag,
+    match: isAdminRole || isAdminFlag
+  });
+  
   if (isAdminRole || isAdminFlag) {
     next();
   } else {

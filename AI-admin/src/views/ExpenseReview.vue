@@ -253,7 +253,6 @@ const fetchPendingExpenses = async () => {
     
     if (Array.isArray(data)) {
       pendingExpenses.value = data
-      console.log(`✅ 获取到 ${data.length} 条待审核费用`)
       
       // 如果路由中有 ID，尝试自动打开对应的审核对话框
       if (routeId.value) {
@@ -340,7 +339,8 @@ const submitReview = async () => {
     // 根据规则 5 处理嵌套结构
     const data = response.data?.data || response.data || response
     
-    if (response.data?.success || response.success) {
+    // 拦截器已经处理了 success 检查，如果能执行到这里说明是成功的
+    if (response) {
       // 从待审核列表中移除
       const index = pendingExpenses.value.findIndex(e => e.id === currentExpense.value.id)
       if (index !== -1) {
@@ -355,7 +355,7 @@ const submitReview = async () => {
         setTimeout(() => router.push('/expense-management'), 1500)
       }
     } else {
-      ElMessage.error(response.data?.message || '审核提交失败')
+      ElMessage.error('审核提交失败')
     }
   } catch (error) {
     console.error('审核提交失败:', error)
@@ -380,7 +380,8 @@ const batchApprove = async () => {
     const ids = selectedExpenses.value.map(e => e.id)
     const response = await feeApi.batchApproveExpenses(ids)
     
-    if (response.data?.success || response.success) {
+    // 拦截器已经处理了 success 检查
+    if (response) {
       // 从待审核列表中移除
       selectedExpenses.value.forEach(expense => {
         const index = pendingExpenses.value.findIndex(e => e.id === expense.id)
@@ -392,7 +393,7 @@ const batchApprove = async () => {
       ElMessage.success(`成功批量审核通过 ${selectedExpenses.value.length} 项费用`)
       selectedExpenses.value = []
     } else {
-      ElMessage.error(response.data?.message || '批量审核失败')
+      ElMessage.error('批量审核失败')
     }
   } catch (error) {
     if (error !== 'cancel') {
@@ -425,7 +426,8 @@ const batchReject = async () => {
     const ids = selectedExpenses.value.map(e => e.id)
     const response = await feeApi.batchRejectExpenses(ids, reason)
     
-    if (response.data?.success || response.success) {
+    // 拦截器已经处理了 success 检查
+    if (response) {
       // 从待审核列表中移除
       selectedExpenses.value.forEach(expense => {
         const index = pendingExpenses.value.findIndex(e => e.id === expense.id)
@@ -437,7 +439,7 @@ const batchReject = async () => {
       ElMessage.success(`成功批量拒绝 ${selectedExpenses.value.length} 项费用`)
       selectedExpenses.value = []
     } else {
-      ElMessage.error(response.data?.message || '批量拒绝失败')
+      ElMessage.error('批量拒绝失败')
     }
   } catch (error) {
     if (error !== 'cancel') {
@@ -496,7 +498,7 @@ const getCategoryType = (category: string) => {
       return 'success'
     case 'other': 
     case 'supplies':
-      return ''
+      return 'info'
     default: return 'info'
   }
 }

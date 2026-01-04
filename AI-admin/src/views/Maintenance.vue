@@ -1125,7 +1125,7 @@ const getScheduleStatusText = (status: string) => {
 const getScheduleStatusTag = (status: string) => {
   switch (status) {
     case 'scheduled':
-      return ''
+      return 'primary'
     case 'executing':
       return 'warning'
     case 'completed':

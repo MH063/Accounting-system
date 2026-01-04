@@ -34,7 +34,10 @@ class VersionController extends BaseController {
 
       return successResponse(res, latestVersion, '获取最新版本信息成功');
     } catch (error) {
-      console.error('获取最新版本信息失败:', error);
+      logger.error('获取最新版本信息失败', { 
+        error: error.message,
+        stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined 
+      });
       next(error);
     }
   }
@@ -68,7 +71,10 @@ class VersionController extends BaseController {
 
       return successResponse(res, { versions: versionHistory }, '获取版本历史成功');
     } catch (error) {
-      console.error('获取版本历史失败:', error);
+      logger.error('获取版本历史失败', { 
+        error: error.message,
+        stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined 
+      });
       next(error);
     }
   }

@@ -1998,7 +1998,7 @@ class UserService extends BaseService {
       const adminAuthService = new AdminAuthService();
       
       // 调用管理员认证服务进行登录验证
-      const result = await adminAuthService.adminLogin(loginData);
+      const result = await adminAuthService.login(loginData.username || loginData.email, loginData.password);
       
       return result;
     } catch (error) {
@@ -2186,17 +2186,23 @@ class UserService extends BaseService {
    */
   async createUserSession(userId, ip, userAgent, tokens = null) {
     try {
-      console.log('[UserService] createUserSession 被调用', { userId, ip, userAgent: userAgent?.substring(0, 50) });
+      if (process.env.NODE_ENV !== 'production') {
+        logger.debug('[UserService] createUserSession 被调用', { userId, ip, userAgent: userAgent?.substring(0, 50) });
+      }
 
       // 识别并跟踪设备
       const deviceTrack = await this.identifyAndTrackDevice(ip || '0.0.0.0', userId);
-      console.log('[UserService] 设备识别结果', { deviceId: deviceTrack.deviceId, conflictDetected: deviceTrack.conflictDetected });
+      if (process.env.NODE_ENV !== 'production') {
+        logger.debug('[UserService] 设备识别结果', { deviceId: deviceTrack.deviceId, conflictDetected: deviceTrack.conflictDetected });
+      }
 
       // 生成会话令牌
       const sessionToken = tokens?.accessToken || this.generateSecureToken();
       const refreshToken = tokens?.refreshToken || this.generateSecureToken();
       const clientType = tokens?.clientType || (userAgent?.includes('Admin') ? 'admin' : 'client');
-      console.log('[UserService] 会话令牌生成', { sessionToken: sessionToken.substring(0, 20) + '...', clientType });
+      if (process.env.NODE_ENV !== 'production') {
+        logger.debug('[UserService] 会话令牌生成', { sessionToken: sessionToken.substring(0, 20) + '...', clientType });
+      }
 
       // 解析用户代理信息
       const deviceInfo = this.parseUserAgent(userAgent);
@@ -2261,11 +2267,15 @@ class UserService extends BaseService {
         ];
       }
 
-      console.log('[UserService] 执行SQL插入', { query: insertQuery.substring(0, 100), params: params.map((p, i) => i === 1 || i === 2 ? p?.substring(0, 20) + '...' : p) });
+      if (process.env.NODE_ENV !== 'production') {
+        logger.debug('[UserService] 执行SQL插入', { query: insertQuery.substring(0, 100), params: params.map((p, i) => i === 1 || i === 2 ? p?.substring(0, 20) + '...' : p) });
+      }
 
       const result = await this.userRepository.executeQuery(insertQuery, params);
       const session = result.rows[0];
-      console.log('[UserService] 会话创建成功', { sessionId: session.id, userId: session.user_id, clientType: session.client_type });
+      if (process.env.NODE_ENV !== 'production') {
+        logger.debug('[UserService] 会话创建成功', { sessionId: session.id, userId: session.user_id, clientType: session.client_type });
+      }
 
       // 如果检测到冲突，将会话标记中包含冲突信息
       if (deviceTrack.conflictDetected) {
@@ -2286,9 +2296,9 @@ class UserService extends BaseService {
       logger.error('[UserService] 创建用户会话失败', {
         error: error.message,
         userId,
-        ip
+        ip,
+        stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined
       });
-      console.error('[UserService] 创建用户会话失败', { error: error.message, stack: error.stack });
       return null;
     }
   }

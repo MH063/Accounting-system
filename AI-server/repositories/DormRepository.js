@@ -705,9 +705,16 @@ class DormRepository extends BaseRepository {
       `;
       const result = await query(queryText);
       const row = result.rows[0];
-      
-      console.log('📊 宿舍统计原始数据:', row);
-      
+
+      if (process.env.NODE_ENV !== 'production') {
+        logger.debug('[DormRepository] 宿舍统计查询结果', {
+          total: row.total,
+          normal_count: row.normal_count,
+          maintenance: row.maintenance,
+          full: row.full
+        });
+      }
+
       // PostgreSQL COUNT 返回的是字符串，需要转换为数字
       return {
         total: parseInt(row.total || 0),

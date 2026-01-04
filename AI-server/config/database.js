@@ -12,7 +12,9 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
 // 获取数据库配置
 function getDatabaseConfig() {
   // 直接使用.env文件中的本地数据库配置
-  console.log('使用本地数据库配置');
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('使用本地数据库配置');
+  }
   const config = {
     host: process.env.DB_HOST || 'localhost',
     port: process.env.DB_PORT || 5432,
@@ -73,28 +75,26 @@ pool.on('error', (err, client) => {
 
 // 简化版查询函数 - 过滤敏感信息
 const query = async (text, params = []) => {
-  if (process.env.NODE_ENV !== 'production') {
-    console.log('[DB_QUERY] 执行查询: ...');
-  }
   const start = Date.now();
   
   try {
     const result = await pool.query(text, params);
     const duration = Date.now() - start;
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[DB_QUERY] 查询成功 (${duration}ms)`);
-    }
     return result;
   } catch (error) {
     const duration = Date.now() - start;
-    console.error(`[DB_QUERY] 查询失败 (${duration}ms)`);
+    if (process.env.NODE_ENV !== 'production') {
+      console.error(`[DB_QUERY] 查询失败 (${duration}ms)`);
+    }
     throw error;
   }
 };
 
 // 简化版测试连接函数 - 避免信息泄露
 const testConnection = async () => {
-  console.log('[DB_TEST] 开始测试连接...');
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[DB_TEST] 开始测试连接...');
+  }
   let client;
   try {
     client = await pool.connect();

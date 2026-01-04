@@ -12,6 +12,9 @@ class ExpenseController extends BaseController {
   constructor() {
     super();
     this.clearAllExpenses = this.clearAllExpenses.bind(this);
+    this.batchApproveExpenses = this.batchApproveExpenses.bind(this);
+    this.batchRejectExpenses = this.batchRejectExpenses.bind(this);
+    this.reviewExpense = this.reviewExpense.bind(this);
   }
   
   /**
@@ -299,7 +302,10 @@ class ExpenseController extends BaseController {
       
       return successResponse(res, statistics, '获取费用统计数据成功');
     } catch (error) {
-      console.error('获取费用统计数据失败:', error);
+      logger.error('获取费用统计数据失败', { 
+        error: error.message,
+        stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined 
+      });
       next(error);
     }
   }
@@ -335,8 +341,18 @@ class ExpenseController extends BaseController {
       const expense = checkResult.rows[0];
       
       // 模拟发送提醒（实际应用中应该集成邮件或短信服务）
-      console.log(`发送费用提醒: 费用ID=${id}, 标题=${expense.title}, 金额=${expense.amount}, 方法=${method}`);
-      console.log(`接收人: ${expense.nickname} (${expense.email} / ${expense.phone})`);
+      // 记录发送提醒
+      logger.info('发送费用提醒', { 
+        expenseId: id, 
+        title: expense.title, 
+        amount: expense.amount, 
+        method,
+        recipient: {
+          nickname: expense.nickname,
+          email: expense.email,
+          phone: expense.phone
+        }
+      });
       
       // 在实际应用中，这里应该调用邮件或短信服务发送提醒
       // 例如：await emailService.sendExpenseReminder(expense, method);
@@ -364,7 +380,11 @@ class ExpenseController extends BaseController {
         reminderId: reminderResult?.rows[0]?.id || null
       }, '费用提醒发送成功');
     } catch (error) {
-      console.error('发送费用提醒失败:', error);
+      logger.error('发送费用提醒失败', { 
+        error: error.message,
+        id,
+        stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined 
+      });
       next(error);
     }
   }
@@ -376,7 +396,7 @@ class ExpenseController extends BaseController {
   async updateExpense(req, res, next) {
     try {
       const { id } = req.params;
-      const { title, description, amount, category, date } = req.body;
+      const { title, description, amount, category, date, status } = req.body;
       
       // 验证必填字段
       if (!id) {
@@ -384,12 +404,14 @@ class ExpenseController extends BaseController {
       }
       
       // 先检查费用是否存在
-      const checkSql = 'SELECT id, category_id FROM expenses WHERE id = $1';
+      const checkSql = 'SELECT id, category_id, status FROM expenses WHERE id = $1';
       const checkResult = await query(checkSql, [id]);
       
       if (checkResult.rows.length === 0) {
         return errorResponse(res, '费用不存在', 404);
       }
+      
+      const currentStatus = checkResult.rows[0].status;
       
       // 准备更新数据
       const updateData = {};
@@ -439,14 +461,19 @@ class ExpenseController extends BaseController {
         updateParams.push(date);
         paramIndex++;
       }
+
+      if (status !== undefined) {
+        // 允许从 draft 变更为 pending
+        updateSql += `, status = $${paramIndex}`;
+        updateParams.push(status);
+        paramIndex++;
+      }
       
       // 添加WHERE条件
       updateSql += ` WHERE id = $${paramIndex} RETURNING id`;
       updateParams.push(id);
       
       // 执行更新
-      console.log('执行费用更新 SQL:', updateSql);
-      console.log('执行费用更新 参数:', JSON.stringify(updateParams));
       const updateResult = await query(updateSql, updateParams);
       
       if (updateResult.rows.length === 0) {
@@ -485,7 +512,11 @@ class ExpenseController extends BaseController {
       
       return successResponse(res, processedRow, '费用更新成功');
     } catch (error) {
-      console.error('更新费用失败:', error);
+      logger.error('更新费用失败', { 
+        error: error.message,
+        id,
+        stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined 
+      });
       next(error);
     }
   }
@@ -563,9 +594,6 @@ class ExpenseController extends BaseController {
       
       // 处理日期字段，确保它们被正确序列化为字符串
       const processedRows = listResult.rows.map(row => {
-        // 关键位置打印日志方便控制台查看日志调试
-        console.log('处理费用原始行数据:', JSON.stringify(row));
-        
         // PostgreSQL 通常返回小写字段名，处理可能的兼容性问题
         const reviewDateVal = row.reviewdate || row.reviewDate;
         const reviewCommentVal = row.reviewcomment || row.reviewComment;
@@ -605,7 +633,11 @@ class ExpenseController extends BaseController {
         }
       }, '获取费用列表成功');
     } catch (error) {
-      console.error('获取费用列表失败:', error);
+      logger.error('获取费用列表失败', { 
+        error: error.message,
+        query: req.query,
+        stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined 
+      });
       next(error);
     }
   }
@@ -652,7 +684,11 @@ class ExpenseController extends BaseController {
       
       return successResponse(res, processedRow, '费用创建成功');
     } catch (error) {
-      console.error('获取费用详情失败:', error);
+      logger.error('获取费用详情失败', { 
+        error: error.message,
+        id: req.params.id,
+        stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined 
+      });
       next(error);
     }
   }
@@ -729,7 +765,6 @@ class ExpenseController extends BaseController {
         if (adminCheck.rows.length === 0) {
           return errorResponse(res, '用户未加入任何宿舍', 400);
         }
-        console.log('管理员创建费用，无需宿舍信息');
         
         // 尝试从第一个参与者获取宿舍ID，以满足数据库 NOT NULL 约束
         if (participants && participants.length > 0) {
@@ -739,7 +774,6 @@ class ExpenseController extends BaseController {
           );
           if (participantDormQuery.rows.length > 0) {
             dormId = participantDormQuery.rows[0].dorm_id;
-            console.log('使用第一个参与者的宿舍ID:', dormId);
           }
         }
       }
@@ -864,8 +898,8 @@ class ExpenseController extends BaseController {
         WHERE id = $4
         RETURNING id, title, status, approved_by as reviewer, approved_at as reviewDate, review_comment as reviewComment
       `;
-      // 假设审核人是当前登录用户（使用用户ID 40）
-      const reviewerId = 40; // 实际应用中应该从登录信息获取用户ID
+      // 获取审核人ID，优先从登录信息获取
+      const reviewerId = req.user?.id || 1; 
       
       const result = await query(updateSql, [status, reviewerId, comment, id]);
       
@@ -879,7 +913,7 @@ class ExpenseController extends BaseController {
           try {
             await this.updateBudgetWithExpense(id, expense.amount, expense.applicant_id, expense.dorm_id);
           } catch (budgetError) {
-            console.error('更新预算失败:', budgetError);
+            logger.error('更新预算失败', { error: budgetError.message, id });
           }
         }
       }
@@ -889,7 +923,7 @@ class ExpenseController extends BaseController {
           try {
             await this.removeExpenseFromBudget(id, expense.amount, expense.applicant_id, expense.dorm_id);
           } catch (budgetError) {
-            console.error('从预算中移除费用失败:', budgetError);
+            logger.error('从预算中移除费用失败', { error: budgetError.message, id });
           }
         }
       }
@@ -903,7 +937,11 @@ class ExpenseController extends BaseController {
       
       return successResponse(res, processedRow, '费用审核成功');
     } catch (error) {
-      console.error('审核费用失败:', error);
+      logger.error('审核费用失败', { 
+        error: error.message,
+        id: req.params.id,
+        stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined 
+      });
       next(error);
     }
   }
@@ -940,7 +978,11 @@ class ExpenseController extends BaseController {
       
       return successResponse(res, result.rows[0], '费用支付成功');
     } catch (error) {
-      console.error('支付费用失败:', error);
+      logger.error('支付费用失败', { 
+        error: error.message,
+        id: req.params.id,
+        stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined 
+      });
       next(error);
     }
   }
@@ -962,7 +1004,11 @@ class ExpenseController extends BaseController {
       
       return successResponse(res, null, '费用删除成功');
     } catch (error) {
-      console.error('删除费用失败:', error);
+      logger.error('删除费用失败', { 
+        error: error.message,
+        id: req.params.id,
+        stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined 
+      });
       next(error);
     }
   }
@@ -1000,8 +1046,8 @@ class ExpenseController extends BaseController {
         RETURNING id
       `;
       
-      // 假设审核人是当前登录用户（使用用户ID 40）
-      const reviewerId = 40; // 实际应用中应该从登录信息获取用户ID
+      // 获取审核人ID，优先从登录信息获取
+      const reviewerId = req.user?.id || 1; 
             
       const result = await query(sql, [reviewerId, ids]);
       
@@ -1015,7 +1061,11 @@ class ExpenseController extends BaseController {
         message: `批量审核通过成功，共${result.rowCount}条记录`
       }, '批量审核通过成功');
     } catch (error) {
-      console.error('批量审核通过失败:', error);
+      logger.error('批量审核通过失败', { 
+        error: error.message,
+        ids,
+        stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined 
+      });
       next(error);
     }
   }
@@ -1053,8 +1103,8 @@ class ExpenseController extends BaseController {
         RETURNING id
       `;
       
-      // 假设审核人是当前登录用户（使用用户ID 40）
-      const reviewerId = 40; // 实际应用中应该从登录信息获取用户ID
+      // 获取审核人ID，优先从登录信息获取
+      const reviewerId = req.user?.id || 1; 
             
       const result = await query(sql, [reviewerId, comment, ids]);
       
@@ -1068,7 +1118,11 @@ class ExpenseController extends BaseController {
         message: `批量拒绝成功，共${result.rowCount}条记录`
       }, '批量拒绝成功');
     } catch (error) {
-      console.error('批量拒绝失败:', error);
+      logger.error('批量拒绝失败', { 
+        error: error.message,
+        ids,
+        stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined 
+      });
       next(error);
     }
   }
@@ -1081,19 +1135,36 @@ class ExpenseController extends BaseController {
     try {
       const { ids } = req.body;
       
+      console.log('🗑️ [ExpenseController] 准备批量删除费用:', ids);
+      
       if (!Array.isArray(ids) || ids.length === 0) {
         return errorResponse(res, '缺少有效的费用ID列表', 400);
       }
       
-      const sql = `DELETE FROM expenses WHERE id = ANY($1::int[]) RETURNING id`;
+      // 检查这些 ID 是否包含在其他关联表中且无法级联删除
+      // 注意：payment_logs 已改为级联删除
+      
+      const sql = `DELETE FROM expenses WHERE id = ANY($1::bigint[]) RETURNING id`;
       const result = await query(sql, [ids]);
+      
+      console.log(`✅ [ExpenseController] 批量删除成功, 影响行数: ${result.rowCount}`);
       
       return successResponse(res, {
         affectedIds: result.rows.map(row => row.id),
         message: `批量删除成功，共${result.rowCount}条记录`
       }, '批量删除成功');
     } catch (error) {
-      console.error('批量删除失败:', error);
+      logger.error('批量删除失败', { 
+        error: error.message,
+        ids: req.body.ids,
+        stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined 
+      });
+      
+      // 如果是外键约束错误，提供更友好的提示
+      if (error.code === '23503') {
+        return errorResponse(res, '无法删除费用：该费用已被其他记录引用（如支付记录或预算记录）', 400);
+      }
+      
       next(error);
     }
   }
@@ -1186,7 +1257,10 @@ class ExpenseController extends BaseController {
         return successResponse(res, result.rows, '获取导出数据成功');
       }
     } catch (error) {
-      console.error('导出费用数据失败:', error);
+      logger.error('导出费用数据失败', { 
+        error: error.message,
+        stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined 
+      });
       next(error);
     }
   }
@@ -1199,28 +1273,22 @@ class ExpenseController extends BaseController {
     try {
       const { title, description, amount, category, date, dorm_id, splitMethod, customSplitDetails } = req.body;
       
-      console.log('保存草稿请求参数:', req.body);
-      
       // 验证必填字段
       if (!title) {
-        console.log('标题不能为空');
         return errorResponse(res, '标题不能为空', 400);
       }
       
       if (!category) {
-        console.log('类别不能为空');
         return errorResponse(res, '类别不能为空', 400);
       }
       
       // 从认证中间件获取当前登录用户信息
       const currentUser = req.user;
       if (!currentUser || !currentUser.id) {
-        console.log('用户未认证');
         return errorResponse(res, '用户未认证，请先登录', 401);
       }
       
       const applicantId = currentUser.id;
-      console.log('使用的申请人ID:', applicantId);
       
       // 获取用户宿舍ID
       // 如果请求中提供了宿舍ID，则使用该ID，否则需要从用户宿舍关系中获取
@@ -1243,7 +1311,6 @@ class ExpenseController extends BaseController {
           `, [applicantId]);
           
           if (adminCheck.rows.length > 0) {
-            console.log('管理员保存草稿，尝试从参与者获取宿舍信息');
             // 尝试从第一个参与者获取宿舍ID
             const participants = req.body.participants;
             if (participants && participants.length > 0) {
@@ -1253,11 +1320,9 @@ class ExpenseController extends BaseController {
               );
               if (participantDormQuery.rows.length > 0) {
                 dormId = participantDormQuery.rows[0].dorm_id;
-                console.log('使用第一个参与者的宿舍ID:', dormId);
               }
             }
           } else {
-            console.log('普通用户未加入任何宿舍');
             return errorResponse(res, '用户未加入任何宿舍', 400);
           }
         }
@@ -1267,30 +1332,24 @@ class ExpenseController extends BaseController {
         // 如果仍然没有宿舍ID，返回错误，提醒用户
         return errorResponse(res, '无法确定费用所属宿舍，请确保至少有一名参与者属于某个宿舍', 400);
       }
-      console.log('使用的宿舍ID:', dormId);
       
       // 查询费用类别ID
-      console.log('查询费用类别:', category);
       const categoryQuery = await query(
         'SELECT id FROM expense_categories WHERE category_name = $1 OR category_code = $1', 
         [category]
       );
       
-      console.log('类别查询结果:', categoryQuery.rows);
-      
       if (categoryQuery.rows.length === 0) {
-        console.log('无效的费用类别:', category);
         return errorResponse(res, '无效的费用类别', 400);
       }
       
       const categoryId = categoryQuery.rows[0].id;
-      console.log('获取到的categoryId:', categoryId);
       
       // 插入或更新草稿
       // 这里简化处理，直接插入新的草稿记录，使用数据库允许的status值'pending'
       const insertSql = `
         INSERT INTO expenses (title, description, amount, currency, category_id, applicant_id, dorm_id, expense_date, status, split_type, split_details, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10, NOW(), NOW())
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'draft', $9, $10, NOW(), NOW())
         RETURNING id, title, description, amount, currency, category_id, applicant_id, dorm_id, expense_date as date, status, created_at, updated_at
       `;
       
@@ -1306,12 +1365,9 @@ class ExpenseController extends BaseController {
         splitMethod || 'equal',
         splitMethod === 'custom' ? JSON.stringify(customSplitDetails) : null
       ];
-      console.log('插入草稿SQL:', insertSql);
-      console.log('插入草稿参数:', insertParams);
       
       const insertResult = await query(insertSql, insertParams);
       const draft = insertResult.rows[0];
-      console.log('插入草稿成功:', draft);
       
       // 查询费用类别名称
       let categoryName = null;
@@ -1341,17 +1397,17 @@ class ExpenseController extends BaseController {
       
       return successResponse(res, returnData, '保存草稿成功');
     } catch (error) {
-      console.error('保存草稿失败:', error);
-      // 更详细的错误信息
-      if (error.code) {
-        console.error('数据库错误代码:', error.code);
-      }
-      if (error.detail) {
-        console.error('错误详情:', error.detail);
-      }
-      if (error.hint) {
-        console.error('错误提示:', error.hint);
-      }
+      const debugDetails = process.env.NODE_ENV !== 'production' ? {
+        stack: error.stack,
+        detail: error.detail,
+        hint: error.hint
+      } : {};
+
+      logger.error('保存草稿失败', {
+        error: error.message,
+        code: error.code,
+        ...debugDetails
+      });
       next(error);
     }
   }
@@ -1365,7 +1421,7 @@ class ExpenseController extends BaseController {
    */
   async updateBudgetWithExpense(expenseId, amount, userId, dormId) {
     try {
-      console.log(`将费用 ${expenseId} 金额 ${amount} 计入预算`);
+      logger.info('将费用计入预算', { expenseId, amount });
       
       // 首先获取费用详情，包括类别信息
       const expenseSql = `
@@ -1376,7 +1432,7 @@ class ExpenseController extends BaseController {
       
       const expenseResult = await query(expenseSql, [expenseId]);
       if (expenseResult.rows.length === 0) {
-        console.log(`费用 ${expenseId} 不存在，无法更新预算`);
+        logger.warn('费用不存在，无法更新预算', { expenseId });
         return;
       }
       
@@ -1411,7 +1467,7 @@ class ExpenseController extends BaseController {
         budgetResult = await query(budgetSql, [generalCategoryId]);
         
         if (budgetResult.rows.length === 0) {
-          console.log(`未找到General预算，尝试查找任何活动预算`);
+          logger.info('未找到General预算，尝试查找任何活动预算');
           
           // 如果没有General预算，查找任何活动的预算
           const fallbackBudgetSql = `
@@ -1427,7 +1483,7 @@ class ExpenseController extends BaseController {
           budgetResult = await query(fallbackBudgetSql);
         }
       } else {
-        console.log('未找到General预算类别，尝试查找任何活动预算');
+        logger.info('未找到General预算类别，尝试查找任何活动预算');
         
         // 如果没有General预算类别，查找任何活动的预算
         const fallbackBudgetSql = `
@@ -1444,12 +1500,16 @@ class ExpenseController extends BaseController {
       }
       
       if (budgetResult.rows.length === 0) {
-        console.log(`未找到任何活动预算，无法更新预算`);
+        logger.info('未找到任何活动预算，无法更新预算');
         return;
       }
       
       const budget = budgetResult.rows[0];
-      console.log(`找到预算: ${budget.id}, 类别ID: ${budget.category_id}, 当前已使用金额: ${budget.used_amount}`);
+      logger.info('找到预算', { 
+        budgetId: budget.id, 
+        categoryId: budget.category_id, 
+        currentUsedAmount: budget.used_amount 
+      });
       
       // 计算新的已使用金额
       const newUsedAmount = parseFloat(budget.used_amount || 0) + parseFloat(amount);
@@ -1466,7 +1526,10 @@ class ExpenseController extends BaseController {
       const updateResult = await query(updateBudgetSql, [newUsedAmount, budget.id]);
       
       if (updateResult.rows.length > 0) {
-        console.log(`预算 ${budget.id} 的已使用金额已更新为 ${updateResult.rows[0].used_amount}`);
+        logger.info('预算已使用金额已更新', { 
+          budgetId: budget.id, 
+          newUsedAmount: updateResult.rows[0].used_amount 
+        });
         
         // 在预算使用记录表中添加记录
         const insertUsageRecordSql = `
@@ -1480,10 +1543,14 @@ class ExpenseController extends BaseController {
         `;
         
         await query(insertUsageRecordSql, [budget.id, expenseId, amount, userId]);
-        console.log(`预算使用记录已添加/更新，预算ID: ${budget.id}, 费用ID: ${expenseId}, 金额: ${amount}`);
+        logger.info('预算使用记录已添加/更新', { 
+          budgetId: budget.id, 
+          expenseId, 
+          amount 
+        });
       }
     } catch (error) {
-      console.error('更新预算失败:', error);
+      logger.error('更新预算失败', { error: error.message, expenseId });
     }
   }
   
@@ -1496,7 +1563,7 @@ class ExpenseController extends BaseController {
    */
   async removeExpenseFromBudget(expenseId, amount, userId, dormId) {
     try {
-      console.log(`从预算中移除费用 ${expenseId} 金额 ${amount}`);
+      logger.info('从预算中移除费用', { expenseId, amount });
       
       // 查找与该费用相关的预算使用记录
       const usageRecordSql = `
@@ -1509,7 +1576,7 @@ class ExpenseController extends BaseController {
       const usageRecordResult = await query(usageRecordSql, [expenseId]);
       
       if (usageRecordResult.rows.length === 0) {
-        console.log(`未找到费用 ${expenseId} 对应的预算使用记录，跳过移除`);
+        logger.info('未找到费用对应的预算使用记录，跳过移除', { expenseId });
         return;
       }
       
@@ -1530,15 +1597,18 @@ class ExpenseController extends BaseController {
       const updateResult = await query(budgetSql, [newUsedAmount, usageRecord.budget_id]);
       
       if (updateResult.rows.length > 0) {
-        console.log(`预算 ${usageRecord.budget_id} 的已使用金额已更新为 ${updateResult.rows[0].used_amount}`);
+        logger.info('预算已使用金额已更新', { 
+          budgetId: usageRecord.budget_id, 
+          newUsedAmount: updateResult.rows[0].used_amount 
+        });
         
         // 删除预算使用记录
         const deleteUsageRecordSql = `DELETE FROM budget_usage_records WHERE expense_id = $1`;
         await query(deleteUsageRecordSql, [expenseId]);
-        console.log(`预算使用记录已删除，费用ID: ${expenseId}`);
+        logger.info('预算使用记录已删除', { expenseId });
       }
     } catch (error) {
-      console.error('从预算中移除费用失败:', error);
+      logger.error('从预算中移除费用失败', { error: error.message, expenseId });
     }
   }
 
@@ -1585,7 +1655,11 @@ class ExpenseController extends BaseController {
         message: `成功清空 ${result.rowCount} 条费用记录`
       }, '清空所有费用记录成功');
     } catch (error) {
-      console.error('清空所有费用记录失败:', error);
+      logger.error('清空所有费用记录失败', { 
+        error: error.message,
+        userId: req.user.id,
+        stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined 
+      });
       next(error);
     }
   }
@@ -1595,7 +1669,7 @@ class ExpenseController extends BaseController {
 const expenseController = new ExpenseController();
 
 // 验证方法绑定
-console.log('验证ExpenseController方法绑定:', {
+logger.debug('验证ExpenseController方法绑定', {
   hasUpdateBudgetWithExpense: typeof expenseController.updateBudgetWithExpense === 'function',
   hasRemoveExpenseFromBudget: typeof expenseController.removeExpenseFromBudget === 'function',
   updateBudgetWithExpenseBound: expenseController.updateBudgetWithExpense === expenseController.updateBudgetWithExpense.bind(expenseController),

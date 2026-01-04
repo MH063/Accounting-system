@@ -434,7 +434,7 @@ const getCategoryType = (category: string) => {
     case 'utilities': return 'success'
     case 'maintenance': return 'warning'
     case 'cleaning': return 'info'
-    case 'other': return ''
+    case 'other': return 'info'
     default: return 'info'
   }
 }

@@ -124,7 +124,7 @@ const persistToDatabase = async (entry) => {
     ];
 
     await pool.query(queryText, values);
-    console.log(`[AUDIT_DB] 成功持久化审计日志: ${action}`);
+    // 审计日志已成功持久化到数据库
   } catch (error) {
     // 这里的错误不应该影响主流程，但我们应该记录它
     console.error('[AUDIT_DB] 持久化审计日志到数据库失败:', error.message);
@@ -235,12 +235,9 @@ const logAnomaly = (req, anomalyType, anomalyData = {}) => {
 };
 
 /**
- * 安全审计日志记录器
- * @param {Object} req - 请求对象
- * @param {string} eventType - 事件类型
- * @param {Object} eventData - 事件数据
+ * 记录安全审计事件（仅持久化，不打印控制台）
  */
-const logSecurityEvent = (req, eventType, eventData = {}) => {
+const logSecurityEventToFiles = (req, eventType, eventData = {}) => {
   try {
     const auditEntry = {
       timestamp: new Date().toISOString(),
@@ -259,6 +256,20 @@ const logSecurityEvent = (req, eventType, eventData = {}) => {
     
     // 持久化到数据库
     persistToDatabase(auditEntry);
+  } catch (error) {
+    logger.error('[AUDIT] 审计日志持久化失败:', error);
+  }
+};
+
+/**
+ * 安全审计日志记录器
+ * @param {Object} req - 请求对象
+ * @param {string} eventType - 事件类型
+ * @param {Object} eventData - 事件数据
+ */
+const logSecurityEvent = (req, eventType, eventData = {}) => {
+  try {
+    logSecurityEventToFiles(req, eventType, eventData);
     
     // 同时记录到常规日志
     logger.security(req, `安全审计事件: ${eventType}`, eventData);
@@ -321,7 +332,15 @@ const enhancedSecurityAuditMiddleware = () => {
       const statusCode = res.statusCode;
       
       // 记录请求审计信息
-      logSecurityEvent(req, 'REQUEST_PROCESSED', {
+      logger.debug(`[SECURITY] 安全审计事件: REQUEST_PROCESSED`, {
+        statusCode,
+        responseTime: duration,
+        contentType: res.get('Content-Type') || '',
+        isAnomalous
+      });
+      
+      // 同时写入审计日志文件和持久化到数据库
+      logSecurityEventToFiles(req, 'REQUEST_PROCESSED', {
         statusCode,
         responseTime: duration,
         contentType: res.get('Content-Type') || '',

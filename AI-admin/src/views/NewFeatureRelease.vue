@@ -252,7 +252,7 @@ const publishForm = ref({
 const getFeatureStatusType = (status: string) => {
   switch (status) {
     case 'draft':
-      return ''
+      return 'info'
     case 'published':
       return 'success'
     case 'paused':
@@ -262,7 +262,7 @@ const getFeatureStatusType = (status: string) => {
     case 'failed':
       return 'danger'
     default:
-      return ''
+      return 'info'
   }
 }
 

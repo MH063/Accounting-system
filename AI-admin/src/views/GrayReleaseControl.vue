@@ -281,7 +281,7 @@ const getProgressStatus = (percentage: number) => {
 const getStrategyStatusType = (status: string) => {
   switch (status) {
     case 'draft':
-      return ''
+      return 'info'
     case 'running':
       return 'success'
     case 'paused':
@@ -291,7 +291,7 @@ const getStrategyStatusType = (status: string) => {
     case 'failed':
       return 'danger'
     default:
-      return ''
+      return 'info'
   }
 }
 

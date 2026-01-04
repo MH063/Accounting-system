@@ -57,6 +57,20 @@ export const expenseCreateApi = {
     api.post('/expenses/draft', data),
 
   /**
+   * 获取费用详情
+   * GET /api/expenses/:id
+   */
+  getExpenseDetail: (id: number | string) => 
+    api.get(`/expenses/${id}`),
+
+  /**
+   * 更新费用
+   * PUT /api/expenses/:id
+   */
+  updateExpense: (id: number | string, data: any) => 
+    api.put(`/expenses/${id}`, data),
+
+  /**
    * 上传附件
    * POST /api/upload/multiple
    * @param formData 表单数据

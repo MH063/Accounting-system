@@ -238,7 +238,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { HomeFilled, OfficeBuilding, Loading } from '@element-plus/icons-vue'
 import { expenseCreateApi } from '@/api/expenseCreate'
@@ -247,11 +247,13 @@ import { getCurrentUser, hasAnyRole } from '@/utils/permissionControl'
 import { normalizeAmount } from '@/utils/amount'
 
 const router = useRouter()
+const route = useRoute()
 const expenseFormRef = ref()
 const saving = ref(false)
 const submitting = ref(false)
 const loadingCategories = ref(false)
 const currentDormId = ref<number | string | null>(null)
+const currentExpenseId = ref<string | number | null>(null)
 
 const categories = ref<Array<{ value: string; label: string; color?: string }>>([])
 const members = ref<Array<{ 
@@ -262,6 +264,9 @@ const members = ref<Array<{
   realName: string; 
   dormName: string; 
   building: string; 
+  moveInDate?: string;
+  moveOutDate?: string;
+  memberRole?: string;
 }>>([])
 
 const dormSearchName = ref('')
@@ -480,7 +485,8 @@ const saveDraft = async () => {
       saving.value = true
       try {
         console.log('💾 保存费用草稿...', expenseForm)
-        const response = await expenseCreateApi.saveDraft({
+        
+        const draftData = {
           title: expenseForm.title,
           description: expenseForm.description,
           amount: expenseForm.amount,
@@ -488,14 +494,31 @@ const saveDraft = async () => {
           date: expenseForm.date,
           participants: expenseForm.participants,
           splitMethod: expenseForm.splitMethod,
-          customSplitDetails: expenseForm.splitMethod === 'custom' ? customSplitDetails.value : undefined
-        })
+          customSplitDetails: expenseForm.splitMethod === 'custom' ? customSplitDetails.value : undefined,
+          status: 'draft'
+        }
+
+        let response
+        if (currentExpenseId.value) {
+          console.log(`📝 更新现有草稿 (ID: ${currentExpenseId.value})`)
+          response = await expenseCreateApi.updateExpense(currentExpenseId.value, draftData)
+        } else {
+          console.log('🆕 创建新草稿')
+          response = await expenseCreateApi.saveDraft(draftData)
+        }
+
         console.log('✅ 草稿保存成功:', response)
-        ElMessage.success('草稿保存成功')
-        router.push('/expense/list')
+        
+        // 如果是新创建的草稿，保存其 ID 以便后续更新
+        if (!currentExpenseId.value && response && response.id) {
+          currentExpenseId.value = response.id
+        }
+        
+        ElMessage.success('草稿已保存')
+        // 不再跳转，保留编辑状态
       } catch (error: any) {
         console.error('❌ 草稿保存失败:', error)
-        ElMessage.error(error.message || '草稿保存失败')
+        ElMessage.error(error.message || '草稿保存失败，请重试')
       } finally {
         saving.value = false
       }
@@ -516,7 +539,8 @@ const submitExpense = async () => {
       submitting.value = true
       try {
         console.log('📤 提交费用...', expenseForm)
-        const response = await expenseCreateApi.createExpense({
+        
+        const expenseData = {
           title: expenseForm.title,
           description: expenseForm.description,
           amount: expenseForm.amount,
@@ -524,11 +548,22 @@ const submitExpense = async () => {
           date: expenseForm.date,
           participants: expenseForm.participants,
           splitMethod: expenseForm.splitMethod,
-          customSplitDetails: expenseForm.splitMethod === 'custom' ? customSplitDetails.value : undefined
-        })
+          customSplitDetails: expenseForm.splitMethod === 'custom' ? customSplitDetails.value : undefined,
+          status: 'pending' // 明确设置为待审核状态
+        }
+
+        let response
+        if (currentExpenseId.value) {
+          console.log(`📝 提交现有草稿 (ID: ${currentExpenseId.value})`)
+          response = await expenseCreateApi.updateExpense(currentExpenseId.value, expenseData)
+        } else {
+          console.log('🆕 直接创建并提交费用')
+          response = await expenseCreateApi.createExpense(expenseData)
+        }
+
         console.log('✅ 费用提交成功:', response)
         ElMessage.success('费用提交成功')
-        router.push('/expense/list')
+        router.push('/expense-management')
       } catch (error: any) {
         console.error('❌ 费用提交失败:', error)
         ElMessage.error(error.message || '费用提交失败')
@@ -717,6 +752,74 @@ onMounted(async () => {
     // 降级处理：尝试加载默认宿舍
     currentDormId.value = 1
     await loadDormMembers(1)
+  }
+  
+  // 检查是否是从草稿编辑跳转过来的
+  const queryId = route.query.id as string
+  if (queryId) {
+    console.log(`📝 加载草稿详情 (ID: ${queryId})`)
+    currentExpenseId.value = queryId
+    try {
+      const response = await expenseCreateApi.getExpenseDetail(queryId)
+      if (response) {
+        // 填充表单数据
+        expenseForm.title = response.title || ''
+        expenseForm.description = response.description || ''
+        expenseForm.amount = response.amount ? response.amount.toString() : ''
+        expenseForm.category = response.category || response.categoryName || ''
+        expenseForm.date = response.date || ''
+        
+        // 处理参与者与分摊详情
+        if (response.splitDetails || Array.isArray(response.participants)) {
+          let participants: number[] = []
+          let loadedDetails: any[] = []
+          
+          const splitDetails = typeof response.splitDetails === 'string' 
+            ? JSON.parse(response.splitDetails) 
+            : (response.splitDetails || [])
+          
+          if (Array.isArray(splitDetails) && splitDetails.length > 0) {
+            participants = splitDetails.map((d: any) => d.key || d.userId || d.id)
+            loadedDetails = splitDetails.map((d: any) => ({
+              key: d.key || d.userId || d.id,
+              name: d.name || d.nickname || d.realName || '',
+              amount: d.amount ? d.amount.toString() : '',
+              weight: d.weight || 1.0,
+              days: d.days || 1
+            }))
+            
+            // 设置分摊方式
+            if (response.splitType === 'custom' || response.splitMethod === 'custom') {
+              expenseForm.splitMethod = 'custom'
+            } else {
+              expenseForm.splitMethod = response.splitType || response.splitMethod || 'equal'
+            }
+          } else if (Array.isArray(response.participants)) {
+            participants = response.participants.map((p: any) => typeof p === 'object' ? p.id : p)
+            expenseForm.splitMethod = response.splitType || response.splitMethod || 'equal'
+          }
+          
+          // 先设置详情，再设置参与者，触发 watcher 
+          // watcher 中的 updateCustomSplitDetails 会通过 currentDetails.find 找到并保留这些加载的数据
+          customSplitDetails.value = loadedDetails
+          expenseForm.participants = participants
+        }
+        
+        // 处理附件
+        if (Array.isArray(response.attachments)) {
+          expenseForm.attachments = response.attachments.map((a: any) => ({
+            name: a.filename || a.name || '附件',
+            url: a.url,
+            id: a.id
+          }))
+        }
+        
+        console.log('✅ 草稿数据填充完成', expenseForm)
+      }
+    } catch (error) {
+      console.error('❌ 加载草稿详情失败:', error)
+      ElMessage.error('加载草稿详情失败')
+    }
   }
   
   calculateSplit()
