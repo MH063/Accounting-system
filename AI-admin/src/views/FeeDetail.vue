@@ -134,7 +134,7 @@
                 placement="top"
               >
                 <el-card>
-                  <h4>{{ record.type }}</h4>
+                  <h4>{{ getFeeTypeText(record.type) }}</h4>
                   <p>金额: ¥{{ record.amount }}</p>
                   <p>操作人: {{ record.operator }}</p>
                 </el-card>
@@ -207,6 +207,13 @@
                 <el-option label="住宿费" value="accommodation" />
                 <el-option label="水电费" value="utilities" />
                 <el-option label="网费" value="internet" />
+                <el-option label="维修费" value="maintenance" />
+                <el-option label="清洁费" value="cleaning" />
+                <el-option label="房租" value="rent" />
+                <el-option label="活动费用" value="activities" />
+                <el-option label="日用品" value="supplies" />
+                <el-option label="食品饮料" value="food" />
+                <el-option label="保险费用" value="insurance" />
                 <el-option label="其他" value="other" />
               </el-select>
             </el-form-item>
@@ -239,6 +246,10 @@
                 <el-option label="已缴费" value="paid" />
                 <el-option label="未缴费" value="unpaid" />
                 <el-option label="部分缴费" value="partial" />
+                <el-option label="待审核" value="pending" />
+                <el-option label="审核通过" value="approved" />
+                <el-option label="审核拒绝" value="rejected" />
+                <el-option label="草稿" value="draft" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -316,6 +327,10 @@
             <el-option label="已缴费" value="paid" />
             <el-option label="未缴费" value="unpaid" />
             <el-option label="部分缴费" value="partial" />
+            <el-option label="待审核" value="pending" />
+            <el-option label="审核通过" value="approved" />
+            <el-option label="审核拒绝" value="rejected" />
+            <el-option label="草稿" value="draft" />
           </el-select>
         </el-form-item>
         
@@ -522,9 +537,9 @@ const getStatusText = (status: string) => {
     case 'pending':
       return '待审核'
     case 'approved':
-      return '已通过'
+      return '审核通过'
     case 'rejected':
-      return '已拒绝'
+      return '审核拒绝'
     case 'draft':
       return '草稿'
     default:
@@ -539,22 +554,57 @@ const getFeeTypeText = (type: string) => {
   if (/[\u4e00-\u9fa5]/.test(type)) return type
   
   switch (type) {
-    case 'accommodation':
-      return '住宿费'
-    case 'utilities':
-      return '水电费'
+    case 'accommodation': return '住宿费'
+    case 'rent': return '房租'
+    case 'deposit': return '押金'
+    case 'management_fee': return '管理费'
+    case 'utilities': return '水电费'
+    case 'water_fee': return '水费'
+    case 'electricity_fee': return '电费'
+    case 'gas_fee': return '燃气费'
+    case 'internet_fee':
     case 'internet':
-      return '网费'
-    case 'maintenance':
-      return '维修费'
-    case 'cleaning':
-      return '清洁费'
-    case 'rent':
-      return '房租'
-    case 'other':
-      return '其他'
-    default:
-      return type || '未知'
+    case 'network':
+    case 'network_fee': return '网费'
+    case 'tv_fee': return '电视费'
+    case 'maintenance': return '维修费'
+    case 'repair': return '维修费'
+    case 'equipment_repair': return '设备维修'
+    case 'furniture_repair': return '家具维修'
+    case 'appliance_repair': return '电器维修'
+    case 'cleaning': return '清洁费'
+    case 'daily_cleaning': return '日常清洁'
+    case 'deep_cleaning': return '深度清洁'
+    case 'pest_control': return '杀虫除害'
+    case 'activities': return '活动费用'
+    case 'supplies': return '日用品'
+    case 'food': return '食品饮料'
+    case 'insurance': return '保险费用'
+    case 'other': return '其他'
+    // 更多细分类型
+    case 'door_window_repair': return '门窗维修'
+    case 'plumbing': return '水管维修'
+    case 'electrical_work': return '电路维修'
+    case 'hardware': return '硬件维修'
+    case 'waste_disposal': return '垃圾处理'
+    case 'agency_fee': return '中介服务费'
+    case 'legal_fee': return '法律咨询费'
+    case 'miscellaneous': return '其他杂费'
+    case 'property_fee':
+    case 'property': return '物业费'
+    case 'office_supplies': return '办公用品'
+    case 'toiletries': return '洗漱用品'
+    case 'cleaning_supplies': return '清洁用品'
+    case 'meal': return '餐饮'
+    case 'snack': return '零食'
+    case 'beverage': return '饮料'
+    // 收入类型
+    case 'salary': return '工资'
+    case 'bonus': return '奖金'
+    case 'investment': return '投资'
+    case 'part_time': return '兼职'
+    case 'gift': return '礼金'
+    default: return type || '未知'
   }
 }
 

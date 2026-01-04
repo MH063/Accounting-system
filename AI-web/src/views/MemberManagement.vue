@@ -891,9 +891,9 @@ const getStatusText = (status?: string) => {
   if (!status) return '-'
   
   const statusMap: Record<string, string> = {
-    'approved': '已批准',
+    'approved': '审核通过',
     'pending': '待处理',
-    'rejected': '已拒绝',
+    'rejected': '审核拒绝',
     'completed': '已完成',
     'processing': '处理中'
   }

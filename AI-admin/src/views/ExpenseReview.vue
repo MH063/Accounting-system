@@ -15,6 +15,7 @@
         <h3>待审核费用 ({{ pendingExpenses.length }})</h3>
         
         <el-table 
+          ref="multipleTableRef"
           :data="pendingExpenses" 
           style="width: 100%"
           @selection-change="handleSelectionChange"
@@ -52,6 +53,19 @@
           </el-table-column>
         </el-table>
         
+        <!-- 分页 -->
+        <div class="pagination-container" v-if="total > 0">
+          <el-pagination
+            v-model:current-page="currentPage"
+            v-model:page-size="pageSize"
+            :page-sizes="[10, 20, 50, 100]"
+            layout="total, sizes, prev, pager, next, jumper"
+            :total="total"
+            @size-change="handleSizeChange"
+            @current-change="handleCurrentChange"
+          />
+        </div>
+        
         <!-- 批量操作 -->
         <div class="batch-actions" v-if="selectedExpenses.length > 0">
           <el-alert
@@ -66,14 +80,14 @@
               @click="batchApprove"
               :loading="batchProcessing"
             >
-              批量通过 ({{ selectedExpenses.length }})
+              批量审核通过 ({{ selectedExpenses.length }})
             </el-button>
             <el-button 
               type="danger" 
               @click="batchReject"
               :loading="batchProcessing"
             >
-              批量拒绝 ({{ selectedExpenses.length }})
+              批量审核拒绝 ({{ selectedExpenses.length }})
             </el-button>
             <el-button @click="clearSelection">取消选择</el-button>
           </div>
@@ -211,6 +225,9 @@ const routeId = computed(() => {
   return id ? Number(id) : null
 })
 
+// 表格实例引用
+const multipleTableRef = ref()
+
 // 监听路由 ID 变化
 watch(() => route.params.id, (newId) => {
   if (newId) {
@@ -227,6 +244,9 @@ watch(() => route.params.id, (newId) => {
 // 响应式数据 - 初始化为空数组，通过API获取真实数据
 const pendingExpenses = ref<any[]>([])
 const loading = ref(false)
+const total = ref(0)
+const currentPage = ref(1)
+const pageSize = ref(10)
 
 const selectedExpenses = ref<any[]>([])
 const batchProcessing = ref(false)
@@ -245,15 +265,19 @@ const goBack = () => {
 // 获取待审核列表
 const fetchPendingExpenses = async () => {
   loading.value = true
-  console.log('🔄 获取待审核费用列表...')
+  console.log(`🔄 获取待审核费用列表 (第 ${currentPage.value} 页, 每页 ${pageSize.value} 条)...`)
   try {
-    const response = await feeApi.getPendingExpenses()
+    const response = await feeApi.getPendingExpenses({
+      page: currentPage.value,
+      size: pageSize.value
+    })
     // 根据规则 5 和拦截器配置处理嵌套结构
     // 拦截器已处理外层 {success, data}，这里 response 为内层 data
     const data = response
     
     if (Array.isArray(data)) {
       pendingExpenses.value = data
+      total.value = data.length // 如果后端没返回 total，回退到数组长度
       
       // 如果路由中有 ID，尝试自动打开对应的审核对话框
       if (routeId.value) {
@@ -265,9 +289,30 @@ const fetchPendingExpenses = async () => {
           loadSpecificExpense(routeId.value)
         }
       }
+    } else if (data && typeof data === 'object') {
+      // 兼容后端返回的分页或包装结构: { data, list, items, total, ... }
+      const list = data.data || data.list || data.items
+      if (Array.isArray(list)) {
+        pendingExpenses.value = list
+        total.value = data.total || list.length
+        
+        if (routeId.value) {
+          const target = pendingExpenses.value.find(e => e.id === routeId.value)
+          if (target) {
+            reviewExpense(target)
+          } else {
+            loadSpecificExpense(routeId.value)
+          }
+        }
+      } else {
+        console.warn('⚠️ 获取待审核费用返回数据格式不正确:', data)
+        pendingExpenses.value = []
+        total.value = 0
+      }
     } else {
       console.warn('⚠️ 获取待审核费用返回数据格式不正确:', data)
       pendingExpenses.value = []
+      total.value = 0
     }
   } catch (error) {
     console.error('获取待审核费用失败:', error)
@@ -275,6 +320,18 @@ const fetchPendingExpenses = async () => {
   } finally {
     loading.value = false
   }
+}
+
+// 分页处理方法
+const handleSizeChange = (val: number) => {
+  pageSize.value = val
+  currentPage.value = 1
+  fetchPendingExpenses()
+}
+
+const handleCurrentChange = (val: number) => {
+  currentPage.value = val
+  fetchPendingExpenses()
 }
 
 // 加载特定费用详情
@@ -302,6 +359,9 @@ const handleSelectionChange = (selection: any[]) => {
 }
 
 const clearSelection = () => {
+  if (multipleTableRef.value) {
+    multipleTableRef.value.clearSelection()
+  }
   selectedExpenses.value = []
 }
 
@@ -349,7 +409,7 @@ const submitReview = async () => {
         pendingExpenses.value.splice(index, 1)
       }
       
-      ElMessage.success(`费用审核已提交，结果：${reviewResult.value === 'approved' ? '通过' : '拒绝'}`)
+      ElMessage.success(`费用审核已提交，结果：${reviewResult.value === 'approved' ? '审核通过' : '审核拒绝'}`)
       reviewDialogVisible.value = false
       
       // 如果是通过路由进入的，审核完后可以考虑返回
@@ -393,6 +453,7 @@ const batchApprove = async () => {
       })
       
       ElMessage.success(`成功批量审核通过 ${selectedExpenses.value.length} 项费用`)
+      selectedExpenses.value = []
       selectedExpenses.value = []
     } else {
       ElMessage.error('批量审核失败')
@@ -438,7 +499,7 @@ const batchReject = async () => {
         }
       })
       
-      ElMessage.success(`成功批量拒绝 ${selectedExpenses.value.length} 项费用`)
+      ElMessage.success(`成功批量审核拒绝 ${selectedExpenses.value.length} 项费用`)
       selectedExpenses.value = []
     } else {
       ElMessage.error('批量拒绝失败')
@@ -562,6 +623,12 @@ onMounted(async () => {
   margin: 0 0 15px 0;
   font-size: 18px;
   font-weight: 600;
+}
+
+.pagination-container {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .batch-actions {

@@ -20,6 +20,10 @@
               <el-option label="住宿费" value="accommodation" />
               <el-option label="水电费" value="utilities" />
               <el-option label="网费" value="internet" />
+              <el-option label="维修费" value="maintenance" />
+              <el-option label="清洁费" value="cleaning" />
+              <el-option label="房租" value="rent" />
+              <el-option label="活动费用" value="activities" />
               <el-option label="其他" value="other" />
             </el-select>
           </el-form-item>
@@ -29,14 +33,19 @@
               <el-option label="已缴费" value="paid" />
               <el-option label="未缴费" value="unpaid" />
               <el-option label="部分缴费" value="partial" />
+              <el-option label="待审核" value="pending" />
+              <el-option label="审核通过" value="approved" />
+              <el-option label="审核拒绝" value="rejected" />
+              <el-option label="草稿" value="draft" />
             </el-select>
           </el-form-item>
           
           <el-form-item label="审核状态">
             <el-select v-model="searchForm.auditStatus" placeholder="请选择审核状态" clearable>
               <el-option label="待审核" value="pending" />
-              <el-option label="已审核" value="approved" />
-              <el-option label="已拒绝" value="rejected" />
+              <el-option label="审核通过" value="approved" />
+              <el-option label="审核拒绝" value="rejected" />
+              <el-option label="草稿" value="draft" />
             </el-select>
           </el-form-item>
           
@@ -184,6 +193,9 @@
                 <el-option label="住宿费" value="accommodation" />
                 <el-option label="水电费" value="utilities" />
                 <el-option label="网费" value="internet" />
+                <el-option label="维修费" value="maintenance" />
+                <el-option label="清洁费" value="cleaning" />
+                <el-option label="房租" value="rent" />
                 <el-option label="其他" value="other" />
               </el-select>
             </el-form-item>
@@ -216,6 +228,10 @@
                 <el-option label="已缴费" value="paid" />
                 <el-option label="未缴费" value="unpaid" />
                 <el-option label="部分缴费" value="partial" />
+                <el-option label="待审核" value="pending" />
+                <el-option label="审核通过" value="approved" />
+                <el-option label="审核拒绝" value="rejected" />
+                <el-option label="草稿" value="draft" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -365,10 +381,24 @@ const getFeeTypeText = (type: string) => {
       return '水电费'
     case 'internet':
       return '网费'
+    case 'maintenance':
+      return '维修费'
+    case 'cleaning':
+      return '清洁费'
+    case 'rent':
+      return '房租'
+    case 'activities':
+      return '活动费用'
+    case 'supplies':
+      return '日用品'
+    case 'food':
+      return '食品饮料'
+    case 'insurance':
+      return '保险费用'
     case 'other':
       return '其他'
     default:
-      return '未知'
+      return type || '未知'
   }
 }
 
@@ -376,10 +406,13 @@ const getFeeTypeText = (type: string) => {
 const getStatusTagType = (status: string) => {
   switch (status) {
     case 'paid':
+    case 'approved':
       return 'success'
     case 'unpaid':
+    case 'rejected':
       return 'danger'
     case 'partial':
+    case 'pending':
       return 'warning'
     case 'draft':
       return 'info'
@@ -397,10 +430,16 @@ const getStatusText = (status: string) => {
       return '未缴费'
     case 'partial':
       return '部分缴费'
+    case 'pending':
+      return '待审核'
+    case 'approved':
+      return '审核通过'
+    case 'rejected':
+      return '审核拒绝'
     case 'draft':
       return '草稿'
     default:
-      return '未知'
+      return status || '未知'
   }
 }
 
@@ -424,15 +463,15 @@ const getAuditStatusTagType = (status: string) => {
 const getAuditStatusText = (status: string) => {
   switch (status) {
     case 'approved':
-      return '已审核'
+      return '审核通过'
     case 'pending':
       return '待审核'
     case 'rejected':
-      return '已拒绝'
+      return '审核拒绝'
     case 'draft':
       return '草稿'
     default:
-      return '未知'
+      return status || '未知'
   }
 }
 

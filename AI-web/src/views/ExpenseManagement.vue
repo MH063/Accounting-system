@@ -55,7 +55,7 @@
           </div>
           <div class="summary-content">
             <div class="summary-number">{{ approvedCount }}</div>
-            <div class="summary-text">已通过</div>
+            <div class="summary-text">审核通过</div>
           </div>
         </div>
         <div class="summary-item monthly">
@@ -147,14 +147,14 @@
               :type="quickFilter === 'approved' ? 'primary' : 'default'"
               @click="quickFilter = 'approved'; statusFilter = 'approved'; resetPagination()"
             >
-              已通过
+              审核通过
             </el-button>
             <el-button 
               size="small"
               :type="quickFilter === 'rejected' ? 'primary' : 'default'"
               @click="quickFilter = 'rejected'; statusFilter = 'rejected'; resetPagination()"
             >
-              已拒绝
+              审核拒绝
             </el-button>
           </el-button-group>
         </div>
@@ -175,8 +175,8 @@
         >
           <el-option label="全部状态" value="" />
           <el-option label="待审核" value="pending" />
-          <el-option label="已通过" value="approved" />
-          <el-option label="已拒绝" value="rejected" />
+          <el-option label="审核通过" value="approved" />
+          <el-option label="审核拒绝" value="rejected" />
         </el-select>
 
         <el-select
@@ -189,6 +189,10 @@
           <el-option label="水电费" value="utilities" />
           <el-option label="维修费" value="maintenance" />
           <el-option label="清洁费" value="cleaning" />
+          <el-option label="活动费用" value="activities" />
+          <el-option label="日用品" value="supplies" />
+          <el-option label="食品饮料" value="food" />
+          <el-option label="保险费用" value="insurance" />
           <el-option label="其他" value="other" />
         </el-select>
 
@@ -852,7 +856,7 @@ const formatCurrency = (amount: number | string): string => {
 const handlePayExpense = (expense: Expense) => {
   // 检查费用状态是否可以支付
   if (expense.status !== 'approved') {
-    ElMessage.warning('只有已通过审核的费用才能进行支付')
+    ElMessage.warning('只有审核通过的费用才能进行支付')
     return
   }
   
@@ -1030,8 +1034,8 @@ const getStatusType = (status: 'pending' | 'approved' | 'rejected' | 'draft' | s
 const getStatusText = (status: 'pending' | 'approved' | 'rejected' | string) => {
   switch (status) {
     case 'pending': return '待审核'
-    case 'approved': return '已通过'
-    case 'rejected': return '已拒绝'
+    case 'approved': return '审核通过'
+    case 'rejected': return '审核拒绝'
     case 'draft': return '草稿'
     default: return '未知'
   }
@@ -1041,8 +1045,8 @@ const getStatusText = (status: 'pending' | 'approved' | 'rejected' | string) => 
 const getStatusDescription = (status: 'pending' | 'approved' | 'rejected' | 'draft' | string) => {
   switch (status) {
     case 'pending': return '费用正在等待审核，请耐心等待'
-    case 'approved': return '费用已通过审核，可以进行后续处理'
-    case 'rejected': return '费用审核未通过，请查看审核意见'
+    case 'approved': return '审核通过，可以进行后续处理'
+    case 'rejected': return '审核被拒绝，请查看审核意见'
     case 'draft': return '费用尚在草稿状态，尚未提交'
     default: return '未知状态'
   }
@@ -1143,19 +1147,51 @@ const getCategoryType = (category: 'accommodation' | 'utilities' | 'maintenance'
     case 'utilities': return 'success'
     case 'maintenance': return 'warning'
     case 'cleaning': return 'info'
+    case 'activities': return 'warning'
+    case 'supplies': return 'success'
+    case 'food': return 'warning'
+    case 'insurance': return 'primary'
     case 'other': return 'danger'
     default: return 'info'
   }
 }
 
-const getCategoryText = (category: 'accommodation' | 'utilities' | 'maintenance' | 'cleaning' | 'other' | string) => {
+const getCategoryText = (category?: string): string => {
+  if (!category) return '未知'
+  
+  // 如果已经是中文，则直接返回
+  if (/[\u4e00-\u9fa5]/.test(category)) {
+    return category
+  }
+
   switch (category) {
     case 'accommodation': return '住宿费'
     case 'utilities': return '水电费'
     case 'maintenance': return '维修费'
     case 'cleaning': return '清洁费'
+    case 'activities': return '活动费用'
+    case 'supplies': return '日用品'
+    case 'food': return '食品饮料'
+    case 'insurance': return '保险费用'
     case 'other': return '其他'
-    default: return '未知'
+    // 细分类型
+    case 'rent': return '房租'
+    case 'water_fee': return '水费'
+    case 'electricity_fee': return '电费'
+    case 'network_fee': return '网费'
+    case 'gas_fee': return '燃气费'
+    case 'property_fee': return '物业费'
+    case 'hardware': return '硬件维修'
+    case 'plumbing': return '水管维修'
+    case 'electrical_work': return '电路维修'
+    case 'appliance_repair': return '家电维修'
+    case 'office_supplies': return '办公用品'
+    case 'toiletries': return '洗漱用品'
+    case 'cleaning_supplies': return '清洁用品'
+    case 'meal': return '餐饮'
+    case 'snack': return '零食'
+    case 'beverage': return '饮料'
+    default: return category || '未知'
   }
 }
 
@@ -1401,13 +1437,13 @@ const handleBatchApprove = async () => {
     const response = await expenseService.batchApproveExpenses(pendingItems.map(item => item.id))
     console.log('批量审核通过结果:', response)
     if (response.success) {
-      ElMessage.success(`批量审核通过 ${pendingItems.length} 条费用记录`)
+      ElMessage.success(`已批量审核通过 ${pendingItems.length} 条费用记录`)
       await loadExpenses()
     } else {
-      ElMessage.error(response.message || '批量审核失败')
+      ElMessage.error(response.message || '批量审核通过失败')
     }
   } catch (error) {
-    handleApiError(error, '批量审核失败')
+    handleApiError(error, '批量审核通过失败')
   } finally {
     batchProcessing.value = false
   }
@@ -1441,14 +1477,14 @@ const handleBatchReject = async () => {
     
     if (response.success) {
       clearSelection()
-      ElMessage.success(`成功拒绝 ${pendingItems.length} 条记录`)
+      ElMessage.success(`已成功审核拒绝 ${pendingItems.length} 条记录`)
       await loadExpenses()
     } else {
-      ElMessage.error(response.message || '批量拒绝失败')
+      ElMessage.error(response.message || '批量审核拒绝失败')
     }
   } catch (error) {
     if (error !== 'cancel') {
-      handleApiError(error, '批量拒绝失败')
+      handleApiError(error, '批量审核拒绝失败')
     }
   } finally {
     batchProcessing.value = false

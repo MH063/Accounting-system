@@ -82,27 +82,20 @@
                   v-model="formData.category"
                   placeholder="请选择费用类别"
                   style="width: 100%"
+                  filterable
                 >
-                  <el-option 
-                    label="住宿费" 
-                    value="accommodation" 
-                  />
-                  <el-option 
-                    label="水电费" 
-                    value="utilities" 
-                  />
-                  <el-option 
-                    label="维修费" 
-                    value="maintenance" 
-                  />
-                  <el-option 
-                    label="清洁费" 
-                    value="cleaning" 
-                  />
-                  <el-option 
-                    label="其他" 
-                    value="other" 
-                  />
+                  <el-option-group 
+                    v-for="group in expenseCategories" 
+                    :key="group.label"
+                    :label="group.label"
+                  >
+                    <el-option 
+                      v-for="option in group.options" 
+                      :key="option.value" 
+                      :label="option.label" 
+                      :value="option.value" 
+                    />
+                  </el-option-group>
                 </el-select>
               </el-form-item>
             </el-col>
@@ -253,6 +246,112 @@ import expenseService from '@/services/expenseService'
 const route = useRoute()
 const router = useRouter()
 
+/**
+ * 获取类别显示文本
+ * @param category 类别值
+ */
+const getCategoryText = (category: string) => {
+  if (!category) return '未知'
+  if (/[\u4e00-\u9fa5]/.test(category)) return category
+
+  // 尝试在 expenseCategories 中查找
+  for (const group of expenseCategories) {
+    const option = group.options.find(opt => opt.value === category)
+    if (option) return option.label
+  }
+
+  const map: Record<string, string> = {
+    'accommodation': '住宿费',
+    'utilities': '水电费',
+    'maintenance': '维修费',
+    'cleaning': '清洁费',
+    'activities': '活动费用',
+    'supplies': '日用品',
+    'food': '食品饮料',
+    'insurance': '保险费用',
+    'other': '其他',
+    'rent': '房租',
+    'deposit': '押金',
+    'management_fee': '管理费',
+    'water_fee': '水费',
+    'electricity_fee': '电费',
+    'gas_fee': '燃气费',
+    'internet_fee': '网费',
+    'tv_fee': '电视费',
+    'equipment_repair': '设备维修',
+    'furniture_repair': '家具维修',
+    'appliance_repair': '电器维修',
+    'door_window_repair': '门窗维修',
+    'plumbing': '管道疏通',
+    'daily_cleaning': '日常清洁',
+    'deep_cleaning': '深度清洁',
+    'pest_control': '杀虫除害',
+    'waste_disposal': '垃圾处理',
+    'agency_fee': '中介服务费',
+    'legal_fee': '法律咨询费',
+    'miscellaneous': '其他杂费'
+  }
+  return map[category] || category
+}
+
+// 费用类别数据
+const expenseCategories = [
+  {
+    label: '住宿费用',
+    options: [
+      { label: '住宿费', value: 'accommodation' },
+      { label: '房租租金', value: 'rent' },
+      { label: '住宿押金', value: 'deposit' },
+      { label: '住宿管理费', value: 'management_fee' }
+    ]
+  },
+  {
+    label: '生活费用',
+    options: [
+      { label: '水电费', value: 'utilities' },
+      { label: '水费', value: 'water_fee' },
+      { label: '电费', value: 'electricity_fee' },
+      { label: '燃气费', value: 'gas_fee' },
+      { label: '网费', value: 'internet_fee' },
+      { label: '有线电视费', value: 'tv_fee' }
+    ]
+  },
+  {
+    label: '维护费用',
+    options: [
+      { label: '维修费', value: 'maintenance' },
+      { label: '设备维修', value: 'equipment_repair' },
+      { label: '家具维修', value: 'furniture_repair' },
+      { label: '电器维修', value: 'appliance_repair' },
+      { label: '门窗维修', value: 'door_window_repair' },
+      { label: '管道疏通', value: 'plumbing' }
+    ]
+  },
+  {
+    label: '清洁费用',
+    options: [
+      { label: '清洁费', value: 'cleaning' },
+      { label: '日常清洁', value: 'daily_cleaning' },
+      { label: '深度清洁', value: 'deep_cleaning' },
+      { label: '杀虫除害', value: 'pest_control' },
+      { label: '垃圾处理', value: 'waste_disposal' }
+    ]
+  },
+  {
+    label: '其他费用',
+    options: [
+      { label: '活动费用', value: 'activities' },
+      { label: '日用品', value: 'supplies' },
+      { label: '食品饮料', value: 'food' },
+      { label: '保险费用', value: 'insurance' },
+      { label: '中介服务费', value: 'agency_fee' },
+      { label: '法律咨询费', value: 'legal_fee' },
+      { label: '其他杂费', value: 'miscellaneous' },
+      { label: '其他', value: 'other' }
+    ]
+  }
+]
+
 // 表单数据
 const formData = ref({
   title: '',
@@ -338,10 +437,7 @@ const loadExpenseData = async () => {
       // 使用传入的数据
       formData.value = {
         title: passedData.description || '',
-        category: passedData.category === '餐饮' ? 'other' : 
-                 passedData.category === '交通' ? 'utilities' :
-                 passedData.category === '生活用品' ? 'accommodation' :
-                 passedData.category === '娱乐' ? 'maintenance' : 'other',
+        category: passedData.category || 'other',
         amount: passedData.amount || 0,
         date: passedData.date || '',
         description: passedData.description || '',
@@ -350,6 +446,46 @@ const loadExpenseData = async () => {
         department: '财务部', // 默认值
         position: '员工' // 默认值
       }
+      
+      // 如果 category 是中文，尝试转换回英文 key
+      if (/[\u4e00-\u9fa5]/.test(formData.value.category)) {
+        const reverseMap: Record<string, string> = {
+          '住宿费': 'accommodation',
+          '房租': 'rent',
+          '房租租金': 'rent',
+          '押金': 'deposit',
+          '住宿押金': 'deposit',
+          '管理费': 'management_fee',
+          '住宿管理费': 'management_fee',
+          '水电费': 'utilities',
+          '水费': 'water_fee',
+          '电费': 'electricity_fee',
+          '燃气费': 'gas_fee',
+          '网费': 'internet_fee',
+          '有线电视费': 'tv_fee',
+          '维修费': 'maintenance',
+          '设备维修': 'equipment_repair',
+          '家具维修': 'furniture_repair',
+          '电器维修': 'appliance_repair',
+          '门窗维修': 'door_window_repair',
+          '管道疏通': 'plumbing',
+          '清洁费': 'cleaning',
+          '日常清洁': 'daily_cleaning',
+          '深度清洁': 'deep_cleaning',
+          '杀虫除害': 'pest_control',
+          '垃圾处理': 'waste_disposal',
+          '活动费用': 'activities',
+          '日用品': 'supplies',
+          '食品饮料': 'food',
+          '保险费用': 'insurance',
+          '中介服务费': 'agency_fee',
+          '法律咨询费': 'legal_fee',
+          '其他杂费': 'miscellaneous',
+          '其他': 'other'
+        }
+        formData.value.category = reverseMap[formData.value.category] || formData.value.category
+      }
+      
       console.log('使用传入的数据加载表单:', formData.value)
     } else {
       // 直接调用真实API获取费用详情

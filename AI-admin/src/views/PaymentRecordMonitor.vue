@@ -214,7 +214,7 @@
       <el-divider />
       
       <el-descriptions title="异常信息" :column="1" v-if="detailData.exception || detailData.isException">
-        <el-descriptions-item label="异常类型">{{ detailData.exception?.type || '手动标记' }}</el-descriptions-item>
+        <el-descriptions-item label="异常类型">{{ getExceptionTypeText(detailData.exception?.type) }}</el-descriptions-item>
         <el-descriptions-item label="异常描述">{{ detailData.exception?.description || '用户手动标记为异常' }}</el-descriptions-item>
         <el-descriptions-item label="处理状态">{{ detailData.exception?.status || '待处理' }}</el-descriptions-item>
         <el-descriptions-item label="处理人">{{ detailData.exception?.handler || '未处理' }}</el-descriptions-item>
@@ -445,8 +445,26 @@ const getStatusText = (status: string) => {
     case 'refunded':
       return '已退款'
     default:
-      return '未知'
+      return status || '未知'
   }
+}
+
+/**
+ * 获取异常类型文本
+ * @param type 异常类型
+ */
+const getExceptionTypeText = (type: string | undefined) => {
+  if (!type) return '手动标记'
+  if (/[\u4e00-\u9fa5]/.test(type)) return type
+  
+  const typeMap: Record<string, string> = {
+    timeout: '支付超时',
+    amount_mismatch: '金额不符',
+    duplicate: '重复支付',
+    complaint: '用户投诉',
+    other: '其他'
+  }
+  return typeMap[type] || type
 }
 
 // 初始化图表

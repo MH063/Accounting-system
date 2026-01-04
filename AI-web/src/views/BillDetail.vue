@@ -1030,9 +1030,14 @@ const getPaymentStatusText = (status: Participant['paymentStatus'] | undefined) 
 const getCategoryType = (category: Expense['category'] | undefined) => {
   const typeMap: Record<string, string> = {
     rent: 'primary',
+    accommodation: 'info',
     utilities: 'success',
     maintenance: 'warning',
     cleaning: 'info',
+    activities: 'warning',
+    supplies: 'success',
+    food: 'warning',
+    insurance: 'primary',
     other: 'danger'
   }
   return (category && typeMap[category]) || 'info'
@@ -1044,14 +1049,56 @@ const getCategoryType = (category: Expense['category'] | undefined) => {
  * @returns 类别对应的文本
  */
 const getCategoryText = (category: Expense['category'] | undefined) => {
-  const textMap: Record<string, string> = {
-    rent: '房租',
-    utilities: '水电费',
-    maintenance: '维修费',
-    cleaning: '清洁费',
-    other: '其他'
+  if (!category) return '未知'
+  // 如果已经是中文，直接返回
+  if (/[\u4e00-\u9fa5]/.test(category)) return category
+  
+  switch (category) {
+    case 'accommodation': return '住宿费'
+    case 'rent': return '房租'
+    case 'deposit': return '押金'
+    case 'management_fee': return '管理费'
+    case 'utilities': return '水电费'
+    case 'water_fee': return '水费'
+    case 'electricity_fee': return '电费'
+    case 'gas_fee': return '燃气费'
+    case 'internet_fee':
+    case 'internet':
+    case 'network':
+    case 'network_fee': return '网费'
+    case 'tv_fee': return '电视费'
+    case 'property_fee':
+    case 'property': return '物业费'
+    case 'maintenance': return '维修费'
+    case 'repair': return '维修费'
+    case 'equipment_repair': return '设备维修'
+    case 'furniture_repair': return '家具维修'
+    case 'appliance_repair': return '电器维修'
+    case 'door_window_repair': return '门窗维修'
+    case 'plumbing': return '水管维修'
+    case 'electrical_work': return '电路维修'
+    case 'hardware': return '硬件维修'
+    case 'cleaning': return '清洁费'
+    case 'daily_cleaning': return '日常清洁'
+    case 'deep_cleaning': return '深度清洁'
+    case 'pest_control': return '杀虫除害'
+    case 'waste_disposal': return '垃圾处理'
+    case 'office_supplies': return '办公用品'
+    case 'toiletries': return '洗漱用品'
+    case 'cleaning_supplies': return '清洁用品'
+    case 'meal': return '餐饮'
+    case 'snack': return '零食'
+    case 'beverage': return '饮料'
+    case 'agency_fee': return '中介服务费'
+    case 'legal_fee': return '法律咨询费'
+    case 'insurance': return '保险费用'
+    case 'activities': return '活动费用'
+    case 'supplies': return '日用品'
+    case 'food': return '食品饮料'
+    case 'miscellaneous': return '其他杂费'
+    case 'other': return '其他'
+    default: return category || '未知'
   }
-  return (category && textMap[category]) || '未知'
 }
 
 /**

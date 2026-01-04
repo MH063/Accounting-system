@@ -190,7 +190,7 @@
         <el-table-column prop="category" label="分类" width="120">
           <template #default="{ row }">
             <el-tag :type="getCategoryType(row.category)" size="small">
-              {{ row.category }}
+              {{ getCategoryText(row.category) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -252,7 +252,11 @@
     >
       <div class="category-detail-content">
         <el-table :data="categoryDetailData" style="width: 100%">
-          <el-table-column prop="category" label="分类" />
+          <el-table-column prop="category" label="分类">
+            <template #default="{ row }">
+              {{ getCategoryText(row.category) }}
+            </template>
+          </el-table-column>
           <el-table-column prop="amount" label="金额">
             <template #default="{ row }">
               ¥{{ formatAmount(row.amount) }}
@@ -576,14 +580,58 @@ const loadChartDataByTimeRange = async (timeRange: string) => {
 
 // 移除模拟数据相关的函数，图表更新现在由loadExpenseData处理
 
-// 获取分类标签类型
-const getCategoryType = (category: string) => {
+/**
+ * 获取费用类别显示的文本
+ * @param category 类别代码
+ */
+const getCategoryText = (category?: string): string => {
+  if (!category) return '未知'
+  // 如果已经是中文，直接返回
+  if (/[\u4e00-\u9fa5]/.test(category)) return category
+  
+  const textMap: Record<string, string> = {
+    'accommodation': '住宿费',
+    'rent': '房租',
+    'deposit': '押金',
+    'management_fee': '管理费',
+    'utilities': '水电费',
+    'water_fee': '水费',
+    'electricity_fee': '电费',
+    'gas_fee': '燃气费',
+    'internet_fee': '网费',
+    'tv_fee': '电视费',
+    'maintenance': '维修费',
+    'equipment_repair': '设备维修',
+    'furniture_repair': '家具维修',
+    'appliance_repair': '电器维修',
+    'cleaning': '清洁费',
+    'daily_cleaning': '日常清洁',
+    'pest_control': '杀虫除害',
+    'activities': '活动费用',
+    'supplies': '日用品',
+    'food': '食品饮料',
+    'insurance': '保险费用',
+    'other': '其他'
+  }
+  return textMap[category] || category
+}
+
+/**
+ * 获取分类标签类型
+ * @param category 类别代码
+ */
+const getCategoryType = (category?: string) => {
+  if (!category) return 'info'
   const types: Record<string, string> = {
-    '餐饮': 'danger',
-    '交通': 'primary',
-    '生活用品': 'success',
-    '娱乐': 'warning',
-    '其他': 'info'
+    'accommodation': 'info',
+    'utilities': 'success',
+    'maintenance': 'warning',
+    'cleaning': 'info',
+    'activities': 'warning',
+    'supplies': 'success',
+    'food': 'warning',
+    'insurance': 'primary',
+    'other': 'danger'
   }
   return types[category] || 'info'
 }
@@ -668,8 +716,14 @@ const updateCategoryChartWithRealData = (categoryData: any[]) => {
   
   console.log('使用真实数据更新分类图表，数据条数:', categoryData.length)
   
+  // 翻译分类名称
+  const translatedData = categoryData.map(item => ({
+    ...item,
+    name: getCategoryText(item.name)
+  }))
+  
   // 同时更新分类详情数据
-  updateCategoryDetail(categoryData)
+  updateCategoryDetail(translatedData)
   
   const option = {
     title: {
@@ -714,7 +768,7 @@ const updateCategoryChartWithRealData = (categoryData: any[]) => {
       labelLine: {
         show: false
       },
-      data: categoryData,
+      data: translatedData,
       color: ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7']
     }]
   }
@@ -723,12 +777,12 @@ const updateCategoryChartWithRealData = (categoryData: any[]) => {
 }
 
 // 更新分类详情数据
-const updateCategoryDetail = (categoryData: any[]) => {
-  const totalAmount = categoryData.reduce((sum, item) => sum + item.value, 0)
-  const updatedDetailData = categoryData.map(item => ({
+const updateCategoryDetail = (translatedData: any[]) => {
+  const totalAmount = translatedData.reduce((sum, item) => sum + item.value, 0)
+  const updatedDetailData = translatedData.map(item => ({
     category: item.name,
     amount: item.value,
-    percentage: ((item.value / totalAmount) * 100).toFixed(1)
+    percentage: totalAmount > 0 ? ((item.value / totalAmount) * 100).toFixed(1) : '0.0'
   }))
   
   categoryDetailData.value = updatedDetailData

@@ -59,7 +59,7 @@
           <div class="expense-info">
             <h4>{{ expense.name }}</h4>
             <p>{{ expense.description }}</p>
-            <span class="expense-category">{{ expense.category }}</span>
+            <span class="expense-category">{{ getCategoryText(expense.category) }}</span>
           </div>
           <div class="expense-amount">
             <span class="amount">¥{{ expense.amount.toFixed(2) }}</span>
@@ -523,6 +523,42 @@ const totalExpense = ref(0)
 const perPersonShare = ref(0)
 const totalPaid = ref(0)
 const totalPending = ref(0)
+
+/**
+ * 获取费用类别名称（中文）
+ * @param category 费用类别标识
+ */
+const getCategoryText = (category: string) => {
+  if (!category) return '未知'
+  // 如果已经是中文，直接返回
+  if (/[\u4e00-\u9fa5]/.test(category)) return category
+  
+  switch (category) {
+    case 'accommodation': return '住宿费'
+    case 'rent': return '房租'
+    case 'deposit': return '押金'
+    case 'management_fee': return '管理费'
+    case 'utilities': return '水电费'
+    case 'water_fee': return '水费'
+    case 'electricity_fee': return '电费'
+    case 'gas_fee': return '燃气费'
+    case 'internet_fee': return '网费'
+    case 'tv_fee': return '电视费'
+    case 'maintenance': return '维修费'
+    case 'equipment_repair': return '设备维修'
+    case 'furniture_repair': return '家具维修'
+    case 'appliance_repair': return '电器维修'
+    case 'cleaning': return '清洁费'
+    case 'daily_cleaning': return '日常清洁'
+    case 'pest_control': return '杀虫除害'
+    case 'activities': return '活动费用'
+    case 'supplies': return '日用品'
+    case 'food': return '食品饮料'
+    case 'insurance': return '保险费用'
+    case 'other': return '其他'
+    default: return category || '未知'
+  }
+}
 
 // 方法
 const selectPaymentMethod = (method: PaymentMethod & { fee: string; description: string }) => {

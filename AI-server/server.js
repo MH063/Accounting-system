@@ -270,6 +270,9 @@ app.use('/api/payment', require('./routes/payment'));
 // 支付记录路由
 app.use('/api/payments', require('./routes/payments'));
 
+// 管理员支付监控路由
+app.use('/api/admin/payments/monitor', require('./routes/adminPaymentMonitor'));
+
 // 收款码相关路由
 app.use('/api/qr-codes', require('./routes/qrCodes'));
 

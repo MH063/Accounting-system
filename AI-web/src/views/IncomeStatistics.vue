@@ -222,7 +222,7 @@
             </el-table-column>
             <el-table-column prop="category" label="分类" width="100">
               <template #default="{ row }">
-                <el-tag :type="getCategoryType(row.category)">{{ row.category }}</el-tag>
+                <el-tag :type="getCategoryType(getCategoryText(row.category))">{{ getCategoryText(row.category) }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column prop="description" label="描述" min-width="200" />
@@ -400,6 +400,31 @@ const filteredIncomeData = computed(() => {
 // 工具函数
 const formatAmount = (amount: number): string => {
   return (amount || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+}
+
+/**
+ * 获取收入类别名称（中文）
+ * @param category 收入类别标识
+ */
+const getCategoryText = (category: string) => {
+  if (!category) return '未知'
+  // 如果已经是中文，直接返回
+  if (/[\u4e00-\u9fa5]/.test(category)) return category
+  
+  switch (category) {
+    case 'salary': return '工资'
+    case 'bonus': return '奖金'
+    case 'investment': return '投资'
+    case 'part_time': return '兼职'
+    case 'other': return '其他'
+    // 支出类别（以防万一）
+    case 'accommodation': return '住宿费'
+    case 'rent': return '房租'
+    case 'utilities': return '水电费'
+    case 'maintenance': return '维修费'
+    case 'cleaning': return '清洁费'
+    default: return category || '未知'
+  }
 }
 
 const getCategoryType = (category: string): string => {

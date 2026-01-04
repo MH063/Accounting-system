@@ -14,8 +14,8 @@ const ALLOWED_TABLES = [
   'activities', 'activity_participants', 'expense_types', 'special_payment_rules',
   'room_payment_rules', 'user_activity_logs', 'notifications', 'system_configs',
   'feature_flags', 'document_types', 'password_reset_tokens', 'user_activity_statistics',
-  'abnormal_expense_stats', 'system_performance_metrics'
-  'user_details', 'expense_details'
+  'abnormal_expense_stats', 'system_performance_metrics',
+  'user_details', 'expense_details', 'payment_monitor_logs'
 ];
 
 module.exports = {

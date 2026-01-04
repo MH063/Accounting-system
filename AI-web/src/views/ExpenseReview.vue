@@ -55,6 +55,10 @@
                 <el-option label="水电费" value="utilities" />
                 <el-option label="维修费" value="maintenance" />
                 <el-option label="清洁费" value="cleaning" />
+                <el-option label="活动费用" value="activities" />
+                <el-option label="日用品" value="supplies" />
+                <el-option label="食品饮料" value="food" />
+                <el-option label="保险费用" value="insurance" />
                 <el-option label="其他" value="other" />
               </el-select>
               <el-select
@@ -1172,11 +1176,11 @@ const canSubmit = computed(() => {
   return reviewForm.value.status && reviewForm.value.comment.trim().length > 0
 })
 
-// 审核状态管理：确保已通过审核的费用不会再次进入审核流程
+// 审核状态管理：确保审核通过的费用不会再次进入审核流程
 const filteredPendingExpenses = computed(() => {
   let filtered = [...pendingExpenses.value]
 
-  // 只显示待审核的费用，排除已通过和已拒绝的费用
+  // 只显示待审核的费用，排除审核通过和审核拒绝的费用
   filtered = filtered.filter(expense => expense.status === 'pending')
 
   // 搜索过滤
@@ -1604,7 +1608,7 @@ const confirmQuickReject = async (): Promise<void> => {
     await performQuickRejectWithReason(currentQuickRejectExpense.value, quickRejectForm)
     
     quickRejectVisible.value = false
-    ElMessage.success('费用申请已拒绝！')
+    ElMessage.success('费用审核拒绝')
 
   } catch (error) {
     if (error !== 'cancel') {
@@ -1654,7 +1658,7 @@ const confirmBatchReject = async (): Promise<void> => {
         await new Promise(resolve => setTimeout(resolve, 200))
       }
 
-      ElMessage.success(`成功批量拒绝 ${selectedExpenses.value.length} 条费用申请！`)
+      ElMessage.success(`成功批量审核拒绝 ${selectedExpenses.value.length} 条费用申请！`)
       selectedExpenses.value = []
 
     } catch (error) {
@@ -1716,7 +1720,7 @@ const performBatchReject = async (expense: ExpenseItem, rejectForm: BatchRejectF
   // 自动发送拒绝通知
   sendRejectionNotification(expense, reasonLabel, suggestion, rejectForm.customReason)
   
-  // 从待审核列表中移除已拒绝的费用
+  // 从待审核列表中移除审核拒绝的费用
   pendingExpenses.value = pendingExpenses.value.filter(item => item.id !== expense.id)
 
   // 自动发送拒绝通知给申请人
@@ -1727,7 +1731,7 @@ const performBatchReject = async (expense: ExpenseItem, rejectForm: BatchRejectF
     rejectForm.customReason
   )
 
-  // 从待审核列表中移除已拒绝的费用，确保不会再次进入审核流程
+  // 从待审核列表中移除审核拒绝的费用，确保不会再次进入审核流程
   pendingExpenses.value = pendingExpenses.value.filter(p => p.id !== expense.id)
 }
 
@@ -1813,7 +1817,7 @@ const performQuickRejectWithReason = async (expense: ExpenseItem, rejectForm: Ba
   // 自动发送拒绝通知
   sendRejectionNotification(expense, reasonLabel, suggestion, rejectForm.customReason)
   
-  // 从待审核列表中移除已拒绝的费用
+  // 从待审核列表中移除审核拒绝的费用
   pendingExpenses.value = pendingExpenses.value.filter(item => item.id !== expense.id)
 }
 
@@ -1945,8 +1949,8 @@ const getStatusType = (status?: string): string => {
 const getStatusText = (status?: string): string => {
   switch (status) {
     case 'pending': return '待审核'
-    case 'approved': return '已通过'
-    case 'rejected': return '已拒绝'
+    case 'approved': return '审核通过'
+    case 'rejected': return '审核拒绝'
     case 'draft': return '草稿'
     default: return '未知'
   }
@@ -1967,19 +1971,44 @@ const getCategoryType = (category?: string): string => {
     case 'utilities': return 'success'
     case 'maintenance': return 'warning'
     case 'cleaning': return 'info'
+    case 'activities': return 'warning'
+    case 'supplies': return 'success'
+    case 'food': return 'warning'
+    case 'insurance': return 'primary'
     case 'other': return 'danger'
     default: return 'info'
   }
 }
 
 const getCategoryText = (category?: string): string => {
+  if (!category) return '未知'
+  // 如果已经是中文，直接返回
+  if (/[\u4e00-\u9fa5]/.test(category)) return category
+  
   switch (category) {
     case 'accommodation': return '住宿费'
+    case 'rent': return '房租'
+    case 'deposit': return '押金'
+    case 'management_fee': return '管理费'
     case 'utilities': return '水电费'
+    case 'water_fee': return '水费'
+    case 'electricity_fee': return '电费'
+    case 'gas_fee': return '燃气费'
+    case 'internet_fee': return '网费'
+    case 'tv_fee': return '电视费'
     case 'maintenance': return '维修费'
+    case 'equipment_repair': return '设备维修'
+    case 'furniture_repair': return '家具维修'
+    case 'appliance_repair': return '电器维修'
     case 'cleaning': return '清洁费'
+    case 'daily_cleaning': return '日常清洁'
+    case 'pest_control': return '杀虫除害'
+    case 'activities': return '活动费用'
+    case 'supplies': return '日用品'
+    case 'food': return '食品饮料'
+    case 'insurance': return '保险费用'
     case 'other': return '其他'
-    default: return '未知'
+    default: return category || '未知'
   }
 }
 
@@ -2069,7 +2098,7 @@ const handleApprove = async (): Promise<void> => {
       })
     }
     
-    ElMessage.success('费用申请已通过审核')
+    ElMessage.success('费用审核通过')
     router.push('/dashboard/bills')
   } catch {
     // 用户取消
@@ -2102,7 +2131,7 @@ const handleReject = async (): Promise<void> => {
       })
     }
     
-    ElMessage.success('费用申请已拒绝')
+    ElMessage.success('费用审核拒绝')
     router.push('/dashboard/bills')
   } catch {
     // 用户取消
@@ -2223,7 +2252,7 @@ const submitQuickApproval = async (): Promise<void> => {
         createdAt: new Date().toISOString()
       })
       
-      // 从待审核列表中移除已通过的费用
+      // 从待审核列表中移除审核通过的费用
       const currentIndex = pendingExpenses.value.findIndex(expense => expense.id === currentExpenseId)
       if (currentIndex !== -1) {
         pendingExpenses.value.splice(currentIndex, 1)

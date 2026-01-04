@@ -664,6 +664,7 @@ const expenseCategories = [
   {
     label: '住宿费用',
     options: [
+      { label: '住宿费', value: 'accommodation' },
       { label: '房租租金', value: 'rent' },
       { label: '住宿押金', value: 'deposit' },
       { label: '住宿管理费', value: 'management_fee' }
@@ -672,6 +673,7 @@ const expenseCategories = [
   {
     label: '生活费用',
     options: [
+      { label: '水电费', value: 'utilities' },
       { label: '水费', value: 'water_fee' },
       { label: '电费', value: 'electricity_fee' },
       { label: '燃气费', value: 'gas_fee' },
@@ -682,6 +684,7 @@ const expenseCategories = [
   {
     label: '维护费用',
     options: [
+      { label: '维修费', value: 'maintenance' },
       { label: '设备维修', value: 'equipment_repair' },
       { label: '家具维修', value: 'furniture_repair' },
       { label: '电器维修', value: 'appliance_repair' },
@@ -692,6 +695,7 @@ const expenseCategories = [
   {
     label: '清洁费用',
     options: [
+      { label: '清洁费', value: 'cleaning' },
       { label: '日常清洁', value: 'daily_cleaning' },
       { label: '深度清洁', value: 'deep_cleaning' },
       { label: '杀虫除害', value: 'pest_control' },
@@ -701,13 +705,65 @@ const expenseCategories = [
   {
     label: '其他费用',
     options: [
+      { label: '活动费用', value: 'activities' },
+      { label: '日用品', value: 'supplies' },
+      { label: '食品饮料', value: 'food' },
       { label: '保险费用', value: 'insurance' },
       { label: '中介服务费', value: 'agency_fee' },
       { label: '法律咨询费', value: 'legal_fee' },
-      { label: '其他杂费', value: 'miscellaneous' }
+      { label: '其他杂费', value: 'miscellaneous' },
+      { label: '其他', value: 'other' }
     ]
   }
 ]
+
+/**
+ * 获取类别显示文本
+ * @param category 类别值
+ */
+const getCategoryText = (category: string) => {
+  if (!category) return '未知'
+  if (/[\u4e00-\u9fa5]/.test(category)) return category
+
+  // 尝试在 expenseCategories 中查找
+  for (const group of expenseCategories) {
+    const option = group.options.find(opt => opt.value === category)
+    if (option) return option.label
+  }
+
+  const map: Record<string, string> = {
+    'accommodation': '住宿费',
+    'utilities': '水电费',
+    'maintenance': '维修费',
+    'cleaning': '清洁费',
+    'activities': '活动费用',
+    'supplies': '日用品',
+    'food': '食品饮料',
+    'insurance': '保险费用',
+    'other': '其他',
+    'rent': '房租',
+    'deposit': '押金',
+    'management_fee': '管理费',
+    'water_fee': '水费',
+    'electricity_fee': '电费',
+    'gas_fee': '燃气费',
+    'internet_fee': '网费',
+    'tv_fee': '电视费',
+    'equipment_repair': '设备维修',
+    'furniture_repair': '家具维修',
+    'appliance_repair': '电器维修',
+    'door_window_repair': '门窗维修',
+    'plumbing': '管道疏通',
+    'daily_cleaning': '日常清洁',
+    'deep_cleaning': '深度清洁',
+    'pest_control': '杀虫除害',
+    'waste_disposal': '垃圾处理',
+    'agency_fee': '中介服务费',
+    'legal_fee': '法律咨询费',
+    'miscellaneous': '其他杂费'
+  }
+  return map[category] || category
+}
 
 // 表单数据
 const formData = reactive({

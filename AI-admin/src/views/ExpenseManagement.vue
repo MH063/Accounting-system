@@ -55,7 +55,7 @@
           </div>
           <div class="summary-content">
             <div class="summary-number">{{ approvedCount }}</div>
-            <div class="summary-text">已通过</div>
+            <div class="summary-text">审核通过</div>
           </div>
         </div>
         <div class="summary-item monthly">
@@ -154,14 +154,14 @@
               :type="quickFilter === 'approved' ? 'primary' : 'default'"
               @click="quickFilter = 'approved'; statusFilter = 'approved'; resetPagination()"
             >
-              已通过
+              审核通过
             </el-button>
             <el-button 
               size="small"
               :type="quickFilter === 'rejected' ? 'primary' : 'default'"
               @click="quickFilter = 'rejected'; statusFilter = 'rejected'; resetPagination()"
             >
-              已拒绝
+              审核拒绝
             </el-button>
           </el-button-group>
         </div>
@@ -183,8 +183,9 @@
           <el-option label="全部状态" value="" />
           <el-option label="草稿" value="draft" />
           <el-option label="待审核" value="pending" />
-          <el-option label="已通过" value="approved" />
-          <el-option label="已拒绝" value="rejected" />
+          <el-option label="审核通过" value="approved" />
+          <el-option label="审核拒绝" value="rejected" />
+          <el-option label="已支付" value="paid" />
         </el-select>
 
         <el-select
@@ -197,6 +198,11 @@
           <el-option label="水电费" value="utilities" />
           <el-option label="维修费" value="maintenance" />
           <el-option label="清洁费" value="cleaning" />
+          <el-option label="房租" value="rent" />
+          <el-option label="活动费用" value="activities" />
+          <el-option label="日用品" value="supplies" />
+          <el-option label="食品饮料" value="food" />
+          <el-option label="保险费用" value="insurance" />
           <el-option label="其他" value="other" />
         </el-select>
 
@@ -325,7 +331,7 @@
                   :type="getCategoryType(row.categoryCode || row.category)" 
                   size="small"
                 >
-                  {{ row.category }}
+                  {{ getCategoryText(row.category) }}
                 </el-tag>
               </template>
             </el-table-column>
@@ -1106,8 +1112,8 @@ const getStatusText = (status: string) => {
   switch (status) {
     case 'draft': return '草稿'
     case 'pending': return '待审核'
-    case 'approved': return '已通过'
-    case 'rejected': return '已拒绝'
+    case 'approved': return '审核通过'
+    case 'rejected': return '审核拒绝'
     case 'paid': return '已支付'
     case 'cancelled': return '已取消'
     default: return status || '未知'
@@ -1169,13 +1175,25 @@ const getCategoryText = (category: string) => {
   
   switch (category) {
     case 'accommodation': return '住宿费'
-    case 'utilities': return '水电费'
-    case 'maintenance': return '维修费'
-    case 'cleaning': return '清洁费'
     case 'rent': return '房租'
-    case 'food': return '食品饮料'
-    case 'supplies': return '日用品'
+    case 'deposit': return '押金'
+    case 'management_fee': return '管理费'
+    case 'utilities': return '水电费'
+    case 'water_fee': return '水费'
+    case 'electricity_fee': return '电费'
+    case 'gas_fee': return '燃气费'
+    case 'internet_fee': return '网费'
+    case 'tv_fee': return '电视费'
+    case 'maintenance': return '维修费'
+    case 'equipment_repair': return '设备维修'
+    case 'furniture_repair': return '家具维修'
+    case 'appliance_repair': return '电器维修'
+    case 'cleaning': return '清洁费'
+    case 'daily_cleaning': return '日常清洁'
+    case 'pest_control': return '杀虫除害'
     case 'activities': return '活动费用'
+    case 'supplies': return '日用品'
+    case 'food': return '食品饮料'
     case 'insurance': return '保险费用'
     case 'other': return '其他'
     default: return category || '未知'
@@ -1393,10 +1411,10 @@ const handleBatchReject = async () => {
     batchProcessing.value = true
     const response = await feeApi.batchRejectExpenses(selectedItems.value.map(item => item.id), '批量拒绝')
     if (response && (response.success !== false)) {
-      console.log(`✅ [ExpenseManagement] 批量拒绝成功, 数量: ${count}`)
+      console.log(`✅ [ExpenseManagement] 批量审核拒绝成功, 数量: ${count}`)
       ElMessage({
         type: 'success',
-        message: `已成功拒绝 ${count} 条费用记录`,
+        message: `已成功审核拒绝 ${count} 条费用记录`,
         duration: 3000,
         showClose: true
       })

@@ -1106,7 +1106,7 @@ const rejectMember = async (member: Member) => {
       const index = members.value.findIndex(m => m.id === member.id)
       if (index > -1) {
         members.value.splice(index, 1)
-        ElMessage.success(`已拒绝 ${member.name} 的加入申请`)
+        ElMessage.success(`审核拒绝 ${member.name} 的加入申请`)
       }
     } else {
       ElMessage.error(response.message || '拒绝申请失败')
