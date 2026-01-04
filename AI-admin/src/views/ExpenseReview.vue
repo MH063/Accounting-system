@@ -248,8 +248,9 @@ const fetchPendingExpenses = async () => {
   console.log('🔄 获取待审核费用列表...')
   try {
     const response = await feeApi.getPendingExpenses()
-    // 根据规则 5 处理嵌套结构
-    const data = response.data?.data || response.data || response
+    // 根据规则 5 和拦截器配置处理嵌套结构
+    // 拦截器已处理外层 {success, data}，这里 response 为内层 data
+    const data = response
     
     if (Array.isArray(data)) {
       pendingExpenses.value = data
@@ -281,7 +282,7 @@ const loadSpecificExpense = async (id: number) => {
   console.log(`🔄 加载特定费用详情: ${id}`)
   try {
     const response = await feeApi.getExpenseDetail(id)
-    const data = response.data?.data || response.data || response
+    const data = response
     
     if (data) {
       // 如果状态不是待审核，提示用户
@@ -336,8 +337,9 @@ const submitReview = async () => {
       comment: rejectReason.value
     })
     
-    // 根据规则 5 处理嵌套结构
-    const data = response.data?.data || response.data || response
+    // 根据规则 5 和拦截器配置处理嵌套结构
+    // 拦截器已处理外层 {success, data}，这里 response 为内层 data
+    const data = response
     
     // 拦截器已经处理了 success 检查，如果能执行到这里说明是成功的
     if (response) {

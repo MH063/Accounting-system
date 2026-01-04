@@ -1937,6 +1937,7 @@ const getStatusType = (status?: string): string => {
     case 'pending': return 'warning'
     case 'approved': return 'success'
     case 'rejected': return 'danger'
+    case 'draft': return 'info'
     default: return 'info'
   }
 }
@@ -1946,6 +1947,7 @@ const getStatusText = (status?: string): string => {
     case 'pending': return '待审核'
     case 'approved': return '已通过'
     case 'rejected': return '已拒绝'
+    case 'draft': return '草稿'
     default: return '未知'
   }
 }

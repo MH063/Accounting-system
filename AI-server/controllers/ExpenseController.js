@@ -682,7 +682,7 @@ class ExpenseController extends BaseController {
         createdAt: row.createdAt ? (typeof row.createdAt === 'object' && row.createdAt.toISOString ? row.createdAt.toISOString() : row.createdAt.toString()) : null
       };
       
-      return successResponse(res, processedRow, '费用创建成功');
+      return successResponse(res, processedRow, '获取费用详情成功');
     } catch (error) {
       logger.error('获取费用详情失败', { 
         error: error.message,

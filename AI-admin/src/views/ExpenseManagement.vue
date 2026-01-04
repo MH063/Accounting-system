@@ -304,6 +304,7 @@
         <div v-loading="loading" class="expense-table-container">
           <!-- 表格视图 -->
           <el-table
+            ref="expenseTableRef"
             :data="paginatedExpenses"
             style="width: 100%"
             class="expense-table"
@@ -744,7 +745,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { 
   Plus, Search, Refresh, Wallet, Clock, CircleCheck,
@@ -792,6 +793,14 @@ const viewMode = ref('table')
 const refreshing = ref(false)
 const loadingMore = ref(false)
 const quickFilter = ref('')
+const expenseTableRef = ref<any>(null)
+
+// 监听筛选条件变化，自动刷新数据
+watch([searchQuery, statusFilter, categoryFilter, monthFilter], () => {
+  console.log('🔍 筛选条件发生变化，触发自动刷新...')
+  currentPage.value = 1
+  loadExpenses()
+}, { deep: true })
 
 // 支付相关状态
 const showPaymentDialog = ref(false)
@@ -1202,7 +1211,12 @@ const handleEditDraft = (expense: Expense) => {
  * 提交草稿（变更为待审核状态）
  * @param expense 费用记录对象
  */
+/**
+ * 提交费用草稿
+ * 处理异步提交逻辑并提供反馈
+ */
 const handleSubmitDraft = async (expense: Expense) => {
+  console.log(`准备提交费用草稿: ${expense.title} (ID: ${expense.id})`)
   try {
     await ElMessageBox.confirm(
       `确定要提交费用草稿 "${expense.title}" 吗？提交后将进入审核流程。`,
@@ -1215,32 +1229,46 @@ const handleSubmitDraft = async (expense: Expense) => {
     )
     
     loading.value = true
+    console.log('正在调用提交接口...')
     const response = await feeApi.updateExpense(expense.id, { 
       status: 'pending' 
     })
     
-    if (response.success) {
+    console.log('提交接口返回原始数据:', response)
+    
+    // 注意：拦截器已剥离 success 字段，如果请求成功且有 data，则返回 data
+    // 如果没有抛出错误，说明请求是成功的
+    if (response) {
+      console.log('提交成功，正在更新本地状态...')
       ElMessage.success('草稿提交成功，已进入待审核流程')
       // 更新本地列表状态
       const index = expenses.value.findIndex(e => e.id === expense.id)
       if (index !== -1) {
         expenses.value[index].status = 'pending'
       }
+      // 刷新数据以确保同步
+      await loadExpenses()
     } else {
-      ElMessage.error(response.message || '提交草稿失败')
+      console.warn('提交返回数据为空，可能存在异常')
+      ElMessage.error('提交草稿失败：服务器未返回有效数据')
     }
   } catch (error) {
     if (error !== 'cancel') {
-      console.error('提交草稿失败:', error)
-      ElMessage.error('提交草稿失败')
+      console.error('提交草稿过程中发生错误:', error)
+      ElMessage.error(error instanceof Error ? error.message : '提交草稿失败，请稍后重试')
+    } else {
+      console.log('用户取消了提交操作')
     }
   } finally {
     loading.value = false
   }
 }
 
-// 处理删除
+/**
+ * 处理删除费用
+ */
 const handleDelete = async (expense: Expense) => {
+  console.log(`准备删除费用: ${expense.title} (ID: ${expense.id})`)
   try {
     await ElMessageBox.confirm(
       `确定要删除费用 "${expense.title}" 吗？此操作不可恢复！`,
@@ -1254,8 +1282,13 @@ const handleDelete = async (expense: Expense) => {
     )
     
     loading.value = true
+    console.log('正在调用删除接口...')
     const response = await feeApi.deleteExpense(expense.id)
-    if (response.success) {
+    console.log('删除接口返回原始数据:', response)
+    
+    // 同样处理拦截器剥离 success 的问题
+    if (response) {
+      console.log('删除成功，正在刷新列表...')
       ElMessage({
         type: 'success',
         message: '费用删除成功',
@@ -1270,14 +1303,15 @@ const handleDelete = async (expense: Expense) => {
         currentPage.value = maxPage
       }
     } else {
-      ElMessage.error(response.message || '删除费用失败')
+      console.warn('删除返回数据为空')
+      ElMessage.error('删除费用失败：服务器未返回有效数据')
     }
   } catch (error) {
     if (error !== 'cancel') {
-      console.error('删除费用失败:', error)
+      console.error('删除费用过程中发生错误:', error)
       ElMessage({
         type: 'error',
-        message: '删除费用失败，请稍后重试',
+        message: error instanceof Error ? error.message : '删除费用失败，请稍后重试',
         duration: 3000,
         showClose: true
       })
@@ -1309,25 +1343,30 @@ const handleBatchApprove = async () => {
     
     batchProcessing.value = true
     const response = await feeApi.batchApproveExpenses(selectedItems.value.map(item => item.id))
-    if (response.success) {
+    if (response && (response.success !== false)) {
+      console.log(`✅ [ExpenseManagement] 批量审核通过成功, 数量: ${count}`)
       ElMessage({
         type: 'success',
         message: `已成功审核通过 ${count} 条费用记录`,
         duration: 3000,
         showClose: true
       })
-      selectedItems.value = []
+      clearSelection()
+      loading.value = true
       await loadExpenses()
+      adjustCurrentPage()
     } else {
-      ElMessage.error(response.message || '批量审核通过失败')
+      console.error('❌ [ExpenseManagement] 批量审核通过失败:', response?.message)
+      ElMessage.error(response?.message || '批量审核通过失败')
     }
   } catch (error) {
     if (error !== 'cancel') {
-      console.error('批量审核通过失败:', error)
+      console.error('❌ [ExpenseManagement] 批量审核通过异常:', error)
       ElMessage.error('批量审核通过失败')
     }
   } finally {
     batchProcessing.value = false
+    loading.value = false
   }
 }
 
@@ -1353,25 +1392,30 @@ const handleBatchReject = async () => {
     
     batchProcessing.value = true
     const response = await feeApi.batchRejectExpenses(selectedItems.value.map(item => item.id), '批量拒绝')
-    if (response.success) {
+    if (response && (response.success !== false)) {
+      console.log(`✅ [ExpenseManagement] 批量拒绝成功, 数量: ${count}`)
       ElMessage({
         type: 'success',
         message: `已成功拒绝 ${count} 条费用记录`,
         duration: 3000,
         showClose: true
       })
-      selectedItems.value = []
+      clearSelection()
+      loading.value = true
       await loadExpenses()
+      adjustCurrentPage()
     } else {
-      ElMessage.error(response.message || '批量拒绝失败')
+      console.error('❌ [ExpenseManagement] 批量拒绝失败:', response?.message)
+      ElMessage.error(response?.message || '批量拒绝失败')
     }
   } catch (error) {
     if (error !== 'cancel') {
-      console.error('批量拒绝失败:', error)
+      console.error('❌ [ExpenseManagement] 批量拒绝异常:', error)
       ElMessage.error('批量拒绝失败')
     }
   } finally {
     batchProcessing.value = false
+    loading.value = false
   }
 }
 
@@ -1399,7 +1443,10 @@ const handleBatchDelete = async () => {
     batchProcessing.value = true
     const response = await feeApi.batchDeleteExpenses(selectedItems.value.map(item => item.id))
     
-    if (response.success) {
+    if (response && (response.success !== false)) {
+      // 打印日志方便调试
+      console.log(`✅ [ExpenseManagement] 批量删除成功, 删除了 ${count} 条记录`)
+      
       // 批量删除成功提示优化
       ElMessage({
         type: 'success',
@@ -1409,20 +1456,21 @@ const handleBatchDelete = async () => {
       })
       
       // 列表自动刷新功能：保持当前分页和筛选状态
-      selectedItems.value = []
+      clearSelection()
+      
+      // 刷新数据前显示加载状态
+      loading.value = true
       await loadExpenses()
       
-      // 检查当前页是否还有数据，如果没有则返回上一页
-      const maxPage = Math.ceil(filteredExpenses.value.length / pageSize.value)
-      if (currentPage.value > maxPage && maxPage > 0) {
-        currentPage.value = maxPage
-      }
+      // 检查并调整当前页码
+      adjustCurrentPage()
     } else {
+      console.error('❌ [ExpenseManagement] 批量删除失败:', response.message)
       ElMessage.error(response.message || '批量删除失败')
     }
   } catch (error) {
     if (error !== 'cancel') {
-      console.error('批量删除失败:', error)
+      console.error('❌ [ExpenseManagement] 批量删除异常:', error)
       ElMessage({
         type: 'error',
         message: '批量删除失败，请稍后重试',
@@ -1432,6 +1480,7 @@ const handleBatchDelete = async () => {
     }
   } finally {
     batchProcessing.value = false
+    loading.value = false
   }
 }
 
@@ -1449,18 +1498,26 @@ const handleClearAll = async () => {
       }
     )
     
+    loading.value = true
     const response = await feeApi.clearAllExpenses()
-    if (response.success) {
+    if (response && (response.success !== false)) {
+      console.log('✅ [ExpenseManagement] 所有费用记录已清空')
       expenses.value = []
+      clearSelection()
+      currentPage.value = 1
       ElMessage.success('已清空所有费用记录')
+      await loadExpenses()
     } else {
-      ElMessage.error(response.message || '清空所有记录失败')
+      console.error('❌ [ExpenseManagement] 清空所有记录失败:', response?.message)
+      ElMessage.error(response?.message || '清空所有记录失败')
     }
   } catch (error) {
     if (error !== 'cancel') {
-      console.error('清空所有记录失败:', error)
+      console.error('❌ [ExpenseManagement] 清空所有记录异常:', error)
       ElMessage.error('清空所有记录失败')
     }
+  } finally {
+    loading.value = false
   }
 }
 
@@ -1583,34 +1640,93 @@ const handleLoadMore = async () => {
   }
 }
 
+/**
+ * 检查并调整当前页码，确保其在有效范围内
+ */
+const adjustCurrentPage = () => {
+  const totalCount = filteredExpenses.value.length
+  const maxPage = Math.ceil(totalCount / pageSize.value) || 1
+  if (currentPage.value > maxPage) {
+    console.log(`🔄 [ExpenseManagement] 当前页 ${currentPage.value} 超过最大页 ${maxPage}，调整为 ${maxPage}`)
+    currentPage.value = maxPage
+  }
+}
+
 // 加载费用数据
+/**
+ * 加载费用列表数据
+ * 遵循规则 5：处理后端双层嵌套结构 {success: true, data: {data: []}}
+ */
 const loadExpenses = async () => {
+  console.log('开始加载费用列表数据...')
   loading.value = true
   try {
-      const response = await feeApi.getExpenseList({ page: 1, pageSize: 100 })
-      
-      // 根据规则 5：处理双层嵌套结构
-      if (response && response.data && Array.isArray(response.data)) {
-        expenses.value = response.data
-      } else if (response && response.items && Array.isArray(response.items)) {
-        expenses.value = response.items
-      } else if (response && Array.isArray(response)) {
-        expenses.value = response
-      } else {
-        expenses.value = []
-      }
-    } catch (error) {
-    console.error('获取费用数据失败:', error)
-    ElMessage.error('获取费用数据失败')
+    // 构建查询参数，支持后端筛选
+    const params = {
+      page: 1, // 保持加载 100 条用于本地搜索和分页的逻辑
+      pageSize: 100,
+      search: searchQuery.value,
+      status: statusFilter.value,
+      category: categoryFilter.value,
+      month: monthFilter.value
+    }
+    
+    console.log('发送请求参数:', params)
+    const response = await feeApi.getExpenseList(params)
+    console.log('获取费用列表响应:', response)
+    
+    // 处理双层嵌套结构 (Rule 5)
+    let data = []
+    if (response && response.data && Array.isArray(response.data)) {
+      data = response.data
+    } else if (response && Array.isArray(response)) {
+      data = response
+    } else if (response && response.list && Array.isArray(response.list)) {
+      data = response.list
+    }
+    
+    expenses.value = data
+    console.log(`成功加载 ${expenses.value.length} 条费用记录`)
+  } catch (error) {
+    console.error('❌ 获取费用数据失败:', error)
+    ElMessage({
+      type: 'error',
+      message: '获取费用数据失败，请检查网络或后端服务',
+      duration: 0, // 不自动关闭，让用户决定
+      showClose: true,
+      dangerouslyUseHTMLString: true,
+      message: '获取费用数据失败，请检查网络或后端服务 <button class="el-button el-button--small el-button--primary" onclick="window.retryLoadExpenses()">重试</button>'
+    })
   } finally {
     loading.value = false
   }
 }
 
+// 全局重试函数 (为了在 ElMessage 的 HTML 中调用)
+onMounted(() => {
+  (window as any).retryLoadExpenses = () => {
+    console.log('🔄 用户点击重试加载数据...')
+    loadExpenses()
+    // 尝试关闭所有的 ElMessage
+    const messages = document.querySelectorAll('.el-message--error')
+    messages.forEach(msg => {
+      const closeBtn = msg.querySelector('.el-message__closeBtn') as HTMLElement
+      if (closeBtn) closeBtn.click()
+    })
+  }
+})
+
+onUnmounted(() => {
+  delete (window as any).retryLoadExpenses
+})
+
 // 清除选择
 const clearSelection = () => {
   selectedItems.value = []
   expenses.value.forEach(e => e.selected = false)
+  if (expenseTableRef.value) {
+    expenseTableRef.value.clearSelection()
+  }
 }
 
 // 组件挂载时加载数据

@@ -381,6 +381,8 @@ const getStatusTagType = (status: string) => {
       return 'danger'
     case 'partial':
       return 'warning'
+    case 'draft':
+      return 'info'
     default:
       return 'info'
   }
@@ -395,6 +397,8 @@ const getStatusText = (status: string) => {
       return '未缴费'
     case 'partial':
       return '部分缴费'
+    case 'draft':
+      return '草稿'
     default:
       return '未知'
   }
@@ -409,6 +413,8 @@ const getAuditStatusTagType = (status: string) => {
       return 'warning'
     case 'rejected':
       return 'danger'
+    case 'draft':
+      return 'info'
     default:
       return 'info'
   }
@@ -423,6 +429,8 @@ const getAuditStatusText = (status: string) => {
       return '待审核'
     case 'rejected':
       return '已拒绝'
+    case 'draft':
+      return '草稿'
     default:
       return '未知'
   }

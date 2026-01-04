@@ -525,6 +525,8 @@ const getStatusText = (status: string) => {
       return '已通过'
     case 'rejected':
       return '已拒绝'
+    case 'draft':
+      return '草稿'
     default:
       return status || '未知'
   }
@@ -568,6 +570,8 @@ const getStatusTagType = (status: string) => {
     case 'partial':
     case 'pending':
       return 'warning'
+    case 'draft':
+      return 'info'
     default:
       return 'info'
   }
@@ -582,6 +586,8 @@ const getAuditStatusTagType = (status: string) => {
       return 'danger'
     case 'pending':
       return 'warning'
+    case 'draft':
+      return 'info'
     default:
       return 'info'
   }
@@ -596,6 +602,8 @@ const getAuditStatusText = (status: string) => {
       return '审核拒绝'
     case 'pending':
       return '待审核'
+    case 'draft':
+      return '草稿'
     default:
       return '未知'
   }
@@ -827,8 +835,9 @@ const loadFeeDetail = async () => {
   console.log('🔄 加载费用详情:', feeId.value)
   try {
     const response = await feeApi.getExpenseDetail(feeId.value)
-    // 根据规则 5：处理双层嵌套结构
-    const data = response.data?.data || response.data || response
+    // 根据规则 5 和拦截器配置：处理双层嵌套结构
+    // 拦截器已处理外层 {success, data}，这里 response 为内层 data
+    const data = response
     
     if (data) {
       feeInfo.value = {
@@ -902,12 +911,16 @@ const loadFeeList = async () => {
   loading.value = true
   try {
     const response = await feeApi.getExpenseList(queryParams.value)
-    // 处理嵌套结构
-    const result = response.data?.data || response.data || response
     
-    if (result) {
-      feeList.value = result.list || result.records || (Array.isArray(result) ? result : [])
-      total.value = result.total || feeList.value.length
+    // 根据拦截器配置，这里 response 已经是后端返回的 response.data.data
+    // 结构为 { data: [...], total: n, list: [...] }
+    if (response) {
+      // 提取列表数据：优先使用 data 或 list 字段，如果 response 本身是数组则直接使用
+      feeList.value = response.data || response.list || response.records || (Array.isArray(response) ? response : [])
+      // 提取总数：优先使用 total 字段，否则使用数组长度
+      total.value = response.total !== undefined ? response.total : feeList.value.length
+      
+      console.log(`✅ [FeeDetail] 成功加载费用列表, 总数: ${total.value}`)
     }
   } catch (error) {
     console.error('获取费用列表失败:', error)

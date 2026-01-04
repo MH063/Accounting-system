@@ -1017,11 +1017,12 @@ const formatDate = (dateString: string | number | undefined | null): string => {
   })
 }
 
-const getStatusType = (status: 'pending' | 'approved' | 'rejected' | string) => {
+const getStatusType = (status: 'pending' | 'approved' | 'rejected' | 'draft' | string) => {
   switch (status) {
     case 'pending': return 'warning'
     case 'approved': return 'success'
     case 'rejected': return 'danger'
+    case 'draft': return 'info'
     default: return 'info'
   }
 }
@@ -1031,36 +1032,40 @@ const getStatusText = (status: 'pending' | 'approved' | 'rejected' | string) => 
     case 'pending': return '待审核'
     case 'approved': return '已通过'
     case 'rejected': return '已拒绝'
+    case 'draft': return '草稿'
     default: return '未知'
   }
 }
 
 // 获取状态详细描述
-const getStatusDescription = (status: 'pending' | 'approved' | 'rejected' | string) => {
+const getStatusDescription = (status: 'pending' | 'approved' | 'rejected' | 'draft' | string) => {
   switch (status) {
     case 'pending': return '费用正在等待审核，请耐心等待'
     case 'approved': return '费用已通过审核，可以进行后续处理'
     case 'rejected': return '费用审核未通过，请查看审核意见'
+    case 'draft': return '费用尚在草稿状态，尚未提交'
     default: return '未知状态'
   }
 }
 
 // 获取状态图标
-const getStatusIcon = (status: 'pending' | 'approved' | 'rejected' | string) => {
+const getStatusIcon = (status: 'pending' | 'approved' | 'rejected' | 'draft' | string) => {
   switch (status) {
     case 'pending': return 'Clock'
     case 'approved': return 'CircleCheck'
     case 'rejected': return 'CircleClose'
+    case 'draft': return 'Edit'
     default: return 'InfoFilled'
   }
 }
 
 // 获取状态颜色
-const getStatusColor = (status: 'pending' | 'approved' | 'rejected' | string) => {
+const getStatusColor = (status: 'pending' | 'approved' | 'rejected' | 'draft' | string) => {
   switch (status) {
     case 'pending': return '#e6a23c'
     case 'approved': return '#67c23a'
     case 'rejected': return '#f56c6c'
+    case 'draft': return '#909399'
     default: return '#909399'
   }
 }
