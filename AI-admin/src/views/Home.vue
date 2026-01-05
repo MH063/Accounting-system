@@ -5,7 +5,7 @@
       <div style="text-align: right; margin-bottom: 10px;">
       </div>
       <el-row :gutter="20">
-        <el-col :span="6">
+        <el-col :xs="24" :sm="12" :md="6">
           <el-card class="stat-card">
             <div class="stat-item">
               <div class="stat-icon bg-primary">
@@ -18,7 +18,7 @@
             </div>
           </el-card>
         </el-col>
-        <el-col :span="6">
+        <el-col :xs="24" :sm="12" :md="6">
           <el-card class="stat-card">
             <div class="stat-item">
               <div class="stat-icon bg-success">
@@ -31,7 +31,7 @@
             </div>
           </el-card>
         </el-col>
-        <el-col :span="6">
+        <el-col :xs="24" :sm="12" :md="6">
           <el-card class="stat-card">
             <div class="stat-item">
               <div class="stat-icon bg-warning">
@@ -44,7 +44,7 @@
             </div>
           </el-card>
         </el-col>
-        <el-col :span="6">
+        <el-col :xs="24" :sm="12" :md="6">
           <el-card class="stat-card">
             <div class="stat-item">
               <div class="stat-icon bg-info">
@@ -61,7 +61,7 @@
       
       <!-- 新增系统统计（页眉处的额外统计信息） -->
       <el-row :gutter="20" style="margin-top: 20px;">
-        <el-col :span="6">
+        <el-col :xs="24" :sm="12" :md="6">
           <el-card class="stat-card">
             <div class="stat-item">
               <div class="stat-icon bg-primary">
@@ -74,7 +74,7 @@
             </div>
           </el-card>
         </el-col>
-        <el-col :span="6">
+        <el-col :xs="24" :sm="12" :md="6">
           <el-card class="stat-card">
             <div class="stat-item">
               <div class="stat-icon bg-success">
@@ -87,7 +87,7 @@
             </div>
           </el-card>
         </el-col>
-        <el-col :span="6">
+        <el-col :xs="24" :sm="12" :md="6">
           <el-card class="stat-card">
             <div class="stat-item">
               <div class="stat-icon bg-warning">
@@ -100,7 +100,7 @@
             </div>
           </el-card>
         </el-col>
-        <el-col :span="6">
+        <el-col :xs="24" :sm="12" :md="6">
           <el-card class="stat-card">
             <div class="stat-item">
               <div class="stat-icon" :class="getAvailabilityIconClass(extraStats.systemAvailability)">
@@ -119,13 +119,12 @@
       
       <!-- 系统组件状态 -->
       <el-row :gutter="20" style="margin-top: 20px;">
-        <el-col :span="16">
+        <el-col :xs="24" :lg="16">
           <el-card>
             <template #header>
               <div class="card-header">
                 <span>系统组件状态</span>
                 <div class="header-actions">
-                  <!-- 系统组件状态刷新按钮已删除 -->
                   <el-button size="small" @click="handleHealthCheck">健康检查</el-button>
                   <el-button size="small" @click="handleViewLogs">查看日志</el-button>
                 </div>
@@ -134,11 +133,8 @@
             <div class="system-components">
               <el-tabs v-model="activeComponentTab" @tab-change="handleTabChange">
                 <el-tab-pane label="组件概览" name="overview">
-                  <div style="text-align: right; margin-bottom: 10px;">
-                    <!-- 组件概览刷新按钮已删除 -->
-                  </div>
                   <el-row :gutter="20">
-                    <el-col :span="8">
+                    <el-col :xs="24" :sm="8">
                       <div class="component-item" @click="setActiveComponent('client')">
                         <div class="component-icon bg-success">
                           <el-icon size="24"><Monitor /></el-icon>
@@ -152,7 +148,7 @@
                         </div>
                       </div>
                     </el-col>
-                    <el-col :span="8">
+                    <el-col :xs="24" :sm="8">
                       <div class="component-item" @click="setActiveComponent('backend')">
                         <div class="component-icon bg-primary">
                           <el-icon size="24"><Setting /></el-icon>
@@ -166,7 +162,7 @@
                         </div>
                       </div>
                     </el-col>
-                    <el-col :span="8">
+                    <el-col :xs="24" :sm="8">
                       <div class="component-item" @click="setActiveComponent('database')">
                         <div class="component-icon bg-info">
                           <el-icon size="24"><CoffeeCup /></el-icon>
@@ -185,7 +181,7 @@
                   <el-row :gutter="20" style="margin-top: 20px;">
                     <el-col :span="24">
                       <div class="system-overview">
-                        <el-descriptions :column="3" border>
+                        <el-descriptions :column="isMobile ? 1 : 3" border>
                           <el-descriptions-item label="系统版本">{{ systemInfo.version }}</el-descriptions-item>
                           <el-descriptions-item label="运行时长">{{ systemInfo.uptime }}</el-descriptions-item>
                           <el-descriptions-item label="部署环境">{{ systemInfo.environment }}</el-descriptions-item>
@@ -216,7 +212,7 @@
                 
                 <el-tab-pane label="客户端详情" name="client">
                   <div class="component-detail">
-                    <el-descriptions title="客户端状态详情" :column="2" border>
+                    <el-descriptions title="客户端状态详情" :column="isMobile ? 1 : 2" border>
                       <el-descriptions-item label="版本号">{{ clientStats.version }}</el-descriptions-item>
                       <el-descriptions-item label="在线用户数">
                         <span style="font-weight: bold; color: #409EFF;">{{ clientStats.onlineUsers }}</span>
@@ -226,20 +222,20 @@
                           </el-tag>
                         </el-tooltip>
                       </el-descriptions-item>
-                      <el-descriptions-item label="用户质量分布" :span="2">
+                      <el-descriptions-item label="用户质量分布" :span="isMobile ? 1 : 2">
                         <div class="user-quality-dist">
                           <div class="dist-item">
-                            <span class="dist-label">高质量用户 (真实)</span>
+                            <span class="dist-label">高质量用户</span>
                             <el-progress :percentage="calculatePercentage(clientStats.userDistribution.high)" status="success" />
                             <span class="dist-count">{{ clientStats.userDistribution.high }}</span>
                           </div>
                           <div class="dist-item">
-                            <span class="dist-label">普通用户 (疑似)</span>
+                            <span class="dist-label">普通用户</span>
                             <el-progress :percentage="calculatePercentage(clientStats.userDistribution.normal)" status="warning" />
                             <span class="dist-count">{{ clientStats.userDistribution.normal }}</span>
                           </div>
                           <div class="dist-item">
-                            <span class="dist-label">可疑用户 (过滤)</span>
+                            <span class="dist-label">可疑用户</span>
                             <el-progress :percentage="calculatePercentage(clientStats.userDistribution.suspicious)" status="exception" />
                             <span class="dist-count">{{ clientStats.userDistribution.suspicious }}</span>
                           </div>
@@ -268,22 +264,25 @@
                     </el-descriptions>
                     
                     <div class="component-chart" style="margin-top: 20px;">
-                      <div class="chart-title">24小时在线用户趋势</div>
-                      <div id="clientChart" style="height: 200px;"></div>
+                      <ChartContainer 
+                        title="24小时在线用户趋势" 
+                        height="300px"
+                        :show-header="false"
+                      />
                     </div>
                     
                     <!-- 客户端操作 -->
                     <div class="component-actions" style="margin-top: 20px;">
-                      <el-button type="primary" @click="handleClientRestart">重启客户端服务</el-button>
-                      <el-button @click="handleClientConfig">配置客户端</el-button>
-                      <el-button @click="handleClientUpdate">更新客户端</el-button>
+                      <el-button type="primary" @click="handleClientRestart">重启服务</el-button>
+                      <el-button @click="handleClientConfig">配置</el-button>
+                      <el-button @click="handleClientUpdate">更新</el-button>
                     </div>
                   </div>
                 </el-tab-pane>
                 
                 <el-tab-pane label="后端详情" name="backend">
                   <div class="component-detail">
-                    <el-descriptions title="后端服务详情" :column="2" border>
+                    <el-descriptions title="后端服务详情" :column="isMobile ? 1 : 2" border>
                       <el-descriptions-item label="版本号">{{ backendStats.version }}</el-descriptions-item>
                       <el-descriptions-item label="API响应时间">{{ backendStats.apiResponseTime }}ms</el-descriptions-item>
                       <el-descriptions-item label="QPS">{{ backendStats.qps }}</el-descriptions-item>
@@ -295,22 +294,25 @@
                     </el-descriptions>
                     
                     <div class="component-chart" style="margin-top: 20px;">
-                      <div class="chart-title">API响应时间趋势</div>
-                      <div id="backendChart" style="height: 200px;"></div>
+                      <ChartContainer 
+                        title="API响应时间趋势" 
+                        height="300px"
+                        :show-header="false"
+                      />
                     </div>
                     
                     <!-- 后端操作 -->
                     <div class="component-actions" style="margin-top: 20px;">
-                      <el-button type="primary" @click="handleBackendRestart">重启后端服务</el-button>
-                      <el-button @click="handleBackendConfig">配置后端服务</el-button>
-                      <el-button @click="handleBackendUpdate">更新后端服务</el-button>
+                      <el-button type="primary" @click="handleBackendRestart">重启服务</el-button>
+                      <el-button @click="handleBackendConfig">配置</el-button>
+                      <el-button @click="handleBackendUpdate">更新</el-button>
                     </div>
                   </div>
                 </el-tab-pane>
                 
                 <el-tab-pane label="数据库详情" name="database">
                   <div class="component-detail">
-                    <el-descriptions title="数据库状态详情" :column="2" border>
+                    <el-descriptions title="数据库状态详情" :column="isMobile ? 1 : 2" border>
                       <el-descriptions-item label="版本">{{ databaseStats.version }}</el-descriptions-item>
                       <el-descriptions-item label="当前连接数">{{ databaseStats.connections }}</el-descriptions-item>
                       <el-descriptions-item label="最大连接数">{{ databaseStats.maxConnections }}</el-descriptions-item>
@@ -324,15 +326,18 @@
                     </el-descriptions>
                     
                     <div class="component-chart" style="margin-top: 20px;">
-                      <div class="chart-title">数据库性能趋势</div>
-                      <div id="databaseChart" style="height: 200px;"></div>
+                      <ChartContainer 
+                        title="数据库性能趋势" 
+                        height="300px"
+                        :show-header="false"
+                      />
                     </div>
                     
                     <!-- 数据库操作 -->
                     <div class="component-actions" style="margin-top: 20px;">
-                      <el-button type="primary" @click="handleDatabaseBackup">备份数据库</el-button>
-                      <el-button @click="handleDatabaseOptimize">优化数据库</el-button>
-                      <el-button @click="handleDatabaseRepair">修复数据库</el-button>
+                      <el-button type="primary" @click="handleDatabaseBackup">备份</el-button>
+                      <el-button @click="handleDatabaseOptimize">优化</el-button>
+                      <el-button @click="handleDatabaseRepair">修复</el-button>
                     </div>
                   </div>
                 </el-tab-pane>
@@ -341,7 +346,7 @@
                 <el-tab-pane label="系统监控" name="monitor">
                   <div class="monitor-detail">
                     <el-row :gutter="20">
-                      <el-col :span="12">
+                      <el-col :xs="24" :sm="12">
                         <el-card>
                           <template #header>
                             <div class="card-header">
@@ -366,7 +371,7 @@
                           </el-table>
                         </el-card>
                       </el-col>
-                      <el-col :span="12">
+                      <el-col :xs="24" :sm="12">
                         <el-card>
                           <template #header>
                             <div class="card-header">
@@ -408,7 +413,7 @@
                           </div>
                         </div>
                       </template>
-                      <el-descriptions :column="2" border :key="configUpdateKey">
+                      <el-descriptions :column="isMobile ? 1 : 2" border :key="configUpdateKey">
                         <el-descriptions-item label="系统名称">{{ systemConfig.name }}</el-descriptions-item>
                         <el-descriptions-item label="版本号">{{ systemConfig.version }}</el-descriptions-item>
                         <el-descriptions-item label="运行环境">{{ systemConfig.environment }}</el-descriptions-item>
@@ -451,7 +456,7 @@
                           <span>安全配置</span>
                         </div>
                       </template>
-                      <el-descriptions :column="2" border :key="configUpdateKey">
+                      <el-descriptions :column="isMobile ? 1 : 2" border :key="configUpdateKey">
                         <el-descriptions-item label="SSL证书">{{ securityConfig.sslCertificate }}</el-descriptions-item>
                         <el-descriptions-item label="加密算法">{{ securityConfig.encryptionAlgorithm }}</el-descriptions-item>
                         <el-descriptions-item label="会话超时">{{ securityConfig.sessionTimeout ? securityConfig.sessionTimeout + '分钟' : '-' }}</el-descriptions-item>
@@ -467,7 +472,7 @@
                           <span>性能配置</span>
                         </div>
                       </template>
-                      <el-descriptions :column="2" border :key="configUpdateKey">
+                      <el-descriptions :column="isMobile ? 1 : 2" border :key="configUpdateKey">
                         <el-descriptions-item label="缓存TTL">{{ performanceConfig.cacheTtl || '-' }}</el-descriptions-item>
                         <el-descriptions-item label="速率限制">{{ performanceConfig.rateLimit || '-' }}</el-descriptions-item>
                         <el-descriptions-item label="压缩">{{ performanceConfig.compression || '-' }}</el-descriptions-item>
@@ -481,7 +486,7 @@
                           <span>功能配置</span>
                         </div>
                       </template>
-                      <el-descriptions :column="2" border :key="configUpdateKey">
+                      <el-descriptions :column="isMobile ? 1 : 2" border :key="configUpdateKey">
                         <el-descriptions-item label="用户注册">
                           <el-tag :type="featureConfig.registrationEnabled ? 'success' : 'danger'">
                             {{ featureConfig.registrationEnabled ? '启用' : '禁用' }}
@@ -508,24 +513,24 @@
                 </el-tab-pane>
                 
                 <!-- 系统配置编辑对话框 -->
-                <el-dialog v-model="configDialogVisible" title="编辑系统配置" width="700px" @close="configChanged = false">
-                  <el-form :model="configForm" label-width="120px">
+                <el-dialog v-model="configDialogVisible" title="编辑系统配置" :width="isMobile ? '95%' : '700px'" @close="configChanged = false">
+                  <el-form :model="configForm" :label-width="isMobile ? '100px' : '120px'">
                     <el-tabs v-model="configActiveTab">
                       <el-tab-pane label="系统配置" name="system">
                         <el-row :gutter="20">
-                          <el-col :span="12">
+                          <el-col :xs="24" :sm="12">
                             <el-form-item label="系统名称">
                               <el-input v-model="configForm.system.name" @change="checkConfigChange" />
                             </el-form-item>
                           </el-col>
-                          <el-col :span="12">
+                          <el-col :xs="24" :sm="12">
                             <el-form-item label="版本号">
                               <el-input :model-value="getPackageVersion()" disabled />
                             </el-form-item>
                           </el-col>
                         </el-row>
                         <el-row :gutter="20">
-                          <el-col :span="12">
+                          <el-col :xs="24" :sm="12">
                             <el-form-item label="运行环境">
                               <el-select v-model="configForm.system.environment" @change="checkConfigChange" style="width: 100%">
                                 <el-option label="开发环境" value="development" />
@@ -534,26 +539,26 @@
                               </el-select>
                             </el-form-item>
                           </el-col>
-                          <el-col :span="12">
+                          <el-col :xs="24" :sm="12">
                             <el-form-item label="服务器地址">
                               <el-input v-model="configForm.system.serverAddress" @change="checkConfigChange" />
                             </el-form-item>
                           </el-col>
                         </el-row>
                         <el-row :gutter="20">
-                          <el-col :span="12">
+                          <el-col :xs="24" :sm="12">
                             <el-form-item label="端口号">
                               <el-input-number v-model="configForm.system.port" :min="1" :max="65535" style="width: 100%" @change="checkConfigChange" />
                             </el-form-item>
                           </el-col>
-                          <el-col :span="12">
+                          <el-col :xs="24" :sm="12">
                             <el-form-item label="最大连接数">
                               <el-input-number v-model="configForm.system.maxConnections" :min="1" :max="10000" style="width: 100%" @change="checkConfigChange" />
                             </el-form-item>
                           </el-col>
                         </el-row>
                         <el-row :gutter="20">
-                          <el-col :span="12">
+                          <el-col :xs="24" :sm="12">
                             <el-form-item label="日志级别">
                               <el-select v-model="configForm.system.logLevel" @change="checkConfigChange" style="width: 100%">
                                 <el-option label="DEBUG" value="debug" />
@@ -563,7 +568,7 @@
                               </el-select>
                             </el-form-item>
                           </el-col>
-                          <el-col :span="12">
+                          <el-col :xs="24" :sm="12">
                             <el-form-item label="会话超时(分钟)">
                               <el-input-number v-model="configForm.system.timeout" :min="5" :max="1440" style="width: 100%" @change="checkConfigChange" />
                             </el-form-item>
@@ -573,7 +578,7 @@
                       
                       <el-tab-pane label="安全配置" name="security">
                         <el-row :gutter="20">
-                          <el-col :span="12">
+                          <el-col :xs="24" :sm="12">
                             <el-form-item label="SSL证书">
                               <el-select v-model="configForm.security.sslCertificate" @change="checkConfigChange" style="width: 100%">
                                 <el-option label="已启用" value="已启用" />
@@ -581,7 +586,7 @@
                               </el-select>
                             </el-form-item>
                           </el-col>
-                          <el-col :span="12">
+                          <el-col :xs="24" :sm="12">
                             <el-form-item label="加密算法">
                               <el-select v-model="configForm.security.encryptionAlgorithm" @change="checkConfigChange" style="width: 100%">
                                 <el-option label="AES-256" value="AES-256" />
@@ -592,24 +597,24 @@
                           </el-col>
                         </el-row>
                         <el-row :gutter="20">
-                          <el-col :span="12">
+                          <el-col :xs="24" :sm="12">
                             <el-form-item label="会话超时(分钟)">
                               <el-input-number v-model="configForm.security.sessionTimeout" :min="5" :max="1440" style="width: 100%" @change="checkConfigChange" />
                             </el-form-item>
                           </el-col>
-                          <el-col :span="12">
+                          <el-col :xs="24" :sm="12">
                             <el-form-item label="密码最小长度">
                               <el-input-number v-model="configForm.security.passwordMinLength" :min="6" :max="32" style="width: 100%" @change="checkConfigChange" />
                             </el-form-item>
                           </el-col>
                         </el-row>
                         <el-row :gutter="20">
-                          <el-col :span="12">
+                          <el-col :xs="24" :sm="12">
                             <el-form-item label="登录失败次数">
                               <el-input-number v-model="configForm.security.loginFailures" :min="1" :max="10" style="width: 100%" @change="checkConfigChange" />
                             </el-form-item>
                           </el-col>
-                          <el-col :span="12">
+                          <el-col :xs="24" :sm="12">
                             <el-form-item label="锁定时间(分钟)">
                               <el-input-number v-model="configForm.security.lockTime" :min="5" :max="1440" style="width: 100%" @change="checkConfigChange" />
                             </el-form-item>
@@ -619,19 +624,19 @@
 
                       <el-tab-pane label="性能配置" name="performance">
                         <el-row :gutter="20">
-                          <el-col :span="12">
+                          <el-col :xs="24" :sm="12">
                             <el-form-item label="缓存TTL(秒)">
                               <el-input-number v-model="configForm.performance.cacheTtl" :min="60" :max="86400" style="width: 100%" @change="checkConfigChange" />
                             </el-form-item>
                           </el-col>
-                          <el-col :span="12">
+                          <el-col :xs="24" :sm="12">
                             <el-form-item label="速率限制/分">
                               <el-input-number v-model="configForm.performance.rateLimit" :min="10" :max="10000" style="width: 100%" @change="checkConfigChange" />
                             </el-form-item>
                           </el-col>
                         </el-row>
                         <el-row :gutter="20">
-                          <el-col :span="12">
+                          <el-col :xs="24" :sm="12">
                             <el-form-item label="最大会话数">
                               <el-input-number v-model="configForm.performance.maxSessions" :min="1" :max="100" style="width: 100%" @change="checkConfigChange" />
                             </el-form-item>
@@ -643,32 +648,32 @@
                         <el-form-item label="用户注册">
                           <el-switch 
                             v-model="configForm.feature.registrationEnabled" 
-                            active-text="启用" 
-                            inactive-text="禁用"
+                            :active-text="isMobile ? '' : '启用'" 
+                            :inactive-text="isMobile ? '' : '禁用'"
                             @change="checkConfigChange"
                           />
                         </el-form-item>
                         <el-form-item label="密码重置">
                           <el-switch 
                             v-model="configForm.feature.passwordResetEnabled" 
-                            active-text="启用" 
-                            inactive-text="禁用"
+                            :active-text="isMobile ? '' : '启用'" 
+                            :inactive-text="isMobile ? '' : '禁用'"
                             @change="checkConfigChange"
                           />
                         </el-form-item>
                         <el-form-item label="审计日志">
                           <el-switch 
                             v-model="configForm.feature.auditLogEnabled" 
-                            active-text="启用" 
-                            inactive-text="禁用"
+                            :active-text="isMobile ? '' : '启用'" 
+                            :inactive-text="isMobile ? '' : '禁用'"
                             @change="checkConfigChange"
                           />
                         </el-form-item>
                         <el-form-item label="维护模式">
                           <el-switch 
                             v-model="configForm.feature.maintenanceMode" 
-                            active-text="开启" 
-                            inactive-text="关闭"
+                            :active-text="isMobile ? '' : '开启'" 
+                            :inactive-text="isMobile ? '' : '关闭'"
                             @change="checkConfigChange"
                           />
                           <div style="color: #909399; font-size: 12px; margin-top: 5px;">
@@ -701,28 +706,28 @@
                         </div>
                       </template>
                       <el-table :data="maintenancePlans" style="width: 100%">
-                        <el-table-column prop="name" label="计划名称" width="150"></el-table-column>
-                        <el-table-column prop="schedule" label="执行时间" width="200"></el-table-column>
-                        <el-table-column prop="status" label="状态" width="100">
+                        <el-table-column prop="name" label="计划名称" :min-width="isMobile ? 100 : 150"></el-table-column>
+                        <el-table-column prop="schedule" label="执行时间" :min-width="isMobile ? 120 : 200"></el-table-column>
+                        <el-table-column prop="status" label="状态" :width="isMobile ? 80 : 100">
                           <template #default="scope">
                             <el-tag :type="scope.row.status === '已执行' ? 'success' : scope.row.status === '进行中' ? 'warning' : 'info'">
                               {{ scope.row.status }}
                             </el-tag>
                           </template>
                         </el-table-column>
-                        <el-table-column prop="lastRun" label="上次执行" width="180"></el-table-column>
-                        <el-table-column label="操作" width="150">
+                        <el-table-column v-if="!isMobile" prop="lastRun" label="上次执行" width="180"></el-table-column>
+                        <el-table-column label="操作" :width="isMobile ? 120 : 150">
                           <template #default="scope">
                             <el-button size="small" @click="handleRunMaintenance(scope.row)">执行</el-button>
-                            <el-button size="small" @click="handleEditMaintenance(scope.row)">编辑</el-button>
+                            <el-button v-if="!isMobile" size="small" @click="handleEditMaintenance(scope.row)">编辑</el-button>
                           </template>
                         </el-table-column>
                       </el-table>
                     </el-card>
                     
                     <!-- 添加维护计划对话框 -->
-                    <el-dialog v-model="addMaintenanceDialogVisible" title="添加维护计划" width="500px" align-center>
-                      <el-form :model="newMaintenancePlan" label-width="80px">
+                    <el-dialog v-model="addMaintenanceDialogVisible" title="添加维护计划" :width="isMobile ? '95%' : '500px'" align-center>
+                      <el-form :model="newMaintenancePlan" :label-width="isMobile ? '80px' : '100px'">
                         <el-form-item label="计划名称">
                           <el-input 
                             v-model="newMaintenancePlan.name" 
@@ -745,7 +750,7 @@
                           </el-select>
                         </el-form-item>
                         
-                        <el-form-item v-if="newMaintenancePlan.scheduleType === 'daily'" label="执行时间">
+                        <el-form-item v-if="newMaintenancePlan.scheduleType === 'daily'" label="时间">
                           <el-time-picker
                             v-model="newMaintenancePlan.time"
                             format="HH:mm"
@@ -755,9 +760,9 @@
                           />
                         </el-form-item>
                         
-                        <el-form-item v-if="newMaintenancePlan.scheduleType === 'weekly'" label="执行时间">
-                          <div style="display: flex; gap: 10px;">
-                            <el-select v-model="newMaintenancePlan.weekday" placeholder="请选择星期">
+                        <el-form-item v-if="newMaintenancePlan.scheduleType === 'weekly'" label="时间">
+                          <div :style="{ display: 'flex', gap: '10px', flexDirection: isMobile ? 'column' : 'row' }">
+                            <el-select v-model="newMaintenancePlan.weekday" placeholder="请选择星期" :style="{ width: isMobile ? '100%' : 'auto' }">
                               <el-option label="周一" value="周一" />
                               <el-option label="周二" value="周二" />
                               <el-option label="周三" value="周三" />
@@ -770,26 +775,30 @@
                               v-model="newMaintenancePlan.time"
                               format="HH:mm"
                               value-format="HH:mm"
-                              placeholder="请选择执行时间"
+                              placeholder="选择时间"
+                              :style="{ width: isMobile ? '100%' : 'auto' }"
                             />
                           </div>
                         </el-form-item>
                         
-                        <el-form-item v-if="newMaintenancePlan.scheduleType === 'monthly'" label="执行时间">
-                          <div style="display: flex; gap: 10px;">
-                            <el-input-number
-                              v-model="newMaintenancePlan.dayOfMonth"
-                              :min="1"
-                              :max="31"
-                              placeholder="日期"
-                              style="width: 100px;"
-                            />
-                            <span style="line-height: 32px;">日</span>
+                        <el-form-item v-if="newMaintenancePlan.scheduleType === 'monthly'" label="时间">
+                          <div :style="{ display: 'flex', gap: '10px', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center' }">
+                            <div style="display: flex; align-items: center; gap: 5px;">
+                              <el-input-number
+                                v-model="newMaintenancePlan.dayOfMonth"
+                                :min="1"
+                                :max="31"
+                                placeholder="日期"
+                                style="width: 100px;"
+                              />
+                              <span>日</span>
+                            </div>
                             <el-time-picker
                               v-model="newMaintenancePlan.time"
                               format="HH:mm"
                               value-format="HH:mm"
-                              placeholder="请选择执行时间"
+                              placeholder="选择时间"
+                              :style="{ width: isMobile ? '100%' : 'auto' }"
                             />
                           </div>
                         </el-form-item>
@@ -850,7 +859,7 @@
           </el-card>
         </el-col>
         
-        <el-col :span="8">
+        <el-col :xs="24" :lg="8">
           <el-card>
             <template #header>
               <div class="card-header">
@@ -925,6 +934,7 @@
 import { ref, onMounted, computed, nextTick, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { User, House, Coin, CreditCard, Monitor, Setting, CoffeeCup, DataAnalysis } from '@element-plus/icons-vue'
+import ChartContainer from '@/components/ChartContainer.vue'
 import * as echarts from 'echarts'
 import { createChartManager } from '@/utils/chartManager'
 import { formatRelativeTime } from '@/utils/timeUtils'
@@ -938,6 +948,21 @@ import { maintenanceApi } from '../api/maintenance'
 
 // 获取路由器实例
 const router = useRouter()
+
+// 移动端检测
+const isMobile = ref(false)
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
+
+onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
+})
 
 // 图表管理器实例
 let clientChartManager: any
@@ -4122,4 +4147,31 @@ const initChartWithRetry = (elementId: string, option: any, retries = 0) => {
   color: #909399;
 }
 
+@media (max-width: 768px) {
+  .status-grid, 
+  .actions-grid, 
+  .cleanup-actions {
+    grid-template-columns: 1fr;
+  }
+  
+  .component-item {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 15px;
+  }
+  
+  .component-icon {
+    margin-right: 0;
+    margin-bottom: 10px;
+  }
+  
+  .health-score {
+    flex-direction: column;
+  }
+  
+  .dist-label {
+    width: 80px;
+  }
+}
 </style>

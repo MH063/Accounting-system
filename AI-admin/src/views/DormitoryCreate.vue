@@ -2,11 +2,13 @@
   <div class="dormitory-create-container">
     <el-card>
       <template #header>
-        <div class="card-header">
-          <span>创建寝室</span>
-          <div>
-            <el-button @click="goBack">取消</el-button>
-            <el-button type="primary" @click="submitForm" :loading="submitting">创建寝室</el-button>
+        <div class="card-header responsive-header">
+          <span>{{ isMobile ? '创建寝室' : '创建新寝室' }}</span>
+          <div class="header-actions">
+            <el-button @click="goBack" :size="isMobile ? 'small' : 'default'">取消</el-button>
+            <el-button type="primary" @click="submitForm" :loading="submitting" :size="isMobile ? 'small' : 'default'">
+              {{ isMobile ? '创建' : '创建寝室' }}
+            </el-button>
           </div>
         </div>
       </template>
@@ -15,11 +17,12 @@
         ref="dormFormRef"
         :model="dormForm"
         :rules="dormFormRules"
-        label-width="120px"
+        :label-width="isMobile ? '80px' : '120px'"
+        :label-position="isMobile ? 'top' : 'left'"
         class="dorm-form"
       >
-        <el-row :gutter="20">
-          <el-col :span="8">
+        <el-row :gutter="isMobile ? 0 : 20">
+          <el-col :xs="24" :sm="8">
             <el-form-item label="宿舍编码" prop="dormCode">
               <el-input
                 v-model="dormForm.dormCode"
@@ -28,7 +31,7 @@
               />
             </el-form-item>
           </el-col>
-          <el-col :span="8">
+          <el-col :xs="24" :sm="8">
             <el-form-item label="寝室名称" prop="name">
               <el-input
                 v-model="dormForm.name"
@@ -37,7 +40,7 @@
               />
             </el-form-item>
           </el-col>
-          <el-col :span="8">
+          <el-col :xs="24" :sm="8">
             <el-form-item label="寝室类型" prop="type">
               <el-select
                 v-model="dormForm.type"
@@ -52,8 +55,8 @@
           </el-col>
         </el-row>
         
-        <el-row :gutter="20">
-          <el-col :span="12">
+        <el-row :gutter="isMobile ? 0 : 20">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="楼栋" prop="building">
               <el-input
                 v-model="dormForm.building"
@@ -63,7 +66,7 @@
             </el-form-item>
           </el-col>
           
-          <el-col :span="12">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="房间号" prop="roomNumber">
               <el-input
                 v-model="dormForm.roomNumber"
@@ -80,7 +83,7 @@
             :min="1"
             :max="20"
             show-input
-            style="width: 300px"
+            :style="{ width: isMobile ? '100%' : '300px' }"
           />
         </el-form-item>
         
@@ -121,13 +124,15 @@
         </el-form-item>
         
         <el-form-item label="寝室成员" prop="members">
-          <el-transfer
-            v-model="dormForm.members"
-            :data="availableMembers"
-            :titles="['可选成员', '已选成员']"
-            filterable
-            filter-placeholder="请输入成员姓名"
-          />
+          <div class="transfer-wrapper" :class="{ 'is-mobile': isMobile }">
+            <el-transfer
+              v-model="dormForm.members"
+              :data="availableMembers"
+              :titles="isMobile ? ['可选', '已选'] : ['可选成员', '已选成员']"
+              filterable
+              filter-placeholder="姓名"
+            />
+          </div>
         </el-form-item>
         
         <el-form-item label="寝室长" prop="leader">
@@ -151,7 +156,8 @@
     <el-dialog
       v-model="rulesDialogVisible"
       title="寝室规则确认"
-      width="500px"
+      :width="isMobile ? '90%' : '500px'"
+      :fullscreen="isMobile"
     >
       <div class="rules-confirmation">
         <h3>寝室规则</h3>
@@ -183,7 +189,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { dormitoryApi } from '@/api/dormitory'
@@ -194,6 +200,23 @@ const router = useRouter()
 // 响应式数据
 const dormFormRef = ref()
 const submitting = ref(false)
+const isMobile = ref(false)
+
+// 检查是否为移动端
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
+
+// 组件挂载时的操作
+onMounted(() => {
+  console.log('🏠 寝室创建页面加载完成')
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
+})
 
 const dormForm = reactive({
   dormCode: '',
@@ -350,10 +373,7 @@ const confirmRules = async () => {
   }
 }
 
-// 组件挂载时的操作
-onMounted(() => {
-  console.log('🏠 寝室创建页面加载完成')
-})
+
 </script>
 
 <style scoped>
@@ -365,6 +385,11 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
 }
 
 .dorm-form {
@@ -405,7 +430,50 @@ onMounted(() => {
   text-align: right;
 }
 
+.transfer-wrapper :deep(.el-transfer) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.transfer-wrapper.is-mobile :deep(.el-transfer) {
+  flex-direction: column;
+}
+
+.transfer-wrapper.is-mobile :deep(.el-transfer-panel) {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.transfer-wrapper.is-mobile :deep(.el-transfer__buttons) {
+  padding: 10px 0;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+}
+
+.transfer-wrapper.is-mobile :deep(.el-transfer__buttons .el-button) {
+  margin: 0 5px;
+}
+
+.transfer-wrapper.is-mobile :deep(.el-transfer__button:first-child) {
+  transform: rotate(90deg);
+}
+
+.transfer-wrapper.is-mobile :deep(.el-transfer__button:last-child) {
+  transform: rotate(90deg);
+}
+
 @media (max-width: 768px) {
+  .dormitory-create-container {
+    padding: 10px;
+  }
+  
+  .card-header {
+    flex-direction: row;
+    align-items: center;
+  }
+  
   .dorm-form {
     max-width: 100%;
   }

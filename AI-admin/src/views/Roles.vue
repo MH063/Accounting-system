@@ -4,16 +4,16 @@
       <template #header>
         <div class="card-header">
           <span>角色管理</span>
-          <el-button type="primary" @click="handleAdd">新增角色</el-button>
+          <el-button type="primary" @click="handleAdd" :size="isMobile ? 'small' : 'default'">新增角色</el-button>
         </div>
       </template>
       
-      <el-table :data="tableData" style="width: 100%">
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="name" label="角色名称" />
-        <el-table-column prop="description" label="描述" />
-        <el-table-column prop="createTime" label="创建时间" />
-        <el-table-column label="操作" width="180">
+      <el-table :data="tableData" style="width: 100%" :size="isMobile ? 'small' : 'default'">
+        <el-table-column prop="id" label="ID" width="80" v-if="!isMobile" />
+        <el-table-column prop="name" label="角色名称" :min-width="120" />
+        <el-table-column prop="description" label="描述" min-width="150" v-if="!isMobile" />
+        <el-table-column prop="createTime" label="创建时间" width="180" v-if="!isMobile" />
+        <el-table-column label="操作" :width="isMobile ? 120 : 180" fixed="right">
           <template #default="scope">
             <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
             <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
@@ -26,8 +26,9 @@
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
           :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
+          :layout="isMobile ? 'total, prev, next' : 'total, sizes, prev, pager, next, jumper'"
           :total="total"
+          :small="isMobile"
           @size-change="handleSizeChange"
           @current-change="handleCurrentChange"
         />
@@ -37,8 +38,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
+
+// 响应式数据
+const isMobile = ref(false)
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
+
+onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
+})
 
 // 表格数据
 const tableData = ref([

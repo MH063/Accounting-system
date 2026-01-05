@@ -4,32 +4,34 @@
       <slot name="header"></slot>
     </div>
     
-    <el-table
-      :data="tableData"
-      :loading="loading"
-      :border="border"
-      :stripe="stripe"
-      :size="size"
-      :height="height"
-      :max-height="maxHeight"
-      :fit="fit"
-      :highlight-current-row="highlightCurrentRow"
-      :show-header="showHeader"
-      :row-class-name="rowClassName"
-      :cell-class-name="cellClassName"
-      :header-cell-class-name="headerCellClassName"
-      @selection-change="handleSelectionChange"
-      @select="handleSelect"
-      @select-all="handleSelectAll"
-      @current-change="handleCurrentChange"
-      @row-click="handleRowClick"
-      @row-dblclick="handleRowDblclick"
-      @cell-click="handleCellClick"
-      @cell-dblclick="handleCellDblclick"
-      @sort-change="handleSortChange"
-    >
-      <slot></slot>
-    </el-table>
+    <div class="table-wrapper">
+      <el-table
+        :data="tableData"
+        :loading="loading"
+        :border="border"
+        :stripe="stripe"
+        :size="responsiveSize"
+        :height="height"
+        :max-height="maxHeight"
+        :fit="fit"
+        :highlight-current-row="highlightCurrentRow"
+        :show-header="showHeader"
+        :row-class-name="rowClassName"
+        :cell-class-name="cellClassName"
+        :header-cell-class-name="headerCellClassName"
+        @selection-change="handleSelectionChange"
+        @select="handleSelect"
+        @select-all="handleSelectAll"
+        @current-change="handleCurrentChange"
+        @row-click="handleRowClick"
+        @row-dblclick="handleRowDblclick"
+        @cell-click="handleCellClick"
+        @cell-dblclick="handleCellDblclick"
+        @sort-change="handleSortChange"
+      >
+        <slot></slot>
+      </el-table>
+    </div>
     
     <div class="table-footer" v-if="showPagination || $slots.footer">
       <div class="pagination-container" v-if="showPagination">
@@ -38,7 +40,8 @@
           v-model:page-size="pageSize"
           :page-sizes="pageSizes"
           :total="total"
-          :layout="paginationLayout"
+          :layout="responsivePaginationLayout"
+          :pager-count="isMobile ? 5 : 7"
           @size-change="handleSizeChange"
           @current-change="handleCurrentPageChange"
         />
@@ -98,6 +101,33 @@ const props = withDefaults(defineProps<Props>(), {
   pageSizes: () => [10, 15, 30, 50],
   total: 0,
   paginationLayout: 'total, sizes, prev, pager, next, jumper'
+})
+
+// 移动端检测
+const isMobile = ref(false)
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
+
+onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
+})
+
+// 响应式表格尺寸
+const responsiveSize = computed(() => {
+  if (isMobile.value) return 'small'
+  return props.size
+})
+
+// 响应式分页布局
+const responsivePaginationLayout = computed(() => {
+  if (isMobile.value) return 'prev, pager, next'
+  return props.paginationLayout
 })
 
 // 定义事件
@@ -176,15 +206,6 @@ const handleCurrentPageChange = (page: number) => {
   emit('current-page-change', page)
 }
 
-// 生命周期钩子
-onMounted(() => {
-  console.log('CommonTable component mounted')
-})
-
-onUnmounted(() => {
-  console.log('CommonTable component unmounted')
-})
-
 // 暴露方法给父组件
 defineExpose({
   currentPage,
@@ -194,35 +215,57 @@ defineExpose({
 
 <style scoped>
 .common-table-container {
+  background: #fff;
+  border-radius: 4px;
   width: 100%;
 }
 
 .table-header {
-  margin-bottom: 16px;
+  padding: 15px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .table-footer {
-  margin-top: 16px;
+  padding: 15px;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
+  border-top: 1px solid #ebeef5;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .pagination-container {
-  flex: 1;
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
 }
 
-/* 响应式设计 */
 @media (max-width: 768px) {
+  .table-header {
+    padding: 10px;
+  }
+  
   .table-footer {
-    flex-direction: column;
-    gap: 12px;
+    padding: 10px;
+    justify-content: center;
   }
   
   .pagination-container {
-    width: 100%;
-    display: flex;
     justify-content: center;
+  }
+  
+  /* 针对移动端优化表格单元格内容换行 */
+  :deep(.el-table .cell) {
+    white-space: normal;
+    word-break: break-all;
+    padding: 0 5px;
   }
 }
 </style>

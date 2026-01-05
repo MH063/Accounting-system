@@ -1,95 +1,103 @@
 <template>
-  <div class="expense-review-container">
-    <el-card>
+  <div class="expense-review-container" :class="{ 'is-mobile': isMobile }">
+    <el-card shadow="never">
       <template #header>
         <div class="card-header">
-          <span>费用审核</span>
-          <div>
-            <el-button @click="goBack">返回</el-button>
+          <div class="header-title">
+            <span>费用审核</span>
+            <el-tag v-if="pendingExpenses.length > 0" size="small" type="danger" round class="count-tag">
+              {{ pendingExpenses.length }}
+            </el-tag>
+          </div>
+          <div class="header-actions">
+            <el-button @click="goBack" :size="isMobile ? 'small' : 'default'">返回</el-button>
           </div>
         </div>
       </template>
       
       <!-- 待审核费用列表 -->
       <div class="pending-expenses">
-        <h3>待审核费用 ({{ pendingExpenses.length }})</h3>
-        
-        <el-table 
-          ref="multipleTableRef"
-          :data="pendingExpenses" 
-          style="width: 100%"
-          @selection-change="handleSelectionChange"
-        >
-          <el-table-column type="selection" width="55" />
-          <el-table-column prop="title" label="费用标题" min-width="150" />
-          <el-table-column prop="applicant" label="申请人" width="100" />
-          <el-table-column prop="amount" label="金额" width="100" align="right">
-            <template #default="{ row }">
-              ¥{{ formatCurrency(row.amount) }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="date" label="费用日期" width="120">
-            <template #default="{ row }">
-              {{ formatDate(row.date) }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="category" label="类别" width="100">
-            <template #default="{ row }">
-              <el-tag :type="getCategoryType(row.category)">
-                {{ getCategoryText(row.category) }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="150" fixed="right">
-            <template #default="{ row }">
-              <el-button 
-                type="primary" 
-                size="small" 
-                @click="reviewExpense(row)"
-              >
-                审核
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+        <div class="table-responsive-container">
+          <el-table 
+            ref="multipleTableRef"
+            :data="pendingExpenses" 
+            style="width: 100%"
+            v-loading="loading"
+            @selection-change="handleSelectionChange"
+          >
+            <el-table-column type="selection" width="45" />
+            <el-table-column prop="title" label="费用标题" min-width="150" show-overflow-tooltip />
+            <el-table-column prop="applicant" label="申请人" width="90" />
+            <el-table-column prop="amount" label="金额" width="100" align="right">
+              <template #default="{ row }">
+                <span class="table-amount">¥{{ formatCurrency(row.amount) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="date" label="费用日期" width="100">
+              <template #default="{ row }">
+                {{ formatDate(row.date) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="category" label="类别" width="90">
+              <template #default="{ row }">
+                <el-tag :type="getCategoryType(row.category)" size="small">
+                  {{ getCategoryText(row.category) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="80" fixed="right">
+              <template #default="{ row }">
+                <el-button 
+                  type="primary" 
+                  size="small" 
+                  link
+                  @click="reviewExpense(row)"
+                >
+                  审核
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
         
         <!-- 分页 -->
-        <div class="pagination-container" v-if="total > 0">
+        <div class="pagination-container" :class="{ 'is-mobile': isMobile }" v-if="total > 0">
           <el-pagination
             v-model:current-page="currentPage"
             v-model:page-size="pageSize"
             :page-sizes="[10, 20, 50, 100]"
-            layout="total, sizes, prev, pager, next, jumper"
+            :layout="isMobile ? 'prev, pager, next' : 'total, sizes, prev, pager, next, jumper'"
             :total="total"
+            :small="isMobile"
             @size-change="handleSizeChange"
             @current-change="handleCurrentChange"
           />
         </div>
         
         <!-- 批量操作 -->
-        <div class="batch-actions" v-if="selectedExpenses.length > 0">
-          <el-alert
-            :title="`已选择 ${selectedExpenses.length} 项费用`"
-            type="info"
-            :closable="false"
-            class="selection-alert"
-          />
+        <div class="batch-actions" v-if="selectedExpenses.length > 0" :class="{ 'is-mobile': isMobile }">
+          <div class="selection-info">
+            <el-icon><InfoFilled /></el-icon>
+            <span>已选择 {{ selectedExpenses.length }} 项费用</span>
+          </div>
           <div class="batch-buttons">
             <el-button 
               type="success" 
               @click="batchApprove"
               :loading="batchProcessing"
+              :size="isMobile ? 'small' : 'default'"
             >
-              批量审核通过 ({{ selectedExpenses.length }})
+              {{ isMobile ? '通过' : '批量审核通过' }}
             </el-button>
             <el-button 
               type="danger" 
               @click="batchReject"
               :loading="batchProcessing"
+              :size="isMobile ? 'small' : 'default'"
             >
-              批量审核拒绝 ({{ selectedExpenses.length }})
+              {{ isMobile ? '拒绝' : '批量审核拒绝' }}
             </el-button>
-            <el-button @click="clearSelection">取消选择</el-button>
+            <el-button @click="clearSelection" :size="isMobile ? 'small' : 'default'">取消</el-button>
           </div>
         </div>
       </div>
@@ -99,16 +107,23 @@
     <el-dialog
       v-model="reviewDialogVisible"
       title="费用审核"
-      width="600px"
+      :width="isMobile ? '95%' : '600px'"
+      :fullscreen="isMobile"
       :before-close="handleDialogClose"
+      class="review-dialog-container"
     >
-      <div v-if="currentExpense" class="review-dialog">
-        <el-descriptions title="费用信息" :column="1" border>
-          <el-descriptions-item label="费用标题">
+      <div v-if="currentExpense" class="review-dialog-body">
+        <el-descriptions 
+          title="费用信息" 
+          :column="isMobile ? 1 : 2" 
+          border
+          size="small"
+        >
+          <el-descriptions-item label="费用标题" :span="isMobile ? 1 : 2">
             {{ currentExpense.title }}
           </el-descriptions-item>
           <el-descriptions-item label="费用类别">
-            <el-tag :type="getCategoryType(currentExpense.category)">
+            <el-tag :type="getCategoryType(currentExpense.category)" size="small">
               {{ getCategoryText(currentExpense.category) }}
             </el-tag>
           </el-descriptions-item>
@@ -121,64 +136,59 @@
           <el-descriptions-item label="申请人">
             {{ currentExpense.applicant }}
           </el-descriptions-item>
-          <el-descriptions-item label="申请时间">
+          <el-descriptions-item label="申请时间" :span="isMobile ? 1 : 2">
             {{ formatDateTime(currentExpense.createdAt) }}
           </el-descriptions-item>
         </el-descriptions>
         
         <div class="section">
-          <h4>费用说明</h4>
-          <p class="description">{{ currentExpense.description }}</p>
+          <h4 class="section-title">费用说明</h4>
+          <div class="description-box">{{ currentExpense.description || '无说明' }}</div>
         </div>
         
         <div class="section">
-          <h4>参与成员分摊</h4>
-          <el-table :data="currentExpense.participants" style="width: 100%">
-            <el-table-column prop="name" label="成员" />
-            <el-table-column prop="amount" label="分摊金额">
-              <template #default="{ row }">
-                ¥{{ formatCurrency(row.amount) }}
-              </template>
-            </el-table-column>
-            <el-table-column prop="percentage" label="分摊比例">
-              <template #default="{ row }">
-                {{ row.percentage }}%
-              </template>
-            </el-table-column>
-          </el-table>
-        </div>
-        
-        <div class="section" v-if="currentExpense.attachments && currentExpense.attachments.length > 0">
-          <h4>附件</h4>
-          <div class="attachments">
-            <el-card 
-              v-for="attachment in currentExpense.attachments" 
-              :key="attachment.id"
-              class="attachment-card"
-            >
-              <div class="attachment-content">
-                <el-icon class="attachment-icon"><Document /></el-icon>
-                <div class="attachment-info">
-                  <div class="attachment-name">{{ attachment.name }}</div>
-                  <div class="attachment-size">{{ formatFileSize(attachment.size) }}</div>
-                </div>
-                <el-button 
-                  type="primary" 
-                  link
-                  @click="downloadAttachment(attachment)"
-                >
-                  下载
-                </el-button>
-              </div>
-            </el-card>
+          <h4 class="section-title">参与成员分摊</h4>
+          <div class="table-responsive-container mini-table">
+            <el-table :data="currentExpense.participants" style="width: 100%" size="small" border>
+              <el-table-column prop="name" label="成员" min-width="80" />
+              <el-table-column prop="amount" label="金额" width="90" align="right">
+                <template #default="{ row }">
+                  ¥{{ formatCurrency(row.amount) }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="percentage" label="比例" width="70" align="center">
+                <template #default="{ row }">
+                  {{ row.percentage }}%
+                </template>
+              </el-table-column>
+            </el-table>
           </div>
         </div>
         
-        <div class="section">
-          <h4>审核意见</h4>
-          <el-radio-group v-model="reviewResult" class="review-result">
-            <el-radio label="approved">通过</el-radio>
-            <el-radio label="rejected">拒绝</el-radio>
+        <div class="section" v-if="currentExpense.attachments && currentExpense.attachments.length > 0">
+          <h4 class="section-title">附件 ({{ currentExpense.attachments.length }})</h4>
+          <div class="attachments-grid">
+            <div 
+              v-for="attachment in currentExpense.attachments" 
+              :key="attachment.id"
+              class="attachment-item"
+              @click="downloadAttachment(attachment)"
+            >
+              <el-icon class="attachment-icon"><Document /></el-icon>
+              <div class="attachment-info">
+                <div class="attachment-name">{{ attachment.name }}</div>
+                <div class="attachment-size">{{ formatFileSize(attachment.size) }}</div>
+              </div>
+              <el-button type="primary" link size="small">下载</el-button>
+            </div>
+          </div>
+        </div>
+        
+        <div class="section review-action-section">
+          <h4 class="section-title">审核决策</h4>
+          <el-radio-group v-model="reviewResult" class="review-result-group">
+            <el-radio-button label="approved">通过</el-radio-button>
+            <el-radio-button label="rejected">拒绝</el-radio-button>
           </el-radio-group>
           
           <el-input
@@ -186,19 +196,20 @@
             v-model="rejectReason"
             type="textarea"
             :rows="3"
-            placeholder="请输入拒绝原因"
-            class="reject-reason"
+            placeholder="请输入拒绝原因 (必填)"
+            class="reject-reason-input"
           />
         </div>
       </div>
       
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="reviewDialogVisible = false">取消</el-button>
+          <el-button @click="reviewDialogVisible = false" :size="isMobile ? 'default' : 'default'">取消</el-button>
           <el-button 
             type="primary" 
             @click="submitReview"
             :loading="submittingReview"
+            :size="isMobile ? 'default' : 'default'"
           >
             提交审核
           </el-button>
@@ -209,15 +220,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Document } from '@element-plus/icons-vue'
+import { Document, InfoFilled } from '@element-plus/icons-vue'
 import { feeApi } from '@/api/fee'
 
 // 路由实例
 const router = useRouter()
 const route = useRoute()
+
+// 移动端适配
+const isMobile = ref(false)
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
 
 // 从路由参数获取费用ID
 const routeId = computed(() => {
@@ -592,6 +609,8 @@ const downloadAttachment = (attachment: any) => {
 
 // 组件挂载时的操作
 onMounted(async () => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
   console.log('🔍 费用审核页面加载完成')
   await fetchPendingExpenses()
   
@@ -606,11 +625,21 @@ onMounted(async () => {
     }
   }
 })
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
+})
 </script>
 
 <style scoped>
 .expense-review-container {
   padding: 20px;
+  min-height: calc(100vh - 120px);
+  background-color: #f0f2f5;
+}
+
+.expense-review-container.is-mobile {
+  padding: 10px;
 }
 
 .card-header {
@@ -619,120 +648,235 @@ onMounted(async () => {
   align-items: center;
 }
 
-.pending-expenses h3 {
-  margin: 0 0 15px 0;
-  font-size: 18px;
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
   font-weight: 600;
 }
 
+.count-tag {
+  font-weight: normal;
+}
+
+.pending-expenses {
+  margin-top: -10px;
+}
+
+.table-responsive-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 15px;
+}
+
+.table-amount {
+  font-weight: 600;
+  color: #f56c6c;
+}
+
 .pagination-container {
-  margin-top: 20px;
+  margin-top: 15px;
   display: flex;
   justify-content: flex-end;
 }
 
-.batch-actions {
-  margin-top: 20px;
-  padding: 15px;
-  background: #f5f7fa;
-  border-radius: 8px;
+.pagination-container.is-mobile {
+  justify-content: center;
+  margin-top: 10px;
 }
 
-.selection-alert {
-  margin-bottom: 15px;
+.batch-actions {
+  margin-top: 20px;
+  padding: 12px 16px;
+  background: #fdf6ec;
+  border: 1px solid #faecd8;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  animation: slideUp 0.3s ease-out;
+}
+
+.batch-actions.is-mobile {
+  flex-direction: column;
+  gap: 12px;
+  align-items: stretch;
+  padding: 12px;
+}
+
+.selection-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #e6a23c;
+  font-size: 14px;
 }
 
 .batch-buttons {
   display: flex;
   gap: 10px;
-  flex-wrap: wrap;
 }
 
-.review-dialog {
-  padding: 10px 0;
+.batch-actions.is-mobile .batch-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.batch-actions.is-mobile .batch-buttons .el-button {
+  margin: 0;
+  padding: 8px 4px;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* 审核对话框样式 */
+.review-dialog-body {
+  padding: 0;
 }
 
 .amount {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   color: #f56c6c;
 }
 
 .section {
-  margin: 20px 0;
+  margin-top: 20px;
 }
 
-.section h4 {
+.section-title {
   margin: 0 0 10px 0;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
+  color: #303133;
+  padding-left: 8px;
+  border-left: 3px solid #409eff;
 }
 
-.description {
+.description-box {
+  padding: 12px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
   color: #606266;
+  font-size: 13px;
   line-height: 1.6;
+  border: 1px solid #ebeef5;
 }
 
-.review-result {
-  margin-bottom: 15px;
+.mini-table :deep(.el-table) {
+  font-size: 12px;
 }
 
-.reject-reason {
-  margin-top: 10px;
-}
-
-.attachments {
+.attachments-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 15px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
 }
 
-.attachment-card {
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.attachment-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.attachment-content {
+.attachment-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  padding: 8px 12px;
+  background-color: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.attachment-item:hover {
+  border-color: #409eff;
+  background-color: #f0f7ff;
 }
 
 .attachment-icon {
-  font-size: 32px;
+  font-size: 24px;
   color: #409eff;
 }
 
 .attachment-info {
   flex: 1;
+  min-width: 0;
 }
 
 .attachment-name {
-  font-weight: 600;
-  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .attachment-size {
-  font-size: 12px;
+  font-size: 11px;
   color: #909399;
 }
 
-.dialog-footer {
-  text-align: right;
+.review-action-section {
+  padding: 15px;
+  background-color: #f0f7ff;
+  border-radius: 8px;
+  border: 1px solid #d9ecff;
+}
+
+.review-result-group {
+  margin-bottom: 12px;
+  display: block;
+}
+
+.reject-reason-input {
+  margin-top: 10px;
 }
 
 @media (max-width: 768px) {
-  .attachments {
+  .expense-review-container {
+    padding: 0;
+  }
+  
+  .expense-review-container :deep(.el-card) {
+    border: none;
+    border-radius: 0;
+  }
+  
+  .expense-review-container :deep(.el-card__header) {
+    padding: 12px 15px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: #fff;
+  }
+  
+  .expense-review-container :deep(.el-card__body) {
+    padding: 10px;
+  }
+  
+  .review-dialog-container :deep(.el-dialog__body) {
+    padding: 15px 10px;
+  }
+  
+  .section {
+    margin-top: 15px;
+  }
+  
+  .attachments-grid {
     grid-template-columns: 1fr;
   }
   
-  .batch-buttons {
-    flex-direction: column;
+  .dialog-footer {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  
+  .dialog-footer .el-button {
+    margin: 0;
+    width: 100%;
   }
 }
 </style>

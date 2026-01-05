@@ -1,10 +1,10 @@
 <template>
-  <div class="chart-container" :style="{ height: containerHeight }">
+  <div class="chart-container" :class="{ 'is-mobile': isMobile }" :style="{ height: containerHeight }">
     <div class="chart-header" v-if="showHeader">
       <div class="chart-title">{{ title }}</div>
       <div class="chart-actions">
         <slot name="actions"></slot>
-        <el-dropdown v-if="showExport" @command="handleExport">
+        <el-dropdown v-if="showExport && !isMobile" @command="handleExport">
           <el-button size="small" type="primary">
             导出 <el-icon><arrow-down /></el-icon>
           </el-button>
@@ -23,10 +23,11 @@
           @click="handleRefresh"
           :loading="refreshing"
         >
-          {{ refreshing ? '刷新中...' : '刷新' }}
+          <el-icon v-if="isMobile"><Refresh /></el-icon>
+          <span v-else>{{ refreshing ? '刷新中...' : '刷新' }}</span>
         </el-button>
         <el-button 
-          v-if="showFullscreen" 
+          v-if="showFullscreen && !isMobile" 
           size="small" 
           @click="toggleFullscreen"
         >
@@ -51,17 +52,17 @@
       </div>
       
       <div v-else-if="error" class="chart-error">
-        <el-result icon="error" title="图表加载失败" :sub-title="error">
+        <el-result icon="error" :title="isMobile ? '' : '图表加载失败'" :sub-title="error">
           <template #extra>
-            <el-button type="primary" @click="handleRetry">重试</el-button>
+            <el-button type="primary" size="small" @click="handleRetry">重试</el-button>
           </template>
         </el-result>
       </div>
       
       <div v-else-if="noData" class="chart-no-data">
-        <el-result icon="info" title="暂无数据">
+        <el-result icon="info" :title="isMobile ? '' : '暂无数据'">
           <template #extra>
-            <el-button type="primary" @click="handleRetry">刷新</el-button>
+            <el-button type="primary" size="small" @click="handleRetry">刷新</el-button>
           </template>
         </el-result>
       </div>
@@ -76,7 +77,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { ElButton, ElDropdown, ElDropdownMenu, ElDropdownItem, ElSkeleton, ElSkeletonItem, ElResult, ElIcon } from 'element-plus'
-import { ArrowDown } from '@element-plus/icons-vue'
+import { ArrowDown, Refresh } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 
 // 定义属性
@@ -120,6 +121,12 @@ const props = withDefaults(defineProps<Props>(), {
   theme: undefined
 })
 
+// 移动端检测
+const isMobile = ref(false)
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
+
 // 定义事件
 const emit = defineEmits<{
   (e: 'export', type: 'png' | 'jpg' | 'svg' | 'pdf'): void
@@ -153,6 +160,9 @@ const chartHeight = computed(() => {
 })
 
 // 方法
+/**
+ * 初始化图表
+ */
 const initChart = () => {
   if (!chartRef.value) return
   
@@ -173,18 +183,29 @@ const initChart = () => {
   emit('chart-ready', chartInstance.value)
 }
 
+/**
+ * 调整图表大小
+ */
 const resizeChart = () => {
   if (chartInstance.value) {
     chartInstance.value.resize()
   }
 }
 
+/**
+ * 更新图表选项
+ * @param options 图表配置项
+ */
 const updateChart = (options: any) => {
   if (chartInstance.value && options) {
     chartInstance.value.setOption(options, true)
   }
 }
 
+/**
+ * 处理导出
+ * @param type 导出文件类型
+ */
 const handleExport = (type: 'png' | 'jpg' | 'svg' | 'pdf') => {
   emit('export', type)
   
@@ -221,6 +242,9 @@ const handleExport = (type: 'png' | 'jpg' | 'svg' | 'pdf') => {
   }
 }
 
+/**
+ * 处理刷新
+ */
 const handleRefresh = async () => {
   refreshing.value = true
   emit('refresh')
@@ -229,10 +253,16 @@ const handleRefresh = async () => {
   refreshing.value = false
 }
 
+/**
+ * 处理重试
+ */
 const handleRetry = () => {
   emit('retry')
 }
 
+/**
+ * 切换全屏状态
+ */
 const toggleFullscreen = () => {
   isFullscreen.value = !isFullscreen.value
   nextTick(() => {
@@ -240,6 +270,9 @@ const toggleFullscreen = () => {
   })
 }
 
+/**
+ * 退出全屏
+ */
 const exitFullscreen = () => {
   if (isFullscreen.value) {
     isFullscreen.value = false
@@ -264,7 +297,13 @@ watch(() => props.loading, (newLoading) => {
 
 // 生命周期钩子
 onMounted(() => {
-  initChart()
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+  
+  // 使用nextTick确保DOM完全渲染后再初始化图表
+  nextTick(() => {
+    initChart()
+  })
   
   // 添加窗口大小变化监听
   if (props.autoResize) {
@@ -286,6 +325,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
+  
   // 清理图表实例
   if (chartInstance.value) {
     chartInstance.value.dispose()
@@ -306,39 +347,47 @@ defineExpose({
   chartInstance,
   resizeChart,
   updateChart,
-  initChart
+  initChart,
+  isFullscreen,
+  refreshing,
+  resizeObserver,
+  isMobile
 })
 </script>
 
 <style scoped>
 .chart-container {
-  width: 100%;
-  border: 1px solid #ebeef5;
-  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
   background-color: #fff;
+  border-radius: 8px;
   overflow: hidden;
+  position: relative;
 }
 
 .chart-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 12px 20px;
-  border-bottom: 1px solid #ebeef5;
+  justify-content: space-between;
+  padding: 10px 15px;
+  border-bottom: 1px solid #f0f0f0;
+  height: 50px;
 }
 
 .chart-title {
   font-size: 16px;
-  font-weight: 500;
+  font-weight: bold;
   color: #303133;
 }
 
 .chart-actions {
   display: flex;
-  gap: 10px;
+  align-items: center;
+  gap: 8px;
 }
 
 .chart-wrapper {
+  flex: 1;
   position: relative;
   width: 100%;
 }
@@ -346,16 +395,6 @@ defineExpose({
 .chart-content {
   width: 100%;
   height: 100%;
-}
-
-.fullscreen-chart {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw !important;
-  height: 100vh !important;
-  z-index: 9999;
-  background-color: #fff;
 }
 
 .chart-loading,
@@ -369,26 +408,38 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: rgba(255, 255, 255, 0.9);
-  z-index: 100;
+  background-color: rgba(255, 255, 255, 0.8);
+  z-index: 10;
 }
 
 .chart-footer {
-  padding: 12px 20px;
-  border-top: 1px solid #ebeef5;
+  padding: 8px 15px;
+  border-top: 1px solid #f0f0f0;
+  height: 40px;
 }
 
-/* 响应式设计 */
+.fullscreen-chart {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 2000 !important;
+  background-color: #fff !important;
+}
+
+/* 移动端适配 */
 @media (max-width: 768px) {
   .chart-header {
-    flex-direction: column;
-    gap: 10px;
-    align-items: flex-start;
+    padding: 8px 12px;
   }
   
-  .chart-actions {
-    width: 100%;
-    justify-content: flex-end;
+  .chart-title {
+    font-size: 14px;
+  }
+  
+  .chart-actions :deep(.el-button--small) {
+    padding: 5px 8px;
   }
 }
 </style>

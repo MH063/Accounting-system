@@ -9,58 +9,58 @@
       </template>
       
       <!-- 仲裁统计 -->
-      <el-row :gutter="20" style="margin-bottom: 20px;">
-        <el-col :span="6">
-          <el-card class="stat-card">
+      <el-row :gutter="isMobile ? 10 : 20" style="margin-bottom: 20px;">
+        <el-col :xs="24" :sm="12" :md="6" style="margin-bottom: 10px;">
+          <el-card class="stat-card" shadow="hover">
             <div class="stat-item">
-              <div class="stat-icon bg-primary">
-                <el-icon size="24"><Document /></el-icon>
+              <div class="stat-icon bg-primary" :style="isMobile ? 'width: 40px; height: 40px;' : ''">
+                <el-icon :size="isMobile ? 20 : 24"><Document /></el-icon>
               </div>
               <div class="stat-content">
                 <div class="stat-title">待仲裁争议</div>
-                <div class="stat-value">{{ stats.pending }}</div>
+                <div class="stat-value" :style="isMobile ? 'font-size: 20px;' : ''">{{ stats.pending }}</div>
               </div>
             </div>
           </el-card>
         </el-col>
         
-        <el-col :span="6">
-          <el-card class="stat-card">
+        <el-col :xs="24" :sm="12" :md="6" style="margin-bottom: 10px;">
+          <el-card class="stat-card" shadow="hover">
             <div class="stat-item">
-              <div class="stat-icon bg-warning">
-                <el-icon size="24"><Warning /></el-icon>
+              <div class="stat-icon bg-warning" :style="isMobile ? 'width: 40px; height: 40px;' : ''">
+                <el-icon :size="isMobile ? 20 : 24"><Warning /></el-icon>
               </div>
               <div class="stat-content">
                 <div class="stat-title">仲裁中争议</div>
-                <div class="stat-value">{{ stats.inProgress }}</div>
+                <div class="stat-value" :style="isMobile ? 'font-size: 20px;' : ''">{{ stats.inProgress }}</div>
               </div>
             </div>
           </el-card>
         </el-col>
         
-        <el-col :span="6">
-          <el-card class="stat-card">
+        <el-col :xs="24" :sm="12" :md="6" style="margin-bottom: 10px;">
+          <el-card class="stat-card" shadow="hover">
             <div class="stat-item">
-              <div class="stat-icon bg-success">
-                <el-icon size="24"><Check /></el-icon>
+              <div class="stat-icon bg-success" :style="isMobile ? 'width: 40px; height: 40px;' : ''">
+                <el-icon :size="isMobile ? 20 : 24"><Check /></el-icon>
               </div>
               <div class="stat-content">
                 <div class="stat-title">已裁决争议</div>
-                <div class="stat-value">{{ stats.decided }}</div>
+                <div class="stat-value" :style="isMobile ? 'font-size: 20px;' : ''">{{ stats.decided }}</div>
               </div>
             </div>
           </el-card>
         </el-col>
         
-        <el-col :span="6">
-          <el-card class="stat-card">
+        <el-col :xs="24" :sm="12" :md="6" style="margin-bottom: 10px;">
+          <el-card class="stat-card" shadow="hover">
             <div class="stat-item">
-              <div class="stat-icon bg-info">
-                <el-icon size="24"><TrendCharts /></el-icon>
+              <div class="stat-icon bg-info" :style="isMobile ? 'width: 40px; height: 40px;' : ''">
+                <el-icon :size="isMobile ? 20 : 24"><TrendCharts /></el-icon>
               </div>
               <div class="stat-content">
                 <div class="stat-title">裁决准确率</div>
-                <div class="stat-value">{{ stats.accuracyRate }}%</div>
+                <div class="stat-value" :style="isMobile ? 'font-size: 20px;' : ''">{{ stats.accuracyRate }}%</div>
               </div>
             </div>
           </el-card>
@@ -68,65 +68,78 @@
       </el-row>
       
       <!-- 搜索和筛选 -->
-      <div class="search-bar">
-        <el-form :model="searchForm" label-width="80px" inline>
+      <div class="search-bar" :class="{ 'is-mobile': isMobile }">
+        <el-form :model="searchForm" :label-width="isMobile ? '80px' : '80px'" :inline="!isMobile" :label-position="isMobile ? 'top' : 'right'">
           <el-form-item label="争议编号">
             <el-input v-model="searchForm.disputeNo" placeholder="请输入争议编号" clearable />
           </el-form-item>
           
-          <el-form-item label="申请人">
-            <el-input v-model="searchForm.applicant" placeholder="请输入申请人" clearable />
-          </el-form-item>
-          
-          <el-form-item label="争议类型">
-            <el-select v-model="searchForm.type" placeholder="请选择争议类型" clearable>
-              <el-option label="费用争议" value="fee" />
-              <el-option label="服务争议" value="service" />
-              <el-option label="系统争议" value="system" />
-              <el-option label="其他争议" value="other" />
-            </el-select>
-          </el-form-item>
-          
-          <el-form-item label="仲裁状态">
-            <el-select v-model="searchForm.arbitrationStatus" placeholder="请选择仲裁状态" clearable>
-              <el-option label="待仲裁" value="pending" />
-              <el-option label="仲裁中" value="in-progress" />
-              <el-option label="已裁决" value="decided" />
-              <el-option label="已结案" value="closed" />
-            </el-select>
-          </el-form-item>
-          
-          <el-form-item label="时间范围">
-            <el-date-picker
-              v-model="searchForm.dateRange"
-              type="datetimerange"
-              range-separator="至"
-              start-placeholder="开始时间"
-              end-placeholder="结束时间"
-              format="YYYY-MM-DD HH:mm:ss"
-              value-format="YYYY-MM-DD HH:mm:ss"
-            />
-          </el-form-item>
+          <template v-if="!isMobile || showMoreFilters">
+            <el-form-item label="申请人">
+              <el-input v-model="searchForm.applicant" placeholder="请输入申请人" clearable />
+            </el-form-item>
+            
+            <el-form-item label="争议类型">
+              <el-select v-model="searchForm.type" placeholder="请选择争议类型" clearable class="full-width">
+                <el-option label="费用争议" value="fee" />
+                <el-option label="服务争议" value="service" />
+                <el-option label="系统争议" value="system" />
+                <el-option label="其他争议" value="other" />
+              </el-select>
+            </el-form-item>
+            
+            <el-form-item label="仲裁状态">
+              <el-select v-model="searchForm.arbitrationStatus" placeholder="请选择仲裁状态" clearable class="full-width">
+                <el-option label="待仲裁" value="pending" />
+                <el-option label="仲裁中" value="in-progress" />
+                <el-option label="已裁决" value="decided" />
+                <el-option label="已结案" value="closed" />
+              </el-select>
+            </el-form-item>
+            
+            <el-form-item label="时间范围">
+              <el-date-picker
+                v-model="searchForm.dateRange"
+                type="datetimerange"
+                range-separator="至"
+                start-placeholder="开始时间"
+                end-placeholder="结束时间"
+                format="YYYY-MM-DD HH:mm:ss"
+                value-format="YYYY-MM-DD HH:mm:ss"
+                :style="isMobile ? 'width: 100%' : ''"
+              />
+            </el-form-item>
+          </template>
           
           <el-form-item>
-            <el-button type="primary" @click="handleSearch">查询</el-button>
-            <el-button @click="handleReset">重置</el-button>
+            <el-button type="primary" @click="handleSearch">
+              <el-icon><Search /></el-icon>
+              <span v-if="!isMobile">查询</span>
+            </el-button>
+            <el-button @click="handleReset">
+              <el-icon><RefreshRight /></el-icon>
+              <span v-if="!isMobile">重置</span>
+            </el-button>
+            <el-button v-if="isMobile" @click="showMoreFilters = !showMoreFilters" type="primary" link>
+              <el-icon><Filter /></el-icon>
+              {{ showMoreFilters ? '收起' : '更多' }}
+            </el-button>
           </el-form-item>
         </el-form>
       </div>
       
       <!-- 仲裁列表 -->
-      <el-table :data="arbitrationList" style="width: 100%" v-loading="loading">
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="disputeNo" label="争议编号" width="150" />
-        <el-table-column prop="applicant" label="申请人" width="120" />
+      <el-table :data="arbitrationList" style="width: 100%" v-loading="loading" :size="isMobile ? 'small' : 'default'">
+        <el-table-column prop="id" label="ID" width="80" v-if="!isMobile" />
+        <el-table-column prop="disputeNo" label="争议编号" :width="isMobile ? 120 : 150" />
+        <el-table-column prop="applicant" label="申请人" width="120" v-if="!isMobile" />
         <el-table-column prop="type" label="争议类型" width="100">
           <template #default="scope">
             {{ getDisputeTypeText(scope.row.type) }}
           </template>
         </el-table-column>
-        <el-table-column prop="title" label="争议标题" />
-        <el-table-column prop="transferTime" label="转交时间" width="160" />
+        <el-table-column prop="title" label="争议标题" min-width="150" />
+        <el-table-column prop="transferTime" label="转交时间" width="160" v-if="!isMobile" />
         <el-table-column prop="arbitrationStatus" label="仲裁状态" width="100">
           <template #default="scope">
             <el-tag :type="getArbitrationStatusTagType(scope.row.arbitrationStatus)">
@@ -134,25 +147,52 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="250">
+        <el-table-column label="操作" :width="isMobile ? 160 : 250" fixed="right">
           <template #default="scope">
-            <el-button size="small" @click="handleView(scope.row)">查看详情</el-button>
-            <el-button 
-              size="small" 
-              type="primary" 
-              @click="handleArbitrate(scope.row)" 
-              :disabled="scope.row.arbitrationStatus === 'decided' || scope.row.arbitrationStatus === 'closed'"
-            >
-              仲裁
-            </el-button>
-            <el-button 
-              size="small" 
-              type="success" 
-              @click="handleClose(scope.row)" 
-              :disabled="scope.row.arbitrationStatus !== 'decided'"
-            >
-              结案
-            </el-button>
+            <template v-if="isMobile">
+              <el-dropdown trigger="click">
+                <el-button size="small" type="primary" link>
+                  <el-icon><More /></el-icon>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item @click="handleView(scope.row)">查看详情</el-dropdown-item>
+                    <el-dropdown-item 
+                      @click="handleArbitrate(scope.row)" 
+                      :disabled="scope.row.arbitrationStatus === 'decided' || scope.row.arbitrationStatus === 'closed'"
+                    >
+                      仲裁
+                    </el-dropdown-item>
+                    <el-dropdown-item 
+                      @click="handleClose(scope.row)" 
+                      :disabled="scope.row.arbitrationStatus !== 'decided'"
+                      style="color: var(--el-color-success)"
+                    >
+                      结案
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </template>
+            <template v-else>
+              <el-button size="small" @click="handleView(scope.row)">查看详情</el-button>
+              <el-button 
+                size="small" 
+                type="primary" 
+                @click="handleArbitrate(scope.row)" 
+                :disabled="scope.row.arbitrationStatus === 'decided' || scope.row.arbitrationStatus === 'closed'"
+              >
+                仲裁
+              </el-button>
+              <el-button 
+                size="small" 
+                type="success" 
+                @click="handleClose(scope.row)" 
+                :disabled="scope.row.arbitrationStatus !== 'decided'"
+              >
+                结案
+              </el-button>
+            </template>
           </template>
         </el-table-column>
       </el-table>
@@ -162,17 +202,18 @@
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
           :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
+          :layout="isMobile ? 'total, prev, next' : 'total, sizes, prev, pager, next, jumper'"
           :total="total"
           @size-change="handleSizeChange"
           @current-change="handleCurrentChange"
+          :small="isMobile"
         />
       </div>
     </el-card>
     
     <!-- 仲裁对话框 -->
-    <el-dialog v-model="arbitrationDialogVisible" title="仲裁处理" width="700px">
-      <el-form :model="arbitrationForm" :rules="arbitrationFormRules" ref="arbitrationFormRef" label-width="100px">
+    <el-dialog v-model="arbitrationDialogVisible" title="仲裁处理" :width="isMobile ? '95%' : '700px'" :fullscreen="isMobile">
+      <el-form :model="arbitrationForm" :rules="arbitrationFormRules" ref="arbitrationFormRef" :label-width="isMobile ? '80px' : '100px'" :label-position="isMobile ? 'top' : 'right'">
         <el-form-item label="争议编号">
           {{ arbitrationForm.disputeNo }}
         </el-form-item>
@@ -253,14 +294,14 @@
     </el-dialog>
     
     <!-- 争议详情对话框 -->
-    <el-dialog v-model="detailDialogVisible" title="争议详情" width="700px">
-      <el-descriptions :column="2" border>
+    <el-dialog v-model="detailDialogVisible" title="争议详情" :width="isMobile ? '95%' : '700px'" :fullscreen="isMobile">
+      <el-descriptions :column="isMobile ? 1 : 2" border :size="isMobile ? 'small' : 'default'">
         <el-descriptions-item label="争议编号">{{ detailData.disputeNo }}</el-descriptions-item>
         <el-descriptions-item label="申请人">{{ detailData.applicant }}</el-descriptions-item>
         <el-descriptions-item label="联系方式">{{ detailData.contact }}</el-descriptions-item>
         <el-descriptions-item label="争议类型">{{ getDisputeTypeText(detailData.type) }}</el-descriptions-item>
-        <el-descriptions-item label="争议标题" :span="2">{{ detailData.title }}</el-descriptions-item>
-        <el-descriptions-item label="争议描述" :span="2">{{ detailData.description }}</el-descriptions-item>
+        <el-descriptions-item label="争议标题" :span="isMobile ? 1 : 2">{{ detailData.title }}</el-descriptions-item>
+        <el-descriptions-item label="争议描述" :span="isMobile ? 1 : 2">{{ detailData.description }}</el-descriptions-item>
         <el-descriptions-item label="提交时间">{{ detailData.submitTime }}</el-descriptions-item>
         <el-descriptions-item label="受理时间">{{ detailData.acceptTime }}</el-descriptions-item>
         <el-descriptions-item label="受理人">{{ detailData.acceptor }}</el-descriptions-item>
@@ -271,7 +312,7 @@
             {{ getArbitrationStatusText(detailData.arbitrationStatus) }}
           </el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="相关附件" :span="2">
+        <el-descriptions-item label="相关附件" :span="isMobile ? 1 : 2">
           <div v-if="detailData.attachments && detailData.attachments.length > 0">
             <el-link 
               v-for="(attachment, index) in detailData.attachments" 
@@ -285,9 +326,9 @@
           </div>
           <div v-else>无附件</div>
         </el-descriptions-item>
-        <el-descriptions-item label="仲裁意见" :span="2">{{ detailData.arbitrationOpinion || '暂无' }}</el-descriptions-item>
-        <el-descriptions-item label="裁决结果" :span="2">{{ getDecisionText(detailData.decision) || '暂无' }}</el-descriptions-item>
-        <el-descriptions-item label="处理建议" :span="2">{{ detailData.suggestion || '暂无' }}</el-descriptions-item>
+        <el-descriptions-item label="仲裁意见" :span="isMobile ? 1 : 2">{{ detailData.arbitrationOpinion || '暂无' }}</el-descriptions-item>
+        <el-descriptions-item label="裁决结果" :span="isMobile ? 1 : 2">{{ getDecisionText(detailData.decision) || '暂无' }}</el-descriptions-item>
+        <el-descriptions-item label="处理建议" :span="isMobile ? 1 : 2">{{ detailData.suggestion || '暂无' }}</el-descriptions-item>
       </el-descriptions>
       
       <template #footer>
@@ -300,11 +341,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Document, Warning, Check, TrendCharts } from '@element-plus/icons-vue'
+import { Document, Warning, Check, TrendCharts, Search, RefreshRight, Filter, More } from '@element-plus/icons-vue'
 
 // 响应式数据
+const isMobile = ref(false)
+const showMoreFilters = ref(false)
+
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
+
 const stats = ref({
   pending: 8,
   inProgress: 5,
@@ -595,6 +643,12 @@ const handleCurrentChange = (val: number) => {
 // 组件挂载
 onMounted(() => {
   console.log('⚖️ 仲裁决策页面加载完成')
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
 })
 
 /**
@@ -605,7 +659,7 @@ onMounted(() => {
 
 <style scoped>
 .arbitration-decision-container {
-  width: 100%;
+  padding: 20px;
 }
 
 .card-header {
@@ -614,8 +668,18 @@ onMounted(() => {
   align-items: center;
 }
 
+.card-header.is-mobile {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.card-header.is-mobile .el-button {
+  width: 100%;
+}
+
 .stat-card {
-  margin-bottom: 0;
+  height: 100%;
 }
 
 .stat-item {
@@ -624,30 +688,14 @@ onMounted(() => {
 }
 
 .stat-icon {
-  width: 50px;
-  height: 50px;
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
-  color: white;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-right: 15px;
-}
-
-.bg-primary {
-  background-color: #409EFF;
-}
-
-.bg-warning {
-  background-color: #E6A23C;
-}
-
-.bg-success {
-  background-color: #67C23A;
-}
-
-.bg-info {
-  background-color: #909399;
+  color: #fff;
 }
 
 .stat-content {
@@ -661,18 +709,61 @@ onMounted(() => {
 }
 
 .stat-value {
-  font-size: 20px;
+  font-size: 24px;
   font-weight: bold;
   color: #303133;
 }
 
+.bg-primary { background-color: #409EFF; }
+.bg-warning { background-color: #E6A23C; }
+.bg-success { background-color: #67C23A; }
+.bg-info { background-color: #909399; }
+
 .search-bar {
   margin-bottom: 20px;
+  background-color: #f5f7fa;
+  padding: 18px;
+  border-radius: 4px;
+}
+
+.search-bar.is-mobile {
+  padding: 10px;
 }
 
 .pagination-container {
   margin-top: 20px;
   display: flex;
-  justify-content: center;
+  justify-content: flex-end;
+}
+
+.full-width {
+  width: 100%;
+}
+
+/* Mobile specific styles */
+@media screen and (max-width: 768px) {
+  .arbitration-decision-container {
+    padding: 10px;
+  }
+  
+  .el-form-item {
+    margin-bottom: 15px;
+  }
+  
+  .search-bar .el-form-item {
+    margin-right: 0;
+    margin-bottom: 10px;
+    width: 100%;
+  }
+  
+  .search-bar .el-button {
+    width: 100%;
+    margin-left: 0;
+    margin-bottom: 10px;
+  }
+  
+  .el-button + .el-button {
+    margin-left: 0;
+  }
 }
 </style>

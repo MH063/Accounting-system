@@ -1,5 +1,5 @@
 <template>
-  <div class="left-menu">
+  <div class="left-menu" :class="{ 'is-collapsed': collapsed }">
     <el-menu
       :default-active="activeMenu"
       class="menu"
@@ -8,6 +8,7 @@
       active-text-color="#409EFF"
       router
       :unique-opened="true"
+      :collapse="false"
     >
       <el-menu-item index="/">
         <el-icon><HomeFilled /></el-icon>
@@ -134,6 +135,13 @@ import { HomeFilled, User, Document, DataLine, Setting, House, Coin, CreditCard,
 
 const route = useRoute()
 
+defineProps({
+  collapsed: {
+    type: Boolean,
+    default: false
+  }
+})
+
 // 当前激活的菜单项
 const activeMenu = computed(() => {
   const { path } = route
@@ -157,10 +165,35 @@ const activeMenu = computed(() => {
 <style scoped>
 .left-menu {
   width: 220px;
-  /* 移除固定高度，让菜单栏可以根据内容自适应高度 */
-  min-height: calc(100vh - 60px);
+  position: fixed;
+  top: 60px; /* 导航栏高度 */
+  left: 0;
+  bottom: 0;
   background-color: #304156;
   overflow-y: auto;
+  z-index: 999;
+  transition: transform 0.3s, width 0.3s;
+}
+
+.left-menu.is-collapsed {
+  width: 0;
+  transform: translateX(-100%);
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .left-menu {
+    transform: translateX(-100%);
+  }
+  
+  .left-menu.is-collapsed {
+    transform: translateX(-100%);
+  }
+  
+  .left-menu:not(.is-collapsed) {
+    transform: translateX(0);
+    width: 220px;
+  }
 }
 
 .menu {

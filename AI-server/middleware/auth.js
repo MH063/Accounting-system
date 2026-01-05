@@ -19,24 +19,26 @@ const userService = new UserService();
  * @param {Function} next - Express下一个中间件函数
  */
 const authenticateToken = async (req, res, next) => {
-  // 从请求头获取令牌
+  // 从请求头或查询参数获取令牌 (支持 SSE)
   const authHeader = req.headers.authorization || req.headers.Authorization;
-  const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
+  let token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
+  
+  // 如果请求头没有，尝试从查询参数获取 (针对 EventSource/SSE)
+  if (!token && req.query && req.query.token) {
+    token = req.query.token;
+  }
   
   // 关键位置打印日志 (规则 7)
   logger.debug('[AuthMiddleware] 令牌提取详情', {
     url: req.originalUrl,
     method: req.method,
     hasAuthHeader: !!req.headers.authorization || !!req.headers.Authorization,
-    authHeaderPreview: authHeader ? `${authHeader.substring(0, 20)}...` : '缺失',
+    hasQueryToken: !!(req.query && req.query.token),
     tokenExtracted: !!token,
-    tokenPrefix: token ? `${token.substring(0, 15)}...` : null,
+    tokenSource: authHeader ? 'header' : (req.query?.token ? 'query' : 'none'),
     headers: {
       authorization: req.headers.authorization ? '存在' : '缺失',
-      Authorization: req.headers.Authorization ? '存在' : '缺失',
-      origin: req.headers.origin,
-      referer: req.headers.referer,
-      contentType: req.headers['content-type']
+      origin: req.headers.origin
     }
   });
 

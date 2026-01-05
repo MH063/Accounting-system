@@ -1,12 +1,12 @@
 <template>
-  <div class="member-detail-container">
+  <div class="member-detail-container" :class="{ 'is-mobile': isMobile }">
     <el-card>
       <template #header>
         <div class="card-header">
           <span>成员详情</span>
-          <div>
-            <el-button @click="goBack">返回</el-button>
-            <el-button type="primary" @click="editMember">编辑</el-button>
+          <div class="header-actions">
+            <el-button @click="goBack" :size="isMobile ? 'small' : 'default'">返回</el-button>
+            <el-button type="primary" @click="editMember" :size="isMobile ? 'small' : 'default'">编辑</el-button>
           </div>
         </div>
       </template>
@@ -14,7 +14,7 @@
       <div class="member-profile">
         <!-- 个人信息概览 -->
         <div class="profile-header">
-          <el-avatar :src="member.avatar" class="member-avatar" :size="80" />
+          <el-avatar :src="member.avatar" class="member-avatar" :size="isMobile ? 64 : 80" />
           <div class="member-basic-info">
             <h2 class="member-name">{{ member.name }}</h2>
             <div class="member-tags">
@@ -42,56 +42,66 @@
         <el-tabs v-model="activeTab" class="member-tabs">
           <el-tab-pane label="基本信息" name="basic">
             <div class="tab-content">
-              <el-row :gutter="20">
-                <el-col :span="12">
+              <el-row :gutter="isMobile ? 0 : 20">
+                <el-col :xs="24" :sm="12">
                   <div class="info-group">
                     <h3>联系信息</h3>
                     <div class="info-item">
                       <label>手机号:</label>
-                      <span>{{ member.phone || '未填写' }}</span>
-                      <el-button 
-                        v-if="member.phone" 
-                        type="primary" 
-                        link
-                        @click="callPhone(member.phone)"
-                      >
-                        <el-icon><Phone /></el-icon>
-                        拨打
-                      </el-button>
+                      <div class="info-value">
+                        <span>{{ member.phone || '未填写' }}</span>
+                        <el-button 
+                          v-if="member.phone" 
+                          type="primary" 
+                          link
+                          @click="callPhone(member.phone)"
+                        >
+                          <el-icon><Phone /></el-icon>
+                          拨打
+                        </el-button>
+                      </div>
                     </div>
                     <div class="info-item">
                       <label>邮箱:</label>
-                      <span>{{ member.email || '未填写' }}</span>
-                      <el-button 
-                        v-if="member.email" 
-                        type="primary" 
-                        link
-                        @click="sendEmail(member.email)"
-                      >
-                        <el-icon><Message /></el-icon>
-                        发邮件
-                      </el-button>
+                      <div class="info-value">
+                        <span>{{ member.email || '未填写' }}</span>
+                        <el-button 
+                          v-if="member.email" 
+                          type="primary" 
+                          link
+                          @click="sendEmail(member.email)"
+                        >
+                          <el-icon><Message /></el-icon>
+                          发邮件
+                        </el-button>
+                      </div>
                     </div>
                     <div class="info-item">
                       <label>紧急联系人:</label>
-                      <span>{{ member.emergencyContact?.name || '未填写' }}</span>
-                      <span v-if="member.emergencyContact?.phone">
-                        ({{ member.emergencyContact.phone }})
-                      </span>
+                      <div class="info-value">
+                        <span>{{ member.emergencyContact?.name || '未填写' }}</span>
+                        <span v-if="member.emergencyContact?.phone" class="sub-info">
+                          ({{ member.emergencyContact.phone }})
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </el-col>
                 
-                <el-col :span="12">
+                <el-col :xs="24" :sm="12">
                   <div class="info-group">
                     <h3>个人资料</h3>
                     <div class="info-item">
                       <label>性别:</label>
-                      <span>{{ member.gender === 'male' ? '男' : '女' }}</span>
+                      <div class="info-value">
+                        <span>{{ member.gender === 'male' ? '男' : '女' }}</span>
+                      </div>
                     </div>
                     <div class="info-item">
                       <label>生日:</label>
-                      <span>{{ member.birthday ? formatDate(member.birthday) : '未填写' }}</span>
+                      <div class="info-value">
+                        <span>{{ member.birthday ? formatDate(member.birthday) : '未填写' }}</span>
+                      </div>
                     </div>
                   </div>
                 </el-col>
@@ -99,9 +109,11 @@
               
               <div class="info-group">
                 <h3>备注信息</h3>
-                <div class="info-item">
+                <div class="info-item bio-item">
                   <label>个人简介:</label>
-                  <span>{{ member.bio || '暂无个人简介' }}</span>
+                  <div class="info-value">
+                    <span>{{ member.bio || '暂无个人简介' }}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -110,26 +122,26 @@
           <el-tab-pane label="费用贡献" name="expenses">
             <div class="tab-content">
               <div class="expenses-summary">
-                <el-row :gutter="20">
-                  <el-col :span="6">
+                <el-row :gutter="isMobile ? 10 : 20">
+                  <el-col :xs="12" :sm="6">
                     <div class="summary-card">
                       <div class="summary-title">总支出</div>
                       <div class="summary-value">¥{{ expensesSummary.total }}</div>
                     </div>
                   </el-col>
-                  <el-col :span="6">
+                  <el-col :xs="12" :sm="6">
                     <div class="summary-card">
                       <div class="summary-title">已支付</div>
                       <div class="summary-value">¥{{ expensesSummary.paid }}</div>
                     </div>
                   </el-col>
-                  <el-col :span="6">
+                  <el-col :xs="12" :sm="6">
                     <div class="summary-card">
                       <div class="summary-title">待支付</div>
                       <div class="summary-value">¥{{ expensesSummary.pending }}</div>
                     </div>
                   </el-col>
-                  <el-col :span="6">
+                  <el-col :xs="12" :sm="6">
                     <div class="summary-card">
                       <div class="summary-title">平均分摊</div>
                       <div class="summary-value">¥{{ expensesSummary.average }}</div>
@@ -141,7 +153,6 @@
               <div class="expenses-chart">
                 <h3>费用分布</h3>
                 <div class="chart-container">
-                  <!-- 这里应该是一个图表组件，暂时用占位符表示 -->
                   <div class="chart-placeholder">
                     <el-icon><PieChart /></el-icon>
                     <p>费用分布图表</p>
@@ -151,26 +162,28 @@
               
               <div class="recent-expenses">
                 <h3>近期费用记录</h3>
-                <el-table :data="recentExpenses" style="width: 100%">
-                  <el-table-column prop="title" label="费用名称" />
-                  <el-table-column prop="amount" label="金额">
-                    <template #default="{ row }">
-                      ¥{{ row.amount }}
-                    </template>
-                  </el-table-column>
-                  <el-table-column prop="date" label="日期">
-                    <template #default="{ row }">
-                      {{ formatDate(row.date) }}
-                    </template>
-                  </el-table-column>
-                  <el-table-column prop="status" label="状态">
-                    <template #default="{ row }">
-                      <el-tag :type="getExpenseStatusType(row.status)">
-                        {{ getExpenseStatusText(row.status) }}
-                      </el-tag>
-                    </template>
-                  </el-table-column>
-                </el-table>
+                <div class="table-wrapper">
+                  <el-table :data="recentExpenses" style="width: 100%" :size="isMobile ? 'small' : 'default'">
+                    <el-table-column prop="title" label="费用名称" min-width="120" />
+                    <el-table-column prop="amount" label="金额" width="100">
+                      <template #default="{ row }">
+                        ¥{{ row.amount }}
+                      </template>
+                    </el-table-column>
+                    <el-table-column prop="date" label="日期" width="110" v-if="!isMobile">
+                      <template #default="{ row }">
+                        {{ formatDate(row.date) }}
+                      </template>
+                    </el-table-column>
+                    <el-table-column prop="status" label="状态" width="100">
+                      <template #default="{ row }">
+                        <el-tag :type="getExpenseStatusType(row.status)" size="small">
+                          {{ getExpenseStatusText(row.status) }}
+                        </el-tag>
+                      </template>
+                    </el-table-column>
+                  </el-table>
+                </div>
               </div>
             </div>
           </el-tab-pane>
@@ -178,21 +191,21 @@
           <el-tab-pane label="活跃度" name="activity">
             <div class="tab-content">
               <div class="activity-summary">
-                <el-row :gutter="20">
-                  <el-col :span="8">
+                <el-row :gutter="isMobile ? 10 : 20">
+                  <el-col :xs="12" :sm="8">
                     <div class="summary-card">
                       <div class="summary-title">本月活跃度</div>
                       <div class="summary-value">{{ activitySummary.monthly }}</div>
                     </div>
                   </el-col>
-                  <el-col :span="8">
+                  <el-col :xs="12" :sm="8">
                     <div class="summary-card">
                       <div class="summary-title">本周活跃度</div>
                       <div class="summary-value">{{ activitySummary.weekly }}</div>
                     </div>
                   </el-col>
-                  <el-col :span="8">
-                    <div class="summary-card">
+                  <el-col :xs="24" :sm="8">
+                    <div class="summary-card" :class="{ 'mt-10': isMobile }">
                       <div class="summary-title">总活跃度</div>
                       <div class="summary-value">{{ activitySummary.total }}</div>
                     </div>
@@ -203,7 +216,6 @@
               <div class="activity-chart">
                 <h3>活跃度趋势</h3>
                 <div class="chart-container">
-                  <!-- 这里应该是一个图表组件，暂时用占位符表示 -->
                   <div class="chart-placeholder">
                     <el-icon><DataLine /></el-icon>
                     <p>活跃度趋势图表</p>
@@ -213,14 +225,15 @@
               
               <div class="recent-activities">
                 <h3>近期活动</h3>
-                <el-timeline>
+                <el-timeline :reverse="false">
                   <el-timeline-item
                     v-for="activity in recentActivities"
                     :key="activity.id"
                     :timestamp="formatDateTime(activity.timestamp)"
                     placement="top"
+                    size="small"
                   >
-                    <el-card>
+                    <el-card shadow="never">
                       <h4>{{ activity.title }}</h4>
                       <p>{{ activity.description }}</p>
                     </el-card>
@@ -237,47 +250,45 @@
     <el-dialog
       v-model="editDialogVisible"
       title="编辑成员信息"
-      width="600px"
+      :width="isMobile ? '95%' : '600px'"
+      :fullscreen="isMobile"
     >
       <el-form
         ref="editFormRef"
         :model="editForm"
         :rules="editFormRules"
-        label-width="100px"
+        :label-width="isMobile ? '70px' : '100px'"
+        :label-position="isMobile ? 'top' : 'left'"
       >
-        <el-row :gutter="20">
-          <el-col :span="24">
-            <el-form-item label="姓名" prop="name">
-              <el-input v-model="editForm.name" />
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <el-form-item label="姓名" prop="name">
+          <el-input v-model="editForm.name" />
+        </el-form-item>
         
-        <el-row :gutter="20">
-          <el-col :span="12">
+        <el-row :gutter="isMobile ? 0 : 20">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="手机号" prop="phone">
               <el-input v-model="editForm.phone" />
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="邮箱" prop="email">
               <el-input v-model="editForm.email" />
             </el-form-item>
           </el-col>
         </el-row>
         
-        <el-row :gutter="20">
-          <el-col :span="12">
+        <el-row :gutter="isMobile ? 0 : 20">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="性别" prop="gender">
-              <el-select v-model="editForm.gender" placeholder="请选择性别">
+              <el-select v-model="editForm.gender" placeholder="请选择性别" style="width: 100%">
                 <el-option label="男" value="male" />
                 <el-option label="女" value="female" />
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="角色" prop="role">
-              <el-select v-model="editForm.role" placeholder="请选择角色">
+              <el-select v-model="editForm.role" placeholder="请选择角色" style="width: 100%">
                 <el-option label="普通成员" value="member" />
                 <el-option label="寝室长" value="leader" />
                 <el-option label="访客" value="guest" />
@@ -290,7 +301,7 @@
           <el-input
             v-model="editForm.bio"
             type="textarea"
-            :rows="3"
+            :rows="isMobile ? 2 : 3"
             placeholder="请输入个人简介"
           />
         </el-form-item>
@@ -307,7 +318,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { 
@@ -318,6 +329,12 @@ import {
 // 路由实例
 const router = useRouter()
 const route = useRoute()
+
+// 移动端适配
+const isMobile = ref(false)
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
 
 // 响应式数据
 const activeTab = ref('basic')
@@ -518,7 +535,13 @@ const formatDateTime = (dateString: string) => {
 
 // 组件挂载时的操作
 onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
   console.log('👤 成员详情页面加载完成', route.params.id)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
 })
 </script>
 
@@ -578,36 +601,59 @@ onMounted(() => {
   color: #606266;
 }
 
+.member-tabs {
+  margin-top: 20px;
+}
+
 .tab-content {
   padding: 20px 0;
 }
 
 .info-group {
-  margin-bottom: 20px;
+  margin-bottom: 30px;
 }
 
 .info-group h3 {
-  margin: 0 0 15px 0;
+  margin-top: 0;
+  margin-bottom: 15px;
   font-size: 16px;
-  font-weight: 600;
+  color: #303133;
+  border-left: 4px solid #409eff;
+  padding-left: 10px;
 }
 
 .info-item {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-  padding: 8px 0;
+  margin-bottom: 15px;
+  line-height: 1.5;
 }
 
 .info-item label {
   width: 100px;
-  font-weight: 600;
-  color: #606266;
+  color: #909399;
+  flex-shrink: 0;
 }
 
-.info-item span {
+.info-value {
   flex: 1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.sub-info {
+  color: #909399;
+  font-size: 13px;
+}
+
+.bio-item {
+  flex-direction: column;
+}
+
+.bio-item label {
+  width: 100%;
+  margin-bottom: 10px;
 }
 
 .expenses-summary,
@@ -616,36 +662,50 @@ onMounted(() => {
 }
 
 .summary-card {
-  background: #f5f7fa;
-  border-radius: 8px;
+  background-color: #f5f7fa;
   padding: 20px;
+  border-radius: 8px;
   text-align: center;
 }
 
 .summary-title {
+  color: #909399;
   font-size: 14px;
-  color: #606266;
-  margin-bottom: 5px;
+  margin-bottom: 10px;
 }
 
 .summary-value {
   font-size: 20px;
-  font-weight: 700;
+  font-weight: 600;
   color: #303133;
 }
 
+.expenses-chart,
+.activity-chart,
+.recent-expenses,
+.recent-activities {
+  margin-bottom: 30px;
+}
+
+.expenses-chart h3,
+.activity-chart h3,
+.recent-expenses h3,
+.recent-activities h3 {
+  font-size: 16px;
+  margin-bottom: 20px;
+}
+
 .chart-container {
-  margin: 20px 0;
+  height: 300px;
+  background-color: #f5f7fa;
+  border-radius: 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .chart-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 300px;
-  background: #f5f7fa;
-  border-radius: 8px;
+  text-align: center;
   color: #909399;
 }
 
@@ -654,34 +714,55 @@ onMounted(() => {
   margin-bottom: 10px;
 }
 
-.recent-expenses,
-.recent-activities {
-  margin-top: 30px;
+.table-wrapper {
+  overflow-x: auto;
 }
 
-.dialog-footer {
-  text-align: right;
+.mt-10 {
+  margin-top: 10px;
 }
 
+/* 移动端适配样式 */
 @media (max-width: 768px) {
+  .member-detail-container {
+    padding: 10px;
+  }
+
   .profile-header {
     flex-direction: column;
     align-items: center;
     text-align: center;
+    gap: 15px;
   }
-  
-  .member-meta {
+
+  .member-tags {
     justify-content: center;
   }
-  
+
+  .member-meta {
+    justify-content: center;
+    gap: 15px;
+  }
+
   .info-item {
     flex-direction: column;
-    align-items: flex-start;
   }
-  
+
   .info-item label {
-    width: auto;
+    width: 100%;
     margin-bottom: 5px;
+  }
+
+  .summary-card {
+    padding: 15px 10px;
+  }
+
+  .summary-value {
+    font-size: 16px;
+  }
+
+  .chart-container {
+    height: 250px;
   }
 }
 </style>

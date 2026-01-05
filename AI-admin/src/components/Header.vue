@@ -1,6 +1,9 @@
 <template>
   <header class="header">
     <div class="header-left">
+      <div class="menu-toggle" @click="$emit('toggle-sidebar')">
+        <el-icon size="24"><Operation /></el-icon>
+      </div>
       <div class="logo-container">
         <img src="../assets/admin-avatar.png" alt="Logo" class="logo" />
         <span class="title">{{ systemName }}</span>
@@ -112,7 +115,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { ArrowDown, Bell, Close, User } from '@element-plus/icons-vue'
+import { ArrowDown, Bell, Close, User, Operation } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '@/api'
 import { useRouter } from 'vue-router'
@@ -139,6 +142,8 @@ const adminUser = computed(() => {
 })
 
 const userName = computed(() => adminUser.value?.name || '管理员')
+
+defineEmits(['toggle-sidebar'])
 
 // 响应式数据
 const showNotificationPanel = ref(false)
@@ -333,12 +338,36 @@ const handleLogout = () => {
   background-color: #fff;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   z-index: 1000;
-  position: relative;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .header-left {
   display: flex;
   align-items: center;
+}
+
+.menu-toggle {
+  display: none;
+  margin-right: 15px;
+  cursor: pointer;
+  color: #606266;
+  transition: color 0.3s;
+}
+
+.menu-toggle:hover {
+  color: #409EFF;
+}
+
+@media (max-width: 768px) {
+  .menu-toggle {
+    display: flex;
+    align-items: center;
+  }
 }
 
 .logo-container {

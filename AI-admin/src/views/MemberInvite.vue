@@ -1,14 +1,20 @@
 <template>
-  <div class="member-invite-container">
+  <div class="member-invite-container" :class="{ 'is-mobile': isMobile }">
     <el-card>
       <template #header>
         <div class="card-header">
           <span>邀请成员</span>
-          <el-button @click="goBack">返回</el-button>
+          <el-button @click="goBack" :size="isMobile ? 'small' : 'default'">返回</el-button>
         </div>
       </template>
       
-      <el-steps :active="currentStep" finish-status="success" align-center>
+      <el-steps 
+        :active="currentStep" 
+        finish-status="success" 
+        align-center 
+        :direction="isMobile ? 'vertical' : 'horizontal'"
+        :class="{ 'mobile-steps': isMobile }"
+      >
         <el-step title="填写邀请信息" />
         <el-step title="生成邀请码" />
         <el-step title="分享邀请链接" />
@@ -21,20 +27,21 @@
             ref="inviteFormRef"
             :model="inviteForm"
             :rules="inviteFormRules"
-            label-width="120px"
+            :label-width="isMobile ? '80px' : '120px'"
+            :label-position="isMobile ? 'top' : 'left'"
             class="invite-form"
           >
             <el-form-item label="邀请说明" prop="description">
               <el-input
                 v-model="inviteForm.description"
                 type="textarea"
-                :rows="3"
+                :rows="isMobile ? 2 : 3"
                 placeholder="请输入邀请说明（可选）"
               />
             </el-form-item>
             
             <el-form-item label="有效期" prop="expiry">
-              <el-select v-model="inviteForm.expiry" placeholder="请选择有效期">
+              <el-select v-model="inviteForm.expiry" placeholder="请选择有效期" style="width: 100%">
                 <el-option label="1小时" value="1h" />
                 <el-option label="1天" value="1d" />
                 <el-option label="7天" value="7d" />
@@ -48,12 +55,13 @@
                 v-model="inviteForm.maxUses"
                 :min="1"
                 :max="100"
+                style="width: 100%"
                 placeholder="请输入最大使用次数"
               />
             </el-form-item>
             
             <el-form-item label="邀请角色" prop="role">
-              <el-select v-model="inviteForm.role" placeholder="请选择邀请角色">
+              <el-select v-model="inviteForm.role" placeholder="请选择邀请角色" style="width: 100%">
                 <el-option label="普通成员" value="member" />
                 <el-option label="访客" value="guest" />
               </el-select>
@@ -67,7 +75,7 @@
           </el-form>
           
           <div class="step-actions">
-            <el-button type="primary" @click="nextStep">下一步</el-button>
+            <el-button type="primary" @click="nextStep" :size="isMobile ? 'large' : 'default'" :style="{ width: isMobile ? '100%' : 'auto' }">下一步</el-button>
           </div>
         </div>
         
@@ -81,6 +89,7 @@
                 type="primary" 
                 @click="copyInviteCode"
                 class="copy-button"
+                :size="isMobile ? 'default' : 'default'"
               >
                 复制邀请码
               </el-button>
@@ -105,9 +114,9 @@
               </div>
             </div>
             
-            <div class="code-actions">
-              <el-button @click="refreshInviteCode">刷新邀请码</el-button>
-              <el-button type="primary" @click="nextStep">下一步</el-button>
+            <div class="code-actions" :class="{ 'is-mobile': isMobile }">
+              <el-button @click="refreshInviteCode" :style="{ flex: isMobile ? 1 : 'none' }">刷新邀请码</el-button>
+              <el-button type="primary" @click="nextStep" :style="{ flex: isMobile ? 1 : 'none' }">下一步</el-button>
             </div>
           </div>
         </div>
@@ -139,7 +148,7 @@
                   class="share-button"
                 >
                   <el-icon><component :is="option.icon" /></el-icon>
-                  {{ option.label }}
+                  {{ isMobile && option.name === 'copy' ? '复制' : option.label }}
                 </el-button>
               </div>
             </div>
@@ -152,9 +161,9 @@
               </div>
             </div>
             
-            <div class="step-actions">
-              <el-button @click="prevStep">上一步</el-button>
-              <el-button type="primary" @click="finishInvite">完成</el-button>
+            <div class="step-actions" :class="{ 'is-mobile': isMobile }">
+              <el-button @click="prevStep" :style="{ flex: isMobile ? 1 : 'none' }">上一步</el-button>
+              <el-button type="primary" @click="finishInvite" :style="{ flex: isMobile ? 1 : 'none' }">完成</el-button>
             </div>
           </div>
         </div>
@@ -167,46 +176,48 @@
         <span>已邀请成员</span>
       </template>
       
-      <el-table :data="invitedMembers" style="width: 100%">
-        <el-table-column prop="name" label="姓名" />
-        <el-table-column prop="email" label="邮箱" />
-        <el-table-column prop="inviteTime" label="邀请时间">
+      <el-table :data="invitedMembers" style="width: 100%" :size="isMobile ? 'small' : 'default'">
+        <el-table-column prop="name" label="姓名" min-width="80" />
+        <el-table-column prop="email" label="邮箱" min-width="120" v-if="!isMobile" />
+        <el-table-column prop="inviteTime" label="时间" min-width="100">
           <template #default="{ row }">
-            {{ formatDate(row.inviteTime) }}
+            {{ isMobile ? formatDateShort(row.inviteTime) : formatDate(row.inviteTime) }}
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态">
+        <el-table-column prop="status" label="状态" width="80">
           <template #default="{ row }">
-            <el-tag :type="getInvitationStatusType(row.status)">
+            <el-tag :type="getInvitationStatusType(row.status)" size="small">
               {{ getInvitationStatusText(row.status) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作">
+        <el-table-column label="操作" :width="isMobile ? 80 : 120" fixed="right">
           <template #default="{ row }">
             <el-button 
               v-if="row.status === 'pending'" 
               type="primary" 
+              link
               size="small"
               @click="resendInvitation(row)"
             >
-              重新发送
+              {{ isMobile ? '重发' : '重新发送' }}
             </el-button>
             <el-button 
               v-if="row.status === 'accepted'" 
               type="success" 
+              link
               size="small"
               @click="viewMemberDetails(row)"
             >
-              查看详情
+              {{ isMobile ? '详情' : '查看详情' }}
             </el-button>
           </template>
         </el-table-column>
       </el-table>
       
-      <div class="invitation-stats">
+      <div class="invitation-stats" :class="{ 'is-mobile': isMobile }">
         <div class="stat-item">
-          <span class="stat-label">总邀请数：</span>
+          <span class="stat-label">总数：</span>
           <span class="stat-value">{{ invitationStats.total }}</span>
         </div>
         <div class="stat-item">
@@ -227,13 +238,29 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { 
   Share, Link, CopyDocument, Refresh, Download, 
   ChatDotRound, Message, ChatLineSquare, User 
 } from '@element-plus/icons-vue'
+
+// 移动端检测
+const isMobile = ref(false)
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
+
+onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+  console.log('👥 成员邀请页面加载完成')
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
+})
 
 // 路由实例
 const router = useRouter()
@@ -413,6 +440,11 @@ const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleString('zh-CN')
 }
 
+const formatDateShort = (dateString: string) => {
+  const date = new Date(dateString)
+  return `${date.getMonth() + 1}-${date.getDate()} ${date.getHours()}:${date.getMinutes()}`
+}
+
 const resendInvitation = (member: any) => {
   ElMessage.info(`已重新发送邀请给 ${member.name}`)
 }
@@ -420,11 +452,6 @@ const resendInvitation = (member: any) => {
 const viewMemberDetails = (member: any) => {
   router.push(`/member/detail/${member.id}`)
 }
-
-// 组件挂载时的操作
-onMounted(() => {
-  console.log('👥 成员邀请页面加载完成')
-})
 </script>
 
 <style scoped>
@@ -604,17 +631,61 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
+  .member-invite-container {
+    padding: 10px;
+  }
+
+  .step-content {
+    margin-top: 15px;
+  }
+
+  .step-panel {
+    padding: 10px 0;
+  }
+
+  .mobile-steps {
+    height: 180px;
+    margin-bottom: 20px;
+  }
+
+  .code-value {
+    font-size: 20px;
+  }
+
+  .code-actions.is-mobile {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+  }
+
+  .step-actions.is-mobile {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+  }
+
   .share-buttons {
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
   }
   
   .share-button {
     width: 100%;
+    margin: 0 !important;
   }
   
-  .invitation-stats {
-    flex-direction: column;
+  .invitation-stats.is-mobile {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 10px;
+  }
+
+  .stat-item {
+    text-align: left;
+    background: #fff;
+    padding: 8px;
+    border-radius: 4px;
   }
 }
 </style>

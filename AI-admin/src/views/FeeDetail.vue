@@ -1,5 +1,5 @@
 <template>
-  <div class="fee-detail-container">
+  <div class="fee-detail-container" :class="{ 'is-mobile': isMobile }">
     <!-- 如果没有费用ID，显示费用选择列表 -->
     <div v-if="!feeId">
       <el-card>
@@ -9,38 +9,48 @@
           </div>
         </template>
         
-        <el-table :data="feeList" style="width: 100%" v-loading="loading" border>
-          <el-table-column prop="id" label="ID" width="80"></el-table-column>
-          <el-table-column prop="title" label="费用标题"></el-table-column>
-          <el-table-column prop="applicant" label="申请人"></el-table-column>
-          <el-table-column prop="amount" label="金额">
-            <template #default="scope">
-              {{ formatCurrency(scope.row.amount) }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="status" label="状态">
-            <template #default="scope">
-              <el-tag :type="getStatusTagType(scope.row.status)">
-                {{ getStatusText(scope.row.status) }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="120">
-            <template #default="scope">
-              <el-button type="primary" size="small" @click="viewDetail(scope.row.id)">查看详情</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+        <div class="table-wrapper">
+          <el-table :data="feeList" style="width: 100%" v-loading="loading" border :size="isMobile ? 'small' : 'default'">
+            <el-table-column prop="id" label="ID" width="60" v-if="!isMobile"></el-table-column>
+            <el-table-column prop="title" label="费用标题" min-width="120"></el-table-column>
+            <el-table-column prop="applicant" label="申请人" width="100" v-if="!isMobile"></el-table-column>
+            <el-table-column prop="amount" label="金额" width="100">
+              <template #default="scope">
+                {{ formatCurrency(scope.row.amount) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="status" label="状态" width="100">
+              <template #default="scope">
+                <el-tag :type="getStatusTagType(scope.row.status)" size="small">
+                  {{ getStatusText(scope.row.status) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" :width="isMobile ? 80 : 120" fixed="right">
+              <template #default="scope">
+                <el-button type="primary" :size="isMobile ? 'small' : 'small'" @click="viewDetail(scope.row.id)">
+                  {{ isMobile ? '查看' : '查看详情' }}
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
         
-        <div class="pagination-container" style="margin-top: 20px; display: flex; justify-content: flex-end;">
+        <div class="pagination-container" :style="{ 
+          marginTop: '20px', 
+          display: 'flex', 
+          justifyContent: isMobile ? 'center' : 'flex-end',
+          overflowX: isMobile ? 'auto' : 'visible'
+        }">
           <el-pagination
             v-model:current-page="queryParams.page"
             v-model:page-size="queryParams.pageSize"
             :page-sizes="[10, 20, 50, 100]"
-            layout="total, sizes, prev, pager, next, jumper"
+            :layout="isMobile ? 'prev, pager, next' : 'total, sizes, prev, pager, next, jumper'"
             :total="total"
             @size-change="handleSizeChange"
             @current-change="handleCurrentChange"
+            :small="isMobile"
           />
         </div>
       </el-card>
@@ -49,20 +59,22 @@
     <!-- 如果有费用ID，显示费用详情 -->
     <el-card v-else>
       <template #header>
-        <div class="card-header">
+        <div class="card-header detail-header">
           <span>费用详情</span>
-          <div>
-            <el-button @click="goBack">返回</el-button>
-            <el-button type="primary" @click="handleEdit" v-if="isAdmin">强制编辑</el-button>
-            <el-button type="success" @click="handlePayment">缴费</el-button>
-            <el-button type="warning" @click="handleChangeStatus">状态调整</el-button>
+          <div class="header-actions">
+            <el-button @click="goBack" :size="isMobile ? 'small' : 'default'">返回</el-button>
+            <el-button type="primary" @click="handleEdit" v-if="isAdmin" :size="isMobile ? 'small' : 'default'">
+              {{ isMobile ? '编辑' : '强制编辑' }}
+            </el-button>
+            <el-button type="success" @click="handlePayment" :size="isMobile ? 'small' : 'default'">缴费</el-button>
+            <el-button type="warning" @click="handleChangeStatus" :size="isMobile ? 'small' : 'default'" v-if="!isMobile">状态调整</el-button>
           </div>
         </div>
       </template>
       
-      <el-row :gutter="20">
-        <el-col :span="16">
-          <el-descriptions title="基本信息" :column="2" border>
+      <el-row :gutter="isMobile ? 0 : 20">
+        <el-col :xs="24" :sm="16">
+          <el-descriptions title="基本信息" :column="isMobile ? 1 : 2" border size="small">
             <el-descriptions-item label="记录ID">{{ feeInfo.id }}</el-descriptions-item>
             <el-descriptions-item label="费用标题">{{ feeInfo.title }}</el-descriptions-item>
             <el-descriptions-item label="成员姓名">{{ feeInfo.studentName }}</el-descriptions-item>
@@ -72,17 +84,17 @@
             <el-descriptions-item label="应缴日期">{{ feeInfo.dueDate }}</el-descriptions-item>
             <el-descriptions-item label="缴费日期">{{ feeInfo.paymentDate || '未缴费' }}</el-descriptions-item>
             <el-descriptions-item label="缴费状态">
-              <el-tag :type="getStatusTagType(feeInfo.status)">
+              <el-tag :type="getStatusTagType(feeInfo.status)" size="small">
                 {{ getStatusText(feeInfo.status) }}
               </el-tag>
             </el-descriptions-item>
-            <el-descriptions-item label="备注" :span="2">{{ feeInfo.remark }}</el-descriptions-item>
+            <el-descriptions-item label="备注" :span="isMobile ? 1 : 2">{{ feeInfo.remark }}</el-descriptions-item>
           </el-descriptions>
           
           <el-divider />
           
           <!-- 分摊计算结果 -->
-          <el-descriptions title="分摊计算结果" :column="1" border>
+          <el-descriptions title="分摊计算结果" :column="1" border size="small">
             <el-descriptions-item label="总金额">{{ allocationResult.totalAmount }} 元</el-descriptions-item>
             <el-descriptions-item label="分摊人数">{{ allocationResult.personCount }} 人</el-descriptions-item>
             <el-descriptions-item label="人均分摊">{{ allocationResult.perPersonAmount }} 元/人</el-descriptions-item>
@@ -91,16 +103,18 @@
           
           <el-divider />
           
-          <el-descriptions title="成员信息" :column="2" border>
+          <el-descriptions title="成员信息" :column="isMobile ? 1 : 2" border size="small">
             <el-descriptions-item label="联系电话">{{ studentInfo.phone }}</el-descriptions-item>
             <el-descriptions-item label="寝室">{{ studentInfo.dormitory }}</el-descriptions-item>
           </el-descriptions>
         </el-col>
         
-        <el-col :span="8">
-          <el-card shadow="never">
+        <el-col :xs="24" :sm="8" :class="{ 'mt-20': isMobile }">
+          <el-card shadow="never" class="stat-card">
             <template #header>
-              <span>费用统计</span>
+              <div class="card-header">
+                <span>费用统计</span>
+              </div>
             </template>
             <div class="fee-statistics">
               <div class="stat-item">
@@ -124,19 +138,22 @@
           
           <el-card shadow="never" style="margin-top: 20px;">
             <template #header>
-              <span>缴费历史</span>
+              <div class="card-header">
+                <span>缴费历史</span>
+              </div>
             </template>
-            <el-timeline>
+            <el-timeline :reverse="false">
               <el-timeline-item
                 v-for="(record, index) in paymentHistory"
                 :key="index"
                 :timestamp="record.date"
                 placement="top"
+                size="small"
               >
-                <el-card>
+                <el-card shadow="never" class="timeline-card">
                   <h4>{{ getFeeTypeText(record.type) }}</h4>
                   <p>金额: ¥{{ record.amount }}</p>
-                  <p>操作人: {{ record.operator }}</p>
+                  <p v-if="!isMobile">操作人: {{ record.operator }}</p>
                 </el-card>
               </el-timeline-item>
             </el-timeline>
@@ -145,42 +162,48 @@
       </el-row>
 
       <!-- 审核历史记录 -->
-      <el-card style="margin-top: 20px;">
+      <el-card style="margin-top: 20px;" class="audit-history-card">
         <template #header>
-          <span>审核历史记录</span>
+          <div class="card-header">
+            <span>审核历史记录</span>
+          </div>
         </template>
-        <el-table :data="auditHistory" style="width: 100%" border>
-          <el-table-column prop="date" label="审核时间" width="180"></el-table-column>
-          <el-table-column prop="auditor" label="审核人" width="150"></el-table-column>
-          <el-table-column prop="status" label="审核状态" width="120">
-            <template #default="scope">
-              <el-tag :type="getAuditStatusTagType(scope.row.status)">
-                {{ getAuditStatusText(scope.row.status) }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="comment" label="审核意见"></el-table-column>
-        </el-table>
+        <div class="table-wrapper">
+          <el-table :data="auditHistory" style="width: 100%" border size="small">
+            <el-table-column prop="date" label="审核时间" width="160"></el-table-column>
+            <el-table-column prop="auditor" label="审核人" width="100"></el-table-column>
+            <el-table-column prop="status" label="审核状态" width="100">
+              <template #default="scope">
+                <el-tag :type="getAuditStatusTagType(scope.row.status)" size="small">
+                  {{ getAuditStatusText(scope.row.status) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="comment" label="审核意见" min-width="150"></el-table-column>
+          </el-table>
+        </div>
       </el-card>
       
       <!-- 费用凭证管理 -->
-      <el-card style="margin-top: 20px;">
+      <el-card style="margin-top: 20px;" class="certificate-card">
         <template #header>
           <div class="card-header">
             <span>费用凭证</span>
-            <el-button type="primary" @click="handleUploadCertificate" size="small">上传凭证</el-button>
+            <el-button type="primary" @click="handleUploadCertificate" :size="isMobile ? 'small' : 'small'">上传凭证</el-button>
           </div>
         </template>
-        <el-row :gutter="20">
-          <el-col :span="6" v-for="(certificate, index) in certificates" :key="index">
+        <el-row :gutter="isMobile ? 10 : 20">
+          <el-col :xs="12" :sm="6" v-for="(certificate, index) in certificates" :key="index" class="mb-10">
             <el-card :body-style="{ padding: '0px' }" shadow="hover">
-              <img :src="certificate.url" class="image" />
-              <div style="padding: 14px;">
+              <div class="certificate-image-wrapper">
+                <img :src="certificate.url" class="image" />
+              </div>
+              <div style="padding: 10px;">
                 <div class="certificate-title">{{ certificate.name }}</div>
-                <div class="certificate-info">{{ certificate.uploadDate }}</div>
+                <div class="certificate-info" v-if="!isMobile">{{ certificate.uploadDate }}</div>
                 <div class="certificate-actions">
-                  <el-button type="primary" link @click="handleViewCertificate(certificate)">查看</el-button>
-                  <el-button type="danger" link @click="handleDeleteCertificate(certificate, index)">删除</el-button>
+                  <el-button type="primary" link @click="handleViewCertificate(certificate)" size="small">查看</el-button>
+                  <el-button type="danger" link @click="handleDeleteCertificate(certificate, index)" size="small">删除</el-button>
                 </div>
               </div>
             </el-card>
@@ -190,18 +213,25 @@
     </el-card>
     
     <!-- 编辑对话框 -->
-    <el-dialog v-model="editDialogVisible" title="编辑费用信息" width="600px">
-      <el-form :model="editFormData" :rules="editFormRules" ref="editFormRef" label-width="100px">
-        <el-row :gutter="20">
-          <el-col :span="24">
-            <el-form-item label="成员姓名" prop="studentName">
-              <el-input v-model="editFormData.studentName" placeholder="请输入成员姓名" />
-            </el-form-item>
-          </el-col>
-        </el-row>
+    <el-dialog 
+      v-model="editDialogVisible" 
+      title="编辑费用信息" 
+      :width="isMobile ? '95%' : '600px'"
+      :fullscreen="isMobile"
+    >
+      <el-form 
+        :model="editFormData" 
+        :rules="editFormRules" 
+        ref="editFormRef" 
+        :label-width="isMobile ? '80px' : '100px'"
+        :label-position="isMobile ? 'top' : 'left'"
+      >
+        <el-form-item label="成员姓名" prop="studentName">
+          <el-input v-model="editFormData.studentName" placeholder="请输入成员姓名" />
+        </el-form-item>
         
-        <el-row :gutter="20">
-          <el-col :span="12">
+        <el-row :gutter="isMobile ? 0 : 20">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="费用类型" prop="feeType">
               <el-select v-model="editFormData.feeType" placeholder="请选择费用类型" style="width: 100%;">
                 <el-option label="住宿费" value="accommodation" />
@@ -219,15 +249,15 @@
             </el-form-item>
           </el-col>
           
-          <el-col :span="12">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="金额(元)" prop="amount">
               <el-input-number v-model="editFormData.amount" :min="0" :precision="2" :step="100" controls-position="right" style="width: 100%;" />
             </el-form-item>
           </el-col>
         </el-row>
         
-        <el-row :gutter="20">
-          <el-col :span="12">
+        <el-row :gutter="isMobile ? 0 : 20">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="应缴日期" prop="dueDate">
               <el-date-picker
                 v-model="editFormData.dueDate"
@@ -240,7 +270,7 @@
             </el-form-item>
           </el-col>
           
-          <el-col :span="12">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="缴费状态" prop="status">
               <el-select v-model="editFormData.status" placeholder="请选择缴费状态" style="width: 100%;">
                 <el-option label="已缴费" value="paid" />
@@ -248,29 +278,15 @@
                 <el-option label="部分缴费" value="partial" />
                 <el-option label="待审核" value="pending" />
                 <el-option label="审核通过" value="approved" />
-                <el-option label="审核拒绝" value="rejected" />
-                <el-option label="草稿" value="draft" />
               </el-select>
             </el-form-item>
           </el-col>
         </el-row>
-        
-        <el-form-item label="缴费日期">
-          <el-date-picker
-            v-model="editFormData.paymentDate"
-            type="date"
-            placeholder="请选择缴费日期"
-            format="YYYY-MM-DD"
-            value-format="YYYY-MM-DD"
-            style="width: 100%;"
-          />
-        </el-form-item>
-        
-        <el-form-item label="备注">
-          <el-input v-model="editFormData.remark" type="textarea" placeholder="请输入备注" />
+
+        <el-form-item label="备注" prop="remark">
+          <el-input v-model="editFormData.remark" type="textarea" :rows="3" placeholder="请输入备注信息" />
         </el-form-item>
       </el-form>
-      
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="editDialogVisible = false">取消</el-button>
@@ -280,8 +296,8 @@
     </el-dialog>
     
     <!-- 缴费对话框 -->
-    <el-dialog v-model="paymentDialogVisible" title="费用缴纳" width="500px">
-      <el-form :model="paymentFormData" :rules="paymentFormRules" ref="paymentFormRef" label-width="100px">
+    <el-dialog v-model="paymentDialogVisible" title="费用缴纳" :width="isMobile ? '95%' : '500px'">
+      <el-form :model="paymentFormData" :rules="paymentFormRules" ref="paymentFormRef" :label-width="isMobile ? '80px' : '100px'" :label-position="isMobile ? 'top' : 'left'">
         <el-form-item label="缴费金额" prop="amount">
           <el-input-number v-model="paymentFormData.amount" :min="0" :max="feeInfo.amount" :precision="2" controls-position="right" style="width: 100%;" />
         </el-form-item>
@@ -320,8 +336,8 @@
     </el-dialog>
     
     <!-- 状态调整对话框 -->
-    <el-dialog v-model="statusDialogVisible" title="费用状态调整" width="500px">
-      <el-form :model="statusFormData" :rules="statusFormRules" ref="statusFormRef" label-width="100px">
+    <el-dialog v-model="statusDialogVisible" title="费用状态调整" :width="isMobile ? '95%' : '500px'">
+      <el-form :model="statusFormData" :rules="statusFormRules" ref="statusFormRef" :label-width="isMobile ? '80px' : '100px'" :label-position="isMobile ? 'top' : 'left'">
         <el-form-item label="新状态" prop="status">
           <el-select v-model="statusFormData.status" placeholder="请选择新的缴费状态" style="width: 100%;">
             <el-option label="已缴费" value="paid" />
@@ -348,7 +364,7 @@
     </el-dialog>
     
     <!-- 凭证上传对话框 -->
-    <el-dialog v-model="certificateDialogVisible" title="上传费用凭证" width="500px">
+    <el-dialog v-model="certificateDialogVisible" title="上传费用凭证" :width="isMobile ? '95%' : '500px'">
       <el-upload
         class="certificate-uploader"
         drag
@@ -369,7 +385,7 @@
         </template>
       </el-upload>
       
-      <el-form :model="certificateFormData" label-width="100px" style="margin-top: 20px;">
+      <el-form :model="certificateFormData" :label-width="isMobile ? '80px' : '100px'" :label-position="isMobile ? 'top' : 'left'" style="margin-top: 20px;">
         <el-form-item label="凭证名称">
           <el-input v-model="certificateFormData.name" placeholder="请输入凭证名称" />
         </el-form-item>
@@ -387,7 +403,7 @@
     </el-dialog>
     
     <!-- 凭证预览对话框 -->
-    <el-dialog v-model="previewDialogVisible" title="凭证预览" width="600px">
+    <el-dialog v-model="previewDialogVisible" title="凭证预览" :width="isMobile ? '95%' : '600px'">
       <img :src="previewImage" alt="凭证预览" style="width: 100%;" />
       <div style="margin-top: 10px; text-align: center;">{{ previewCertificateName }}</div>
     </el-dialog>
@@ -395,7 +411,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
@@ -405,6 +421,12 @@ import { feeApi } from '@/api/fee'
 // 路由相关
 const router = useRouter()
 const route = useRoute()
+
+// 移动端适配
+const isMobile = ref(false)
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
 
 // 从路由参数获取费用ID
 const feeId = computed(() => {
@@ -851,6 +873,8 @@ const handleDeleteCertificate = (certificate: any, index: number) => {
 
 // 组件挂载
 onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
   console.log('💳 费用详情页面加载完成', {
     hasId: !!feeId.value,
     id: feeId.value
@@ -863,6 +887,10 @@ onMounted(() => {
     // 如果没有ID，加载费用列表供选择
     loadFeeList()
   }
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
 })
 
 // 监听路由参数变化，当进入或返回页面时加载对应数据
@@ -997,8 +1025,13 @@ const loadFeeList = async () => {
   align-items: center;
 }
 
+.header-actions {
+  display: flex;
+  gap: 10px;
+}
+
 .fee-statistics {
-  padding: 20px 0;
+  padding: 10px 0;
 }
 
 .stat-item {
@@ -1031,9 +1064,19 @@ const loadFeeList = async () => {
   object-fit: cover;
 }
 
+.certificate-image-wrapper {
+  width: 100%;
+  height: 120px;
+  overflow: hidden;
+}
+
 .certificate-title {
   font-weight: bold;
   margin-bottom: 5px;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .certificate-info {
@@ -1043,7 +1086,8 @@ const loadFeeList = async () => {
 }
 
 .certificate-actions {
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .certificate-uploader .el-upload {
@@ -1065,5 +1109,76 @@ const loadFeeList = async () => {
   width: 100%;
   height: 100%;
   text-align: center;
+}
+
+.mt-20 {
+  margin-top: 20px;
+}
+
+.mb-10 {
+  margin-bottom: 10px;
+}
+
+/* 移动端适配样式 */
+.is-mobile .card-header {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.is-mobile .header-actions {
+  width: 100%;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.is-mobile .detail-header {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.is-mobile .detail-header .header-actions {
+  width: auto;
+}
+
+.is-mobile .stat-card {
+  margin-top: 10px;
+}
+
+.is-mobile .timeline-card {
+  padding: 10px;
+}
+
+.is-mobile .timeline-card h4 {
+  font-size: 14px;
+  margin: 0 0 5px 0;
+}
+
+.is-mobile .timeline-card p {
+  font-size: 12px;
+  margin: 0;
+}
+
+.is-mobile .certificate-image-wrapper {
+  height: 100px;
+}
+
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* 修复 descriptions 在移动端的样式 */
+:deep(.el-descriptions__body) {
+  background-color: transparent;
+}
+
+:deep(.el-descriptions__label) {
+  width: 100px;
+}
+
+.is-mobile :deep(.el-descriptions__label) {
+  width: 80px;
 }
 </style>

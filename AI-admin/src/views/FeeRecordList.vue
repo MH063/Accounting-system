@@ -4,170 +4,186 @@
       <template #header>
         <div class="card-header">
           <span>费用记录列表</span>
-          <el-button type="primary" @click="handleAdd">新增费用记录</el-button>
+          <div class="header-actions">
+            <el-button type="primary" @click="handleAdd">
+              <el-icon v-if="isMobile"><Plus /></el-icon>
+              <span v-if="!isMobile">新增费用记录</span>
+            </el-button>
+          </div>
         </div>
       </template>
       
       <!-- 搜索和筛选 -->
       <div class="search-bar">
-        <el-form :model="searchForm" label-width="80px" inline>
-          <el-form-item label="学生姓名">
-            <el-input v-model="searchForm.studentName" placeholder="请输入学生姓名" clearable />
-          </el-form-item>
-          
-          <el-form-item label="费用类型">
-            <el-select v-model="searchForm.feeType" placeholder="请选择费用类型" clearable>
-              <el-option label="住宿费" value="accommodation" />
-              <el-option label="水电费" value="utilities" />
-              <el-option label="网费" value="internet" />
-              <el-option label="维修费" value="maintenance" />
-              <el-option label="清洁费" value="cleaning" />
-              <el-option label="房租" value="rent" />
-              <el-option label="活动费用" value="activities" />
-              <el-option label="其他" value="other" />
-            </el-select>
-          </el-form-item>
-          
-          <el-form-item label="缴费状态">
-            <el-select v-model="searchForm.status" placeholder="请选择缴费状态" clearable>
-              <el-option label="已缴费" value="paid" />
-              <el-option label="未缴费" value="unpaid" />
-              <el-option label="部分缴费" value="partial" />
-              <el-option label="待审核" value="pending" />
-              <el-option label="审核通过" value="approved" />
-              <el-option label="审核拒绝" value="rejected" />
-              <el-option label="草稿" value="draft" />
-            </el-select>
-          </el-form-item>
-          
-          <el-form-item label="审核状态">
-            <el-select v-model="searchForm.auditStatus" placeholder="请选择审核状态" clearable>
-              <el-option label="待审核" value="pending" />
-              <el-option label="审核通过" value="approved" />
-              <el-option label="审核拒绝" value="rejected" />
-              <el-option label="草稿" value="draft" />
-            </el-select>
-          </el-form-item>
-          
-          <el-form-item label="时间范围">
-            <el-date-picker
-              v-model="searchForm.dateRange"
-              type="daterange"
-              range-separator="至"
-              start-placeholder="开始日期"
-              end-placeholder="结束日期"
-              format="YYYY-MM-DD"
-              value-format="YYYY-MM-DD"
-            />
-          </el-form-item>
-          
-          <el-form-item>
-            <el-button type="primary" @click="handleSearch">查询</el-button>
-            <el-button @click="handleReset">重置</el-button>
-          </el-form-item>
+        <el-form :model="searchForm" :label-width="isMobile ? '80px' : '80px'" :inline="!isMobile" class="responsive-search-form">
+          <el-row :gutter="isMobile ? 10 : 20">
+            <el-col :xs="24" :sm="6">
+              <el-form-item label="学生姓名">
+                <el-input v-model="searchForm.studentName" placeholder="请输入姓名" clearable />
+              </el-form-item>
+            </el-col>
+            
+            <template v-if="!isMobile || showMoreFilters">
+              <el-col :xs="12" :sm="6">
+                <el-form-item label="费用类型">
+                  <el-select v-model="searchForm.feeType" placeholder="类型" clearable style="width: 100%;">
+                    <el-option label="住宿费" value="accommodation" />
+                    <el-option label="水电费" value="utilities" />
+                    <el-option label="网费" value="internet" />
+                    <el-option label="维修费" value="maintenance" />
+                    <el-option label="其他" value="other" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              
+              <el-col :xs="12" :sm="6">
+                <el-form-item label="缴费状态">
+                  <el-select v-model="searchForm.status" placeholder="状态" clearable style="width: 100%;">
+                    <el-option label="已缴费" value="paid" />
+                    <el-option label="未缴费" value="unpaid" />
+                    <el-option label="待审核" value="pending" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              
+              <el-col :xs="24" :sm="6" v-if="!isMobile">
+                <el-form-item label="时间范围">
+                  <el-date-picker
+                    v-model="searchForm.dateRange"
+                    type="daterange"
+                    range-separator="至"
+                    start-placeholder="开始"
+                    end-placeholder="结束"
+                    format="YYYY-MM-DD"
+                    value-format="YYYY-MM-DD"
+                    style="width: 100%;"
+                  />
+                </el-form-item>
+              </el-col>
+            </template>
+            
+            <el-col :xs="24" :sm="6" class="search-btn-col">
+              <div class="search-actions">
+                <el-button type="primary" @click="handleSearch" :icon="Search" :class="{ 'flex-1': isMobile }">
+                  {{ isMobile ? '查询' : '查询' }}
+                </el-button>
+                <el-button @click="handleReset" :icon="Refresh" :class="{ 'flex-1': isMobile }">
+                  {{ isMobile ? '重置' : '重置' }}
+                </el-button>
+                <el-button 
+                  v-if="isMobile" 
+                  type="primary" 
+                  link 
+                  @click="showMoreFilters = !showMoreFilters"
+                >
+                  {{ showMoreFilters ? '收起' : '更多' }}
+                  <el-icon class="el-icon--right">
+                    <component :is="showMoreFilters ? 'ArrowUp' : 'ArrowDown'" />
+                  </el-icon>
+                </el-button>
+              </div>
+            </el-col>
+          </el-row>
         </el-form>
       </div>
       
       <!-- 费用统计汇总 -->
       <div class="fee-stats-container">
-        <el-row :gutter="20">
-          <el-col :span="6">
-            <el-card class="stats-card">
-              <el-statistic title="总费用金额" :value="feeStats.totalAmount" prefix="¥" />
+        <el-row :gutter="isMobile ? 10 : 20">
+          <el-col :xs="12" :sm="6">
+            <el-card class="stats-card" shadow="hover">
+              <el-statistic title="总费用" :value="feeStats.totalAmount" prefix="¥" />
             </el-card>
           </el-col>
-          <el-col :span="6">
-            <el-card class="stats-card">
-              <el-statistic title="已缴费金额" :value="feeStats.paidAmount" prefix="¥" />
+          <el-col :xs="12" :sm="6">
+            <el-card class="stats-card" shadow="hover">
+              <el-statistic title="已缴费" :value="feeStats.paidAmount" prefix="¥" />
             </el-card>
           </el-col>
-          <el-col :span="6">
-            <el-card class="stats-card">
-              <el-statistic title="待缴费金额" :value="feeStats.unpaidAmount" prefix="¥" />
+          <el-col :xs="12" :sm="6" :class="{ 'mt-10': isMobile }">
+            <el-card class="stats-card" shadow="hover">
+              <el-statistic title="待缴费" :value="feeStats.unpaidAmount" prefix="¥" />
             </el-card>
           </el-col>
-          <el-col :span="6">
-            <el-card class="stats-card">
-              <el-statistic title="待审核记录" :value="feeStats.pendingCount" suffix="条" />
+          <el-col :xs="12" :sm="6" :class="{ 'mt-10': isMobile }">
+            <el-card class="stats-card" shadow="hover">
+              <el-statistic title="待审核" :value="feeStats.pendingCount" suffix="条" />
             </el-card>
           </el-col>
         </el-row>
       </div>
       
       <!-- 批量操作区域 -->
-      <div class="batch-operations">
-        <el-button 
-          type="primary" 
-          :disabled="selectedRows.length === 0"
-          @click="batchApprove"
-        >
-          批量审核通过
-        </el-button>
-        <el-button 
-          type="warning" 
-          :disabled="selectedRows.length === 0"
-          @click="batchReject"
-        >
-          批量审核拒绝
-        </el-button>
-        <el-button 
-          type="success" 
-          :disabled="selectedRows.length === 0"
-          @click="batchMarkPaid"
-        >
-          批量标记已缴费
-        </el-button>
+      <div class="batch-operations" :class="{ 'mobile-batch': isMobile }">
+        <el-button-group :class="{ 'w-100': isMobile }">
+          <el-button 
+            type="primary" 
+            size="small"
+            :disabled="selectedRows.length === 0"
+            @click="batchApprove"
+          >
+            {{ isMobile ? '审核' : '批量审核' }}
+          </el-button>
+          <el-button 
+            type="success" 
+            size="small"
+            :disabled="selectedRows.length === 0"
+            @click="batchMarkPaid"
+          >
+            {{ isMobile ? '缴费' : '批量已缴' }}
+          </el-button>
+        </el-button-group>
         <span class="selection-info" v-if="selectedRows.length > 0">
-          已选择 {{ selectedRows.length }} 条记录
+          已选 {{ selectedRows.length }}
         </span>
       </div>
       
-      <el-table 
-        :data="tableData" 
-        style="width: 100%" 
-        v-loading="loading"
-        @selection-change="handleSelectionChange"
-      >
-        <el-table-column type="selection" width="55" />
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="studentName" label="学生姓名" />
-        <el-table-column prop="feeType" label="费用类型">
-          <template #default="scope">
-            {{ getFeeTypeText(scope.row.feeType) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="amount" label="金额(元)" />
-        <el-table-column prop="dueDate" label="应缴日期" />
-        <el-table-column prop="paymentDate" label="缴费日期" />
-        <el-table-column prop="status" label="缴费状态">
-          <template #default="scope">
-            <el-tag :type="getStatusTagType(scope.row.status)">
-              {{ getStatusText(scope.row.status) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="auditStatus" label="审核状态">
-          <template #default="scope">
-            <el-tag :type="getAuditStatusTagType(scope.row.auditStatus)">
-              {{ getAuditStatusText(scope.row.auditStatus) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="200">
-          <template #default="scope">
-            <el-button size="small" @click="handleView(scope.row)">查看</el-button>
-            <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
-            <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <div class="table-container scrollbar-hide">
+        <el-table 
+          :data="tableData" 
+          style="width: 100%" 
+          v-loading="loading"
+          @selection-change="handleSelectionChange"
+          :size="isMobile ? 'small' : 'default'"
+        >
+          <el-table-column type="selection" width="40" fixed />
+          <el-table-column prop="studentName" label="姓名" min-width="90" fixed />
+          <el-table-column prop="feeType" label="类型" min-width="90">
+            <template #default="scope">
+              {{ getFeeTypeText(scope.row.feeType) }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="amount" label="金额" min-width="90" />
+          <el-table-column prop="status" label="状态" min-width="100">
+            <template #default="scope">
+              <el-tag :type="getStatusTagType(scope.row.status)" size="small">
+                {{ getStatusText(scope.row.status) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" :width="isMobile ? 120 : 180" fixed="right">
+            <template #default="scope">
+              <el-button size="small" link type="primary" @click="handleView(scope.row)">
+                {{ isMobile ? '看' : '查看' }}
+              </el-button>
+              <el-button size="small" link type="primary" @click="handleEdit(scope.row)">
+                {{ isMobile ? '改' : '编辑' }}
+              </el-button>
+              <el-button size="small" link type="danger" @click="handleDelete(scope.row)">
+                {{ isMobile ? '删' : '删除' }}
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
       
       <div class="pagination-container">
         <el-pagination
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
           :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
+          :layout="isMobile ? 'prev, pager, next' : 'total, sizes, prev, pager, next, jumper'"
+          :pager-count="isMobile ? 5 : 7"
           :total="total"
           @size-change="handleSizeChange"
           @current-change="handleCurrentChange"
@@ -176,45 +192,44 @@
     </el-card>
     
     <!-- 新增/编辑对话框 -->
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px">
-      <el-form :model="formData" :rules="formRules" ref="formRef" label-width="100px">
-        <el-row :gutter="20">
-          <el-col :span="24">
-            <el-form-item label="学生姓名" prop="studentName">
-              <el-input v-model="formData.studentName" placeholder="请输入学生姓名" />
-            </el-form-item>
-          </el-col>
-        </el-row>
+    <el-dialog 
+      v-model="dialogVisible" 
+      :title="dialogTitle" 
+      :width="isMobile ? '95%' : '600px'"
+      :fullscreen="isMobile"
+    >
+      <el-form :model="formData" :rules="formRules" ref="formRef" :label-width="isMobile ? '80px' : '100px'">
+        <el-form-item label="学生姓名" prop="studentName">
+          <el-input v-model="formData.studentName" placeholder="请输入学生姓名" />
+        </el-form-item>
         
-        <el-row :gutter="20">
-          <el-col :span="12">
+        <el-row :gutter="isMobile ? 10 : 20">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="费用类型" prop="feeType">
-              <el-select v-model="formData.feeType" placeholder="请选择费用类型" style="width: 100%;">
+              <el-select v-model="formData.feeType" placeholder="请选择" style="width: 100%;">
                 <el-option label="住宿费" value="accommodation" />
                 <el-option label="水电费" value="utilities" />
                 <el-option label="网费" value="internet" />
                 <el-option label="维修费" value="maintenance" />
-                <el-option label="清洁费" value="cleaning" />
-                <el-option label="房租" value="rent" />
                 <el-option label="其他" value="other" />
               </el-select>
             </el-form-item>
           </el-col>
           
-          <el-col :span="12">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="金额(元)" prop="amount">
-              <el-input-number v-model="formData.amount" :min="0" :precision="2" :step="100" controls-position="right" style="width: 100%;" />
+              <el-input-number v-model="formData.amount" :min="0" :precision="2" controls-position="right" style="width: 100%;" />
             </el-form-item>
           </el-col>
         </el-row>
         
-        <el-row :gutter="20">
-          <el-col :span="12">
+        <el-row :gutter="isMobile ? 10 : 20">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="应缴日期" prop="dueDate">
               <el-date-picker
                 v-model="formData.dueDate"
                 type="date"
-                placeholder="请选择应缴日期"
+                placeholder="请选择"
                 format="YYYY-MM-DD"
                 value-format="YYYY-MM-DD"
                 style="width: 100%;"
@@ -222,16 +237,12 @@
             </el-form-item>
           </el-col>
           
-          <el-col :span="12">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="缴费状态" prop="status">
-              <el-select v-model="formData.status" placeholder="请选择缴费状态" style="width: 100%;">
+              <el-select v-model="formData.status" placeholder="请选择" style="width: 100%;">
                 <el-option label="已缴费" value="paid" />
                 <el-option label="未缴费" value="unpaid" />
-                <el-option label="部分缴费" value="partial" />
                 <el-option label="待审核" value="pending" />
-                <el-option label="审核通过" value="approved" />
-                <el-option label="审核拒绝" value="rejected" />
-                <el-option label="草稿" value="draft" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -241,7 +252,7 @@
           <el-date-picker
             v-model="formData.paymentDate"
             type="date"
-            placeholder="请选择缴费日期"
+            placeholder="请选择"
             format="YYYY-MM-DD"
             value-format="YYYY-MM-DD"
             style="width: 100%;"
@@ -249,7 +260,7 @@
         </el-form-item>
         
         <el-form-item label="备注">
-          <el-input v-model="formData.remark" type="textarea" placeholder="请输入备注" />
+          <el-input v-model="formData.remark" type="textarea" :rows="3" placeholder="请输入备注" />
         </el-form-item>
       </el-form>
       
@@ -264,12 +275,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus, Search, Refresh, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 
 // 导入统一验证规则库
 import { commonRules } from '@/utils/validationRules'
+
+// 移动端适配
+const isMobile = ref(false)
+const showMoreFilters = ref(false)
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
 
 // 路由相关
 const router = useRouter()
@@ -728,9 +747,15 @@ const updateFeeStats = () => {
 // 组件挂载
 onMounted(() => {
   console.log('💰 费用记录列表页面加载完成')
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
   
   // 初始化统计数据
   updateFeeStats()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
 })
 
 /**
@@ -752,6 +777,11 @@ onMounted(() => {
 
 .search-bar {
   margin-bottom: 20px;
+}
+
+.search-actions {
+  display: flex;
+  gap: 10px;
 }
 
 .fee-stats-container {
@@ -779,5 +809,45 @@ onMounted(() => {
   margin-top: 20px;
   display: flex;
   justify-content: center;
+}
+
+.mt-10 {
+  margin-top: 10px;
+}
+
+.w-100 {
+  width: 100%;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+.table-container {
+  margin-top: 10px;
+  overflow-x: auto;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .card-header {
+    flex-direction: row;
+    align-items: center;
+  }
+  
+  .search-actions {
+    margin-top: 10px;
+    width: 100%;
+  }
+  
+  .mobile-batch {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .mobile-batch .selection-info {
+    margin-left: 0;
+    margin-top: 5px;
+  }
 }
 </style>

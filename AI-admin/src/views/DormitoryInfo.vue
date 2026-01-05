@@ -13,12 +13,12 @@
       
       <div class="dormitory-info">
         <!-- 寝室基本信息 -->
-        <el-descriptions title="寝室基本信息" :column="2" border>
+        <el-descriptions title="寝室基本信息" :column="isMobile ? 1 : 2" border>
           <el-descriptions-item label="寝室名称">
             {{ dormitory.name }}
           </el-descriptions-item>
           <el-descriptions-item label="寝室类型">
-            <el-tag :type="getTypeTagType(dormitory.type)">
+            <el-tag :type="getTypeTagType(dormitory.type)" size="small">
               {{ getTypeText(dormitory.type) }}
             </el-tag>
           </el-descriptions-item>
@@ -35,7 +35,7 @@
             {{ dormitory.currentOccupancy }} 人
           </el-descriptions-item>
           <el-descriptions-item label="状态">
-            <el-tag :type="getStatusTagType(dormitory.status)">
+            <el-tag :type="getStatusTagType(dormitory.status)" size="small">
               {{ getStatusText(dormitory.status) }}
             </el-tag>
           </el-descriptions-item>
@@ -53,21 +53,21 @@
         <!-- 成员数量统计 -->
         <div class="section">
           <h3>成员数量统计</h3>
-          <el-row :gutter="20">
-            <el-col :span="6">
+          <el-row :gutter="isMobile ? 10 : 20">
+            <el-col :xs="12" :sm="6" class="mb-10">
               <div class="stat-card">
-                <div class="stat-icon">
+                <div class="stat-icon" v-if="!isMobile">
                   <el-icon size="24" color="#409EFF"><User /></el-icon>
                 </div>
                 <div class="stat-content">
                   <div class="stat-value">{{ dormitory.currentOccupancy }}</div>
-                  <div class="stat-label">总成员数</div>
+                  <div class="stat-label">总成员</div>
                 </div>
               </div>
             </el-col>
-            <el-col :span="6">
+            <el-col :xs="12" :sm="6" class="mb-10">
               <div class="stat-card">
-                <div class="stat-icon">
+                <div class="stat-icon" v-if="!isMobile">
                   <el-icon size="24" color="#67C23A"><User /></el-icon>
                 </div>
                 <div class="stat-content">
@@ -76,9 +76,9 @@
                 </div>
               </div>
             </el-col>
-            <el-col :span="6">
+            <el-col :xs="12" :sm="6" class="mb-10">
               <div class="stat-card">
-                <div class="stat-icon">
+                <div class="stat-icon" v-if="!isMobile">
                   <el-icon size="24" color="#E6A23C"><User /></el-icon>
                 </div>
                 <div class="stat-content">
@@ -87,9 +87,9 @@
                 </div>
               </div>
             </el-col>
-            <el-col :span="6">
+            <el-col :xs="12" :sm="6" class="mb-10">
               <div class="stat-card">
-                <div class="stat-icon">
+                <div class="stat-icon" v-if="!isMobile">
                   <el-icon size="24" color="#F56C6C"><User /></el-icon>
                 </div>
                 <div class="stat-content">
@@ -104,43 +104,45 @@
         <!-- 成员列表 -->
         <div class="section">
           <h3>寝室成员 ({{ dormitory.currentOccupancy }})</h3>
-          <el-table :data="dormitory.members" style="width: 100%">
-            <el-table-column prop="name" label="姓名" />
-            <el-table-column prop="role" label="角色">
-              <template #default="{ row }">
-                <el-tag :type="getRoleTagType(row.role)">
-                  {{ getRoleText(row.role) }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="joinDate" label="入住时间">
-              <template #default="{ row }">
-                {{ formatDate(row.joinDate) }}
-              </template>
-            </el-table-column>
-            <el-table-column prop="phone" label="联系电话" />
-            <el-table-column label="操作" width="120">
-              <template #default="{ row }">
-                <el-button 
-                  type="primary" 
-                  size="small" 
-                  link
-                  @click="viewMemberDetail(row)"
-                >
-                  查看详情
-                </el-button>
-              </template>
-            </el-table-column>
-          </el-table>
+          <div class="table-container">
+            <el-table :data="dormitory.members" style="width: 100%">
+              <el-table-column prop="name" label="姓名" :min-width="isMobile ? 80 : 100" />
+              <el-table-column prop="role" label="角色" width="100">
+                <template #default="{ row }">
+                  <el-tag :type="getRoleTagType(row.role)" size="small">
+                    {{ getRoleText(row.role) }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="joinDate" label="入住时间" width="120" v-if="!isMobile">
+                <template #default="{ row }">
+                  {{ formatDate(row.joinDate) }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="phone" label="联系电话" :min-width="120" v-if="!isMobile" />
+              <el-table-column label="操作" :width="isMobile ? 70 : 100" fixed="right">
+                <template #default="{ row }">
+                  <el-button 
+                    type="primary" 
+                    :size="isMobile ? 'small' : 'default'" 
+                    link
+                    @click="viewMemberDetail(row)"
+                  >
+                    {{ isMobile ? '查看' : '查看详情' }}
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
         </div>
         
         <!-- 费用统计概览 -->
         <div class="section">
           <h3>费用统计概览</h3>
-          <el-row :gutter="20">
-            <el-col :span="6">
+          <el-row :gutter="isMobile ? 10 : 20">
+            <el-col :xs="12" :sm="6" class="mb-10">
               <div class="stat-card">
-                <div class="stat-icon">
+                <div class="stat-icon" v-if="!isMobile">
                   <el-icon size="24" color="#409EFF"><Wallet /></el-icon>
                 </div>
                 <div class="stat-content">
@@ -149,9 +151,9 @@
                 </div>
               </div>
             </el-col>
-            <el-col :span="6">
+            <el-col :xs="12" :sm="6" class="mb-10">
               <div class="stat-card">
-                <div class="stat-icon">
+                <div class="stat-icon" v-if="!isMobile">
                   <el-icon size="24" color="#67C23A"><Wallet /></el-icon>
                 </div>
                 <div class="stat-content">
@@ -160,9 +162,9 @@
                 </div>
               </div>
             </el-col>
-            <el-col :span="6">
+            <el-col :xs="12" :sm="6" class="mb-10">
               <div class="stat-card">
-                <div class="stat-icon">
+                <div class="stat-icon" v-if="!isMobile">
                   <el-icon size="24" color="#E6A23C"><Wallet /></el-icon>
                 </div>
                 <div class="stat-content">
@@ -171,9 +173,9 @@
                 </div>
               </div>
             </el-col>
-            <el-col :span="6">
+            <el-col :xs="12" :sm="6" class="mb-10">
               <div class="stat-card">
-                <div class="stat-icon">
+                <div class="stat-icon" v-if="!isMobile">
                   <el-icon size="24" color="#F56C6C"><Wallet /></el-icon>
                 </div>
                 <div class="stat-content">
@@ -186,48 +188,53 @@
           
           <div class="recent-expenses">
             <h4>近期费用</h4>
-            <el-table :data="recentExpenses" style="width: 100%">
-              <el-table-column prop="title" label="费用名称" />
-              <el-table-column prop="amount" label="金额">
-                <template #default="{ row }">
-                  ¥{{ formatCurrency(row.amount) }}
-                </template>
-              </el-table-column>
-              <el-table-column prop="date" label="日期">
-                <template #default="{ row }">
-                  {{ formatDate(row.date) }}
-                </template>
-              </el-table-column>
-              <el-table-column prop="status" label="状态">
-                <template #default="{ row }">
-                  <el-tag :type="getExpenseStatusType(row.status)">
-                    {{ getExpenseStatusText(row.status) }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-            </el-table>
+            <div class="table-container">
+              <el-table :data="recentExpenses" style="width: 100%">
+                <el-table-column prop="title" label="费用名称" :min-width="120" />
+                <el-table-column prop="amount" label="金额" width="100">
+                  <template #default="{ row }">
+                    ¥{{ formatCurrency(row.amount) }}
+                  </template>
+                </el-table-column>
+                <el-table-column prop="date" label="日期" width="120" v-if="!isMobile">
+                  <template #default="{ row }">
+                    {{ formatDate(row.date) }}
+                  </template>
+                </el-table-column>
+                <el-table-column prop="status" label="状态" width="100">
+                  <template #default="{ row }">
+                    <el-tag :type="getExpenseStatusType(row.status)" size="small">
+                      {{ getExpenseStatusText(row.status) }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
           </div>
         </div>
         
         <!-- 权限相关的操作按钮 -->
         <div class="section">
           <h3>操作</h3>
-          <div class="actions">
+          <div class="actions" :class="{ 'is-mobile': isMobile }">
             <el-button 
               type="primary" 
               @click="addMember"
+              :class="{ 'full-width': isMobile }"
             >
               添加成员
             </el-button>
             <el-button 
               type="warning" 
               @click="modifyRules"
+              :class="{ 'full-width': isMobile }"
             >
               修改寝室规则
             </el-button>
             <el-button 
               type="danger" 
               @click="dissolveDormitory"
+              :class="{ 'full-width': isMobile }"
             >
               解散寝室
             </el-button>
@@ -252,8 +259,36 @@
     <el-dialog
       v-model="editDialogVisible"
       title="编辑寝室信息"
-      width="600px"
+      :width="isMobile ? '95%' : '600px'"
+      :fullscreen="isMobile"
     >
+      <el-form
+        ref="editFormRef"
+        :model="editForm"
+        :rules="editFormRules"
+        :label-width="isMobile ? '80px' : '100px'"
+        :label-position="isMobile ? 'top' : 'left'"
+      >
+        <el-form-item label="寝室名称" prop="name">
+          <el-input v-model="editForm.name" />
+        </el-form-item>
+        
+        <el-form-item label="寝室描述" prop="description">
+          <el-input
+            v-model="editForm.description"
+            type="textarea"
+            :rows="3"
+          />
+        </el-form-item>
+      </el-form>
+      
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="editDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="saveDormitory">保存</el-button>
+        </div>
+      </template>
+    </el-dialog>
       <el-form
         ref="editFormRef"
         :model="editForm"

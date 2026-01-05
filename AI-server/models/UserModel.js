@@ -87,7 +87,7 @@ class UserModel {
     }
 
     // 验证角色
-    const validRoles = ['user', 'admin', 'moderator', 'guest'];
+    const validRoles = ['user', 'admin', 'system_admin', 'dorm_leader', 'payer'];
     if (this.role && !validRoles.includes(this.role)) {
       errors.push('无效的角色类型');
     }

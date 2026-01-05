@@ -4,11 +4,13 @@
       <template #header>
         <div class="card-header">
           <span>用户管理</span>
-          <div>
-            <el-button type="primary" @click="handleAdd">新增用户</el-button>
+          <div class="header-actions">
+            <el-button type="primary" @click="handleAdd" :icon="Plus">
+              {{ isMobile ? '' : '新增用户' }}
+            </el-button>
             <el-dropdown @command="handleExportCommand">
-              <el-button>
-                导出数据<i class="el-icon-arrow-down el-icon--right"></i>
+              <el-button :icon="isMobile ? '' : 'Download'">
+                {{ isMobile ? '导出' : '导出数据' }}<el-icon class="el-icon--right"><arrow-down /></el-icon>
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
@@ -22,111 +24,135 @@
       </template>
       
       <!-- 搜索和筛选 -->
-      <el-form :model="searchForm" label-width="80px" inline class="search-form">
-        <el-form-item label="关键字">
-          <el-input
-            v-model="searchForm.keyword"
-            placeholder="搜索用户名称或邮箱"
-            style="width: 200px;"
-            clearable
-            @keyup.enter="handleSearch"
-          />
-        </el-form-item>
-        
-        <el-form-item label="角色">
-          <el-select v-model="searchForm.role" placeholder="请选择角色" clearable style="width: 120px;">
-            <el-option label="管理员" value="admin" />
-            <el-option label="普通用户" value="user" />
-          </el-select>
-        </el-form-item>
-        
-        <el-form-item label="状态">
-          <el-select v-model="searchForm.status" placeholder="请选择状态" clearable style="width: 120px;">
-            <el-option label="激活" value="active" />
-            <el-option label="禁用" value="inactive" />
-          </el-select>
-        </el-form-item>
-        
-        <el-form-item label="寝室">
-          <el-input
-            v-model="searchForm.dormitory"
-            placeholder="请输入寝室号"
-            style="width: 120px;"
-            clearable
-          />
-        </el-form-item>
-        
-        <el-form-item>
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
-          <el-button @click="handleReset">重置</el-button>
-        </el-form-item>
+      <el-form :model="searchForm" :label-width="isMobile ? '60px' : '80px'" :inline="!isMobile" class="search-form">
+        <el-row :gutter="isMobile ? 10 : 20">
+          <el-col :xs="24" :sm="6">
+            <el-form-item label="关键字">
+              <el-input
+                v-model="searchForm.keyword"
+                placeholder="搜索用户名称或邮箱"
+                style="width: 100%"
+                clearable
+                @keyup.enter="handleSearch"
+              />
+            </el-form-item>
+          </el-col>
+          
+          <el-col :xs="12" :sm="6">
+            <el-form-item label="角色">
+              <el-select v-model="searchForm.role" placeholder="角色" clearable style="width: 100%">
+                <el-option label="管理员" value="admin" />
+                <el-option label="普通用户" value="user" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          
+          <el-col :xs="12" :sm="6">
+            <el-form-item label="状态">
+              <el-select v-model="searchForm.status" placeholder="状态" clearable style="width: 100%">
+                <el-option label="激活" value="active" />
+                <el-option label="禁用" value="inactive" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          
+          <el-col :xs="24" :sm="6" v-if="!isMobile || showMoreFilters">
+            <el-form-item label="寝室">
+              <el-input
+                v-model="searchForm.dormitory"
+                placeholder="请输入寝室号"
+                style="width: 100%"
+                clearable
+              />
+            </el-form-item>
+          </el-col>
+          
+          <el-col :xs="24" :sm="6" class="search-buttons">
+            <el-form-item label-width="0">
+              <el-button type="primary" @click="handleSearch" :icon="Search">搜索</el-button>
+              <el-button @click="handleReset" :icon="Refresh">重置</el-button>
+              <el-button 
+                v-if="isMobile" 
+                type="primary" 
+                link 
+                @click="showMoreFilters = !showMoreFilters"
+              >
+                {{ showMoreFilters ? '收起' : '更多' }}
+                <el-icon class="el-icon--right">
+                  <component :is="showMoreFilters ? 'ArrowUp' : 'ArrowDown'" />
+                </el-icon>
+              </el-button>
+            </el-form-item>
+          </el-col>
+        </el-row>
       </el-form>
       
       <!-- 批量操作 -->
-      <div class="batch-actions" style="margin-bottom: 10px;">
-        <el-button type="primary" :disabled="selectedUsers.length === 0" @click="handleBatchEnable">
-          批量启用
-        </el-button>
-        <el-button type="warning" :disabled="selectedUsers.length === 0" @click="handleBatchDisable">
-          批量禁用
-        </el-button>
-        <el-button type="danger" :disabled="selectedUsers.length === 0" @click="handleBatchDelete">
-          批量删除
-        </el-button>
+      <div class="batch-actions" :class="{ 'is-mobile': isMobile }">
+        <el-button-group>
+          <el-button type="primary" :disabled="selectedUsers.length === 0" @click="handleBatchEnable">
+            {{ isMobile ? '启用' : '批量启用' }}
+          </el-button>
+          <el-button type="warning" :disabled="selectedUsers.length === 0" @click="handleBatchDisable">
+            {{ isMobile ? '禁用' : '批量禁用' }}
+          </el-button>
+          <el-button type="danger" :disabled="selectedUsers.length === 0" @click="handleBatchDelete">
+            {{ isMobile ? '删除' : '批量删除' }}
+          </el-button>
+        </el-button-group>
       </div>
       
-      <el-table 
-        :data="tableData" 
-        style="width: 100%" 
-        v-loading="loading"
-        :empty-text="loading ? '加载中...' : '暂无数据'"
-        @selection-change="handleSelectionChange"
-      >
-        <el-table-column type="selection" width="55" />
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="username" label="用户名" />
-        <el-table-column prop="email" label="邮箱" />
-        <el-table-column prop="role" label="角色">
-          <template #default="scope">
-            <el-tag v-if="scope.row.isSystemRole" type="info" effect="plain" style="margin-right: 5px;">系统角色</el-tag>
-            <el-tag v-if="scope.row.role === 'admin'" type="success">管理员</el-tag>
-            <el-tag v-else>普通用户</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="dormitory" label="寝室号" />
-        <el-table-column prop="phone" label="手机号" />
-        <el-table-column prop="status" label="状态">
-          <template #default="scope">
-            <el-tag :type="scope.row.status === 'active' ? 'success' : 'danger'">
-              {{ scope.row.status === 'active' ? '激活' : '禁用' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-  <el-table-column prop="lastLoginTime" label="最后登录时间">
-  <template #default="scope">
-    {{ formatDate(scope.row.lastLoginTime) }}
-  </template>
-</el-table-column>
-<el-table-column prop="createdAt" label="创建时间">
-  <template #default="scope">
-    {{ formatDate(scope.row.createdAt) }}
-  </template>
-</el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
-          <template #default="scope">
-            <el-button size="small" @click="handleView(scope.row)">查看</el-button>
-            <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
-            <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <div class="table-wrapper">
+        <el-table 
+          :data="tableData" 
+          style="width: 100%" 
+          v-loading="loading"
+          :size="isMobile ? 'small' : 'default'"
+          :empty-text="loading ? '加载中...' : '暂无数据'"
+          @selection-change="handleSelectionChange"
+        >
+          <el-table-column type="selection" width="50" />
+          <el-table-column prop="id" label="ID" width="70" v-if="!isMobile" />
+          <el-table-column prop="username" label="用户名" :min-width="100" show-overflow-tooltip />
+          <el-table-column prop="email" label="邮箱" :min-width="150" v-if="!isMobile" show-overflow-tooltip />
+          <el-table-column prop="role" label="角色" width="100">
+            <template #default="scope">
+              <el-tag :type="scope.row.role === 'admin' ? 'success' : 'info'" size="small">
+                {{ scope.row.role === 'admin' ? '管理员' : '用户' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="dormitory" label="寝室" width="90" />
+          <el-table-column prop="status" label="状态" width="80">
+            <template #default="scope">
+              <el-tag :type="scope.row.status === 'active' ? 'success' : 'danger'" size="small">
+                {{ scope.row.status === 'active' ? '激活' : '禁用' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" :width="isMobile ? 120 : 180" fixed="right">
+            <template #default="scope">
+              <el-button size="small" link type="primary" @click="handleView(scope.row)">
+                {{ isMobile ? '看' : '查看' }}
+              </el-button>
+              <el-button size="small" link type="primary" @click="handleEdit(scope.row)">
+                {{ isMobile ? '改' : '编辑' }}
+              </el-button>
+              <el-button size="small" link type="danger" @click="handleDelete(scope.row)">
+                {{ isMobile ? '删' : '删除' }}
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
       
       <div class="pagination-container">
         <el-pagination
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
           :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
+          :layout="isMobile ? 'prev, pager, next' : 'total, sizes, prev, pager, next, jumper'"
+          :pager-count="isMobile ? 5 : 7"
           :total="total"
           @size-change="handleSizeChange"
           @current-change="handleCurrentChange"
@@ -138,48 +164,38 @@
     <el-dialog
       v-model="addDialogVisible"
       title="新增用户"
-      width="600px"
+      :width="isMobile ? '95%' : '600px'"
+      :fullscreen="isMobile"
       :close-on-click-modal="false"
     >
       <el-form
         ref="addFormRef"
         :model="addForm"
         :rules="addFormRules"
-        label-width="100px"
+        :label-width="isMobile ? '80px' : '100px'"
+        :label-position="isMobile ? 'top' : 'left'"
         v-loading="addLoading"
       >
-        <el-row :gutter="20">
-          <el-col :span="12">
+        <el-row :gutter="isMobile ? 0 : 20">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="用户名" prop="username">
-              <el-input
-                v-model="addForm.username"
-                placeholder="请输入用户名"
-                clearable
-              />
+              <el-input v-model="addForm.username" placeholder="请输入用户名" clearable />
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="邮箱" prop="email">
-              <el-input
-                v-model="addForm.email"
-                placeholder="请输入邮箱地址"
-                clearable
-              />
+              <el-input v-model="addForm.email" placeholder="请输入邮箱地址" clearable />
             </el-form-item>
           </el-col>
         </el-row>
 
-        <el-row :gutter="20">
-          <el-col :span="12">
+        <el-row :gutter="isMobile ? 0 : 20">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="手机号" prop="phone">
-              <el-input
-                v-model="addForm.phone"
-                placeholder="请输入手机号"
-                clearable
-              />
+              <el-input v-model="addForm.phone" placeholder="请输入手机号" clearable />
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="角色" prop="role">
               <el-select v-model="addForm.role" placeholder="请选择角色" style="width: 100%;">
                 <el-option label="管理员" value="admin" />
@@ -189,8 +205,8 @@
           </el-col>
         </el-row>
 
-        <el-row :gutter="20">
-          <el-col :span="12">
+        <el-row :gutter="isMobile ? 0 : 20">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="初始密码" prop="password">
               <el-input
                 v-model="addForm.password"
@@ -201,7 +217,7 @@
               />
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="确认密码" prop="confirmPassword">
               <el-input
                 v-model="addForm.confirmPassword"
@@ -214,17 +230,13 @@
           </el-col>
         </el-row>
 
-        <el-row :gutter="20">
-          <el-col :span="12">
+        <el-row :gutter="isMobile ? 0 : 20">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="寝室号" prop="dormitory">
-              <el-input
-                v-model="addForm.dormitory"
-                placeholder="请输入寝室号（可选）"
-                clearable
-              />
+              <el-input v-model="addForm.dormitory" placeholder="请输入寝室号（可选）" clearable />
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="状态" prop="status">
               <el-select v-model="addForm.status" placeholder="请选择状态" style="width: 100%;">
                 <el-option label="激活" value="active" />
@@ -259,11 +271,27 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { userApi, systemApi } from '@/api/user'
-import { Search, Refresh, Plus, View, Edit, Delete } from '@element-plus/icons-vue'
+import { Search, Refresh, Plus, View, Edit, Delete, Download, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
+
+// 移动端检测
+const isMobile = ref(false)
+const showMoreFilters = ref(false)
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
+
+onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
+})
 
 // 导入统一验证规则库
 import { commonRules } from '@/utils/validationRules'
@@ -753,12 +781,44 @@ onMounted(() => {
   align-items: center;
 }
 
+/* 搜索表单自适应 */
 .search-form {
   margin-bottom: 20px;
 }
 
+.search-buttons {
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-end;
+}
+
+/* 批量操作按钮组 */
 .batch-actions {
-  margin-bottom: 10px;
+  margin-bottom: 15px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.batch-actions.is-mobile {
+  justify-content: space-between;
+}
+
+.batch-actions.is-mobile :deep(.el-button-group) {
+  display: flex;
+  width: 100%;
+}
+
+.batch-actions.is-mobile :deep(.el-button) {
+  flex: 1;
+  padding: 8px 4px;
+}
+
+/* 表格容器，支持横向滚动 */
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .pagination-container {
@@ -773,5 +833,39 @@ onMounted(() => {
 
 .dialog-footer .el-button {
   margin-left: 10px;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .card-header {
+    flex-direction: row;
+    font-size: 14px;
+  }
+  
+  .header-actions {
+    display: flex;
+    gap: 5px;
+  }
+  
+  :deep(.el-card__header) {
+    padding: 10px 15px;
+  }
+  
+  :deep(.el-card__body) {
+    padding: 15px 10px;
+  }
+
+  .search-buttons {
+    margin-top: 10px;
+    justify-content: center;
+    width: 100%;
+  }
+
+  .search-buttons :deep(.el-form-item__content) {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+  }
 }
 </style>

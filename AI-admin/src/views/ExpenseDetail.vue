@@ -1,37 +1,49 @@
 <template>
-  <div class="expense-detail-container">
-    <el-card>
+  <div class="expense-detail-container" :class="{ 'is-mobile': isMobile }">
+    <el-card shadow="never">
       <template #header>
         <div class="card-header">
-          <span>费用详情</span>
-          <div>
-            <el-button @click="goBack">返回</el-button>
+          <div class="header-title">
+            <span>费用详情</span>
+            <el-tag :type="getStatusType(expense.status)" size="small" round>
+              {{ getStatusText(expense.status) }}
+            </el-tag>
+          </div>
+          <div class="header-actions">
+            <el-button @click="goBack" :size="isMobile ? 'small' : 'default'">返回</el-button>
             <el-button 
               v-if="expense.status === 'pending'" 
               type="warning" 
               @click="reviewExpense"
+              :size="isMobile ? 'small' : 'default'"
             >
-              审核费用
+              审核
             </el-button>
             <el-button 
-              v-else-if="expense.status === 'approved'" 
+              v-if="expense.status === 'approved'" 
               type="success" 
               @click="payExpense"
+              :size="isMobile ? 'small' : 'default'"
             >
-              支付费用
+              支付
             </el-button>
           </div>
         </div>
       </template>
       
-      <div class="expense-detail">
+      <div class="expense-detail-body">
         <!-- 费用基本信息 -->
-        <el-descriptions title="费用基本信息" :column="2" border>
-          <el-descriptions-item label="费用标题">
+        <el-descriptions 
+          title="费用基本信息" 
+          :column="isMobile ? 1 : 2" 
+          border
+          size="small"
+        >
+          <el-descriptions-item label="费用标题" :span="isMobile ? 1 : 2">
             {{ expense.title }}
           </el-descriptions-item>
           <el-descriptions-item label="费用类别">
-            <el-tag :type="getCategoryType(expense.category)">
+            <el-tag :type="getCategoryType(expense.category)" size="small">
               {{ getCategoryText(expense.category) }}
             </el-tag>
           </el-descriptions-item>
@@ -44,12 +56,12 @@
           <el-descriptions-item label="申请人">
             {{ expense.applicant }}
           </el-descriptions-item>
-          <el-descriptions-item label="申请时间">
+          <el-descriptions-item label="申请时间" :span="isMobile ? 1 : 2">
             {{ formatDateTime(expense.createdAt) }}
           </el-descriptions-item>
           <el-descriptions-item label="状态">
-            <el-tag :type="getStatusType(expense.status)">
-              <el-icon :size="12" style="margin-right: 4px; vertical-align: text-top;">
+            <el-tag :type="getStatusType(expense.status)" size="small">
+              <el-icon :size="12" style="margin-right: 4px; vertical-align: middle;">
                 <component :is="getStatusIcon(expense.status)" />
               </el-icon>
               {{ getStatusText(expense.status) }}
@@ -58,115 +70,118 @@
           <el-descriptions-item label="审核人" v-if="expense.reviewer">
             {{ expense.reviewer }}
           </el-descriptions-item>
-          <el-descriptions-item label="审核时间" v-if="expense.reviewDate">
+          <el-descriptions-item label="审核时间" v-if="expense.reviewDate" :span="isMobile ? 1 : 2">
             {{ formatDateTime(expense.reviewDate) }}
           </el-descriptions-item>
         </el-descriptions>
         
         <!-- 费用说明 -->
         <div class="section">
-          <h3>费用说明</h3>
-          <p class="description">{{ expense.description }}</p>
+          <h3 class="section-title">费用说明</h3>
+          <div class="description-box">{{ expense.description || '无详细说明' }}</div>
         </div>
         
         <!-- 参与成员分摊详情 -->
         <div class="section">
-          <h3>参与成员分摊详情</h3>
-          <el-table :data="expense.participants" style="width: 100%">
-            <el-table-column prop="name" label="成员" />
-            <el-table-column prop="amount" label="分摊金额">
-              <template #default="{ row }">
-                ¥{{ formatCurrency(row.amount) }}
-              </template>
-            </el-table-column>
-            <el-table-column prop="percentage" label="分摊比例">
-              <template #default="{ row }">
-                {{ row.percentage }}%
-              </template>
-            </el-table-column>
-            <el-table-column prop="status" label="支付状态">
-              <template #default="{ row }">
-                <el-tag :type="getPaymentStatusType(row.paymentStatus)">
-                  {{ getPaymentStatusText(row.paymentStatus) }}
-                </el-tag>
-              </template>
-            </el-table-column>
-          </el-table>
+          <h3 class="section-title">分摊详情</h3>
+          <div class="table-responsive-container">
+            <el-table :data="expense.participants" style="width: 100%" size="small" border stripe>
+              <el-table-column prop="name" label="成员" min-width="90" />
+              <el-table-column prop="amount" label="分摊金额" width="100" align="right">
+                <template #default="{ row }">
+                  ¥{{ formatCurrency(row.amount) }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="percentage" label="比例" width="70" align="center">
+                <template #default="{ row }">
+                  {{ row.percentage }}%
+                </template>
+              </el-table-column>
+              <el-table-column prop="status" label="支付状态" width="100">
+                <template #default="{ row }">
+                  <el-tag :type="getPaymentStatusType(row.paymentStatus)" size="small">
+                    {{ getPaymentStatusText(row.paymentStatus) }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
         </div>
         
         <!-- 状态流转历史 -->
         <div class="section">
-          <h3>状态流转历史</h3>
-          <el-timeline>
-            <el-timeline-item
-              v-for="history in statusHistory"
-              :key="history.id"
-              :timestamp="formatDateTime(history.timestamp)"
-              placement="top"
-              :type="getTimelineType(history.status)"
-            >
-              <el-card>
-                <h4>{{ getStatusText(history.status) }}</h4>
-                <p v-if="history.comment">{{ history.comment }}</p>
-                <p>操作人: {{ history.operator }}</p>
-              </el-card>
-            </el-timeline-item>
-          </el-timeline>
+          <h3 class="section-title">状态流转历史</h3>
+          <div class="timeline-container">
+            <el-timeline>
+              <el-timeline-item
+                v-for="history in statusHistory"
+                :key="history.id"
+                :timestamp="formatDateTime(history.timestamp)"
+                placement="top"
+                :type="getTimelineType(history.status)"
+                size="normal"
+              >
+                <el-card shadow="never" class="history-card">
+                  <div class="history-header">
+                    <span class="history-status">{{ getStatusText(history.status) }}</span>
+                    <span class="history-operator">操作人: {{ history.operator }}</span>
+                  </div>
+                  <p v-if="history.comment" class="history-comment">{{ history.comment }}</p>
+                </el-card>
+              </el-timeline-item>
+            </el-timeline>
+          </div>
         </div>
         
         <!-- 附件 -->
         <div class="section" v-if="expense.attachments && expense.attachments.length > 0">
-          <h3>附件</h3>
-          <div class="attachments">
-            <el-card 
+          <h3 class="section-title">附件 ({{ expense.attachments.length }})</h3>
+          <div class="attachments-grid">
+            <div 
               v-for="attachment in expense.attachments" 
               :key="attachment.id"
-              class="attachment-card"
+              class="attachment-item"
+              @click="downloadAttachment(attachment)"
             >
-              <div class="attachment-content">
-                <el-icon class="attachment-icon"><Document /></el-icon>
-                <div class="attachment-info">
-                  <div class="attachment-name">{{ attachment.name }}</div>
-                  <div class="attachment-size">{{ formatFileSize(attachment.size) }}</div>
-                </div>
-                <el-button 
-                  type="primary" 
-                  link
-                  @click="downloadAttachment(attachment)"
-                >
-                  下载
-                </el-button>
+              <el-icon class="attachment-icon"><Document /></el-icon>
+              <div class="attachment-info">
+                <div class="attachment-name">{{ attachment.name }}</div>
+                <div class="attachment-size">{{ formatFileSize(attachment.size) }}</div>
               </div>
-            </el-card>
+              <el-button type="primary" link size="small">下载</el-button>
+            </div>
           </div>
         </div>
         
         <!-- 评论和讨论 -->
         <div class="section">
-          <h3>评论和讨论</h3>
-          <div class="comments">
+          <h3 class="section-title">讨论 ({{ comments.length }})</h3>
+          <div class="comments-section">
             <div 
               v-for="comment in comments" 
               :key="comment.id"
-              class="comment"
+              class="comment-item"
             >
               <div class="comment-header">
-                <el-avatar :src="comment.avatar" size="small" />
-                <div class="comment-user">{{ comment.user }}</div>
-                <div class="comment-time">{{ formatDateTime(comment.time) }}</div>
+                <el-avatar :src="comment.avatar" :size="isMobile ? 24 : 32" />
+                <div class="comment-meta">
+                  <span class="comment-user">{{ comment.user }}</span>
+                  <span class="comment-time">{{ formatDateTime(comment.time) }}</span>
+                </div>
               </div>
               <div class="comment-content">{{ comment.content }}</div>
             </div>
             
-            <div class="comment-input">
+            <div class="comment-input-area">
               <el-input
                 v-model="newComment"
                 type="textarea"
-                :rows="3"
+                :rows="isMobile ? 2 : 3"
                 placeholder="请输入您的评论..."
+                class="comment-textarea"
               />
-              <div class="comment-actions">
-                <el-button type="primary" @click="addComment">发表评论</el-button>
+              <div class="comment-submit">
+                <el-button type="primary" @click="addComment" :size="isMobile ? 'small' : 'default'">发表评论</el-button>
               </div>
             </div>
           </div>
@@ -177,7 +192,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { 
@@ -187,6 +202,12 @@ import {
 // 路由实例
 const router = useRouter()
 const route = useRoute()
+
+// 移动端适配
+const isMobile = ref(false)
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
 
 // 响应式数据
 const newComment = ref('')
@@ -419,13 +440,25 @@ const addComment = () => {
 
 // 组件挂载时的操作
 onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
   console.log('📄 费用详情页面加载完成', route.params.id)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
 })
 </script>
 
 <style scoped>
 .expense-detail-container {
   padding: 20px;
+  min-height: calc(100vh - 120px);
+  background-color: #f0f2f5;
+}
+
+.expense-detail-container.is-mobile {
+  padding: 10px;
 }
 
 .card-header {
@@ -434,66 +467,123 @@ onMounted(() => {
   align-items: center;
 }
 
-.expense-detail {
-  padding: 20px 0;
-}
-
-.section {
-  margin-bottom: 30px;
-}
-
-.section h3 {
-  margin: 0 0 15px 0;
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 16px;
   font-weight: 600;
-  color: #303133;
+}
+
+.expense-detail-body {
+  padding: 0;
 }
 
 .amount {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   color: #f56c6c;
 }
 
-.description {
+.section {
+  margin-top: 25px;
+}
+
+.section-title {
+  margin: 0 0 12px 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+  padding-left: 8px;
+  border-left: 3px solid #409eff;
+}
+
+.description-box {
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
   color: #606266;
+  font-size: 14px;
   line-height: 1.6;
+  border: 1px solid #ebeef5;
 }
 
-.attachments {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 15px;
+.table-responsive-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
-.attachment-card {
-  cursor: pointer;
-  transition: all 0.3s ease;
+.timeline-container {
+  padding: 10px 5px;
 }
 
-.attachment-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+.history-card {
+  border: 1px solid #ebeef5;
 }
 
-.attachment-content {
+.history-header {
   display: flex;
+  justify-content: space-between;
   align-items: center;
+  margin-bottom: 8px;
+}
+
+.history-status {
+  font-weight: 600;
+  color: #303133;
+}
+
+.history-operator {
+  font-size: 12px;
+  color: #909399;
+}
+
+.history-comment {
+  font-size: 13px;
+  color: #606266;
+  margin: 0;
+}
+
+.attachments-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 12px;
 }
 
+.attachment-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 15px;
+  background-color: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.attachment-item:hover {
+  border-color: #409eff;
+  background-color: #f0f7ff;
+}
+
 .attachment-icon {
-  font-size: 32px;
+  font-size: 28px;
   color: #409eff;
 }
 
 .attachment-info {
   flex: 1;
+  min-width: 0;
 }
 
 .attachment-name {
-  font-weight: 600;
-  margin-bottom: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .attachment-size {
@@ -501,27 +591,33 @@ onMounted(() => {
   color: #909399;
 }
 
-.comments {
-  padding: 15px 0;
+.comments-section {
+  padding: 10px 0;
 }
 
-.comment {
+.comment-item {
   padding: 15px 0;
   border-bottom: 1px solid #ebeef5;
 }
 
-.comment:last-child {
+.comment-item:last-child {
   border-bottom: none;
 }
 
 .comment-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.comment-meta {
+  display: flex;
+  flex-direction: column;
 }
 
 .comment-user {
+  font-size: 14px;
   font-weight: 600;
   color: #303133;
 }
@@ -532,22 +628,53 @@ onMounted(() => {
 }
 
 .comment-content {
+  font-size: 14px;
   color: #606266;
-  line-height: 1.5;
+  line-height: 1.6;
+  padding-left: 44px;
 }
 
-.comment-input {
+.comment-input-area {
   margin-top: 20px;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
 }
 
-.comment-actions {
-  margin-top: 10px;
-  text-align: right;
+.comment-submit {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 @media (max-width: 768px) {
-  .attachments {
+  .expense-detail-container {
+    padding: 0;
+  }
+  
+  .expense-detail-container :deep(.el-card) {
+    border: none;
+    border-radius: 0;
+  }
+  
+  .expense-detail-container :deep(.el-card__header) {
+    padding: 12px 15px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: #fff;
+  }
+  
+  .expense-detail-container :deep(.el-card__body) {
+    padding: 15px;
+  }
+  
+  .attachments-grid {
     grid-template-columns: 1fr;
+  }
+  
+  .comment-content {
+    padding-left: 36px;
   }
 }
 </style>

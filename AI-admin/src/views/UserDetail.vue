@@ -1,20 +1,20 @@
 <template>
-  <div class="user-detail-container">
+  <div class="user-detail-container" :class="{ 'is-mobile': isMobile }">
     <el-card v-loading="loading">
       <template #header>
-        <div class="card-header">
-          <span>用户详情</span>
-          <div>
-            <el-button @click="handleBack">返回</el-button>
-            <el-button type="primary" @click="handleEdit" v-if="!isEditing">编辑</el-button>
-            <el-button type="success" @click="handleSave" v-else>保存</el-button>
+        <div class="card-header responsive-header">
+          <span class="title">用户详情</span>
+          <div class="header-actions">
+            <el-button @click="handleBack">{{ isMobile ? '返回' : '返回列表' }}</el-button>
+            <el-button type="primary" @click="handleEdit" v-if="!isEditing">{{ isMobile ? '编辑' : '编辑信息' }}</el-button>
+            <el-button type="success" @click="handleSave" v-else>{{ isMobile ? '保存' : '保存修改' }}</el-button>
             <el-button @click="handleCancel" v-if="isEditing">取消</el-button>
           </div>
         </div>
       </template>
 
       <!-- 用户基本信息 -->
-      <el-descriptions title="基本信息" :column="2" border>
+      <el-descriptions title="基本信息" :column="isMobile ? 1 : 2" border>
         <el-descriptions-item label="用户ID">{{ userDetail.id }}</el-descriptions-item>
         <el-descriptions-item label="用户名">
           <el-input v-model="userDetail.username" v-if="isEditing" />
@@ -29,7 +29,7 @@
           <span v-else>{{ userDetail.phone }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="角色">
-          <el-select v-model="userDetail.role" v-if="isEditing">
+          <el-select v-model="userDetail.role" v-if="isEditing" style="width: 100%">
             <el-option label="管理员" value="admin" />
             <el-option label="普通用户" value="user" />
           </el-select>
@@ -41,7 +41,7 @@
           </div>
         </el-descriptions-item>
         <el-descriptions-item label="状态">
-          <el-select v-model="userDetail.status" v-if="isEditing">
+          <el-select v-model="userDetail.status" v-if="isEditing" style="width: 100%">
             <el-option label="激活" value="active" />
             <el-option label="禁用" value="inactive" />
           </el-select>
@@ -60,53 +60,56 @@
             {{ (userDetail.createdAt || userDetail.created_at) ? formatDate(userDetail.createdAt || userDetail.created_at) : '未知' }}
           </span>
         </el-descriptions-item>
-        <el-descriptions-item label="最后登录时间">
+        <el-descriptions-item label="最后登录">
           <el-tag v-if="!userDetail.lastLoginTime && !userDetail.last_login_at" type="info">从未登录</el-tag>
           <span v-else>{{ formatDate(userDetail.lastLoginTime || userDetail.last_login_at) }}</span>
         </el-descriptions-item>
       </el-descriptions>
 
       <!-- 操作按钮 -->
-      <div class="action-buttons" style="margin-top: 20px;">
-        <el-button type="warning" @click="handleResetPassword">重置密码</el-button>
-        <el-button type="danger" @click="handleDeleteUser">删除用户</el-button>
+      <div class="action-buttons responsive-buttons" style="margin-top: 20px;">
+        <el-button type="warning" @click="handleResetPassword" :plain="isMobile" :size="isMobile ? 'small' : 'default'">重置密码</el-button>
+        <el-button type="danger" @click="handleDeleteUser" :plain="isMobile" :size="isMobile ? 'small' : 'default'">删除用户</el-button>
       </div>
     </el-card>
 
     <!-- 用户登录日志 -->
     <el-card style="margin-top: 20px;">
       <template #header>
-        <div class="card-header">
+        <div class="card-header responsive-header">
           <span>登录日志</span>
           <el-button size="small" @click="loadLoginLogs">刷新</el-button>
         </div>
       </template>
 
-      <el-table :data="loginLogs" v-loading="logsLoading" style="width: 100%">
-        <el-table-column prop="id" label="日志ID" width="100" />
-        <el-table-column prop="loginTime" label="登录时间">
-          <template #default="scope">
-            {{ formatDate(scope.row.loginTime) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="ip" label="IP地址" />
-        <el-table-column prop="userAgent" label="设备信息" />
-        <el-table-column prop="status" label="状态">
-          <template #default="scope">
-            <el-tag :type="scope.row.status === 'success' ? 'success' : 'danger'">
-              {{ scope.row.status === 'success' ? '成功' : '失败' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-      </el-table>
+      <div class="table-container mobile-scroll">
+        <el-table :data="loginLogs" v-loading="logsLoading" style="width: 100%" :size="isMobile ? 'small' : 'default'">
+          <el-table-column prop="id" label="ID" width="70" v-if="!isMobile" />
+          <el-table-column prop="loginTime" label="登录时间" min-width="160">
+            <template #default="scope">
+              {{ formatDate(scope.row.loginTime) }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="ip" label="IP地址" min-width="130" />
+          <el-table-column prop="userAgent" label="设备信息" min-width="200" show-overflow-tooltip />
+          <el-table-column prop="status" label="状态" width="80" fixed="right">
+            <template #default="scope">
+              <el-tag :type="scope.row.status === 'success' ? 'success' : 'danger'" size="small">
+                {{ scope.row.status === 'success' ? '成功' : '失败' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
 
       <div class="pagination-container">
         <el-pagination
           v-model:current-page="logsPage"
           v-model:page-size="logsPageSize"
           :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
+          :layout="isMobile ? 'prev, pager, next' : 'total, sizes, prev, pager, next, jumper'"
           :total="logsTotal"
+          :small="isMobile"
           @size-change="handleLogsSizeChange"
           @current-change="handleLogsCurrentChange"
         />
@@ -116,41 +119,44 @@
     <!-- 用户支付记录 -->
     <el-card style="margin-top: 20px;">
       <template #header>
-        <div class="card-header">
+        <div class="card-header responsive-header">
           <span>支付记录</span>
           <el-button size="small" @click="loadPaymentRecords">刷新</el-button>
         </div>
       </template>
 
-      <el-table :data="paymentRecords" v-loading="paymentsLoading" style="width: 100%">
-        <el-table-column prop="id" label="记录ID" width="100" />
-        <el-table-column prop="type" label="费用类型" />
-        <el-table-column prop="amount" label="金额">
-          <template #default="scope">
-            ¥{{ scope.row.amount }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="paymentTime" label="支付时间">
-          <template #default="scope">
-            {{ formatDate(scope.row.paymentTime) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="status" label="状态">
-          <template #default="scope">
-            <el-tag :type="scope.row.status === 'paid' ? 'success' : 'danger'">
-              {{ scope.row.status === 'paid' ? '已支付' : '未支付' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-      </el-table>
+      <div class="table-container mobile-scroll">
+        <el-table :data="paymentRecords" v-loading="paymentsLoading" style="width: 100%" :size="isMobile ? 'small' : 'default'">
+          <el-table-column prop="id" label="ID" width="70" v-if="!isMobile" />
+          <el-table-column prop="type" label="费用类型" min-width="120" />
+          <el-table-column prop="amount" label="金额" min-width="100">
+            <template #default="scope">
+              <span class="amount-text">¥{{ scope.row.amount }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="paymentTime" label="支付时间" min-width="160">
+            <template #default="scope">
+              {{ formatDate(scope.row.paymentTime) }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="status" label="状态" width="90" fixed="right">
+            <template #default="scope">
+              <el-tag :type="scope.row.status === 'paid' ? 'success' : 'danger'" size="small">
+                {{ scope.row.status === 'paid' ? '已支付' : '未支付' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
 
       <div class="pagination-container">
         <el-pagination
           v-model:current-page="paymentsPage"
           v-model:page-size="paymentsPageSize"
           :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
+          :layout="isMobile ? 'prev, pager, next' : 'total, sizes, prev, pager, next, jumper'"
           :total="paymentsTotal"
+          :small="isMobile"
           @size-change="handlePaymentsSizeChange"
           @current-change="handlePaymentsCurrentChange"
         />
@@ -160,10 +166,10 @@
     <!-- 用户权限角色管理 -->
     <el-card style="margin-top: 20px;">
       <template #header>
-        <div class="card-header">
+        <div class="card-header responsive-header">
           <span>权限角色管理</span>
-          <div>
-            <el-button size="small" @click="loadUserRoles">刷新</el-button>
+          <div class="header-actions">
+            <el-button size="small" @click="loadUserRoles" v-if="!isMobile">刷新</el-button>
             <el-button size="small" type="primary" @click="handleEditRoles" v-if="!isEditingRoles">编辑权限</el-button>
             <el-button size="small" type="success" @click="handleSaveRoles" v-else>保存权限</el-button>
             <el-button size="small" @click="handleCancelRoles" v-if="isEditingRoles">取消</el-button>
@@ -171,30 +177,32 @@
         </div>
       </template>
 
-      <div class="roles-section">
+      <div class="roles-section" :class="{ 'mobile-roles': isMobile }">
         <div class="current-roles">
-          <h4>当前角色</h4>
+          <h4 class="section-title">当前角色</h4>
           <div class="roles-list">
             <el-tag
               v-for="role in currentRoles"
               :key="role.id"
               :type="role.type || 'info'"
               style="margin: 5px;"
+              :size="isMobile ? 'small' : 'default'"
             >
               {{ role.name }}
             </el-tag>
-            <span v-if="currentRoles.length === 0">暂无分配角色</span>
+            <span v-if="currentRoles.length === 0" class="empty-text">暂无分配角色</span>
           </div>
         </div>
 
         <div class="available-roles" v-if="isEditingRoles">
-          <h4>可分配角色</h4>
-          <el-checkbox-group v-model="selectedRoleIds">
+          <h4 class="section-title">可分配角色</h4>
+          <el-checkbox-group v-model="selectedRoleIds" class="roles-checkbox-group">
             <el-checkbox
               v-for="role in availableRoles"
               :key="role.id"
               :label="role.id"
               style="margin: 5px;"
+              :size="isMobile ? 'small' : 'default'"
             >
               {{ role.name }}
             </el-checkbox>
@@ -204,30 +212,30 @@
     </el-card>
 
     <!-- 用户所属寝室信息 -->
-    <el-card style="margin-top: 20px;">
+    <el-card style="margin-top: 20px; margin-bottom: 20px;">
       <template #header>
-        <div class="card-header">
+        <div class="card-header responsive-header">
           <span>所属寝室信息</span>
           <el-button size="small" @click="loadUserDormitory">刷新</el-button>
         </div>
       </template>
 
       <div v-loading="dormitoryLoading">
-        <el-descriptions :column="2" border v-if="userDormitory">
+        <el-descriptions :column="isMobile ? 1 : 2" border v-if="userDormitory">
           <el-descriptions-item label="寝室号">{{ userDormitory.roomNumber }}</el-descriptions-item>
           <el-descriptions-item label="楼栋">{{ userDormitory.building }}</el-descriptions-item>
           <el-descriptions-item label="楼层">{{ userDormitory.floor }}</el-descriptions-item>
           <el-descriptions-item label="床位号">{{ userDormitory.bedNumber }}</el-descriptions-item>
           <el-descriptions-item label="入住时间">{{ formatDate(userDormitory.checkInTime) }}</el-descriptions-item>
           <el-descriptions-item label="状态">
-            <el-tag :type="userDormitory.status === 'active' ? 'success' : 'warning'">
+            <el-tag :type="userDormitory.status === 'active' ? 'success' : 'warning'" size="small">
               {{ userDormitory.status === 'active' ? '入住中' : '已退房' }}
             </el-tag>
           </el-descriptions-item>
         </el-descriptions>
         <el-empty v-else description="该用户暂无寝室信息">
           <template #image>
-            <el-icon size="80" color="#409EFF">
+            <el-icon :size="isMobile ? 60 : 80" color="#409EFF">
               <House />
             </el-icon>
           </template>
@@ -238,11 +246,37 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { userApi } from '../api/user'
 import { House } from '@element-plus/icons-vue'
+
+// 移动端适配
+const isMobile = ref(false)
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
+
+onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+
+  // 检查是否进入编辑模式
+  if (route.query.mode === 'edit') {
+    isEditing.value = true
+  }
+
+  loadUserDetail()
+  loadLoginLogs()
+  loadPaymentRecords()
+  loadUserRoles()
+  loadUserDormitory()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
+})
 
 // 路由相关
 const route = useRoute()
@@ -610,20 +644,7 @@ const handlePaymentsCurrentChange = (val: number) => {
   loadPaymentRecords()
 }
 
-// 组件挂载时加载数据
-onMounted(() => {
-  
-  // 检查是否进入编辑模式
-  if (route.query.mode === 'edit') {
-    isEditing.value = true
-  }
-  
-  loadUserDetail()
-  loadLoginLogs()
-  loadPaymentRecords()
-  loadUserRoles()
-  loadUserDormitory()
-})
+
 
 /**
  * 用户详情页面
@@ -640,6 +661,11 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.card-header .title {
+  font-weight: bold;
+  font-size: 16px;
 }
 
 .action-buttons {
@@ -691,5 +717,73 @@ onMounted(() => {
 
 .text-gray {
   color: #909399;
+}
+
+.amount-text {
+  font-weight: bold;
+  color: #f56c6c;
+}
+
+.mobile-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 移动端适配样式 */
+@media screen and (max-width: 768px) {
+  .responsive-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .header-actions {
+    width: 100%;
+    display: flex;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .header-actions .el-button {
+    margin-left: 0 !important;
+  }
+
+  .responsive-buttons {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .responsive-buttons .el-button {
+    width: 100%;
+    margin-left: 0 !important;
+    margin-bottom: 8px;
+  }
+
+  .roles-section.mobile-roles {
+    padding: 10px 0;
+  }
+
+  .section-title {
+    font-size: 14px !important;
+    margin-bottom: 10px !important;
+  }
+
+  .roles-checkbox-group {
+    display: flex;
+    flex-direction: column;
+  }
+
+  :deep(.el-descriptions__label) {
+    width: 100px !important;
+  }
+
+  :deep(.el-card__header) {
+    padding: 12px 15px;
+  }
+
+  :deep(.el-card__body) {
+    padding: 15px;
+  }
 }
 </style>

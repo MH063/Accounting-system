@@ -2,16 +2,16 @@
   <div class="batch-operation-container">
     <el-card>
       <template #header>
-        <div class="card-header">
+        <div class="card-header" :class="{ 'is-mobile': isMobile }">
           <span>批量操作</span>
-          <div>
-            <el-button @click="goBack">返回</el-button>
-            <el-button @click="loadUsers">刷新数据</el-button>
+          <div class="header-actions">
+            <el-button @click="goBack" :size="isMobile ? 'small' : 'default'">返回</el-button>
+            <el-button @click="loadUsers" :size="isMobile ? 'small' : 'default'">刷新数据</el-button>
           </div>
         </div>
       </template>
       
-      <el-tabs v-model="activeTab">
+      <el-tabs v-model="activeTab" :class="{ 'mobile-tabs': isMobile }">
         <el-tab-pane label="批量导入" name="import">
           <el-card shadow="never">
             <template #header>
@@ -96,7 +96,7 @@
               </div>
             </template>
             
-            <el-form :model="exportForm" label-width="120px">
+            <el-form :model="exportForm" :label-width="isMobile ? 'auto' : '120px'" :label-position="isMobile ? 'top' : 'right'">
               <el-form-item label="导出格式">
                 <el-radio-group v-model="exportForm.format">
                   <el-radio label="excel">Excel (.xlsx)</el-radio>
@@ -105,18 +105,18 @@
               </el-form-item>
               
               <el-form-item label="筛选条件">
-                <div class="filter-group">
+                <div class="filter-group" :style="isMobile ? 'display: flex; flex-direction: column; gap: 10px;' : ''">
                   <el-input
                     v-model="exportForm.keyword"
                     placeholder="用户名/邮箱"
-                    style="width: 200px; margin-right: 10px;"
+                    :style="isMobile ? 'width: 100%;' : 'width: 200px; margin-right: 10px;'"
                     clearable
                   />
-                  <el-select v-model="exportForm.role" placeholder="角色" style="width: 120px; margin-right: 10px;" clearable>
+                  <el-select v-model="exportForm.role" placeholder="角色" :style="isMobile ? 'width: 100%;' : 'width: 120px; margin-right: 10px;'" clearable>
                     <el-option label="管理员" value="admin" />
                     <el-option label="普通用户" value="user" />
                   </el-select>
-                  <el-select v-model="exportForm.status" placeholder="状态" style="width: 120px;" clearable>
+                  <el-select v-model="exportForm.status" placeholder="状态" :style="isMobile ? 'width: 100%;' : 'width: 120px;'" clearable>
                     <el-option label="激活" value="active" />
                     <el-option label="禁用" value="inactive" />
                   </el-select>
@@ -124,13 +124,13 @@
               </el-form-item>
               
               <el-form-item label="选择用户">
-                <el-button @click="selectAllUsers" :disabled="usersList.length === 0">全选</el-button>
-                <el-button @click="clearSelection" :disabled="selectedUsers.length === 0">清空</el-button>
+                <el-button @click="selectAllUsers" :disabled="usersList.length === 0" size="small">全选</el-button>
+                <el-button @click="clearSelection" :disabled="selectedUsers.length === 0" size="small">清空</el-button>
                 <span style="margin-left: 10px;">已选择: {{ selectedUsers.length }} / {{ usersList.length }}</span>
               </el-form-item>
               
               <el-form-item>
-                <el-button type="primary" @click="exportUsers" :loading="exporting">
+                <el-button type="primary" @click="exportUsers" :loading="exporting" :style="isMobile ? 'width: 100%' : ''">
                   {{ exporting ? '导出中...' : '开始导出' }}
                 </el-button>
               </el-form-item>
@@ -141,18 +141,19 @@
               style="width: 100%; margin-top: 20px;"
               @selection-change="handleUsersSelectionChange"
               v-loading="loadingUsers"
+              :size="isMobile ? 'small' : 'default'"
             >
               <el-table-column type="selection" width="55" />
-              <el-table-column prop="id" label="ID" width="80" />
+              <el-table-column prop="id" label="ID" width="80" v-if="!isMobile" />
               <el-table-column prop="username" label="用户名" />
-              <el-table-column prop="email" label="邮箱" />
+              <el-table-column prop="email" label="邮箱" v-if="!isMobile" />
               <el-table-column prop="role" label="角色">
                 <template #default="scope">
                   <el-tag v-if="scope.row.role === 'admin'" type="success">管理员</el-tag>
                   <el-tag v-else>普通用户</el-tag>
                 </template>
               </el-table-column>
-              <el-table-column prop="status" label="状态">
+              <el-table-column prop="status" label="状态" width="100">
                 <template #default="scope">
                   <el-tag :type="scope.row.status === 'active' ? 'success' : 'danger'">
                     {{ scope.row.status === 'active' ? '激活' : '禁用' }}
@@ -171,22 +172,22 @@
               </div>
             </template>
             
-            <el-form :model="permissionForm" label-width="120px">
+            <el-form :model="permissionForm" :label-width="isMobile ? 'auto' : '120px'" :label-position="isMobile ? 'top' : 'right'">
               <el-form-item label="选择用户">
-                <el-button @click="selectAllForPermission" :disabled="usersList.length === 0">全选</el-button>
-                <el-button @click="clearPermissionSelection" :disabled="selectedPermissionUsers.length === 0">清空</el-button>
+                <el-button @click="selectAllForPermission" :disabled="usersList.length === 0" size="small">全选</el-button>
+                <el-button @click="clearPermissionSelection" :disabled="selectedPermissionUsers.length === 0" size="small">清空</el-button>
                 <span style="margin-left: 10px;">已选择: {{ selectedPermissionUsers.length }} / {{ usersList.length }}</span>
               </el-form-item>
               
               <el-form-item label="目标角色">
-                <el-select v-model="permissionForm.role" placeholder="请选择角色">
+                <el-select v-model="permissionForm.role" placeholder="请选择角色" :style="isMobile ? 'width: 100%' : ''">
                   <el-option label="管理员" value="admin" />
                   <el-option label="普通用户" value="user" />
                 </el-select>
               </el-form-item>
               
               <el-form-item>
-                <el-button type="primary" @click="confirmBatchPermission" :loading="updatingPermission">
+                <el-button type="primary" @click="confirmBatchPermission" :loading="updatingPermission" :style="isMobile ? 'width: 100%' : ''">
                   {{ updatingPermission ? '更新中...' : '批量调整权限' }}
                 </el-button>
               </el-form-item>
@@ -197,9 +198,10 @@
               style="width: 100%; margin-top: 20px;"
               @selection-change="handlePermissionSelectionChange"
               v-loading="loadingUsers"
+              :size="isMobile ? 'small' : 'default'"
             >
               <el-table-column type="selection" width="55" />
-              <el-table-column prop="id" label="ID" width="80" />
+              <el-table-column prop="id" label="ID" width="80" v-if="!isMobile" />
               <el-table-column prop="username" label="用户名" />
               <el-table-column prop="role" label="当前角色">
                 <template #default="scope">
@@ -219,10 +221,10 @@
               </div>
             </template>
             
-            <el-form :model="statusForm" label-width="120px">
+            <el-form :model="statusForm" :label-width="isMobile ? 'auto' : '120px'" :label-position="isMobile ? 'top' : 'right'">
               <el-form-item label="选择用户">
-                <el-button @click="selectAllForStatus" :disabled="usersList.length === 0">全选</el-button>
-                <el-button @click="clearStatusSelection" :disabled="selectedStatusUsers.length === 0">清空</el-button>
+                <el-button @click="selectAllForStatus" :disabled="usersList.length === 0" size="small">全选</el-button>
+                <el-button @click="clearStatusSelection" :disabled="selectedStatusUsers.length === 0" size="small">清空</el-button>
                 <span style="margin-left: 10px;">已选择: {{ selectedStatusUsers.length }} / {{ usersList.length }}</span>
               </el-form-item>
               
@@ -234,7 +236,7 @@
               </el-form-item>
               
               <el-form-item>
-                <el-button type="primary" @click="confirmBatchStatus" :loading="updatingStatus">
+                <el-button type="primary" @click="confirmBatchStatus" :loading="updatingStatus" :style="isMobile ? 'width: 100%' : ''">
                   {{ updatingStatus ? '更新中...' : '批量更新状态' }}
                 </el-button>
               </el-form-item>
@@ -245,9 +247,10 @@
               style="width: 100%; margin-top: 20px;"
               @selection-change="handleStatusSelectionChange"
               v-loading="loadingUsers"
+              :size="isMobile ? 'small' : 'default'"
             >
               <el-table-column type="selection" width="55" />
-              <el-table-column prop="id" label="ID" width="80" />
+              <el-table-column prop="id" label="ID" width="80" v-if="!isMobile" />
               <el-table-column prop="username" label="用户名" />
               <el-table-column prop="status" label="当前状态">
                 <template #default="scope">
@@ -268,15 +271,15 @@
               </div>
             </template>
             
-            <el-form :model="dormitoryForm" label-width="120px">
+            <el-form :model="dormitoryForm" :label-width="isMobile ? 'auto' : '120px'" :label-position="isMobile ? 'top' : 'right'">
               <el-form-item label="选择用户">
-                <el-button @click="selectAllForDormitory" :disabled="usersList.length === 0">全选</el-button>
-                <el-button @click="clearDormitorySelection" :disabled="selectedDormitoryUsers.length === 0">清空</el-button>
+                <el-button @click="selectAllForDormitory" :disabled="usersList.length === 0" size="small">全选</el-button>
+                <el-button @click="clearDormitorySelection" :disabled="selectedDormitoryUsers.length === 0" size="small">清空</el-button>
                 <span style="margin-left: 10px;">已选择: {{ selectedDormitoryUsers.length }} / {{ usersList.length }}</span>
               </el-form-item>
               
               <el-form-item label="楼栋">
-                <el-select v-model="dormitoryForm.building" placeholder="请选择楼栋" @change="loadFloors">
+                <el-select v-model="dormitoryForm.building" placeholder="请选择楼栋" @change="loadFloors" :style="isMobile ? 'width: 100%' : ''">
                   <el-option label="A栋" value="A" />
                   <el-option label="B栋" value="B" />
                   <el-option label="C栋" value="C" />
@@ -284,25 +287,25 @@
               </el-form-item>
               
               <el-form-item label="楼层">
-                <el-select v-model="dormitoryForm.floor" placeholder="请选择楼层" @change="loadRooms" :disabled="!dormitoryForm.building">
+                <el-select v-model="dormitoryForm.floor" placeholder="请选择楼层" @change="loadRooms" :disabled="!dormitoryForm.building" :style="isMobile ? 'width: 100%' : ''">
                   <el-option v-for="floor in floors" :key="floor" :label="`${floor}楼`" :value="floor" />
                 </el-select>
               </el-form-item>
               
               <el-form-item label="寝室号">
-                <el-select v-model="dormitoryForm.roomNumber" placeholder="请选择寝室号" :disabled="!dormitoryForm.floor">
+                <el-select v-model="dormitoryForm.roomNumber" placeholder="请选择寝室号" :disabled="!dormitoryForm.floor" :style="isMobile ? 'width: 100%' : ''">
                   <el-option v-for="room in rooms" :key="room" :label="room" :value="room" />
                 </el-select>
               </el-form-item>
               
               <el-form-item label="床位号">
-                <el-select v-model="dormitoryForm.bedNumber" placeholder="请选择床位号">
+                <el-select v-model="dormitoryForm.bedNumber" placeholder="请选择床位号" :style="isMobile ? 'width: 100%' : ''">
                   <el-option v-for="bed in beds" :key="bed" :label="bed" :value="bed" />
                 </el-select>
               </el-form-item>
               
               <el-form-item>
-                <el-button type="primary" @click="confirmBatchDormitory" :loading="updatingDormitory">
+                <el-button type="primary" @click="confirmBatchDormitory" :loading="updatingDormitory" :style="isMobile ? 'width: 100%' : ''">
                   {{ updatingDormitory ? '分配中...' : '批量分配寝室' }}
                 </el-button>
               </el-form-item>
@@ -313,9 +316,10 @@
               style="width: 100%; margin-top: 20px;"
               @selection-change="handleDormitorySelectionChange"
               v-loading="loadingUsers"
+              :size="isMobile ? 'small' : 'default'"
             >
               <el-table-column type="selection" width="55" />
-              <el-table-column prop="id" label="ID" width="80" />
+              <el-table-column prop="id" label="ID" width="80" v-if="!isMobile" />
               <el-table-column prop="username" label="用户名" />
               <el-table-column prop="dormitory" label="当前寝室">
                 <template #default="scope">
@@ -331,7 +335,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
@@ -340,6 +344,22 @@ import { validateFile } from '@/utils/fileUploadValidator'
 
 // 路由相关
 const router = useRouter()
+
+// 移动端适配逻辑
+const isMobile = ref(false)
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
+
+onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+  loadUsers()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
+})
 
 // 响应式数据
 const activeTab = ref('import')
@@ -735,6 +755,8 @@ const clearSelection = () => {
 // 组件挂载时加载数据
 onMounted(() => {
   console.log('📊 批量操作页面加载完成')
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
   loadUsers()
 })
 
@@ -757,5 +779,57 @@ onMounted(() => {
 
 .upload-demo {
   width: 100%;
+}
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .card-header.is-mobile {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .header-actions {
+    width: 100%;
+    display: flex;
+    gap: 10px;
+  }
+
+  .header-actions .el-button {
+    flex: 1;
+  }
+
+  .mobile-tabs :deep(.el-tabs__nav) {
+    width: 100%;
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .mobile-tabs :deep(.el-tabs__item) {
+    flex: 1;
+    text-align: center;
+    padding: 0 5px !important;
+    font-size: 12px;
+    min-width: 80px;
+  }
+
+  :deep(.el-card__body) {
+    padding: 10px;
+  }
+
+  .filter-group {
+    width: 100%;
+  }
+
+  .result-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .result-summary .el-tag {
+    flex: 1;
+    text-align: center;
+    margin: 0 !important;
+  }
 }
 </style>

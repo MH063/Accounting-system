@@ -27,7 +27,8 @@ const requireAdmin = async (req, res, next) => {
     const user = req.user;
     const isAdmin = user.isAdmin === true || 
                     user.role === 'admin' || 
-                    (Array.isArray(user.role) && user.role.includes('admin'));
+                    user.role === 'system_admin' ||
+                    (Array.isArray(user.role) && (user.role.includes('admin') || user.role.includes('system_admin')));
 
     if (!isAdmin) {
       logger.warn('[AdminAuth] 非管理员用户尝试访问管理员接口', {

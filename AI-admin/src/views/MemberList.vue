@@ -4,9 +4,15 @@
       <template #header>
         <div class="card-header">
           <span>成员列表</span>
-          <div>
-            <el-button type="primary" @click="handleInvite">邀请成员</el-button>
-            <el-button @click="refreshMembers">刷新</el-button>
+          <div class="header-actions">
+            <el-button type="primary" @click="handleInvite">
+              <el-icon v-if="isMobile"><Plus /></el-icon>
+              <span v-if="!isMobile">邀请成员</span>
+            </el-button>
+            <el-button @click="refreshMembers">
+              <el-icon v-if="isMobile"><Refresh /></el-icon>
+              <span v-if="!isMobile">刷新</span>
+            </el-button>
           </div>
         </div>
       </template>
@@ -15,40 +21,92 @@
       <div class="search-bar">
         <el-input
           v-model="searchQuery"
-          placeholder="搜索成员姓名或联系方式"
+          :placeholder="isMobile ? '搜索姓名/电话' : '搜索成员姓名或联系方式'"
           clearable
           @keyup.enter="handleSearch"
-          class="search-input"
+          :class="{ 'search-input': !isMobile, 'search-input-mobile': isMobile }"
         >
           <template #prefix>
             <el-icon><Search /></el-icon>
           </template>
         </el-input>
         
-        <el-select
-          v-model="roleFilter"
-          placeholder="角色筛选"
-          clearable
-          class="filter-select"
-        >
-          <el-option label="全部角色" value="" />
-          <el-option label="寝室长" value="leader" />
-          <el-option label="普通成员" value="member" />
-          <el-option label="访客" value="guest" />
-        </el-select>
-        
-        <el-select
-          v-model="statusFilter"
-          placeholder="状态筛选"
-          clearable
-          class="filter-select"
-        >
-          <el-option label="全部状态" value="" />
-          <el-option label="在线" value="online" />
-          <el-option label="离线" value="offline" />
-        </el-select>
-        
-        <el-button @click="resetFilters">重置</el-button>
+        <div v-if="isMobile" class="mobile-actions-row">
+          <el-button 
+            type="primary" 
+            link 
+            @click="showMoreFilters = !showMoreFilters"
+            class="more-filter-btn"
+          >
+            {{ showMoreFilters ? '收起' : '更多' }}
+            <el-icon class="el-icon--right">
+              <component :is="showMoreFilters ? 'ArrowUp' : 'ArrowDown'" />
+            </el-icon>
+          </el-button>
+          
+          <el-button 
+            @click="resetFilters"
+            class="reset-btn-mobile"
+          >
+            <el-icon><RefreshRight /></el-icon>
+          </el-button>
+        </div>
+
+        <div v-if="isMobile && showMoreFilters" class="mobile-filters">
+          <el-select
+            v-model="roleFilter"
+            placeholder="角色"
+            clearable
+            style="width: 100%"
+          >
+            <el-option label="全部角色" value="" />
+            <el-option label="寝室长" value="leader" />
+            <el-option label="普通成员" value="member" />
+            <el-option label="访客" value="guest" />
+          </el-select>
+          
+          <el-select
+            v-model="statusFilter"
+            placeholder="状态"
+            clearable
+            style="width: 100%"
+          >
+            <el-option label="全部状态" value="" />
+            <el-option label="在线" value="online" />
+            <el-option label="离线" value="offline" />
+          </el-select>
+        </div>
+
+        <template v-if="!isMobile">
+          <el-select
+            v-model="roleFilter"
+            placeholder="角色筛选"
+            clearable
+            class="filter-select"
+          >
+            <el-option label="全部角色" value="" />
+            <el-option label="寝室长" value="leader" />
+            <el-option label="普通成员" value="member" />
+            <el-option label="访客" value="guest" />
+          </el-select>
+          
+          <el-select
+            v-model="statusFilter"
+            placeholder="状态筛选"
+            clearable
+            class="filter-select"
+          >
+            <el-option label="全部状态" value="" />
+            <el-option label="在线" value="online" />
+            <el-option label="离线" value="offline" />
+          </el-select>
+          
+          <el-button 
+            @click="resetFilters"
+          >
+            重置
+          </el-button>
+        </template>
       </div>
       
       <!-- 成员卡片列表 -->
@@ -74,7 +132,7 @@
               </div>
             </div>
             <div class="member-status">
-              <el-tag :type="getStatusTagType(member.status)">
+              <el-tag :type="getStatusTagType(member.status)" size="small">
                 <el-icon v-if="member.status === 'online'"><CircleCheck /></el-icon>
                 {{ getStatusText(member.status) }}
               </el-tag>
@@ -100,9 +158,10 @@
             <el-button 
               type="primary" 
               size="small" 
+              plain
               @click="viewMemberDetails(member)"
             >
-              查看详情
+              {{ isMobile ? '详情' : '查看详情' }}
             </el-button>
             <el-button 
               v-if="member.role !== 'leader'" 
@@ -110,26 +169,23 @@
               size="small" 
               @click="setAsLeader(member)"
             >
-              设为寝室长
+              {{ isMobile ? '设长' : '设为寝室长' }}
             </el-button>
             <el-dropdown @command="handleMemberAction">
               <el-button size="small">
-                更多操作
+                {{ isMobile ? '' : '更多' }}
                 <el-icon><ArrowDown /></el-icon>
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item :command="{action: 'message', member}">
-                    <el-icon><ChatDotRound /></el-icon>
-                    发送消息
+                    <el-icon><ChatDotRound /></el-icon> 发送消息
                   </el-dropdown-item>
                   <el-dropdown-item :command="{action: 'edit', member}">
-                    <el-icon><Edit /></el-icon>
-                    编辑信息
+                    <el-icon><Edit /></el-icon> 编辑信息
                   </el-dropdown-item>
                   <el-dropdown-item :command="{action: 'remove', member}" divided>
-                    <el-icon><Remove /></el-icon>
-                    移除成员
+                    <el-icon><Remove /></el-icon> 移除成员
                   </el-dropdown-item>
                 </el-dropdown-menu>
               </template>
@@ -152,8 +208,15 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   Search, Phone, Message, HomeFilled, CircleCheck, 
-  ChatDotRound, Edit, Remove, ArrowDown 
+  ChatDotRound, Edit, Remove, ArrowDown, Plus, Refresh, RefreshRight, ArrowUp
 } from '@element-plus/icons-vue'
+
+// 移动端适配
+const isMobile = ref(false)
+const showMoreFilters = ref(false)
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
 
 // 路由实例
 const router = useRouter()
@@ -340,6 +403,9 @@ const handleMemberAction = async (command: any) => {
 let statusUpdateTimer: any = null
 
 onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+  
   // 模拟定期更新成员在线状态
   statusUpdateTimer = setInterval(() => {
     members.value.forEach(member => {
@@ -353,6 +419,7 @@ onMounted(() => {
 
 // 组件卸载时清除定时器
 onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
   if (statusUpdateTimer) {
     clearInterval(statusUpdateTimer)
   }
@@ -380,6 +447,31 @@ onUnmounted(() => {
 .search-input {
   flex: 1;
   min-width: 200px;
+}
+
+.search-input-mobile {
+  width: 100%;
+}
+
+.mobile-actions-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.mobile-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+  background: #f5f7fa;
+  border-radius: 4px;
+}
+
+.reset-btn-mobile {
+  padding: 8px 12px;
 }
 
 .filter-select {
@@ -474,17 +566,31 @@ onUnmounted(() => {
 }
 
 @media (max-width: 768px) {
+  .member-list-container {
+    padding: 10px;
+  }
+  
   .members-grid {
     grid-template-columns: 1fr;
+    gap: 15px;
   }
   
-  .search-bar {
-    flex-direction: column;
+  .member-header {
+    margin-bottom: 12px;
   }
   
-  .search-input,
-  .filter-select {
-    width: 100%;
+  .member-avatar {
+    width: 40px;
+    height: 40px;
+  }
+  
+  .member-name {
+    font-size: 15px;
+  }
+  
+  .detail-item {
+    font-size: 13px;
+    margin-bottom: 6px;
   }
 }
 </style>

@@ -1,7 +1,7 @@
 <template>
   <div class="charts-container">
     <el-row :gutter="20">
-      <el-col :span="12">
+      <el-col :span="isMobile ? 24 : 12" :style="isMobile ? 'margin-bottom: 20px;' : ''">
         <el-card>
           <template #header>
             <div class="card-header">
@@ -11,7 +11,7 @@
           <div ref="visitChartRef" style="height: 300px;"></div>
         </el-card>
       </el-col>
-      <el-col :span="12">
+      <el-col :span="isMobile ? 24 : 12">
         <el-card>
           <template #header>
             <div class="card-header">
@@ -41,6 +41,12 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { createChartManager } from '@/utils/chartManager'
+
+// 移动端适配逻辑
+const isMobile = ref(false)
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
 
 // 图表引用
 const visitChartRef = ref()
@@ -205,12 +211,15 @@ const handleResize = () => {
 
 // 组件挂载
 onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
   initCharts()
   window.addEventListener('resize', handleResize)
 })
 
 // 组件卸载前
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', checkMobile)
   window.removeEventListener('resize', handleResize)
   if (visitChartManager) visitChartManager.dispose()
   if (userChartManager) userChartManager.dispose()

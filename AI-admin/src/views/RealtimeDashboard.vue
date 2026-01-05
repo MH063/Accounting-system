@@ -187,16 +187,24 @@ const updateData = () => {
   if (logs.value.length > 50) logs.value.pop()
 }
 
+const handleResize = () => {
+  trafficChart?.resize()
+  loadChart?.resize()
+}
+
 onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+  window.addEventListener('resize', handleResize)
+  
   initCharts()
   timer = setInterval(updateData, 5000)
-  window.addEventListener('resize', () => {
-    trafficChart?.resize()
-    loadChart?.resize()
-  })
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', checkMobile)
+  window.removeEventListener('resize', handleResize)
+  
   if (timer) clearInterval(timer)
   trafficChart?.dispose()
   loadChart?.dispose()
@@ -215,12 +223,35 @@ onBeforeUnmount(() => {
   margin-bottom: 20px;
 }
 
+.header-section.is-mobile {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.header-section.is-mobile h2 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.card-header.is-mobile {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
 .stat-cards {
-  margin-bottom: 20px;
+  margin-bottom: 10px;
 }
 
 .stat-card {
   text-align: center;
+  height: 100%;
 }
 
 .stat-title {
@@ -261,11 +292,14 @@ onBeforeUnmount(() => {
 .log-item {
   margin-bottom: 5px;
   font-size: 12px;
+  word-break: break-all;
 }
 
 .log-time {
   color: #569cd6;
   margin-right: 10px;
+  display: inline-block;
+  min-width: 80px;
 }
 
 .log-tag {
@@ -274,5 +308,28 @@ onBeforeUnmount(() => {
 
 .log-message {
   color: #ce9178;
+}
+
+/* Mobile specific styles */
+@media screen and (max-width: 768px) {
+  .realtime-dashboard-container {
+    padding: 10px;
+  }
+  
+  .log-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  
+  .log-time {
+    margin-bottom: 2px;
+  }
+  
+  .log-message {
+    width: 100%;
+    margin-top: 2px;
+    padding-left: 0;
+  }
 }
 </style>

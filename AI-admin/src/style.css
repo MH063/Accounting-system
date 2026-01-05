@@ -1,3 +1,23 @@
+/* 全局变量定义 */
+:root {
+  --primary-color: #409EFF;
+  --success-color: #67C23A;
+  --warning-color: #E6A23C;
+  --danger-color: #F56C6C;
+  --info-color: #909399;
+  --text-primary: #303133;
+  --text-regular: #606266;
+  --text-secondary: #909399;
+  --border-color: #DCDFE6;
+  --bg-color: #F5F7FA;
+  
+  /* 响应式断点 */
+  --breakpoint-xs: 576px;
+  --breakpoint-sm: 768px;
+  --breakpoint-md: 992px;
+  --breakpoint-lg: 1200px;
+}
+
 /* 全局样式重置 */
 * {
   margin: 0;
@@ -5,103 +25,121 @@
   box-sizing: border-box;
 }
 
-/* Element Plus 对话框居中显示 */
+html {
+  font-size: 16px;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  line-height: 1.6;
+  color: var(--text-primary);
+  background-color: var(--bg-color);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 响应式字体大小 */
+@media (max-width: 768px) {
+  html {
+    font-size: 14px;
+  }
+}
+
+/* Element Plus 对话框适配 */
 .el-overlay-dialog {
   display: flex;
   align-items: center;
   justify-content: center;
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
+  padding: 1rem;
 }
 
 .el-dialog {
   margin: 0 !important;
+  max-width: 95vw;
 }
 
-body {
-  font-family: 'Arial', sans-serif;
-  line-height: 1.6;
-  color: #2c3e50;
-  background-color: #f8f9fa;
+@media (max-width: 768px) {
+  .el-dialog {
+    width: 90% !important;
+  }
 }
 
-/* 通用样式 */
+/* 通用布局类 */
 .container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 1rem;
+  width: 100%;
+  margin-right: auto;
+  margin-left: auto;
+  padding-right: 1rem;
+  padding-left: 1rem;
 }
 
-/* 按钮样式 */
-.btn {
-  display: inline-block;
-  background-color: #3498db;
-  color: white;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 4px;
-  text-decoration: none;
-  cursor: pointer;
-  transition: background-color 0.3s;
+@media (min-width: 576px) { .container { max-width: 540px; } }
+@media (min-width: 768px) { .container { max-width: 720px; } }
+@media (min-width: 992px) { .container { max-width: 960px; } }
+@media (min-width: 1200px) { .container { max-width: 1140px; } }
+
+/* 响应式间距 */
+.m-1 { margin: 0.25rem; }
+.m-2 { margin: 0.5rem; }
+.m-3 { margin: 1rem; }
+.p-1 { padding: 0.25rem; }
+.p-2 { padding: 0.5rem; }
+.p-3 { padding: 1rem; }
+
+/* 交互元素最小尺寸优化 */
+button, 
+.el-button,
+.el-input__inner,
+.el-select,
+.clickable {
+  min-height: 2.5rem; /* 约40px，接近建议的48px */
 }
 
-.btn:hover {
-  background-color: #2980b9;
+@media (max-width: 768px) {
+  button, 
+  .el-button,
+  .el-input__inner,
+  .el-select {
+    min-height: 3rem; /* 移动端增大到48px左右 */
+  }
 }
 
-.btn-secondary {
-  background-color: #6c757d;
+/* 响应式图片 */
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
 }
 
-.btn-secondary:hover {
-  background-color: #5a6268;
-}
-
-/* 表单样式 */
-.form-group {
+/* 卡片样式优化 */
+.card {
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px 0 rgba(0,0,0,.1);
+  padding: 1.25rem;
   margin-bottom: 1rem;
 }
 
-.form-label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: bold;
-}
-
-.form-input {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 1rem;
-}
-
-.form-input:focus {
-  outline: none;
-  border-color: #3498db;
-}
-
-/* 卡片样式 */
-.card {
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
-}
-
-/* 响应式设计 */
-@media (min-width: 768px) {
-  .container {
-    padding: 0 2rem;
+@media (max-width: 768px) {
+  .card {
+    padding: 1rem;
+    border-radius: 4px;
   }
 }
 
-@media (min-width: 1024px) {
-  .container {
-    padding: 0;
-  }
+/* 辅助类 */
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
+
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.w-full { width: 100%; }
+.h-full { height: 100%; }
+
+/* 隐藏类 */
+.hidden-xs { @media (max-width: 575px) { display: none !important; } }
+.hidden-sm { @media (max-width: 767px) { display: none !important; } }
+.visible-xs { @media (min-width: 576px) { display: none !important; } }

@@ -2,10 +2,10 @@
   <div class="data-report-container">
     <el-card>
       <template #header>
-        <div class="card-header">
+        <div class="card-header" :style="isMobile ? 'flex-direction: column; align-items: stretch; gap: 10px;' : ''">
           <span>数据报表</span>
-          <div>
-            <el-select v-model="reportType" placeholder="请选择报表类型" @change="handleReportTypeChange" style="margin-right: 15px;">
+          <div :style="isMobile ? 'display: flex; flex-direction: column; gap: 10px;' : ''">
+            <el-select v-model="reportType" placeholder="请选择报表类型" @change="handleReportTypeChange" :style="isMobile ? 'width: 100%; margin-right: 0;' : 'margin-right: 15px;'">
               <el-option label="用户活跃度报表" value="userActivity" />
               <el-option label="收入统计报表" value="income" />
               <el-option label="操作日志报表" value="operationLog" />
@@ -20,17 +20,19 @@
               format="YYYY-MM-DD"
               value-format="YYYY-MM-DD"
               @change="handleTimeChange"
-              style="margin-right: 15px;"
+              :style="isMobile ? 'width: 100%; margin-right: 0;' : 'margin-right: 15px;'"
             />
-            <el-button type="primary" @click="handleGenerate">生成报表</el-button>
-            <el-button @click="handleExport">导出</el-button>
+            <div :style="isMobile ? 'display: flex; gap: 10px;' : 'display: inline-block;'">
+              <el-button type="primary" @click="handleGenerate" :style="isMobile ? 'flex: 1;' : ''">生成报表</el-button>
+              <el-button @click="handleExport" :style="isMobile ? 'flex: 1;' : ''">导出</el-button>
+            </div>
           </div>
         </div>
       </template>
       
       <!-- 报表概览 -->
-      <el-row :gutter="20" style="margin-bottom: 20px;">
-        <el-col :span="6" v-for="stat in reportStats" :key="stat.title">
+      <el-row :gutter="isMobile ? 10 : 20" style="margin-bottom: 20px;">
+        <el-col :span="isMobile ? 12 : 6" :xs="24" v-for="stat in reportStats" :key="stat.title" style="margin-bottom: 10px;">
           <el-card class="stat-card">
             <div class="stat-item">
               <div class="stat-icon" :class="`bg-${stat.color}`">
@@ -51,8 +53,8 @@
       </el-row>
       
       <!-- 图表区域 -->
-      <el-row :gutter="20">
-        <el-col :span="16">
+      <el-row :gutter="isMobile ? 10 : 20">
+        <el-col :span="isMobile ? 24 : 16">
           <el-card>
             <template #header>
               <div class="chart-header">
@@ -63,7 +65,7 @@
           </el-card>
         </el-col>
         
-        <el-col :span="8">
+        <el-col :span="isMobile ? 24 : 8" :style="isMobile ? 'margin-top: 20px;' : ''">
           <el-card>
             <template #header>
               <div class="chart-header">
@@ -82,7 +84,7 @@
             <span>{{ tableTitle }}</span>
           </div>
         </template>
-        <el-table :data="reportData" style="width: 100%" v-loading="loading">
+        <el-table :data="reportData" style="width: 100%" v-loading="loading" :size="isMobile ? 'small' : 'default'">
           <el-table-column 
             v-for="column in tableColumns" 
             :key="column.prop" 
@@ -97,8 +99,9 @@
             v-model:current-page="currentPage"
             v-model:page-size="pageSize"
             :page-sizes="[10, 20, 50, 100]"
-            layout="total, sizes, prev, pager, next, jumper"
+            :layout="isMobile ? 'total, prev, next' : 'total, sizes, prev, pager, next, jumper'"
             :total="total"
+            :small="isMobile"
             @size-change="handleSizeChange"
             @current-change="handleCurrentChange"
           />
@@ -109,11 +112,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { User, Coin, Document, DataLine, Top, Bottom } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 import { createChartManager } from '@/utils/chartManager'
+
+// 移动端适配逻辑
+const isMobile = ref(false)
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
 
 // 响应式数据
 const reportType = ref('userActivity')
@@ -346,12 +355,14 @@ const handleCurrentChange = (val: number) => {
 
 // 窗口大小变更处理
 const handleResize = () => {
+  checkMobile()
   if (mainChartManager) mainChartManager.resize()
   if (pieChartManager) pieChartManager.resize()
 }
 
 // 组件挂载
 onMounted(() => {
+  checkMobile()
   console.log('📈 数据报表页面加载完成')
   initCharts()
   window.addEventListener('resize', handleResize)

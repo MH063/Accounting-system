@@ -1,30 +1,30 @@
 <template>
-  <div class="system-notification-container">
+  <div class="system-notification-container" :class="{ 'is-mobile': isMobile }">
     <el-card>
       <template #header>
-        <div class="card-header">
-          <span>系统通知管理</span>
+        <div class="card-header" :class="{ 'is-mobile': isMobile }">
+          <span class="title">系统通知管理</span>
           <div class="header-actions">
-            <el-button type="success" @click="handleExport" :loading="exportLoading">
-              <el-icon><Download /></el-icon>导出记录
+            <el-button type="success" @click="handleExport" :loading="exportLoading" :size="isMobile ? 'small' : 'default'">
+              <el-icon><Download /></el-icon>{{ isMobile ? '导出' : '导出记录' }}
             </el-button>
-            <el-button type="primary" @click="handleCreateNotification" :loading="loading">
-              <el-icon><Plus /></el-icon>发送通知
+            <el-button type="primary" @click="handleCreateNotification" :loading="loading" :size="isMobile ? 'small' : 'default'">
+              <el-icon><Plus /></el-icon>{{ isMobile ? '发送' : '发送通知' }}
             </el-button>
-            <el-button @click="handleRefresh" :loading="refreshLoading">
-              <el-icon><Refresh /></el-icon>刷新
+            <el-button @click="handleRefresh" :loading="refreshLoading" :size="isMobile ? 'small' : 'default'">
+              <el-icon><Refresh /></el-icon>{{ isMobile ? '刷新' : '刷新' }}
             </el-button>
           </div>
         </div>
       </template>
       
       <!-- 通知统计 -->
-      <el-row :gutter="20" style="margin-bottom: 20px;">
-        <el-col :span="6">
-          <el-card class="stat-card">
+      <el-row :gutter="isMobile ? 10 : 20" style="margin-bottom: 20px;">
+        <el-col :xs="12" :sm="6" style="margin-bottom: 10px;">
+          <el-card class="stat-card" shadow="hover">
             <div class="stat-item">
-              <div class="stat-icon bg-primary">
-                <el-icon size="24"><Bell /></el-icon>
+              <div class="stat-icon bg-primary" :class="{ 'mini': isMobile }">
+                <el-icon :size="isMobile ? 18 : 24"><Bell /></el-icon>
               </div>
               <div class="stat-content">
                 <div class="stat-title">今日发送</div>
@@ -33,11 +33,11 @@
             </div>
           </el-card>
         </el-col>
-        <el-col :span="6">
-          <el-card class="stat-card">
+        <el-col :xs="12" :sm="6" style="margin-bottom: 10px;">
+          <el-card class="stat-card" shadow="hover">
             <div class="stat-item">
-              <div class="stat-icon bg-success">
-                <el-icon size="24"><View /></el-icon>
+              <div class="stat-icon bg-success" :class="{ 'mini': isMobile }">
+                <el-icon :size="isMobile ? 18 : 24"><View /></el-icon>
               </div>
               <div class="stat-content">
                 <div class="stat-title">阅读率</div>
@@ -46,11 +46,11 @@
             </div>
           </el-card>
         </el-col>
-        <el-col :span="6">
-          <el-card class="stat-card">
+        <el-col :xs="12" :sm="6" style="margin-bottom: 10px;">
+          <el-card class="stat-card" shadow="hover">
             <div class="stat-item">
-              <div class="stat-icon bg-warning">
-                <el-icon size="24"><Timer /></el-icon>
+              <div class="stat-icon bg-warning" :class="{ 'mini': isMobile }">
+                <el-icon :size="isMobile ? 18 : 24"><Timer /></el-icon>
               </div>
               <div class="stat-content">
                 <div class="stat-title">待发送</div>
@@ -59,11 +59,11 @@
             </div>
           </el-card>
         </el-col>
-        <el-col :span="6">
-          <el-card class="stat-card">
+        <el-col :xs="12" :sm="6" style="margin-bottom: 10px;">
+          <el-card class="stat-card" shadow="hover">
             <div class="stat-item">
-              <div class="stat-icon bg-danger">
-                <el-icon size="24"><Warning /></el-icon>
+              <div class="stat-icon bg-danger" :class="{ 'mini': isMobile }">
+                <el-icon :size="isMobile ? 18 : 24"><Warning /></el-icon>
               </div>
               <div class="stat-content">
                 <div class="stat-title">发送失败</div>
@@ -75,91 +75,116 @@
       </el-row>
       
       <!-- 功能标签页 -->
-      <el-tabs v-model="activeTab" @tab-change="handleTabChange">
+      <el-tabs v-model="activeTab" @tab-change="handleTabChange" :class="{ 'mobile-tabs': isMobile }">
         <!-- 全局通知消息发送 -->
         <el-tab-pane label="通知发送" name="send">
           <div class="tab-content">
             <!-- 搜索表单 -->
-            <el-form :model="notificationSearchForm" inline class="search-form">
-              <el-form-item label="通知标题">
-                <el-input v-model="notificationSearchForm.keyword" placeholder="请输入通知标题" clearable />
-              </el-form-item>
-              <el-form-item label="通知类型">
-                <el-select v-model="notificationSearchForm.type" placeholder="请选择通知类型" clearable>
-                  <el-option label="系统通知" value="system" />
-                  <el-option label="公告" value="announcement" />
-                  <el-option label="提醒" value="reminder" />
-                  <el-option label="紧急通知" value="urgent" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="发送状态">
-                <el-select v-model="notificationSearchForm.status" placeholder="请选择发送状态" clearable>
-                  <el-option label="草稿" value="draft" />
-                  <el-option label="已计划" value="scheduled" />
-                  <el-option label="发送中" value="sending" />
-                  <el-option label="已发送" value="sent" />
-                  <el-option label="发送失败" value="failed" />
-                </el-select>
-              </el-form-item>
-              <el-form-item>
-                <el-button type="primary" @click="handleNotificationSearch">搜索</el-button>
-                <el-button @click="handleNotificationReset">重置</el-button>
-              </el-form-item>
+            <el-form :model="notificationSearchForm" :inline="!isMobile" class="search-form responsive-form">
+              <el-row :gutter="isMobile ? 0 : 20">
+                <el-col :xs="24" :sm="8">
+                  <el-form-item label="通知标题">
+                    <el-input v-model="notificationSearchForm.keyword" placeholder="请输入通知标题" clearable style="width: 100%" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="8">
+                  <el-form-item label="通知类型">
+                    <el-select v-model="notificationSearchForm.type" placeholder="请选择通知类型" clearable style="width: 100%">
+                      <el-option label="系统通知" value="system" />
+                      <el-option label="公告" value="announcement" />
+                      <el-option label="提醒" value="reminder" />
+                      <el-option label="紧急通知" value="urgent" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="8" v-if="!isMobile">
+                  <el-form-item label="发送状态">
+                    <el-select v-model="notificationSearchForm.status" placeholder="请选择发送状态" clearable style="width: 100%">
+                      <el-option label="草稿" value="draft" />
+                      <el-option label="已计划" value="scheduled" />
+                      <el-option label="发送中" value="sending" />
+                      <el-option label="已发送" value="sent" />
+                      <el-option label="发送失败" value="failed" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="24" :md="24" class="form-buttons">
+                  <el-form-item>
+                    <el-button type="primary" @click="handleNotificationSearch">搜索</el-button>
+                    <el-button @click="handleNotificationReset">重置</el-button>
+                  </el-form-item>
+                </el-col>
+              </el-row>
             </el-form>
             
             <!-- 通知列表 -->
-            <el-table :data="notificationList" border stripe v-loading="notificationLoading" style="width: 100%">
-              <el-table-column prop="id" label="ID" width="80" />
-              <el-table-column prop="title" label="通知标题" min-width="200" show-overflow-tooltip>
-                <template #default="scope">
-                  <el-link type="primary" @click="handleViewNotification(scope.row)">{{ scope.row.title }}</el-link>
-                </template>
-              </el-table-column>
-              <el-table-column prop="type" label="类型" width="100">
-                <template #default="scope">
-                  <el-tag :type="getNotificationTypeTagType(scope.row.type)">
-                    {{ getNotificationTypeText(scope.row.type) }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="priority" label="优先级" width="100">
-                <template #default="scope">
-                  <el-tag :type="getPriorityTagType(scope.row.priority)">
-                    {{ getPriorityText(scope.row.priority) }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="status" label="状态" width="100">
-                <template #default="scope">
-                  <el-tag :type="getStatusTagType(scope.row.status)">
-                    {{ getStatusText(scope.row.status) }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="recipientCount" label="接收人数" width="100" />
-              <el-table-column prop="senderName" label="发送人" width="120" />
-              <el-table-column prop="sendTime" label="发送时间" width="160" />
-              <el-table-column label="操作" width="220" fixed="right">
-                <template #default="scope">
-                  <el-button size="small" @click="handleViewNotification(scope.row)">查看</el-button>
-                  <el-button 
-                    size="small" 
-                    type="primary" 
-                    @click="handleEditNotification(scope.row)"
-                  >
-                    编辑
-                  </el-button>
-                  <el-button 
-                    size="small" 
-                    type="success" 
-                    @click="handleSendNotification(scope.row)"
-                    :disabled="scope.row.status === 'sent' || scope.row.status === 'sending'"
-                  >
-                    发送
-                  </el-button>
-                </template>
-              </el-table-column>
-            </el-table>
+            <div class="table-container mobile-scroll">
+              <el-table 
+                :data="notificationList" 
+                border 
+                stripe 
+                v-loading="notificationLoading" 
+                style="width: 100%"
+                :size="isMobile ? 'small' : 'default'"
+              >
+                <el-table-column prop="id" label="ID" width="70" v-if="!isMobile" />
+                <el-table-column prop="title" label="通知标题" min-width="150" show-overflow-tooltip>
+                  <template #default="scope">
+                    <el-link type="primary" @click="handleViewNotification(scope.row)">{{ scope.row.title }}</el-link>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="type" label="类型" width="90">
+                  <template #default="scope">
+                    <el-tag :type="getNotificationTypeTagType(scope.row.type)" size="small">
+                      {{ getNotificationTypeText(scope.row.type) }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="status" label="状态" width="90">
+                  <template #default="scope">
+                    <el-tag :type="getStatusTagType(scope.row.status)" size="small">
+                      {{ getStatusText(scope.row.status) }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="sendTime" label="发送时间" width="160" v-if="!isMobile" />
+                <el-table-column label="操作" :width="isMobile ? 100 : 220" fixed="right">
+                  <template #default="scope">
+                    <template v-if="isMobile">
+                      <el-dropdown trigger="click">
+                        <el-button type="primary" size="small" text>
+                          操作<el-icon class="el-icon--right"><arrow-down /></el-icon>
+                        </el-button>
+                        <template #dropdown>
+                          <el-dropdown-menu>
+                            <el-dropdown-item @click="handleViewNotification(scope.row)">查看</el-dropdown-item>
+                            <el-dropdown-item @click="handleEditNotification(scope.row)">编辑</el-dropdown-item>
+                            <el-dropdown-item 
+                              @click="handleSendNotification(scope.row)"
+                              :disabled="scope.row.status === 'sent' || scope.row.status === 'sending'"
+                            >
+                              发送
+                            </el-dropdown-item>
+                          </el-dropdown-menu>
+                        </template>
+                      </el-dropdown>
+                    </template>
+                    <template v-else>
+                      <el-button size="small" @click="handleViewNotification(scope.row)">查看</el-button>
+                      <el-button size="small" type="primary" @click="handleEditNotification(scope.row)">编辑</el-button>
+                      <el-button 
+                        size="small" 
+                        type="success" 
+                        @click="handleSendNotification(scope.row)"
+                        :disabled="scope.row.status === 'sent' || scope.row.status === 'sending'"
+                      >
+                        发送
+                      </el-button>
+                    </template>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
             
             <!-- 分页 -->
             <div class="pagination-container">
@@ -167,8 +192,9 @@
                 v-model:current-page="notificationCurrentPage"
                 v-model:page-size="notificationPageSize"
                 :page-sizes="[10, 20, 50, 100]"
-                layout="total, sizes, prev, pager, next, jumper"
+                :layout="isMobile ? 'prev, pager, next' : 'total, sizes, prev, pager, next, jumper'"
                 :total="notificationTotal"
+                :small="isMobile"
                 @size-change="handleNotificationSizeChange"
                 @current-change="handleNotificationCurrentChange"
               />
@@ -180,73 +206,110 @@
         <el-tab-pane label="通知模板" name="templates">
           <div class="tab-content">
             <!-- 搜索表单 -->
-            <el-form :model="templateSearchForm" inline class="search-form">
-              <el-form-item label="模板名称">
-                <el-input v-model="templateSearchForm.keyword" placeholder="请输入模板名称" clearable />
-              </el-form-item>
-              <el-form-item label="模板类型">
-                <el-select v-model="templateSearchForm.type" placeholder="请选择模板类型" clearable>
-                  <el-option label="系统通知" value="system" />
-                  <el-option label="公告" value="announcement" />
-                  <el-option label="提醒" value="reminder" />
-                  <el-option label="紧急通知" value="urgent" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="状态">
-                <el-select v-model="templateSearchForm.isActive" placeholder="请选择状态" clearable>
-                  <el-option label="启用" :value="true" />
-                  <el-option label="禁用" :value="false" />
-                </el-select>
-              </el-form-item>
-              <el-form-item>
-                <el-button type="primary" @click="handleTemplateSearch">搜索</el-button>
-                <el-button @click="handleTemplateReset">重置</el-button>
-                <el-button type="success" @click="handleCreateTemplate">创建模板</el-button>
-              </el-form-item>
+            <el-form :model="templateSearchForm" :inline="!isMobile" class="search-form responsive-form">
+              <el-row :gutter="isMobile ? 0 : 20">
+                <el-col :xs="24" :sm="8">
+                  <el-form-item label="模板名称">
+                    <el-input v-model="templateSearchForm.keyword" placeholder="请输入模板名称" clearable style="width: 100%" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="8">
+                  <el-form-item label="模板类型">
+                    <el-select v-model="templateSearchForm.type" placeholder="请选择模板类型" clearable style="width: 100%">
+                      <el-option label="系统通知" value="system" />
+                      <el-option label="公告" value="announcement" />
+                      <el-option label="提醒" value="reminder" />
+                      <el-option label="紧急通知" value="urgent" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="8" v-if="!isMobile">
+                  <el-form-item label="状态">
+                    <el-select v-model="templateSearchForm.isActive" placeholder="请选择状态" clearable style="width: 100%">
+                      <el-option label="启用" :value="true" />
+                      <el-option label="禁用" :value="false" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="24" class="form-buttons">
+                  <el-form-item>
+                    <el-button type="primary" @click="handleTemplateSearch">搜索</el-button>
+                    <el-button @click="handleTemplateReset">重置</el-button>
+                    <el-button type="success" @click="handleCreateTemplate">创建模板</el-button>
+                  </el-form-item>
+                </el-col>
+              </el-row>
             </el-form>
             
             <!-- 模板列表 -->
-            <el-table :data="templateList" border stripe v-loading="templateLoading" style="width: 100%">
-              <el-table-column prop="id" label="ID" width="80" />
-              <el-table-column prop="name" label="模板名称" min-width="150" show-overflow-tooltip />
-              <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip />
-              <el-table-column prop="type" label="类型" width="100">
-                <template #default="scope">
-                  <el-tag :type="getNotificationTypeTagType(scope.row.type)">
-                    {{ getNotificationTypeText(scope.row.type) }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="variables" label="变量" width="200">
-                <template #default="scope">
-                  <el-tag v-for="variable in scope.row.variables" :key="variable" size="small" style="margin-right: 5px;">
-                    {{ variable }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="usageCount" label="使用次数" width="100" />
-              <el-table-column prop="isActive" label="状态" width="100">
-                <template #default="scope">
-                  <el-tag :type="scope.row.isActive ? 'success' : 'danger'">
-                    {{ scope.row.isActive ? '启用' : '禁用' }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="createTime" label="创建时间" width="160" />
-              <el-table-column label="操作" width="220" fixed="right">
-                <template #default="scope">
-                  <el-button size="small" @click="handleViewTemplate(scope.row)">查看</el-button>
-                  <el-button size="small" type="primary" @click="handleEditTemplate(scope.row)">编辑</el-button>
-                  <el-button 
-                    size="small" 
-                    :type="scope.row.isActive ? 'warning' : 'success'"
-                    @click="handleToggleTemplate(scope.row)"
-                  >
-                    {{ scope.row.isActive ? '禁用' : '启用' }}
-                  </el-button>
-                </template>
-              </el-table-column>
-            </el-table>
+            <div class="table-container mobile-scroll">
+              <el-table 
+                :data="templateList" 
+                border 
+                stripe 
+                v-loading="templateLoading" 
+                style="width: 100%"
+                :size="isMobile ? 'small' : 'default'"
+              >
+                <el-table-column prop="id" label="ID" width="80" v-if="!isMobile" />
+                <el-table-column prop="name" label="模板名称" min-width="150" show-overflow-tooltip />
+                <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip v-if="!isMobile" />
+                <el-table-column prop="type" label="类型" width="100">
+                  <template #default="scope">
+                    <el-tag :type="getNotificationTypeTagType(scope.row.type)" size="small">
+                      {{ getNotificationTypeText(scope.row.type) }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="variables" label="变量" width="200" v-if="!isMobile">
+                  <template #default="scope">
+                    <el-tag v-for="variable in scope.row.variables" :key="variable" size="small" style="margin-right: 5px;">
+                      {{ variable }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="usageCount" label="使用次数" width="100" v-if="!isMobile" />
+                <el-table-column prop="isActive" label="状态" width="80">
+                  <template #default="scope">
+                    <el-tag :type="scope.row.isActive ? 'success' : 'danger'" size="small">
+                      {{ scope.row.isActive ? '启用' : '禁用' }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="createTime" label="创建时间" width="160" v-if="!isMobile" />
+                <el-table-column label="操作" :width="isMobile ? 80 : 220" fixed="right">
+                  <template #default="scope">
+                    <template v-if="isMobile">
+                      <el-dropdown trigger="click">
+                        <el-button type="primary" size="small" text>
+                          操作<el-icon class="el-icon--right"><arrow-down /></el-icon>
+                        </el-button>
+                        <template #dropdown>
+                          <el-dropdown-menu>
+                            <el-dropdown-item @click="handleViewTemplate(scope.row)">查看</el-dropdown-item>
+                            <el-dropdown-item @click="handleEditTemplate(scope.row)">编辑</el-dropdown-item>
+                            <el-dropdown-item @click="handleToggleTemplate(scope.row)">
+                              {{ scope.row.isActive ? '禁用' : '启用' }}
+                            </el-dropdown-item>
+                          </el-dropdown-menu>
+                        </template>
+                      </el-dropdown>
+                    </template>
+                    <template v-else>
+                      <el-button size="small" @click="handleViewTemplate(scope.row)">查看</el-button>
+                      <el-button size="small" type="primary" @click="handleEditTemplate(scope.row)">编辑</el-button>
+                      <el-button 
+                        size="small" 
+                        :type="scope.row.isActive ? 'warning' : 'success'"
+                        @click="handleToggleTemplate(scope.row)"
+                      >
+                        {{ scope.row.isActive ? '禁用' : '启用' }}
+                      </el-button>
+                    </template>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
             
             <!-- 分页 -->
             <div class="pagination-container">
@@ -254,8 +317,9 @@
                 v-model:current-page="templateCurrentPage"
                 v-model:page-size="templatePageSize"
                 :page-sizes="[10, 20, 50, 100]"
-                layout="total, sizes, prev, pager, next, jumper"
+                :layout="isMobile ? 'prev, pager, next' : 'total, sizes, prev, pager, next, jumper'"
                 :total="templateTotal"
+                :small="isMobile"
                 @size-change="handleTemplateSizeChange"
                 @current-change="handleTemplateCurrentChange"
               />
@@ -267,94 +331,128 @@
         <el-tab-pane label="发送历史" name="history">
           <div class="tab-content">
             <!-- 搜索表单 -->
-            <el-form :model="historySearchForm" inline class="search-form">
-              <el-form-item label="通知标题">
-                <el-input v-model="historySearchForm.keyword" placeholder="请输入通知标题" clearable />
-              </el-form-item>
-              <el-form-item label="通知类型">
-                <el-select v-model="historySearchForm.type" placeholder="请选择通知类型" clearable>
-                  <el-option label="系统通知" value="system" />
-                  <el-option label="公告" value="announcement" />
-                  <el-option label="提醒" value="reminder" />
-                  <el-option label="紧急通知" value="urgent" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="发送方式">
-                <el-select v-model="historySearchForm.method" placeholder="请选择发送方式" clearable>
-                  <el-option label="邮件" value="email" />
-                  <el-option label="短信" value="sms" />
-                  <el-option label="站内信" value="in-app" />
-                  <el-option label="推送通知" value="push" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="发送状态">
-                <el-select v-model="historySearchForm.status" placeholder="请选择发送状态" clearable>
-                  <el-option label="待发送" value="pending" />
-                  <el-option label="发送中" value="sending" />
-                  <el-option label="已发送" value="sent" />
-                  <el-option label="发送失败" value="failed" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="发送时间">
-                <el-date-picker
-                  v-model="historySearchForm.dateRange"
-                  type="daterange"
-                  range-separator="至"
-                  start-placeholder="开始日期"
-                  end-placeholder="结束日期"
-                  value-format="YYYY-MM-DD"
-                />
-              </el-form-item>
-              <el-form-item>
-                <el-button type="primary" @click="handleHistorySearch">搜索</el-button>
-                <el-button @click="handleHistoryReset">重置</el-button>
-                <el-button type="success" @click="handleExportHistory">导出记录</el-button>
-              </el-form-item>
+            <el-form :model="historySearchForm" :inline="!isMobile" class="search-form responsive-form">
+              <el-row :gutter="isMobile ? 0 : 20">
+                <el-col :xs="24" :sm="8">
+                  <el-form-item label="通知标题">
+                    <el-input v-model="historySearchForm.keyword" placeholder="请输入通知标题" clearable style="width: 100%" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="8">
+                  <el-form-item label="通知类型">
+                    <el-select v-model="historySearchForm.type" placeholder="请选择通知类型" clearable style="width: 100%">
+                      <el-option label="系统通知" value="system" />
+                      <el-option label="公告" value="announcement" />
+                      <el-option label="提醒" value="reminder" />
+                      <el-option label="紧急通知" value="urgent" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="8" v-if="!isMobile">
+                  <el-form-item label="发送方式">
+                    <el-select v-model="historySearchForm.method" placeholder="请选择发送方式" clearable style="width: 100%">
+                      <el-option label="邮件" value="email" />
+                      <el-option label="短信" value="sms" />
+                      <el-option label="站内信" value="in-app" />
+                      <el-option label="推送通知" value="push" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="12" v-if="!isMobile">
+                  <el-form-item label="发送时间">
+                    <el-date-picker
+                      v-model="historySearchForm.dateRange"
+                      type="daterange"
+                      range-separator="至"
+                      start-placeholder="开始日期"
+                      end-placeholder="结束日期"
+                      value-format="YYYY-MM-DD"
+                      style="width: 100%"
+                    />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="24" class="form-buttons">
+                  <el-form-item>
+                    <el-button type="primary" @click="handleHistorySearch">搜索</el-button>
+                    <el-button @click="handleHistoryReset">重置</el-button>
+                    <el-button type="success" @click="handleExportHistory" v-if="!isMobile">导出记录</el-button>
+                  </el-form-item>
+                </el-col>
+              </el-row>
             </el-form>
             
             <!-- 历史记录列表 -->
-            <el-table :data="historyList" border stripe v-loading="historyLoading" style="width: 100%">
-              <el-table-column prop="id" label="ID" width="80" />
-              <el-table-column prop="notificationTitle" label="通知标题" min-width="200" show-overflow-tooltip />
-              <el-table-column prop="type" label="类型" width="100">
-                <template #default="scope">
-                  <el-tag :type="getNotificationTypeTagType(scope.row.type)">
-                    {{ getNotificationTypeText(scope.row.type) }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="senderName" label="发送人" width="120" />
-              <el-table-column prop="recipientGroup" label="接收群体" width="120" />
-              <el-table-column prop="recipientCount" label="接收人数" width="100" />
-              <el-table-column prop="sendMethod" label="发送方式" width="100">
-                <template #default="scope">
-                  <el-tag>{{ getSendMethodText(scope.row.sendMethod) }}</el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="status" label="状态" width="100">
-                <template #default="scope">
-                  <el-tag :type="getHistoryStatusTagType(scope.row.status)">
-                    {{ getHistoryStatusText(scope.row.status) }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="sendTime" label="发送时间" width="160" />
-              <el-table-column prop="readCount" label="阅读数" width="80" />
-              <el-table-column prop="clickCount" label="点击数" width="80" />
-              <el-table-column label="操作" width="150" fixed="right">
-                <template #default="scope">
-                  <el-button size="small" @click="handleViewHistory(scope.row)">查看</el-button>
-                  <el-button 
-                    v-if="scope.row.status === 'failed'"
-                    size="small" 
-                    type="warning" 
-                    @click="handleRetryHistory(scope.row)"
-                  >
-                    重试
-                  </el-button>
-                </template>
-              </el-table-column>
-            </el-table>
+            <div class="table-container mobile-scroll">
+              <el-table 
+                :data="historyList" 
+                border 
+                stripe 
+                v-loading="historyLoading" 
+                style="width: 100%"
+                :size="isMobile ? 'small' : 'default'"
+              >
+                <el-table-column prop="id" label="ID" width="80" v-if="!isMobile" />
+                <el-table-column prop="notificationTitle" label="通知标题" min-width="200" show-overflow-tooltip />
+                <el-table-column prop="type" label="类型" width="100" v-if="!isMobile">
+                  <template #default="scope">
+                    <el-tag :type="getNotificationTypeTagType(scope.row.type)" size="small">
+                      {{ getNotificationTypeText(scope.row.type) }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="senderName" label="发送人" width="120" v-if="!isMobile" />
+                <el-table-column prop="recipientGroup" label="接收群体" width="120" v-if="!isMobile" />
+                <el-table-column prop="recipientCount" label="接收人数" width="100" v-if="!isMobile" />
+                <el-table-column prop="sendMethod" label="发送方式" width="100">
+                  <template #default="scope">
+                    <el-tag size="small">{{ getSendMethodText(scope.row.sendMethod) }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="status" label="状态" width="100">
+                  <template #default="scope">
+                    <el-tag :type="getHistoryStatusTagType(scope.row.status)" size="small">
+                      {{ getHistoryStatusText(scope.row.status) }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="sendTime" label="发送时间" width="160" v-if="!isMobile" />
+                <el-table-column prop="readCount" label="阅读数" width="80" v-if="!isMobile" />
+                <el-table-column prop="clickCount" label="点击数" width="80" v-if="!isMobile" />
+                <el-table-column label="操作" :width="isMobile ? 80 : 150" fixed="right">
+                  <template #default="scope">
+                    <template v-if="isMobile">
+                      <el-dropdown trigger="click">
+                        <el-button type="primary" size="small" text>
+                          操作<el-icon class="el-icon--right"><arrow-down /></el-icon>
+                        </el-button>
+                        <template #dropdown>
+                          <el-dropdown-menu>
+                            <el-dropdown-item @click="handleViewHistory(scope.row)">查看</el-dropdown-item>
+                            <el-dropdown-item 
+                              v-if="scope.row.status === 'failed'"
+                              @click="handleRetryHistory(scope.row)"
+                            >
+                              重试
+                            </el-dropdown-item>
+                          </el-dropdown-menu>
+                        </template>
+                      </el-dropdown>
+                    </template>
+                    <template v-else>
+                      <el-button size="small" @click="handleViewHistory(scope.row)">查看</el-button>
+                      <el-button 
+                        v-if="scope.row.status === 'failed'"
+                        size="small" 
+                        type="warning" 
+                        @click="handleRetryHistory(scope.row)"
+                      >
+                        重试
+                      </el-button>
+                    </template>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
             
             <!-- 分页 -->
             <div class="pagination-container">
@@ -362,8 +460,9 @@
                 v-model:current-page="historyCurrentPage"
                 v-model:page-size="historyPageSize"
                 :page-sizes="[10, 20, 50, 100]"
-                layout="total, sizes, prev, pager, next, jumper"
+                :layout="isMobile ? 'prev, pager, next' : 'total, sizes, prev, pager, next, jumper'"
                 :total="historyTotal"
+                :small="isMobile"
                 @size-change="handleHistorySizeChange"
                 @current-change="handleHistoryCurrentChange"
               />
@@ -375,47 +474,48 @@
         <el-tab-pane label="效果统计" name="stats">
           <div class="tab-content">
             <!-- 统计筛选 -->
-            <el-form :model="statsSearchForm" inline class="search-form">
-              <el-form-item label="统计时间">
-                <el-date-picker
-                  v-model="statsSearchForm.dateRange"
-                  type="daterange"
-                  range-separator="至"
-                  start-placeholder="开始日期"
-                  end-placeholder="结束日期"
-                  value-format="YYYY-MM-DD"
-                  :shortcuts="dateShortcuts"
-                />
-              </el-form-item>
-              <el-form-item label="通知类型">
-                <el-select v-model="statsSearchForm.type" placeholder="请选择通知类型" clearable>
-                  <el-option label="系统通知" value="system" />
-                  <el-option label="公告" value="announcement" />
-                  <el-option label="提醒" value="reminder" />
-                  <el-option label="紧急通知" value="urgent" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="发送方式">
-                <el-select v-model="statsSearchForm.method" placeholder="请选择发送方式" clearable>
-                  <el-option label="邮件" value="email" />
-                  <el-option label="短信" value="sms" />
-                  <el-option label="站内信" value="in-app" />
-                  <el-option label="推送通知" value="push" />
-                </el-select>
-              </el-form-item>
-              <el-form-item>
-                <el-button type="primary" @click="handleStatsSearch">查询</el-button>
-                <el-button @click="handleStatsReset">重置</el-button>
-              </el-form-item>
+            <el-form :model="statsSearchForm" :inline="!isMobile" class="search-form responsive-form">
+              <el-row :gutter="isMobile ? 0 : 20">
+                <el-col :xs="24" :sm="12">
+                  <el-form-item label="统计时间">
+                    <el-date-picker
+                      v-model="statsSearchForm.dateRange"
+                      :type="isMobile ? 'date' : 'daterange'"
+                      :range-separator="isMobile ? '' : '至'"
+                      :start-placeholder="isMobile ? '开始日期' : '开始日期'"
+                      :end-placeholder="isMobile ? '结束日期' : '结束日期'"
+                      value-format="YYYY-MM-DD"
+                      :shortcuts="isMobile ? [] : dateShortcuts"
+                      style="width: 100%"
+                    />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="6">
+                  <el-form-item label="通知类型">
+                    <el-select v-model="statsSearchForm.type" placeholder="请选择通知类型" clearable style="width: 100%">
+                      <el-option label="系统通知" value="system" />
+                      <el-option label="公告" value="announcement" />
+                      <el-option label="提醒" value="reminder" />
+                      <el-option label="紧急通知" value="urgent" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="6" class="form-buttons">
+                  <el-form-item>
+                    <el-button type="primary" @click="handleStatsSearch">查询</el-button>
+                    <el-button @click="handleStatsReset" v-if="!isMobile">重置</el-button>
+                  </el-form-item>
+                </el-col>
+              </el-row>
             </el-form>
             
             <!-- 总体统计 -->
-            <el-row :gutter="20" style="margin-bottom: 20px;">
-              <el-col :span="6">
-                <el-card class="stat-card">
+            <el-row :gutter="isMobile ? 10 : 20" style="margin-bottom: 20px;">
+              <el-col :xs="12" :sm="6" style="margin-bottom: 10px;">
+                <el-card class="stat-card" shadow="hover">
                   <div class="stat-item">
-                    <div class="stat-icon bg-primary">
-                      <el-icon size="24"><Promotion /></el-icon>
+                    <div class="stat-icon bg-primary" :class="{ 'mini': isMobile }">
+                      <el-icon :size="isMobile ? 18 : 24"><Promotion /></el-icon>
                     </div>
                     <div class="stat-content">
                       <div class="stat-title">总发送数</div>
@@ -424,11 +524,11 @@
                   </div>
                 </el-card>
               </el-col>
-              <el-col :span="6">
-                <el-card class="stat-card">
+              <el-col :xs="12" :sm="6" style="margin-bottom: 10px;">
+                <el-card class="stat-card" shadow="hover">
                   <div class="stat-item">
-                    <div class="stat-icon bg-success">
-                      <el-icon size="24"><View /></el-icon>
+                    <div class="stat-icon bg-success" :class="{ 'mini': isMobile }">
+                      <el-icon :size="isMobile ? 18 : 24"><View /></el-icon>
                     </div>
                     <div class="stat-content">
                       <div class="stat-title">总阅读数</div>
@@ -437,11 +537,11 @@
                   </div>
                 </el-card>
               </el-col>
-              <el-col :span="6">
-                <el-card class="stat-card">
+              <el-col :xs="12" :sm="6" style="margin-bottom: 10px;">
+                <el-card class="stat-card" shadow="hover">
                   <div class="stat-item">
-                    <div class="stat-icon bg-warning">
-                      <el-icon size="24"><Pointer /></el-icon>
+                    <div class="stat-icon bg-warning" :class="{ 'mini': isMobile }">
+                      <el-icon :size="isMobile ? 18 : 24"><Pointer /></el-icon>
                     </div>
                     <div class="stat-content">
                       <div class="stat-title">总点击数</div>
@@ -450,11 +550,11 @@
                   </div>
                 </el-card>
               </el-col>
-              <el-col :span="6">
-                <el-card class="stat-card">
+              <el-col :xs="12" :sm="6" style="margin-bottom: 10px;">
+                <el-card class="stat-card" shadow="hover">
                   <div class="stat-item">
-                    <div class="stat-icon bg-info">
-                      <el-icon size="24"><TrendCharts /></el-icon>
+                    <div class="stat-icon bg-info" :class="{ 'mini': isMobile }">
+                      <el-icon :size="isMobile ? 18 : 24"><TrendCharts /></el-icon>
                     </div>
                     <div class="stat-content">
                       <div class="stat-title">阅读率</div>
@@ -466,32 +566,32 @@
             </el-row>
             
             <!-- 图表展示 -->
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <el-card title="类型统计">
+            <el-row :gutter="isMobile ? 10 : 20">
+              <el-col :xs="24" :sm="12" style="margin-bottom: 20px;">
+                <el-card>
                   <template #header>
                     <span>类型统计</span>
                   </template>
-                  <div ref="typeStatsChartRef" style="height: 300px;"></div>
+                  <div ref="typeStatsChartRef" :style="{ height: isMobile ? '250px' : '300px' }"></div>
                 </el-card>
               </el-col>
-              <el-col :span="12">
-                <el-card title="发送方式统计">
+              <el-col :xs="24" :sm="12" style="margin-bottom: 20px;">
+                <el-card>
                   <template #header>
                     <span>发送方式统计</span>
                   </template>
-                  <div ref="methodStatsChartRef" style="height: 300px;"></div>
+                  <div ref="methodStatsChartRef" :style="{ height: isMobile ? '250px' : '300px' }"></div>
                 </el-card>
               </el-col>
             </el-row>
             
-            <el-row :gutter="20" style="margin-top: 20px;">
-              <el-col :span="24">
-                <el-card title="趋势统计">
+            <el-row :gutter="isMobile ? 10 : 20" style="margin-top: 20px;">
+              <el-col :xs="24" :sm="24">
+                <el-card>
                   <template #header>
                     <span>趋势统计</span>
                   </template>
-                  <div ref="trendStatsChartRef" style="height: 400px;"></div>
+                  <div ref="trendStatsChartRef" :style="{ height: isMobile ? '300px' : '400px' }"></div>
                 </el-card>
               </el-col>
             </el-row>
@@ -502,52 +602,88 @@
         <el-tab-pane label="用户群体" name="userGroups">
           <div class="tab-content">
             <!-- 搜索表单 -->
-            <el-form :model="userGroupSearchForm" inline class="search-form">
-              <el-form-item label="群体名称">
-                <el-input v-model="userGroupSearchForm.keyword" placeholder="请输入群体名称" clearable />
-              </el-form-item>
-              <el-form-item label="状态">
-                <el-select v-model="userGroupSearchForm.isActive" placeholder="请选择状态" clearable>
-                  <el-option label="启用" :value="true" />
-                  <el-option label="禁用" :value="false" />
-                </el-select>
-              </el-form-item>
-              <el-form-item>
-                <el-button type="primary" @click="handleUserGroupSearch">搜索</el-button>
-                <el-button @click="handleUserGroupReset">重置</el-button>
-                <el-button type="success" @click="handleCreateUserGroup">创建群体</el-button>
-              </el-form-item>
+            <el-form :model="userGroupSearchForm" :inline="!isMobile" class="search-form responsive-form">
+              <el-row :gutter="isMobile ? 0 : 20">
+                <el-col :xs="24" :sm="8">
+                  <el-form-item label="群体名称">
+                    <el-input v-model="userGroupSearchForm.keyword" placeholder="请输入群体名称" clearable style="width: 100%" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="8">
+                  <el-form-item label="状态">
+                    <el-select v-model="userGroupSearchForm.isActive" placeholder="请选择状态" clearable style="width: 100%">
+                      <el-option label="启用" :value="true" />
+                      <el-option label="禁用" :value="false" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="8" class="form-buttons">
+                  <el-form-item>
+                    <el-button type="primary" @click="handleUserGroupSearch">搜索</el-button>
+                    <el-button @click="handleUserGroupReset" v-if="!isMobile">重置</el-button>
+                    <el-button type="success" @click="handleCreateUserGroup">创建群体</el-button>
+                  </el-form-item>
+                </el-col>
+              </el-row>
             </el-form>
             
             <!-- 用户群体列表 -->
-            <el-table :data="userGroupList" border stripe v-loading="userGroupLoading" style="width: 100%">
-              <el-table-column prop="id" label="ID" width="80" />
-              <el-table-column prop="name" label="群体名称" min-width="150" show-overflow-tooltip />
-              <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
-              <el-table-column prop="userCount" label="用户数量" width="100" />
-              <el-table-column prop="isActive" label="状态" width="100">
-                <template #default="scope">
-                  <el-tag :type="scope.row.isActive ? 'success' : 'danger'">
-                    {{ scope.row.isActive ? '启用' : '禁用' }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="createTime" label="创建时间" width="160" />
-              <el-table-column label="操作" width="250" fixed="right">
-                <template #default="scope">
-                  <el-button size="small" @click="handleViewUserGroup(scope.row)">查看</el-button>
-                  <el-button size="small" type="primary" @click="handleEditUserGroup(scope.row)">编辑</el-button>
-                  <el-button 
-                    size="small" 
-                    :type="scope.row.isActive ? 'warning' : 'success'"
-                    @click="handleToggleUserGroup(scope.row)"
-                  >
-                    {{ scope.row.isActive ? '禁用' : '启用' }}
-                  </el-button>
-                  <el-button size="small" type="info" @click="handlePreviewUserGroup(scope.row)">预览</el-button>
-                </template>
-              </el-table-column>
-            </el-table>
+            <div class="table-container mobile-scroll">
+              <el-table 
+                :data="userGroupList" 
+                border 
+                stripe 
+                v-loading="userGroupLoading" 
+                style="width: 100%"
+                :size="isMobile ? 'small' : 'default'"
+              >
+                <el-table-column prop="id" label="ID" width="80" v-if="!isMobile" />
+                <el-table-column prop="name" label="群体名称" min-width="150" show-overflow-tooltip />
+                <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip v-if="!isMobile" />
+                <el-table-column prop="userCount" label="用户数量" width="100" />
+                <el-table-column prop="isActive" label="状态" width="100">
+                  <template #default="scope">
+                    <el-tag :type="scope.row.isActive ? 'success' : 'danger'" size="small">
+                      {{ scope.row.isActive ? '启用' : '禁用' }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="createTime" label="创建时间" width="160" v-if="!isMobile" />
+                <el-table-column label="操作" :width="isMobile ? 80 : 250" fixed="right">
+                  <template #default="scope">
+                    <template v-if="isMobile">
+                      <el-dropdown trigger="click">
+                        <el-button type="primary" size="small" text>
+                          操作<el-icon class="el-icon--right"><arrow-down /></el-icon>
+                        </el-button>
+                        <template #dropdown>
+                          <el-dropdown-menu>
+                            <el-dropdown-item @click="handleViewUserGroup(scope.row)">查看</el-dropdown-item>
+                            <el-dropdown-item @click="handleEditUserGroup(scope.row)">编辑</el-dropdown-item>
+                            <el-dropdown-item @click="handleToggleUserGroup(scope.row)">
+                              {{ scope.row.isActive ? '禁用' : '启用' }}
+                            </el-dropdown-item>
+                            <el-dropdown-item @click="handlePreviewUserGroup(scope.row)">预览</el-dropdown-item>
+                          </el-dropdown-menu>
+                        </template>
+                      </el-dropdown>
+                    </template>
+                    <template v-else>
+                      <el-button size="small" @click="handleViewUserGroup(scope.row)">查看</el-button>
+                      <el-button size="small" type="primary" @click="handleEditUserGroup(scope.row)">编辑</el-button>
+                      <el-button 
+                        size="small" 
+                        :type="scope.row.isActive ? 'warning' : 'success'"
+                        @click="handleToggleUserGroup(scope.row)"
+                      >
+                        {{ scope.row.isActive ? '禁用' : '启用' }}
+                      </el-button>
+                      <el-button size="small" type="info" @click="handlePreviewUserGroup(scope.row)">预览</el-button>
+                    </template>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
             
             <!-- 分页 -->
             <div class="pagination-container">
@@ -555,8 +691,9 @@
                 v-model:current-page="userGroupCurrentPage"
                 v-model:page-size="userGroupPageSize"
                 :page-sizes="[10, 20, 50, 100]"
-                layout="total, sizes, prev, pager, next, jumper"
+                :layout="isMobile ? 'prev, pager, next' : 'total, sizes, prev, pager, next, jumper'"
                 :total="userGroupTotal"
+                :small="isMobile"
                 @size-change="handleUserGroupSizeChange"
                 @current-change="handleUserGroupCurrentChange"
               />
@@ -568,87 +705,127 @@
         <el-tab-pane label="定时任务" name="scheduledTasks">
           <div class="tab-content">
             <!-- 搜索表单 -->
-            <el-form :model="taskSearchForm" inline class="search-form">
-              <el-form-item label="任务名称">
-                <el-input v-model="taskSearchForm.keyword" placeholder="请输入任务名称" clearable />
-              </el-form-item>
-              <el-form-item label="任务状态">
-                <el-select v-model="taskSearchForm.status" placeholder="请选择任务状态" clearable>
-                  <el-option label="待执行" value="pending" />
-                  <el-option label="执行中" value="running" />
-                  <el-option label="已完成" value="completed" />
-                  <el-option label="执行失败" value="failed" />
-                  <el-option label="已取消" value="cancelled" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="计划时间">
-                <el-date-picker
-                  v-model="taskSearchForm.dateRange"
-                  type="daterange"
-                  range-separator="至"
-                  start-placeholder="开始日期"
-                  end-placeholder="结束日期"
-                  value-format="YYYY-MM-DD"
-                />
-              </el-form-item>
-              <el-form-item>
-                <el-button type="primary" @click="handleTaskSearch">搜索</el-button>
-                <el-button @click="handleTaskReset">重置</el-button>
-                <el-button type="success" @click="handleCreateTask">创建任务</el-button>
-              </el-form-item>
+            <el-form :model="taskSearchForm" :inline="!isMobile" class="search-form responsive-form">
+              <el-row :gutter="isMobile ? 0 : 20">
+                <el-col :xs="24" :sm="8">
+                  <el-form-item label="任务名称">
+                    <el-input v-model="taskSearchForm.keyword" placeholder="请输入任务名称" clearable style="width: 100%" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="8">
+                  <el-form-item label="任务状态">
+                    <el-select v-model="taskSearchForm.status" placeholder="请选择任务状态" clearable style="width: 100%">
+                      <el-option label="待执行" value="pending" />
+                      <el-option label="执行中" value="running" />
+                      <el-option label="已完成" value="completed" />
+                      <el-option label="执行失败" value="failed" />
+                      <el-option label="已取消" value="cancelled" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="8" class="form-buttons">
+                  <el-form-item>
+                    <el-button type="primary" @click="handleTaskSearch">搜索</el-button>
+                    <el-button @click="handleTaskReset" v-if="!isMobile">重置</el-button>
+                    <el-button type="success" @click="handleCreateTask">创建任务</el-button>
+                  </el-form-item>
+                </el-col>
+              </el-row>
             </el-form>
             
             <!-- 定时任务列表 -->
-            <el-table :data="taskList" border stripe v-loading="taskLoading" style="width: 100%">
-              <el-table-column prop="id" label="ID" width="80" />
-              <el-table-column prop="name" label="任务名称" min-width="150" show-overflow-tooltip />
-              <el-table-column prop="notificationTitle" label="通知标题" min-width="200" show-overflow-tooltip />
-              <el-table-column prop="scheduledTime" label="计划时间" width="160" />
-              <el-table-column prop="status" label="状态" width="100">
-                <template #default="scope">
-                  <el-tag :type="getTaskStatusTagType(scope.row.status)">
-                    {{ getTaskStatusText(scope.row.status) }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="retryCount" label="重试次数" width="100">
-                <template #default="scope">
-                  {{ scope.row.retryCount }} / {{ scope.row.maxRetries }}
-                </template>
-              </el-table-column>
-              <el-table-column prop="createTime" label="创建时间" width="160" />
-              <el-table-column prop="runTime" label="执行时间" width="160" />
-              <el-table-column label="操作" width="250" fixed="right">
-                <template #default="scope">
-                  <el-button size="small" @click="handleViewTask(scope.row)">查看</el-button>
-                  <el-button size="small" type="primary" @click="handleEditTask(scope.row)">编辑</el-button>
-                  <el-button 
-                    v-if="scope.row.status === 'pending'"
-                    size="small" 
-                    type="success" 
-                    @click="handleExecuteTask(scope.row)"
-                  >
-                    立即执行
-                  </el-button>
-                  <el-button 
-                    v-if="scope.row.status === 'pending'"
-                    size="small" 
-                    type="warning" 
-                    @click="handleCancelTask(scope.row)"
-                  >
-                    取消
-                  </el-button>
-                  <el-button 
-                    v-if="scope.row.status === 'failed'"
-                    size="small" 
-                    type="danger" 
-                    @click="handleRetryTask(scope.row)"
-                  >
-                    重试
-                  </el-button>
-                </template>
-              </el-table-column>
-            </el-table>
+            <div class="table-container mobile-scroll">
+              <el-table 
+                :data="taskList" 
+                border 
+                stripe 
+                v-loading="taskLoading" 
+                style="width: 100%"
+                :size="isMobile ? 'small' : 'default'"
+              >
+                <el-table-column prop="id" label="ID" width="80" v-if="!isMobile" />
+                <el-table-column prop="name" label="任务名称" min-width="150" show-overflow-tooltip />
+                <el-table-column prop="notificationTitle" label="通知标题" min-width="200" show-overflow-tooltip v-if="!isMobile" />
+                <el-table-column prop="scheduledTime" label="计划时间" width="160" />
+                <el-table-column prop="status" label="状态" width="100">
+                  <template #default="scope">
+                    <el-tag :type="getTaskStatusTagType(scope.row.status)" size="small">
+                      {{ getTaskStatusText(scope.row.status) }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="retryCount" label="重试次数" width="100" v-if="!isMobile">
+                  <template #default="scope">
+                    {{ scope.row.retryCount }} / {{ scope.row.maxRetries }}
+                  </template>
+                </el-table-column>
+                <el-table-column prop="createTime" label="创建时间" width="160" v-if="!isMobile" />
+                <el-table-column prop="runTime" label="执行时间" width="160" v-if="!isMobile" />
+                <el-table-column label="操作" :width="isMobile ? 80 : 250" fixed="right">
+                  <template #default="scope">
+                    <template v-if="isMobile">
+                      <el-dropdown trigger="click">
+                        <el-button type="primary" size="small" text>
+                          操作<el-icon class="el-icon--right"><arrow-down /></el-icon>
+                        </el-button>
+                        <template #dropdown>
+                          <el-dropdown-menu>
+                            <el-dropdown-item @click="handleViewTask(scope.row)">查看</el-dropdown-item>
+                            <el-dropdown-item @click="handleEditTask(scope.row)">编辑</el-dropdown-item>
+                            <el-dropdown-item 
+                              v-if="scope.row.status === 'pending'"
+                              @click="handleExecuteTask(scope.row)"
+                            >
+                              立即执行
+                            </el-dropdown-item>
+                            <el-dropdown-item 
+                              v-if="scope.row.status === 'pending'"
+                              @click="handleCancelTask(scope.row)"
+                            >
+                              取消
+                            </el-dropdown-item>
+                            <el-dropdown-item 
+                              v-if="scope.row.status === 'failed'"
+                              @click="handleRetryTask(scope.row)"
+                            >
+                              重试
+                            </el-dropdown-item>
+                          </el-dropdown-menu>
+                        </template>
+                      </el-dropdown>
+                    </template>
+                    <template v-else>
+                      <el-button size="small" @click="handleViewTask(scope.row)">查看</el-button>
+                      <el-button size="small" type="primary" @click="handleEditTask(scope.row)">编辑</el-button>
+                      <el-button 
+                        v-if="scope.row.status === 'pending'"
+                        size="small" 
+                        type="success" 
+                        @click="handleExecuteTask(scope.row)"
+                      >
+                        立即执行
+                      </el-button>
+                      <el-button 
+                        v-if="scope.row.status === 'pending'"
+                        size="small" 
+                        type="warning" 
+                        @click="handleCancelTask(scope.row)"
+                      >
+                        取消
+                      </el-button>
+                      <el-button 
+                        v-if="scope.row.status === 'failed'"
+                        size="small" 
+                        type="danger" 
+                        @click="handleRetryTask(scope.row)"
+                      >
+                        重试
+                      </el-button>
+                    </template>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
             
             <!-- 分页 -->
             <div class="pagination-container">
@@ -656,8 +833,9 @@
                 v-model:current-page="taskCurrentPage"
                 v-model:page-size="taskPageSize"
                 :page-sizes="[10, 20, 50, 100]"
-                layout="total, sizes, prev, pager, next, jumper"
+                :layout="isMobile ? 'prev, pager, next' : 'total, sizes, prev, pager, next, jumper'"
                 :total="taskTotal"
+                :small="isMobile"
                 @size-change="handleTaskSizeChange"
                 @current-change="handleTaskCurrentChange"
               />
@@ -671,10 +849,11 @@
     <el-dialog 
       v-model="notificationDialogVisible" 
       :title="notificationDialogTitle" 
-      width="800px"
+      :width="isMobile ? '95%' : '800px'"
+      :fullscreen="isMobile"
       :close-on-click-modal="false"
     >
-      <el-form :model="notificationFormData" :rules="notificationDialogMode === 'view' ? {} : notificationFormRules" ref="notificationFormRef" label-width="100px">
+      <el-form :model="notificationFormData" :rules="notificationDialogMode === 'view' ? {} : notificationFormRules" ref="notificationFormRef" :label-width="isMobile ? '80px' : '100px'" :label-position="isMobile ? 'top' : 'right'">
         <el-form-item label="通知类型" prop="type">
           <el-select v-model="notificationFormData.type" placeholder="请选择通知类型" style="width: 100%;" :disabled="notificationDialogMode === 'view'">
             <el-option label="系统通知" value="system" />
@@ -701,7 +880,7 @@
           <el-input 
             v-model="notificationFormData.content" 
             type="textarea" 
-            :rows="6" 
+            :rows="isMobile ? 4 : 6" 
             placeholder="请输入通知内容" 
             maxlength="1000"
             show-word-limit
@@ -760,7 +939,7 @@
             v-model="notificationFormData.scheduledTime"
             type="datetime"
             placeholder="选择发送时间"
-            style="margin-left: 15px;"
+            :style="isMobile ? 'width: 100%; margin-top: 10px;' : 'margin-left: 15px;'"
             :disabled="notificationDialogMode === 'view'"
           />
         </el-form-item>
@@ -768,11 +947,11 @@
       
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="notificationDialogVisible = false">
+          <el-button @click="notificationDialogVisible = false" :size="isMobile ? 'small' : 'default'">
             {{ notificationDialogMode === 'view' ? '关闭' : '取消' }}
           </el-button>
-          <el-button v-if="notificationDialogMode !== 'view' && !notificationFormData.id" type="primary" @click="handleSaveNotificationDraft" :loading="submitLoading">保存草稿</el-button>
-          <el-button v-if="notificationDialogMode !== 'view'" type="success" @click="handleSaveAndSendNotification" :loading="submitLoading">
+          <el-button v-if="notificationDialogMode !== 'view' && !notificationFormData.id" type="primary" @click="handleSaveNotificationDraft" :loading="submitLoading" :size="isMobile ? 'small' : 'default'">保存草稿</el-button>
+          <el-button v-if="notificationDialogMode !== 'view'" type="success" @click="handleSaveAndSendNotification" :loading="submitLoading" :size="isMobile ? 'small' : 'default'">
             {{ notificationFormData.scheduleEnabled ? '计划发送' : '立即发送' }}
           </el-button>
         </span>
@@ -783,10 +962,11 @@
     <el-dialog 
       v-model="templateDialogVisible" 
       :title="templateDialogTitle" 
-      width="700px"
+      :width="isMobile ? '95%' : '700px'"
+      :fullscreen="isMobile"
       :close-on-click-modal="false"
     >
-      <el-form :model="templateFormData" :rules="templateDialogMode === 'view' ? {} : templateFormRules" ref="templateFormRef" label-width="100px">
+      <el-form :model="templateFormData" :rules="templateDialogMode === 'view' ? {} : templateFormRules" ref="templateFormRef" :label-width="isMobile ? '80px' : '100px'" :label-position="isMobile ? 'top' : 'right'">
         <el-form-item label="模板名称" prop="name">
           <el-input v-model="templateFormData.name" placeholder="请输入模板名称" :disabled="templateDialogMode === 'view'" />
         </el-form-item>
@@ -809,7 +989,7 @@
           <el-input 
             v-model="templateFormData.content" 
             type="textarea" 
-            :rows="8" 
+            :rows="isMobile ? 6 : 8" 
             placeholder="请输入内容模板，如：{content}" 
             maxlength="2000"
             show-word-limit
@@ -843,10 +1023,10 @@
       
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="templateDialogVisible = false">
+          <el-button @click="templateDialogVisible = false" :size="isMobile ? 'small' : 'default'">
             {{ templateDialogMode === 'view' ? '关闭' : '取消' }}
           </el-button>
-          <el-button v-if="templateDialogMode !== 'view'" type="primary" @click="handleSaveTemplate" :loading="submitLoading">保存</el-button>
+          <el-button v-if="templateDialogMode !== 'view'" type="primary" @click="handleSaveTemplate" :loading="submitLoading" :size="isMobile ? 'small' : 'default'">保存</el-button>
         </span>
       </template>
     </el-dialog>
@@ -855,10 +1035,11 @@
     <el-dialog 
       v-model="userGroupDialogVisible" 
       :title="userGroupDialogTitle" 
-      width="700px"
+      :width="isMobile ? '95%' : '700px'"
+      :fullscreen="isMobile"
       :close-on-click-modal="false"
     >
-      <el-form :model="userGroupFormData" :rules="userGroupDialogMode === 'view' ? {} : userGroupFormRules" ref="userGroupFormRef" label-width="100px">
+      <el-form :model="userGroupFormData" :rules="userGroupDialogMode === 'view' ? {} : userGroupFormRules" ref="userGroupFormRef" :label-width="isMobile ? '80px' : '100px'" :label-position="isMobile ? 'top' : 'right'">
         <el-form-item label="群体名称" prop="name">
           <el-input v-model="userGroupFormData.name" placeholder="请输入群体名称" :disabled="userGroupDialogMode === 'view'" />
         </el-form-item>
@@ -890,6 +1071,7 @@
             start-placeholder="开始日期"
             end-placeholder="结束日期"
             value-format="YYYY-MM-DD"
+            style="width: 100%"
             :disabled="userGroupDialogMode === 'view'"
           />
         </el-form-item>
@@ -902,6 +1084,7 @@
             start-placeholder="开始日期"
             end-placeholder="结束日期"
             value-format="YYYY-MM-DD"
+            style="width: 100%"
             :disabled="userGroupDialogMode === 'view'"
           />
         </el-form-item>
@@ -926,11 +1109,11 @@
       
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="userGroupDialogVisible = false">
+          <el-button @click="userGroupDialogVisible = false" :size="isMobile ? 'small' : 'default'">
             {{ userGroupDialogMode === 'view' ? '关闭' : '取消' }}
           </el-button>
-          <el-button v-if="userGroupDialogMode !== 'view'" type="info" @click="handlePreviewUserGroupSave">预览用户</el-button>
-          <el-button v-if="userGroupDialogMode !== 'view'" type="primary" @click="handleSaveUserGroup" :loading="submitLoading">保存</el-button>
+          <el-button v-if="userGroupDialogMode !== 'view'" type="info" @click="handlePreviewUserGroupSave" :size="isMobile ? 'small' : 'default'">预览用户</el-button>
+          <el-button v-if="userGroupDialogMode !== 'view'" type="primary" @click="handleSaveUserGroup" :loading="submitLoading" :size="isMobile ? 'small' : 'default'">保存</el-button>
         </span>
       </template>
     </el-dialog>
@@ -939,10 +1122,11 @@
     <el-dialog 
       v-model="taskDialogVisible" 
       :title="taskDialogTitle" 
-      width="700px"
+      :width="isMobile ? '95%' : '700px'"
+      :fullscreen="isMobile"
       :close-on-click-modal="false"
     >
-      <el-form :model="taskFormData" :rules="taskDialogMode === 'view' ? {} : taskFormRules" ref="taskFormRef" label-width="100px">
+      <el-form :model="taskFormData" :rules="taskDialogMode === 'view' ? {} : taskFormRules" ref="taskFormRef" :label-width="isMobile ? '80px' : '100px'" :label-position="isMobile ? 'top' : 'right'">
         <el-form-item label="任务名称" prop="name">
           <el-input v-model="taskFormData.name" placeholder="请输入任务名称" :disabled="taskDialogMode === 'view'" />
         </el-form-item>
@@ -974,16 +1158,16 @@
         </el-form-item>
         
         <el-form-item label="最大重试次数" prop="maxRetries">
-          <el-input-number v-model="taskFormData.maxRetries" :min="0" :max="5" :disabled="taskDialogMode === 'view'" />
+          <el-input-number v-model="taskFormData.maxRetries" :min="0" :max="5" :disabled="taskDialogMode === 'view'" style="width: 100%" />
         </el-form-item>
       </el-form>
       
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="taskDialogVisible = false">
+          <el-button @click="taskDialogVisible = false" :size="isMobile ? 'small' : 'default'">
             {{ taskDialogMode === 'view' ? '关闭' : '取消' }}
           </el-button>
-          <el-button v-if="taskDialogMode !== 'view'" type="primary" @click="handleSaveTask" :loading="submitLoading">保存</el-button>
+          <el-button v-if="taskDialogMode !== 'view'" type="primary" @click="handleSaveTask" :loading="submitLoading" :size="isMobile ? 'small' : 'default'">保存</el-button>
         </span>
       </template>
     </el-dialog>
@@ -992,44 +1176,59 @@
     <el-dialog 
       v-model="userPreviewDialogVisible" 
       title="用户预览" 
-      width="800px"
+      :width="isMobile ? '95%' : '800px'"
+      :fullscreen="isMobile"
     >
-      <el-table :data="userPreviewList" border stripe v-loading="userPreviewLoading" style="width: 100%">
-        <el-table-column prop="id" label="用户ID" width="80" />
-        <el-table-column prop="username" label="用户名" width="120" />
-        <el-table-column prop="realName" label="真实姓名" width="120" />
-        <el-table-column prop="email" label="邮箱" min-width="150" />
-        <el-table-column prop="phone" label="手机号" width="120" />
-        <el-table-column prop="userType" label="用户类型" width="100">
-          <template #default="scope">
-            <el-tag>{{ getUserTypeText(scope.row.userType) }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="registerTime" label="注册时间" width="160" />
-        <el-table-column prop="lastActiveTime" label="最后活跃" width="160" />
-      </el-table>
+      <div class="table-container mobile-scroll">
+        <el-table 
+          :data="userPreviewList" 
+          border 
+          stripe 
+          v-loading="userPreviewLoading" 
+          style="width: 100%"
+          :size="isMobile ? 'small' : 'default'"
+        >
+          <el-table-column prop="id" label="用户ID" width="80" v-if="!isMobile" />
+          <el-table-column prop="username" label="用户名" width="120" />
+          <el-table-column prop="realName" label="真实姓名" width="120" v-if="!isMobile" />
+          <el-table-column prop="email" label="邮箱" min-width="150" />
+          <el-table-column prop="phone" label="手机号" width="120" v-if="!isMobile" />
+          <el-table-column prop="userType" label="用户类型" width="100">
+            <template #default="scope">
+              <el-tag size="small">{{ getUserTypeText(scope.row.userType) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="registerTime" label="注册时间" width="160" v-if="!isMobile" />
+          <el-table-column prop="lastActiveTime" label="最后活跃" width="160" v-if="!isMobile" />
+        </el-table>
+      </div>
       
       <div class="pagination-container">
         <el-pagination
           v-model:current-page="userPreviewCurrentPage"
           v-model:page-size="userPreviewPageSize"
           :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
+          :layout="isMobile ? 'prev, pager, next' : 'total, sizes, prev, pager, next, jumper'"
           :total="userPreviewTotal"
+          :small="isMobile"
           @size-change="handleUserPreviewSizeChange"
           @current-change="handleUserPreviewCurrentChange"
         />
       </div>
+      <template #footer v-if="isMobile">
+        <el-button @click="userPreviewDialogVisible = false" size="small">关闭</el-button>
+      </template>
     </el-dialog>
     
     <!-- 查看发送历史对话框 -->
     <el-dialog 
       v-model="historyDialogVisible" 
       :title="historyDialogTitle" 
-      width="700px"
+      :width="isMobile ? '95%' : '700px'"
+      :fullscreen="isMobile"
       :close-on-click-modal="false"
     >
-      <el-form :model="historyFormData" label-width="100px">
+      <el-form :model="historyFormData" :label-width="isMobile ? '80px' : '100px'" :label-position="isMobile ? 'top' : 'right'">
         <el-form-item label="通知标题">
           <el-input v-model="historyFormData.title" readonly />
         </el-form-item>
@@ -1077,18 +1276,18 @@
           <el-input type="textarea" v-model="historyFormData.content" :rows="4" readonly />
         </el-form-item>
         
-        <el-row :gutter="20">
-          <el-col :span="8">
+        <el-row :gutter="isMobile ? 0 : 20">
+          <el-col :xs="24" :sm="8">
             <el-form-item label="接收人数">
               <el-input v-model="historyFormData.recipientCount" readonly />
             </el-form-item>
           </el-col>
-          <el-col :span="8">
+          <el-col :xs="24" :sm="8">
             <el-form-item label="成功发送">
               <el-input v-model="historyFormData.successCount" readonly />
             </el-form-item>
           </el-col>
-          <el-col :span="8">
+          <el-col :xs="24" :sm="8">
             <el-form-item label="发送失败">
               <el-input v-model="historyFormData.failureCount" readonly />
             </el-form-item>
@@ -1102,7 +1301,7 @@
       
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="historyDialogVisible = false">关闭</el-button>
+          <el-button @click="historyDialogVisible = false" :size="isMobile ? 'small' : 'default'">关闭</el-button>
         </span>
       </template>
     </el-dialog>
@@ -1110,12 +1309,27 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick } from 'vue'
+import { ref, reactive, onMounted, nextTick, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   Bell, View, Timer, Warning, Download, Plus, Refresh, 
-  Promotion, Pointer, TrendCharts
+  Promotion, Pointer, TrendCharts, ArrowDown
 } from '@element-plus/icons-vue'
+
+// 响应式布局
+const isMobile = ref(false)
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
+
+onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
+})
 import { 
   systemNotificationApi, 
   notificationTemplateApi, 
@@ -2713,6 +2927,12 @@ onMounted(() => {
   color: white;
 }
 
+.stat-icon.mini {
+  width: 40px;
+  height: 40px;
+  margin-right: 10px;
+}
+
 .bg-primary {
   background-color: #409eff;
 }
@@ -2749,6 +2969,14 @@ onMounted(() => {
   color: #303133;
 }
 
+.system-notification-container.is-mobile .stat-value {
+  font-size: 18px;
+}
+
+.system-notification-container.is-mobile .stat-title {
+  font-size: 12px;
+}
+
 .tab-content {
   padding: 20px 0;
 }
@@ -2760,14 +2988,51 @@ onMounted(() => {
   border-radius: 4px;
 }
 
+.search-form.responsive-form {
+  padding: 15px;
+}
+
+.system-notification-container.is-mobile .search-form {
+  padding: 10px;
+}
+
 .pagination-container {
   margin-top: 20px;
   text-align: right;
+}
+
+.system-notification-container.is-mobile .pagination-container {
+  text-align: center;
 }
 
 .form-tip {
   font-size: 12px;
   color: #909399;
   margin-top: 5px;
+}
+
+.mobile-scroll {
+  overflow-x: auto;
+}
+
+.card-header.is-mobile {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+@media screen and (max-width: 768px) {
+  .system-notification-container {
+    padding: 10px;
+  }
+  
+  .stat-card {
+    height: auto;
+    padding: 10px 0;
+  }
+  
+  .stat-item {
+    justify-content: center;
+  }
 }
 </style>

@@ -1,132 +1,135 @@
 <template>
   <div class="dispute-acceptance-container">
-    <el-card>
+    <!-- 统计概览 -->
+    <el-row :gutter="isMobile ? 10 : 20" class="stats-row">
+      <el-col :xs="12" :sm="6">
+        <el-card shadow="hover" class="stat-card">
+          <div class="stat-content">
+            <div class="stat-label">今日新增</div>
+            <div class="stat-value text-primary">{{ stats.todayNew }}</div>
+          </div>
+          <el-icon class="stat-icon"><Document /></el-icon>
+        </el-card>
+      </el-col>
+      <el-col :xs="12" :sm="6">
+        <el-card shadow="hover" class="stat-card">
+          <div class="stat-content">
+            <div class="stat-label">待处理</div>
+            <div class="stat-value text-warning">{{ stats.pending }}</div>
+          </div>
+          <el-icon class="stat-icon"><Warning /></el-icon>
+        </el-card>
+      </el-col>
+      <el-col :xs="12" :sm="6">
+        <el-card shadow="hover" class="stat-card">
+          <div class="stat-content">
+            <div class="stat-label">已处理</div>
+            <div class="stat-value text-success">{{ stats.processed }}</div>
+          </div>
+          <el-icon class="stat-icon"><Check /></el-icon>
+        </el-card>
+      </el-col>
+      <el-col :xs="12" :sm="6">
+        <el-card shadow="hover" class="stat-card">
+          <div class="stat-content">
+            <div class="stat-label">及时率</div>
+            <div class="stat-value text-info">{{ stats.timelyRate }}%</div>
+          </div>
+          <el-icon class="stat-icon"><TrendCharts /></el-icon>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <el-card class="list-card">
       <template #header>
-        <div class="card-header">
-          <span>争议受理</span>
-          <el-button type="primary" @click="handleCreate">新建争议</el-button>
+        <div class="card-header" :style="isMobile ? 'flex-direction: column; align-items: stretch; gap: 10px;' : ''">
+          <div class="header-left">
+            <span>争议受理列表</span>
+          </div>
+          <div class="header-right" :style="isMobile ? 'display: flex; justify-content: space-between;' : ''">
+            <el-button type="primary" @click="handleCreate" :size="isMobile ? 'small' : 'default'">新增争议</el-button>
+            <el-button type="success" @click="handleExport" :size="isMobile ? 'small' : 'default'">导出数据</el-button>
+          </div>
         </div>
       </template>
-      
-      <!-- 争议统计 -->
-      <el-row :gutter="20" style="margin-bottom: 20px;">
-        <el-col :span="6">
-          <el-card class="stat-card">
-            <div class="stat-item">
-              <div class="stat-icon bg-primary">
-                <el-icon size="24"><Document /></el-icon>
-              </div>
-              <div class="stat-content">
-                <div class="stat-title">今日新增争议</div>
-                <div class="stat-value">{{ stats.todayNew }}</div>
-              </div>
-            </div>
-          </el-card>
-        </el-col>
-        
-        <el-col :span="6">
-          <el-card class="stat-card">
-            <div class="stat-item">
-              <div class="stat-icon bg-warning">
-                <el-icon size="24"><Warning /></el-icon>
-              </div>
-              <div class="stat-content">
-                <div class="stat-title">待处理争议</div>
-                <div class="stat-value">{{ stats.pending }}</div>
-              </div>
-            </div>
-          </el-card>
-        </el-col>
-        
-        <el-col :span="6">
-          <el-card class="stat-card">
-            <div class="stat-item">
-              <div class="stat-icon bg-success">
-                <el-icon size="24"><Check /></el-icon>
-              </div>
-              <div class="stat-content">
-                <div class="stat-title">已处理争议</div>
-                <div class="stat-value">{{ stats.processed }}</div>
-              </div>
-            </div>
-          </el-card>
-        </el-col>
-        
-        <el-col :span="6">
-          <el-card class="stat-card">
-            <div class="stat-item">
-              <div class="stat-icon bg-info">
-                <el-icon size="24"><TrendCharts /></el-icon>
-              </div>
-              <div class="stat-content">
-                <div class="stat-title">处理及时率</div>
-                <div class="stat-value">{{ stats.timelyRate }}%</div>
-              </div>
-            </div>
-          </el-card>
-        </el-col>
-      </el-row>
-      
-      <!-- 搜索和筛选 -->
+
+      <!-- 搜索栏 -->
       <div class="search-bar">
-        <el-form :model="searchForm" label-width="80px" inline>
-          <el-form-item label="争议编号">
-            <el-input v-model="searchForm.disputeNo" placeholder="请输入争议编号" clearable />
-          </el-form-item>
-          
-          <el-form-item label="申请人">
-            <el-input v-model="searchForm.applicant" placeholder="请输入申请人" clearable />
-          </el-form-item>
-          
-          <el-form-item label="争议类型">
-            <el-select v-model="searchForm.type" placeholder="请选择争议类型" clearable>
-              <el-option label="费用争议" value="fee" />
-              <el-option label="服务争议" value="service" />
-              <el-option label="系统争议" value="system" />
-              <el-option label="其他争议" value="other" />
-            </el-select>
-          </el-form-item>
-          
-          <el-form-item label="状态">
-            <el-select v-model="searchForm.status" placeholder="请选择状态" clearable>
-              <el-option label="待受理" value="pending" />
-              <el-option label="受理中" value="accepted" />
-              <el-option label="已驳回" value="rejected" />
-              <el-option label="已转交" value="transferred" />
-            </el-select>
-          </el-form-item>
-          
-          <el-form-item label="时间范围">
-            <el-date-picker
-              v-model="searchForm.dateRange"
-              type="datetimerange"
-              range-separator="至"
-              start-placeholder="开始时间"
-              end-placeholder="结束时间"
-              format="YYYY-MM-DD HH:mm:ss"
-              value-format="YYYY-MM-DD HH:mm:ss"
-            />
-          </el-form-item>
-          
-          <el-form-item>
-            <el-button type="primary" @click="handleSearch">查询</el-button>
-            <el-button @click="handleReset">重置</el-button>
-          </el-form-item>
+        <el-form :model="searchForm" :inline="!isMobile" label-width="80px" :label-position="isMobile ? 'top' : 'right'">
+          <el-row :gutter="isMobile ? 10 : 20">
+            <el-col :xs="12" :sm="6">
+              <el-form-item label="争议编号">
+                <el-input v-model="searchForm.disputeNo" placeholder="编号" clearable />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="12" :sm="6">
+              <el-form-item label="申请人">
+                <el-input v-model="searchForm.applicant" placeholder="姓名" clearable />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="12" :sm="6" v-if="!isMobile || showMoreFilters">
+              <el-form-item label="争议类型">
+                <el-select v-model="searchForm.type" placeholder="全部" clearable style="width: 100%;">
+                  <el-option label="费用争议" value="fee" />
+                  <el-option label="服务争议" value="service" />
+                  <el-option label="系统争议" value="system" />
+                  <el-option label="其他争议" value="other" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :xs="12" :sm="6" v-if="!isMobile || showMoreFilters">
+              <el-form-item label="状态">
+                <el-select v-model="searchForm.status" placeholder="全部" clearable style="width: 100%;">
+                  <el-option label="待受理" value="pending" />
+                  <el-option label="受理中" value="accepted" />
+                  <el-option label="已驳回" value="rejected" />
+                  <el-option label="已转交" value="transferred" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12" v-if="!isMobile || showMoreFilters">
+              <el-form-item label="提交时间">
+                <el-date-picker
+                  v-model="searchForm.dateRange"
+                  type="daterange"
+                  range-separator="至"
+                  start-placeholder="开始日期"
+                  end-placeholder="结束日期"
+                  style="width: 100%;"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="6">
+              <el-form-item label-width="0">
+                <div :style="isMobile ? 'display: flex; gap: 10px;' : ''">
+                  <el-button type="primary" @click="handleSearch" :style="isMobile ? 'flex: 1;' : ''">
+                    <el-icon><Search /></el-icon>{{ isMobile ? '' : '查询' }}
+                  </el-button>
+                  <el-button @click="handleReset" :style="isMobile ? 'flex: 1;' : ''">
+                    <el-icon><RefreshRight /></el-icon>{{ isMobile ? '' : '重置' }}
+                  </el-button>
+                  <el-button v-if="isMobile" type="info" plain @click="showMoreFilters = !showMoreFilters" style="flex: 1;">
+                    <el-icon><Filter /></el-icon>
+                  </el-button>
+                </div>
+              </el-form-item>
+            </el-col>
+          </el-row>
         </el-form>
       </div>
-      
-      <!-- 争议列表 -->
-      <el-table :data="disputeList" style="width: 100%" v-loading="loading">
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="disputeNo" label="争议编号" width="150" />
-        <el-table-column prop="applicant" label="申请人" width="120" />
-        <el-table-column prop="type" label="争议类型" width="100">
+
+      <!-- 数据表格 -->
+      <el-table :data="disputeList" v-loading="loading" border style="width: 100%" :size="isMobile ? 'small' : 'default'">
+        <el-table-column prop="disputeNo" label="争议编号" width="150" fixed="left" />
+        <el-table-column prop="applicant" label="申请人" width="100" />
+        <el-table-column prop="contact" label="联系方式" width="120" v-if="!isMobile" />
+        <el-table-column prop="type" label="争议类型" width="120">
           <template #default="scope">
             {{ getDisputeTypeText(scope.row.type) }}
           </template>
         </el-table-column>
-        <el-table-column prop="title" label="争议标题" />
-        <el-table-column prop="submitTime" label="提交时间" width="160" />
+        <el-table-column prop="title" label="争议标题" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="submitTime" label="提交时间" width="170" v-if="!isMobile" />
         <el-table-column prop="status" label="状态" width="100">
           <template #default="scope">
             <el-tag :type="getStatusTagType(scope.row.status)">
@@ -134,17 +137,22 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200">
+        <el-table-column label="操作" :width="isMobile ? 110 : 200" fixed="right">
           <template #default="scope">
-            <el-button size="small" @click="handleView(scope.row)">查看详情</el-button>
-            <el-button 
-              size="small" 
-              type="primary" 
-              @click="handleAccept(scope.row)" 
-              :disabled="scope.row.status !== 'pending'"
-            >
-              受理
-            </el-button>
+            <el-button size="small" @click="handleDetail(scope.row)">详情</el-button>
+            <el-dropdown v-if="isMobile" trigger="click" style="margin-left: 10px;">
+              <el-button size="small" type="primary" link>更多</el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item @click="handleEdit(scope.row)">编辑</el-dropdown-item>
+                  <el-dropdown-item @click="handleDelete(scope.row)" style="color: #f56c6c;">删除</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+            <template v-else>
+              <el-button size="small" type="primary" @click="handleEdit(scope.row)">编辑</el-button>
+              <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
+            </template>
           </template>
         </el-table-column>
       </el-table>
@@ -154,8 +162,9 @@
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
           :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
+          :layout="isMobile ? 'total, prev, next' : 'total, sizes, prev, pager, next, jumper'"
           :total="total"
+          :small="isMobile"
           @size-change="handleSizeChange"
           @current-change="handleCurrentChange"
         />
@@ -163,8 +172,8 @@
     </el-card>
     
     <!-- 新建/编辑争议对话框 -->
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="700px">
-      <el-form :model="formData" :rules="formRules" ref="formRef" label-width="100px">
+    <el-dialog v-model="dialogVisible" :title="dialogTitle" :width="isMobile ? '95%' : '700px'">
+      <el-form :model="formData" :rules="formRules" ref="formRef" :label-width="isMobile ? '80px' : '100px'" :label-position="isMobile ? 'top' : 'right'">
         <el-form-item label="争议编号" prop="disputeNo">
           <el-input v-model="formData.disputeNo" placeholder="请输入争议编号" />
         </el-form-item>
@@ -231,14 +240,14 @@
     </el-dialog>
     
     <!-- 争议详情对话框 -->
-    <el-dialog v-model="detailDialogVisible" title="争议详情" width="700px">
-      <el-descriptions :column="2" border>
+    <el-dialog v-model="detailDialogVisible" title="争议详情" :width="isMobile ? '95%' : '700px'">
+      <el-descriptions :column="isMobile ? 1 : 2" border>
         <el-descriptions-item label="争议编号">{{ detailData.disputeNo }}</el-descriptions-item>
         <el-descriptions-item label="申请人">{{ detailData.applicant }}</el-descriptions-item>
         <el-descriptions-item label="联系方式">{{ detailData.contact }}</el-descriptions-item>
         <el-descriptions-item label="争议类型">{{ getDisputeTypeText(detailData.type) }}</el-descriptions-item>
-        <el-descriptions-item label="争议标题" :span="2">{{ detailData.title }}</el-descriptions-item>
-        <el-descriptions-item label="争议描述" :span="2">{{ detailData.description }}</el-descriptions-item>
+        <el-descriptions-item label="争议标题" :span="isMobile ? 1 : 2">{{ detailData.title }}</el-descriptions-item>
+        <el-descriptions-item label="争议描述" :span="isMobile ? 1 : 2">{{ detailData.description }}</el-descriptions-item>
         <el-descriptions-item label="提交时间">{{ detailData.submitTime }}</el-descriptions-item>
         <el-descriptions-item label="受理时间">{{ detailData.acceptTime || '未受理' }}</el-descriptions-item>
         <el-descriptions-item label="受理人">{{ detailData.acceptor || '未受理' }}</el-descriptions-item>
@@ -247,7 +256,7 @@
             {{ getStatusText(detailData.status) }}
           </el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="相关附件" :span="2">
+        <el-descriptions-item label="相关附件" :span="isMobile ? 1 : 2">
           <div v-if="detailData.attachments && detailData.attachments.length > 0">
             <el-link 
               v-for="(attachment, index) in detailData.attachments" 
@@ -280,13 +289,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Document, Warning, Check, TrendCharts } from '@element-plus/icons-vue'
+import { Document, Warning, Check, TrendCharts, Search, RefreshRight, Filter } from '@element-plus/icons-vue'
 
 // 导入统一验证规则库
 import { commonRules, businessRules } from '@/utils/validationRules'
-import { validateFile } from '@/utils/fileUploadValidator'// 响应式数据
+
+// 移动端适配逻辑
+const isMobile = ref(false)
+const showMoreFilters = ref(false)
+
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
+
+// 响应式数据
 const stats = ref({
   todayNew: 5,
   pending: 12,
@@ -346,7 +364,7 @@ const disputeList = ref([
 
 const loading = ref(false)
 const currentPage = ref(1)
-const pageSize = ref(10) // 按照分页设置规范，默认值为10
+const pageSize = ref(10)
 const total = ref(100)
 
 const searchForm = ref({
@@ -400,75 +418,44 @@ const formRules = {
 }
 
 const formRef = ref()
+
 // 获取争议类型文本
 const getDisputeTypeText = (type: string) => {
-  switch (type) {
-    case 'fee':
-      return '费用争议'
-    case 'service':
-      return '服务争议'
-    case 'system':
-      return '系统争议'
-    case 'other':
-      return '其他争议'
-    default:
-      return '未知'
+  const map: Record<string, string> = {
+    'fee': '费用争议',
+    'service': '服务争议',
+    'system': '系统争议',
+    'other': '其他争议'
   }
+  return map[type] || '未知'
 }
 
 // 获取状态文本
 const getStatusText = (status: string) => {
-  switch (status) {
-    case 'pending':
-      return '待受理'
-    case 'accepted':
-      return '受理中'
-    case 'rejected':
-      return '已驳回'
-    case 'transferred':
-      return '已转交'
-    default:
-      return '未知'
+  const map: Record<string, string> = {
+    'pending': '待受理',
+    'accepted': '受理中',
+    'rejected': '已驳回',
+    'transferred': '已转交'
   }
+  return map[status] || '未知'
 }
 
 // 获取状态标签类型
 const getStatusTagType = (status: string) => {
-  switch (status) {
-    case 'pending':
-      return 'warning'
-    case 'accepted':
-      return 'primary'
-    case 'rejected':
-      return 'danger'
-    case 'transferred':
-      return 'success'
-    default:
-      return 'info'
+  const map: Record<string, string> = {
+    'pending': 'warning',
+    'accepted': 'primary',
+    'rejected': 'danger',
+    'transferred': 'success'
   }
-}
-
-// 新建争议
-const handleCreate = () => {
-  dialogTitle.value = '新建争议'
-  isEdit.value = false
-  formData.value = {
-    id: 0,
-    disputeNo: `DIS${new Date().getFullYear()}${(new Date().getMonth() + 1).toString().padStart(2, '0')}${new Date().getDate().toString().padStart(2, '0')}${(disputeList.value.length + 1).toString().padStart(3, '0')}`,
-    applicant: '',
-    contact: '',
-    type: '',
-    title: '',
-    description: '',
-    status: 'pending'
-  }
-  dialogVisible.value = true
+  return map[status] || 'info'
 }
 
 // 搜索
 const handleSearch = () => {
   console.log('🔍 搜索争议:', searchForm.value)
-  ElMessage.success('查询功能待实现')
+  ElMessage.success('正在搜索...')
 }
 
 // 重置
@@ -480,27 +467,69 @@ const handleReset = () => {
     status: '',
     dateRange: []
   }
-  ElMessage.success('重置搜索条件')
+  handleSearch()
 }
 
+// 生命周期钩子
+onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+  console.log('📋 争议受理页面加载完成')
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
+})
+
 // 查看详情
-const handleView = (row: any) => {
+const handleDetail = (row: any) => {
   detailData.value = { ...row }
   detailDialogVisible.value = true
 }
 
-// 受理争议
-const handleAccept = (row: any) => {
-  console.log('📋 受理争议:', row)
-  ElMessage.success(`争议"${row.disputeNo}"已受理`)
-  
-  // 更新状态
-  const index = disputeList.value.findIndex(item => item.id === row.id)
-  if (index !== -1) {
-    disputeList.value[index].status = 'accepted'
-    disputeList.value[index].acceptTime = new Date().toLocaleString()
-    disputeList.value[index].acceptor = '当前用户'
+// 新增
+const handleCreate = () => {
+  isEdit.value = false
+  dialogTitle.value = '新增争议'
+  formData.value = {
+    id: 0,
+    disputeNo: `DIS${new Date().getTime()}`,
+    applicant: '',
+    contact: '',
+    type: '',
+    title: '',
+    description: '',
+    status: 'pending'
   }
+  dialogVisible.value = true
+}
+
+// 编辑
+const handleEdit = (row: any) => {
+  isEdit.value = true
+  dialogTitle.value = '编辑争议'
+  formData.value = { ...row }
+  dialogVisible.value = true
+}
+
+// 删除
+const handleDelete = (row: any) => {
+  ElMessageBox.confirm(
+    `确定要删除争议编号为 ${row.disputeNo} 的记录吗？`,
+    '提示',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).then(() => {
+    ElMessage.success('删除成功')
+  })
+}
+
+// 导出
+const handleExport = () => {
+  ElMessage.success('正在导出数据...')
 }
 
 // 转交仲裁
@@ -516,17 +545,12 @@ const handleTransferToArbitration = (row: any) => {
   ).then(() => {
     console.log('⚖️ 转交仲裁:', row)
     ElMessage.success(`争议"${row.disputeNo}"已转交仲裁`)
-    
-    // 更新状态
     const index = disputeList.value.findIndex(item => item.id === row.id)
     if (index !== -1) {
       disputeList.value[index].status = 'transferred'
     }
-    
     detailDialogVisible.value = false
-  }).catch(() => {
-    // 用户取消操作
-  })
+  }).catch(() => {})
 }
 
 // 提交表单
@@ -534,11 +558,9 @@ const submitForm = () => {
   formRef.value.validate((valid: boolean) => {
     if (valid) {
       if (isEdit.value) {
-        console.log('✏️ 编辑争议:', formData.value)
-        ElMessage.success('争议编辑成功')
+        ElMessage.success('编辑成功')
       } else {
-        console.log('➕ 新建争议:', formData.value)
-        ElMessage.success('争议新建成功')
+        ElMessage.success('创建成功')
       }
       dialogVisible.value = false
     } else {
@@ -547,32 +569,56 @@ const submitForm = () => {
   })
 }
 
-// 分页相关
+// 分页
 const handleSizeChange = (val: number) => {
   pageSize.value = val
   currentPage.value = 1
-  console.log(`📈 每页显示 ${val} 条`)
 }
 
 const handleCurrentChange = (val: number) => {
   currentPage.value = val
-  console.log(`📄 当前页: ${val}`)
 }
-
-// 组件挂载
-onMounted(() => {
-  console.log('📋 争议受理页面加载完成')
-})
-
-/**
- * 争议受理页面
- * 处理用户提交的各类争议申请
- */
 </script>
 
 <style scoped>
 .dispute-acceptance-container {
-  width: 100%;
+  padding: 10px;
+}
+
+.stats-row {
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  position: relative;
+  overflow: hidden;
+  height: 100px;
+  display: flex;
+  align-items: center;
+}
+
+.stat-content {
+  z-index: 1;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: #909399;
+  margin-bottom: 8px;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.stat-icon {
+  position: absolute;
+  right: -10px;
+  bottom: -10px;
+  font-size: 60px;
+  color: rgba(0, 0, 0, 0.05);
+  transform: rotate(-15deg);
 }
 
 .card-header {
@@ -581,69 +627,39 @@ onMounted(() => {
   align-items: center;
 }
 
-.stat-card {
-  margin-bottom: 0;
-}
-
-.stat-item {
-  display: flex;
-  align-items: center;
-}
-
-.stat-icon {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: 15px;
-}
-
-.bg-primary {
-  background-color: #409EFF;
-}
-
-.bg-warning {
-  background-color: #E6A23C;
-}
-
-.bg-success {
-  background-color: #67C23A;
-}
-
-.bg-info {
-  background-color: #909399;
-}
-
-.stat-content {
-  flex: 1;
-}
-
-.stat-title {
-  font-size: 14px;
-  color: #909399;
-  margin-bottom: 5px;
-}
-
-.stat-value {
-  font-size: 20px;
-  font-weight: bold;
-  color: #303133;
-}
-
 .search-bar {
   margin-bottom: 20px;
+  background-color: #f5f7fa;
+  padding: 20px;
+  border-radius: 4px;
 }
 
 .pagination-container {
   margin-top: 20px;
   display: flex;
-  justify-content: center;
+  justify-content: flex-end;
 }
 
-.upload-demo {
-  width: 100%;
+.text-primary { color: #409eff; }
+.text-warning { color: #e6a23c; }
+.text-success { color: #67c23a; }
+.text-info { color: #909399; }
+
+@media (max-width: 768px) {
+  .dispute-acceptance-container {
+    padding: 5px;
+  }
+  
+  .stat-card {
+    height: 80px;
+  }
+  
+  .stat-value {
+    font-size: 20px;
+  }
+  
+  .search-bar {
+    padding: 15px 10px;
+  }
 }
 </style>

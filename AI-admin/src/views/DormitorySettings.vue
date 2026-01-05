@@ -5,7 +5,10 @@
         <div class="card-header">
           <span>寝室设置</span>
           <div>
-            <el-button @click="goBack">返回</el-button>
+            <el-button @click="goBack">
+              <el-icon v-if="isMobile"><Back /></el-icon>
+              <span v-if="!isMobile">返回</span>
+            </el-button>
           </div>
         </div>
       </template>
@@ -18,7 +21,8 @@
                 ref="basicFormRef"
                 :model="basicForm"
                 :rules="basicFormRules"
-                label-width="120px"
+                :label-width="isMobile ? '80px' : '120px'"
+                :label-position="isMobile ? 'top' : 'left'"
                 class="settings-form"
               >
                 <el-form-item label="寝室名称" prop="name">
@@ -59,7 +63,8 @@
               <el-form
                 ref="expenseFormRef"
                 :model="expenseForm"
-                label-width="120px"
+                :label-width="isMobile ? '100px' : '120px'"
+                :label-position="isMobile ? 'top' : 'left'"
                 class="settings-form"
               >
                 <el-form-item label="默认分摊方式">
@@ -112,7 +117,8 @@
               <el-form
                 ref="notificationFormRef"
                 :model="notificationForm"
-                label-width="150px"
+                :label-width="isMobile ? '120px' : '150px'"
+                :label-position="isMobile ? 'top' : 'left'"
                 class="settings-form"
               >
                 <el-form-item label="费用相关通知">
@@ -175,6 +181,7 @@
                     ref="dissolveFormRef"
                     :model="dissolveForm"
                     :rules="dissolveFormRules"
+                    :label-position="isMobile ? 'top' : 'left'"
                   >
                     <el-form-item label="确认寝室名称" prop="confirmName">
                       <el-input
@@ -231,14 +238,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Back } from '@element-plus/icons-vue'
 import { dormitoryApi } from '@/api/dormitory'
 
 // 路由实例
 const router = useRouter()
 const route = useRoute()
+
+// 移动端适配
+const isMobile = ref(false)
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
 
 // 响应式数据
 const activeTab = ref('basic')
@@ -456,8 +470,14 @@ const formatDateTime = (dateString: string): string => {
 
 // 组件挂载时的操作
 onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
   console.log('⚙️ 寝室设置页面加载完成', route.params.id)
   loadSettingsData()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
 })
 </script>
 
@@ -493,12 +513,28 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
+  .dormitory-settings-container {
+    padding: 10px;
+  }
+
+  .settings-content {
+    padding: 10px 0;
+  }
+
+  .tab-content {
+    padding: 10px 0;
+  }
+
   .settings-form {
     max-width: 100%;
   }
   
   .dissolve-section {
     max-width: 100%;
+  }
+
+  :deep(.el-tabs__nav-wrap) {
+    padding: 0 10px;
   }
 }
 </style>

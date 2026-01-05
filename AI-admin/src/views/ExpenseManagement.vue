@@ -1,7 +1,7 @@
 <template>
-  <div class="expense-management">
+  <div class="expense-management" :class="{ 'is-mobile': isMobile }">
     <!-- 页面头部 -->
-    <div class="page-header">
+    <div class="page-header" :class="{ 'is-mobile': isMobile }">
       <div class="header-left">
         <h1 class="page-title">
           <el-icon class="title-icon"><Wallet /></el-icon>
@@ -15,7 +15,7 @@
           @click="router.push('/expense/create')"
           class="create-btn"
         >
-          新建费用
+          {{ isMobile ? '新建' : '新建费用' }}
         </el-button>
         <el-button 
           type="warning" 
@@ -23,21 +23,21 @@
           @click="router.push('/expense/review')"
           class="review-btn"
         >
-          费用审核
+          {{ isMobile ? '审核' : '费用审核' }}
         </el-button>
       </div>
     </div>
 
     <!-- 费用统计摘要 -->
     <div class="summary-section">
-      <div class="summary-grid">
+      <div class="summary-grid" :class="{ 'is-mobile': isMobile }">
         <div class="summary-item total">
           <div class="summary-icon">
             <el-icon><Money /></el-icon>
           </div>
           <div class="summary-content">
             <div class="summary-number">{{ formatCurrency(totalExpense) }}</div>
-            <div class="summary-text">总费用</div>
+            <div class="summary-text">{{ isMobile ? '总额' : '总费用' }}</div>
           </div>
         </div>
         <div class="summary-item pending">
@@ -55,7 +55,7 @@
           </div>
           <div class="summary-content">
             <div class="summary-number">{{ approvedCount }}</div>
-            <div class="summary-text">审核通过</div>
+            <div class="summary-text">{{ isMobile ? '已通' : '审核通过' }}</div>
           </div>
         </div>
         <div class="summary-item monthly">
@@ -64,18 +64,18 @@
           </div>
           <div class="summary-content">
             <div class="summary-number">{{ formatCurrency(monthlyExpense) }}</div>
-            <div class="summary-text">本月费用</div>
+            <div class="summary-text">{{ isMobile ? '本月' : '本月费用' }}</div>
           </div>
         </div>
       </div>
     </div>
 
     <!-- 搜索和筛选区域 -->
-    <div class="operations-section">
+    <div class="operations-section" :class="{ 'is-mobile': isMobile }">
       <!-- 批量操作栏 -->
       <div v-if="selectedItems.length > 0" class="batch-actions-bar">
         <el-alert
-          :title="`已选择 ${selectedItems.length} 条记录`"
+          :title="isMobile ? `已选 ${selectedItems.length}` : `已选择 ${selectedItems.length} 条记录`"
           type="info"
           :closable="false"
           class="selection-alert"
@@ -93,7 +93,8 @@
             :disabled="selectedItems.some(item => item.status !== 'pending')"
           >
             <el-icon><CircleCheck /></el-icon>
-            批量审核通过 ({{ selectedItems.filter(item => item.status === 'pending').length }})
+            <span v-if="!isMobile">批量审核通过 ({{ selectedItems.filter(item => item.status === 'pending').length }})</span>
+            <span v-else>{{ selectedItems.filter(item => item.status === 'pending').length }}</span>
           </el-button>
           <el-button 
             type="danger" 
@@ -103,7 +104,8 @@
             :disabled="selectedItems.some(item => item.status !== 'pending')"
           >
             <el-icon><Close /></el-icon>
-            批量拒绝 ({{ selectedItems.filter(item => item.status === 'pending').length }})
+            <span v-if="!isMobile">批量拒绝 ({{ selectedItems.filter(item => item.status === 'pending').length }})</span>
+            <span v-else>{{ selectedItems.filter(item => item.status === 'pending').length }}</span>
           </el-button>
           <el-button 
             type="warning" 
@@ -112,147 +114,159 @@
             :loading="batchProcessing"
           >
             <el-icon><Delete /></el-icon>
-            批量删除
+            <span v-if="!isMobile">批量删除</span>
           </el-button>
           <el-button 
             type="text" 
             size="small"
             @click="clearSelection"
           >
-            取消选择
+            取消
           </el-button>
         </div>
       </div>
       
       <div class="operations-row">
-        <!-- 快速筛选按钮组 -->
-        <div class="quick-filters">
-          <el-button-group>
-            <el-button 
-              size="small"
-              :type="quickFilter === '' ? 'primary' : 'default'"
-              @click="quickFilter = ''; resetFilters()"
-            >
-              全部
-            </el-button>
-            <el-button 
-              size="small"
-              :type="quickFilter === 'pending' ? 'primary' : 'default'"
-              @click="quickFilter = 'pending'; statusFilter = 'pending'; resetPagination()"
-            >
-              待审核
-            </el-button>
-            <el-button 
-              size="small"
-              :type="quickFilter === 'draft' ? 'primary' : 'default'"
-              @click="quickFilter = 'draft'; statusFilter = 'draft'; resetPagination()"
-            >
-              草稿箱
-            </el-button>
-            <el-button 
-              size="small"
-              :type="quickFilter === 'approved' ? 'primary' : 'default'"
-              @click="quickFilter = 'approved'; statusFilter = 'approved'; resetPagination()"
-            >
-              审核通过
-            </el-button>
-            <el-button 
-              size="small"
-              :type="quickFilter === 'rejected' ? 'primary' : 'default'"
-              @click="quickFilter = 'rejected'; statusFilter = 'rejected'; resetPagination()"
-            >
-              审核拒绝
-            </el-button>
-          </el-button-group>
-        </div>
+        <el-row :gutter="10" style="width: 100%">
+          <el-col :xs="24" :sm="24" :md="8" :lg="6">
+            <!-- 快速筛选按钮组 -->
+            <div class="quick-filters" :class="{ 'is-mobile': isMobile }">
+              <el-button-group>
+                <el-button 
+                  size="small"
+                  :type="quickFilter === '' ? 'primary' : 'default'"
+                  @click="quickFilter = ''; resetFilters()"
+                >
+                  全部
+                </el-button>
+                <el-button 
+                  size="small"
+                  :type="quickFilter === 'pending' ? 'primary' : 'default'"
+                  @click="quickFilter = 'pending'; statusFilter = 'pending'; resetPagination()"
+                >
+                  待审
+                </el-button>
+                <el-button 
+                  size="small"
+                  :type="quickFilter === 'draft' ? 'primary' : 'default'"
+                  @click="quickFilter = 'draft'; statusFilter = 'draft'; resetPagination()"
+                >
+                  草稿
+                </el-button>
+                <el-button 
+                  size="small"
+                  :type="quickFilter === 'approved' ? 'primary' : 'default'"
+                  @click="quickFilter = 'approved'; statusFilter = 'approved'; resetPagination()"
+                >
+                  通过
+                </el-button>
+              </el-button-group>
+            </div>
+          </el-col>
 
-        <el-input
-          v-model="searchQuery"
-          placeholder="快速搜索费用..."
-          :prefix-icon="Search"
-          class="search-input"
-          clearable
-          @keyup.enter="handleSearch"
-        />
-        
-        <el-select
-          v-model="statusFilter"
-          placeholder="费用状态"
-          clearable
-        >
-          <el-option label="全部状态" value="" />
-          <el-option label="草稿" value="draft" />
-          <el-option label="待审核" value="pending" />
-          <el-option label="审核通过" value="approved" />
-          <el-option label="审核拒绝" value="rejected" />
-          <el-option label="已支付" value="paid" />
-        </el-select>
+          <el-col :xs="24" :sm="12" :md="6" :lg="5">
+            <el-input
+              v-model="searchQuery"
+              placeholder="搜索标题/申请人..."
+              :prefix-icon="Search"
+              class="search-input"
+              clearable
+              @keyup.enter="handleSearch"
+            />
+          </el-col>
+          
+          <el-col :xs="12" :sm="6" :md="4" :lg="3">
+            <el-select
+              v-model="statusFilter"
+              placeholder="状态"
+              clearable
+              style="width: 100%"
+            >
+              <el-option label="全部" value="" />
+              <el-option label="草稿" value="draft" />
+              <el-option label="待审" value="pending" />
+              <el-option label="通过" value="approved" />
+              <el-option label="拒绝" value="rejected" />
+              <el-option label="已付" value="paid" />
+            </el-select>
+          </el-col>
 
-        <el-select
-          v-model="categoryFilter"
-          placeholder="费用类别"
-          clearable
-        >
-          <el-option label="全部分类" value="" />
-          <el-option label="住宿费" value="accommodation" />
-          <el-option label="水电费" value="utilities" />
-          <el-option label="维修费" value="maintenance" />
-          <el-option label="清洁费" value="cleaning" />
-          <el-option label="房租" value="rent" />
-          <el-option label="活动费用" value="activities" />
-          <el-option label="日用品" value="supplies" />
-          <el-option label="食品饮料" value="food" />
-          <el-option label="保险费用" value="insurance" />
-          <el-option label="其他" value="other" />
-        </el-select>
+          <el-col :xs="12" :sm="6" :md="4" :lg="3">
+            <el-select
+              v-model="categoryFilter"
+              placeholder="分类"
+              clearable
+              style="width: 100%"
+            >
+              <el-option label="全部分类" value="" />
+              <el-option label="住宿费" value="accommodation" />
+              <el-option label="水电费" value="utilities" />
+              <el-option label="维修费" value="maintenance" />
+              <el-option label="清洁费" value="cleaning" />
+              <el-option label="房租" value="rent" />
+              <el-option label="活动费用" value="activities" />
+              <el-option label="其他" value="other" />
+            </el-select>
+          </el-col>
 
-        <el-select
-          v-model="monthFilter"
-          placeholder="费用月份"
-          clearable
-        >
-          <el-option label="全部月份" value="" />
-          <el-option 
-            v-for="month in availableMonths" 
-            :key="month.value" 
-            :label="month.label" 
-            :value="month.value" 
-          />
-        </el-select>
+          <el-col :xs="12" :sm="6" :md="4" :lg="3" v-if="!isMobile || showMoreFilters">
+            <el-select
+              v-model="monthFilter"
+              placeholder="月份"
+              clearable
+              style="width: 100%"
+            >
+              <el-option label="全部月份" value="" />
+              <el-option 
+                v-for="month in availableMonths" 
+                :key="month.value" 
+                :label="month.label" 
+                :value="month.value" 
+              />
+            </el-select>
+          </el-col>
 
-        <el-button 
-          type="primary" 
-          :icon="Refresh" 
-          @click="resetFilters"
-          class="reset-button"
-        >
-          重置
-        </el-button>
+          <el-col :xs="12" :sm="6" :md="4" :lg="4">
+            <div class="action-buttons">
+              <el-button 
+                type="primary" 
+                :icon="Refresh" 
+                @click="resetFilters"
+                class="reset-button"
+              >
+                {{ isMobile ? '' : '重置' }}
+              </el-button>
 
-        <!-- 更多操作 -->
-        <el-dropdown trigger="click">
-          <el-button 
-            :icon="More"
-            type="text"
-            size="small"
-            class="more-actions-btn"
-          >
-            更多
-            <el-icon class="el-icon--right"><arrow-down /></el-icon>
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item @click="handleBatchApprove">
-                <el-icon><CircleCheck /></el-icon>
-                审核待处理项目
-              </el-dropdown-item>
-              <el-dropdown-item divided @click="handleClearAll">
-                <el-icon><Delete /></el-icon>
-                清空所有记录
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+              <el-dropdown trigger="click">
+                <el-button 
+                  :icon="More"
+                  type="text"
+                  size="small"
+                  class="more-actions-btn"
+                >
+                  {{ isMobile ? '' : '更多' }}
+                  <el-icon class="el-icon--right"><arrow-down /></el-icon>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item @click="handleBatchApprove">
+                      <el-icon><CircleCheck /></el-icon>
+                      审核待处理
+                    </el-dropdown-item>
+                    <el-dropdown-item @click="isMobile && (showMoreFilters = !showMoreFilters)" v-if="isMobile">
+                      <el-icon><Filter /></el-icon>
+                      {{ showMoreFilters ? '隐藏' : '显示' }}更多
+                    </el-dropdown-item>
+                    <el-dropdown-item divided @click="handleClearAll">
+                      <el-icon><Delete /></el-icon>
+                      清空记录
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
+          </el-col>
+        </el-row>
       </div>
     </div>
 
@@ -309,15 +323,16 @@
 
         <div v-loading="loading" class="expense-table-container">
           <!-- 表格视图 -->
-          <el-table
-            ref="expenseTableRef"
-            :data="paginatedExpenses"
-            style="width: 100%"
-            class="expense-table"
-            v-if="filteredExpenses.length > 0 && viewMode === 'table'"
-            @selection-change="handleSelectionChange"
-          >
-            <el-table-column type="selection" width="55" />
+          <div v-if="filteredExpenses.length > 0 && viewMode === 'table'" class="table-responsive-container mobile-scroll">
+            <el-table
+              ref="expenseTableRef"
+              :data="paginatedExpenses"
+              style="width: 100%"
+              class="expense-table"
+              :size="isMobile ? 'small' : 'default'"
+              @selection-change="handleSelectionChange"
+            >
+            <el-table-column type="selection" width="45" />
 
             <el-table-column prop="title" label="费用标题" min-width="150">
               <template #default="{ row }">
@@ -325,7 +340,7 @@
               </template>
             </el-table-column>
 
-            <el-table-column prop="category" label="费用类别" width="120">
+            <el-table-column prop="category" label="类别" width="100">
               <template #default="{ row }">
                 <el-tag 
                   :type="getCategoryType(row.categoryCode || row.category)" 
@@ -336,118 +351,82 @@
               </template>
             </el-table-column>
 
-            <el-table-column prop="amount" label="费用金额" width="100" align="right">
+            <el-table-column prop="amount" label="金额" width="100" align="right">
               <template #default="{ row }">
-                <span class="amount-cell">{{ formatCurrency(row.amount) }}</span>
+                <span class="amount-cell">¥{{ row.amount }}</span>
               </template>
             </el-table-column>
 
-            <el-table-column prop="applicant" label="申请人" width="100" />
+            <el-table-column prop="applicant" label="申请人" width="90" v-if="!isMobile" />
             
-            <el-table-column prop="dormName" label="寝室" width="120">
-              <template #default="{ row }">
-                <el-tag v-if="row.dormName" size="small" type="info">{{ row.dormName }}</el-tag>
-                <span v-else class="text-gray-400">-</span>
-              </template>
-            </el-table-column>
-
-            <el-table-column prop="date" label="费用日期" width="120">
+            <el-table-column prop="date" label="日期" width="110">
               <template #default="{ row }">
                 {{ formatDate(row.date) }}
               </template>
             </el-table-column>
 
-            <el-table-column prop="status" label="状态" width="120">
+            <el-table-column prop="status" label="状态" width="100" fixed="right">
               <template #default="{ row }">
-                <el-tooltip 
-                  :content="getStatusDescription(row.status)" 
-                  placement="top"
+                <el-tag 
+                  :type="getStatusType(row.status)" 
+                  size="small"
                 >
-                  <el-tag 
-                    :type="getStatusType(row.status)" 
-                    size="small"
-                    style="cursor: help;"
-                  >
-                    <el-icon 
-                      :size="12" 
-                      style="margin-right: 4px; vertical-align: text-top;"
-                    >
-                      <component :is="getStatusIcon(row.status)" />
-                    </el-icon>
-                    {{ getStatusText(row.status) }}
-                  </el-tag>
-                </el-tooltip>
+                  {{ getStatusText(row.status) }}
+                </el-tag>
               </template>
             </el-table-column>
 
-            <el-table-column prop="reviewer" label="审核人" width="100" />
-
-            <el-table-column label="操作" width="240" fixed="right">
+            <el-table-column label="操作" :width="isMobile ? 120 : 200" fixed="right">
               <template #default="{ row }">
                 <div class="table-actions">
-                  <el-button 
-                    v-if="row.status === 'draft'"
-                    type="primary" 
-                    size="small" 
-                    text
-                    @click.stop="handleEditDraft(row)"
-                    :icon="Edit"
-                  >
-                    编辑
-                  </el-button>
-                  <el-button 
-                    v-if="row.status === 'draft'"
-                    type="success" 
-                    size="small" 
-                    text
-                    @click.stop="handleSubmitDraft(row)"
-                    :icon="CircleCheck"
-                  >
-                    提交
-                  </el-button>
-                  <el-button 
-                    v-if="row.status !== 'draft'"
-                    type="primary" 
-                    size="small" 
-                    text
-                    @click.stop="handleView(row)"
-                    :icon="View"
-                  >
-                    查看
-                  </el-button>
-                  <el-button 
-                    v-if="row.status === 'pending'"
-                    type="warning" 
-                    size="small" 
-                    text
-                    @click.stop="handleReview(row)"
-                    :icon="Edit"
-                  >
-                    审核
-                  </el-button>
-                  <el-button 
-                    v-else-if="row.status === 'approved'"
-                    type="success" 
-                    size="small" 
-                    text
-                    @click.stop="handlePayExpense(row)"
-                    :icon="Money"
-                  >
-                    支付
-                  </el-button>
-                  <el-button 
-                    type="danger" 
-                    size="small" 
-                    text
-                    @click.stop="handleDelete(row)"
-                    :icon="Delete"
-                  >
-                    删除
-                  </el-button>
+                  <el-dropdown trigger="click" v-if="isMobile">
+                    <el-button type="primary" size="small" text>
+                      操作<el-icon class="el-icon--right"><arrow-down /></el-icon>
+                    </el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item v-if="row.status === 'draft'" @click="handleEditDraft(row)">编辑</el-dropdown-item>
+                        <el-dropdown-item v-if="row.status === 'draft'" @click="handleSubmitDraft(row)">提交</el-dropdown-item>
+                        <el-dropdown-item v-if="row.status !== 'draft'" @click="handleView(row)">查看</el-dropdown-item>
+                        <el-dropdown-item v-if="row.status === 'pending'" @click="handleReview(row)">审核</el-dropdown-item>
+                        <el-dropdown-item v-if="row.status === 'approved'" @click="handlePayExpense(row)">支付</el-dropdown-item>
+                        <el-dropdown-item divided @click="handleDelete(row)" style="color: #f56c6c">删除</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                  <template v-else>
+                    <el-button 
+                      v-if="row.status === 'draft'"
+                      type="primary" 
+                      size="small" 
+                      text
+                      @click.stop="handleEditDraft(row)"
+                    >
+                      编辑
+                    </el-button>
+                    <el-button 
+                      v-if="row.status !== 'draft'"
+                      type="primary" 
+                      size="small" 
+                      text
+                      @click.stop="handleView(row)"
+                    >
+                      查看
+                    </el-button>
+                    <el-button 
+                      type="danger" 
+                      size="small" 
+                      text
+                      @click.stop="handleDelete(row)"
+                    >
+                      删除
+                    </el-button>
+                  </template>
                 </div>
               </template>
             </el-table-column>
           </el-table>
+          </div>
 
           <!-- 卡片视图 -->
           <div 
@@ -648,13 +627,14 @@
         </div>
 
         <!-- 分页 (仅在表格视图显示) -->
-        <div v-if="filteredExpenses.length > pageSize && viewMode === 'table'" class="pagination-section">
+        <div v-if="filteredExpenses.length > pageSize && viewMode === 'table'" class="pagination-section" :class="{ 'is-mobile': isMobile }">
           <el-pagination
             v-model:current-page="currentPage"
             v-model:page-size="pageSize"
             :page-sizes="[5, 8, 12, 20, 50]"
             :total="filteredExpenses.length"
-            layout="total, sizes, prev, pager, next, jumper"
+            :layout="isMobile ? 'prev, pager, next' : 'total, sizes, prev, pager, next, jumper'"
+            :small="isMobile"
             @size-change="handleSizeChange"
             @current-change="handleCurrentChange"
           />
@@ -665,8 +645,10 @@
     <el-dialog
       v-model="showPaymentDialog"
       title="费用支付"
-      width="500px"
+      :width="isMobile ? '92%' : '500px'"
+      :fullscreen="isMobile"
       :before-close="handleClosePaymentDialog"
+      class="payment-responsive-dialog"
     >
       <div v-if="currentExpense" class="payment-dialog">
         <!-- 费用信息 -->
@@ -756,7 +738,7 @@ import { useRouter } from 'vue-router'
 import { 
   Plus, Search, Refresh, Wallet, Clock, CircleCheck,
   Calendar, Money, DocumentChecked, Download, View, Edit, Delete, Grid, List, User, More,
-  CreditCard, ChatLineRound, Money as BankIcon, SuccessFilled, Picture, Close, InfoFilled, HomeFilled
+  CreditCard, ChatLineRound, Money as BankIcon, SuccessFilled, Picture, Close, InfoFilled, HomeFilled, CircleClose
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { feeApi } from '@/api/fee'
@@ -784,6 +766,16 @@ interface Expense {
 }
 
 const router = useRouter()
+
+// 移动端适配
+const isMobile = ref(false)
+const showMoreFilters = ref(false)
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+  if (isMobile.value) {
+    viewMode.value = 'card'
+  }
+}
 
 // 响应式数据
 const loading = ref(false)
@@ -1720,9 +1712,15 @@ const loadExpenses = async () => {
   }
 }
 
-// 全局重试函数 (为了在 ElMessage 的 HTML 中调用)
+// 组件挂载时加载数据
 onMounted(() => {
-  (window as any).retryLoadExpenses = () => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+  console.log('💰 费用管理页面加载完成')
+  loadExpenses()
+
+  // 全局重试函数 (为了在 ElMessage 的 HTML 中调用)
+  ;(window as any).retryLoadExpenses = () => {
     console.log('🔄 用户点击重试加载数据...')
     loadExpenses()
     // 尝试关闭所有的 ElMessage
@@ -1735,6 +1733,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
   delete (window as any).retryLoadExpenses
 })
 
@@ -1746,12 +1745,6 @@ const clearSelection = () => {
     expenseTableRef.value.clearSelection()
   }
 }
-
-// 组件挂载时加载数据
-onMounted(() => {
-  console.log('💰 费用管理页面加载完成')
-  loadExpenses()
-})
 </script>
 
 <style scoped>
@@ -1942,6 +1935,12 @@ onMounted(() => {
 
 .expense-table-container {
   min-height: 400px;
+}
+
+.table-responsive-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .title-cell {
@@ -2208,20 +2207,66 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
+  .expense-management {
+    padding: 10px;
+  }
+
   .page-header {
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
     align-items: stretch;
+    padding: 15px;
   }
   
   .header-actions {
-    justify-content: center;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .header-actions .el-button {
+    margin: 0;
+    width: 100%;
   }
   
   .summary-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .summary-item {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .summary-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .summary-number {
+    font-size: 16px;
+  }
+
+  .summary-text {
+    font-size: 12px;
   }
   
+  .operations-section {
+    padding: 15px;
+  }
+
+  .batch-actions-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .batch-buttons {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  }
+
   .operations-row {
     flex-direction: column;
     align-items: stretch;
@@ -2229,8 +2274,10 @@ onMounted(() => {
   }
   
   .quick-filters {
-    flex-wrap: wrap;
-    justify-content: center;
+    overflow-x: auto;
+    padding-bottom: 5px;
+    justify-content: flex-start;
+    -webkit-overflow-scrolling: touch;
   }
 
   .search-input, 
@@ -2239,21 +2286,44 @@ onMounted(() => {
     min-width: unset;
   }
   
+  .action-buttons {
+    display: flex;
+    gap: 10px;
+  }
+
   .reset-button,
   .more-actions-btn {
-    width: 100%;
+    flex: 1;
     margin-left: 0;
+    justify-content: center;
   }
   
   .card-grid {
     grid-template-columns: 1fr;
-    padding: 0 12px;
+    padding: 0 10px;
+    gap: 15px;
   }
   
   .month-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
+    padding: 0 10px 12px;
+  }
+
+  .month-summary {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .pagination-section.is-mobile {
+    padding: 15px 5px;
+  }
+
+  :deep(.el-pagination) {
+    display: flex;
+    justify-content: center;
+    width: 100%;
   }
 }
 </style>

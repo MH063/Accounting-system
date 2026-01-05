@@ -1,13 +1,19 @@
 <template>
-  <div class="expense-create-container">
+  <div class="expense-create-container" :class="{ 'is-mobile': isMobile }">
     <el-card>
       <template #header>
-        <div class="card-header">
-          <span>创建费用</span>
-          <div>
-            <el-button @click="goBack">取消</el-button>
-            <el-button type="primary" @click="saveDraft" :loading="saving">保存草稿</el-button>
-            <el-button type="success" @click="submitExpense" :loading="submitting">提交费用</el-button>
+        <div class="card-header responsive-header">
+          <span class="title">{{ isMobile ? '新建费用' : '创建费用' }}</span>
+          <div class="header-buttons">
+            <el-button @click="goBack" :size="isMobile ? 'small' : 'default'">
+              {{ isMobile ? '返回' : '取消' }}
+            </el-button>
+            <el-button type="primary" @click="saveDraft" :loading="saving" :size="isMobile ? 'small' : 'default'">
+              {{ isMobile ? '暂存' : '保存草稿' }}
+            </el-button>
+            <el-button type="success" @click="submitExpense" :loading="submitting" :size="isMobile ? 'small' : 'default'">
+              {{ isMobile ? '提交' : '提交费用' }}
+            </el-button>
           </div>
         </div>
       </template>
@@ -16,11 +22,12 @@
         ref="expenseFormRef"
         :model="expenseForm"
         :rules="expenseFormRules"
-        label-width="120px"
+        :label-width="isMobile ? '80px' : '120px'"
+        :label-position="isMobile ? 'top' : 'left'"
         class="expense-form"
       >
-        <el-row :gutter="20">
-          <el-col :span="12">
+        <el-row :gutter="isMobile ? 0 : 20">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="费用标题" prop="title">
               <el-input
                 v-model="expenseForm.title"
@@ -31,7 +38,7 @@
             </el-form-item>
           </el-col>
           
-          <el-col :span="12">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="费用类别" prop="category">
               <el-select
                 v-model="expenseForm.category"
@@ -54,15 +61,15 @@
           <el-input
             v-model="expenseForm.description"
             type="textarea"
-            :rows="3"
+            :rows="isMobile ? 2 : 3"
             placeholder="请输入费用说明"
             maxlength="200"
             show-word-limit
           />
         </el-form-item>
         
-        <el-row :gutter="20">
-          <el-col :span="12">
+        <el-row :gutter="isMobile ? 0 : 20">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="费用金额" prop="amount">
               <el-input
                 v-model="expenseForm.amount"
@@ -75,7 +82,7 @@
             </el-form-item>
           </el-col>
           
-          <el-col :span="12">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="费用日期" prop="date">
               <el-date-picker
                 v-model="expenseForm.date"
@@ -91,50 +98,58 @@
         <el-form-item label="参与成员" prop="participants">
           <div class="transfer-container">
             <div v-if="currentDormId === 'all'" class="transfer-filter">
-              <el-row :gutter="10" style="width: 500px; margin-bottom: 10px;">
-                <el-col :span="10">
+              <el-row :gutter="10" :style="{ width: isMobile ? '100%' : '100%', maxWidth: '600px', marginBottom: '10px' }">
+                <el-col :xs="12" :sm="10">
                   <el-input
                     v-model="dormSearchName"
-                    placeholder="寝室号 (模糊匹配)"
+                    placeholder="寝室号"
                     clearable
                     @input="debouncedFilter"
+                    :size="isMobile ? 'small' : 'default'"
                   >
                     <template #prefix>
                       <el-icon><HomeFilled /></el-icon>
                     </template>
                   </el-input>
                 </el-col>
-                <el-col :span="10">
+                <el-col :xs="12" :sm="10">
                   <el-input
                     v-model="dormSearchCode"
-                    placeholder="宿舍编码 (精确匹配)"
+                    placeholder="宿舍编码"
                     clearable
                     @input="debouncedFilter"
+                    :size="isMobile ? 'small' : 'default'"
                   >
                     <template #prefix>
                       <el-icon><OfficeBuilding /></el-icon>
                     </template>
                   </el-input>
                 </el-col>
-                <el-col :span="4">
+                <el-col v-if="!isMobile" :span="4">
                   <div v-if="isFiltering" class="filter-loading">
                     <el-icon class="is-loading"><Loading /></el-icon>
                     <span>筛选中...</span>
                   </div>
                 </el-col>
               </el-row>
+              <div v-if="isMobile && isFiltering" class="filter-loading mobile-filter-loading">
+                <el-icon class="is-loading"><Loading /></el-icon>
+                <span>筛选中...</span>
+              </div>
             </div>
             <el-transfer
               v-model="expenseForm.participants"
               :data="filteredMembers"
-              :titles="['未选择', '已选择']"
+              :titles="isMobile ? ['待选', '已选'] : ['未选择', '已选择']"
               filterable
               :filter-method="filterMethod"
-              filter-placeholder="搜索姓名/用户名"
+              :filter-placeholder="isMobile ? '搜索' : '搜索姓名/用户名'"
               :props="{
                 key: 'key',
                 label: 'label'
               }"
+              :button-texts="isMobile ? ['', ''] : []"
+              class="responsive-transfer"
             >
               <template #default="{ option }">
                 <div class="member-item">
@@ -159,7 +174,7 @@
         </el-form-item>
         
         <el-form-item label="分摊方式" prop="splitMethod">
-          <el-radio-group v-model="expenseForm.splitMethod" @change="calculateSplit">
+          <el-radio-group v-model="expenseForm.splitMethod" @change="calculateSplit" :class="{ 'mobile-radio-group': isMobile }">
             <el-radio label="equal">等额分摊</el-radio>
             <el-radio label="days">按天数分摊</el-radio>
             <el-radio label="custom">自定义比例</el-radio>
@@ -167,40 +182,43 @@
         </el-form-item>
         
         <div v-if="expenseForm.splitMethod === 'custom' || expenseForm.splitMethod === 'days'" class="custom-split-section">
-          <el-table :data="customSplitDetails" style="width: 100%">
-            <el-table-column prop="name" label="成员" />
-            <el-table-column v-if="expenseForm.splitMethod === 'days'" label="居住天数">
-              <template #default="{ row }">
-                <span>{{ row.days }} 天</span>
-              </template>
-            </el-table-column>
-            <el-table-column :label="expenseForm.splitMethod === 'days' ? '计算金额' : '分摊金额'">
-              <template #default="{ row }">
-                <el-input
-                  v-model="row.amount"
-                  :readonly="expenseForm.splitMethod === 'days'"
-                  @input="handleCustomSplitInput(row)"
-                  @blur="handleCustomSplitBlur(row)"
-                  placeholder="请输入金额"
-                >
-                  <template #prepend>¥</template>
-                </el-input>
-              </template>
-            </el-table-column>
-            <el-table-column label="分摊比例">
-              <template #default="{ row }">
-                {{ calculatePercentage(row.amount) }}%
-              </template>
-            </el-table-column>
-          </el-table>
+          <div class="mobile-scroll-container">
+            <el-table :data="customSplitDetails" style="width: 100%">
+              <el-table-column prop="name" label="成员" :min-width="isMobile ? 100 : 150" />
+              <el-table-column v-if="expenseForm.splitMethod === 'days'" label="居住天数" :width="isMobile ? 80 : 100">
+                <template #default="{ row }">
+                  <span>{{ row.days }} 天</span>
+                </template>
+              </el-table-column>
+              <el-table-column :label="expenseForm.splitMethod === 'days' ? '计算金额' : '分摊金额'" :min-width="isMobile ? 120 : 180">
+                <template #default="{ row }">
+                  <el-input
+                    v-model="row.amount"
+                    :readonly="expenseForm.splitMethod === 'days'"
+                    :size="isMobile ? 'small' : 'default'"
+                    @input="handleCustomSplitInput(row)"
+                    @blur="handleCustomSplitBlur(row)"
+                    placeholder="请输入金额"
+                  >
+                    <template #prepend>¥</template>
+                  </el-input>
+                </template>
+              </el-table-column>
+              <el-table-column label="比例" :width="isMobile ? 70 : 100">
+                <template #default="{ row }">
+                  {{ calculatePercentage(row.amount) }}%
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
           
           <div class="split-summary">
             <div class="summary-item">
-              <span>总金额:</span>
+              <span>总额:</span>
               <span>¥{{ expenseForm.amount }}</span>
             </div>
             <div class="summary-item">
-              <span>已分配:</span>
+              <span>已配:</span>
               <span>¥{{ allocatedAmount }}</span>
             </div>
             <div class="summary-item" :class="{ 'warning': Math.abs(remainingAmount) > 0.01 }">
@@ -237,10 +255,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { HomeFilled, OfficeBuilding, Loading } from '@element-plus/icons-vue'
+import { HomeFilled, OfficeBuilding, Loading, Back, Checked, Promotion } from '@element-plus/icons-vue'
 import { expenseCreateApi } from '@/api/expenseCreate'
 import { userApi } from '@/api/user'
 import { getCurrentUser, hasAnyRole } from '@/utils/permissionControl'
@@ -248,6 +266,12 @@ import { normalizeAmount } from '@/utils/amount'
 
 const router = useRouter()
 const route = useRoute()
+
+// 移动端适配
+const isMobile = ref(false)
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
 const expenseFormRef = ref()
 const saving = ref(false)
 const submitting = ref(false)
@@ -714,6 +738,9 @@ watch(() => expenseForm.participants, () => {
 })
 
 onMounted(async () => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+  
   console.log('💸 费用创建页面加载完成')
   
   const today = new Date()
@@ -824,6 +851,10 @@ onMounted(async () => {
   
   calculateSplit()
 })
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
+})
 </script>
 
 <style scoped>
@@ -837,18 +868,24 @@ onMounted(async () => {
   align-items: center;
 }
 
+.header-buttons {
+  display: flex;
+  gap: 10px;
+}
+
 .expense-form {
   max-width: 1000px;
   margin: 0 auto;
 }
 
 .custom-split-section {
-  padding: 20px;
+  padding: 15px;
   background: #f5f7fa;
   border-radius: 8px;
   margin-bottom: 20px;
   max-width: 1000px;
   margin: 0 auto 20px;
+  border: 1px solid #ebeef5;
 }
 
 .split-summary {
@@ -857,17 +894,23 @@ onMounted(async () => {
   gap: 20px;
   margin-top: 15px;
   padding-top: 15px;
-  border-top: 1px solid #ebeef5;
+  border-top: 1px dashed #ebeef5;
 }
 
 .summary-item {
   display: flex;
+  align-items: center;
   gap: 8px;
-  font-weight: 600;
+  font-size: 14px;
 }
 
-.summary-item.warning {
-  color: #e6a23c;
+.summary-item span:last-child {
+  font-weight: bold;
+  color: #409eff;
+}
+
+.summary-item.warning span:last-child {
+  color: #f56c6c;
 }
 
 .upload-demo {
@@ -880,13 +923,6 @@ onMounted(async () => {
   width: 100%;
   align-items: stretch;
   gap: 15px;
-}
-
-.filter-container {
-  background: #f8f9fa;
-  padding: 15px;
-  border-radius: 4px;
-  border: 1px solid #ebeef5;
 }
 
 .member-item {
@@ -922,6 +958,17 @@ onMounted(async () => {
   height: 32px;
   color: #409eff;
   font-size: 13px;
+}
+
+.mobile-filter-loading {
+  margin-bottom: 10px;
+  justify-content: center;
+}
+
+.mobile-scroll-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 :deep(.el-transfer) {
@@ -960,13 +1007,27 @@ onMounted(async () => {
   height: 300px;
 }
 
-@media (max-width: 992px) {
-  :deep(.el-transfer-panel) {
-    max-width: none;
-  }
-}
-
 @media (max-width: 768px) {
+  .expense-create-container {
+    padding: 10px;
+  }
+
+  .responsive-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .responsive-header .title {
+    font-size: 16px;
+    font-weight: bold;
+  }
+
+  .header-buttons {
+    gap: 5px;
+  }
+
   .expense-form {
     max-width: 100%;
   }
@@ -974,6 +1035,26 @@ onMounted(async () => {
   .split-summary {
     flex-direction: column;
     align-items: flex-end;
+    gap: 8px;
+    padding: 10px 0;
+  }
+
+  .summary-item {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .mobile-radio-group {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .mobile-radio-group :deep(.el-radio) {
+    margin-right: 0;
+    width: 100%;
   }
 
   :deep(.el-transfer) {

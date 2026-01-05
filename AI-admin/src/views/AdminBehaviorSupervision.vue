@@ -2,26 +2,26 @@
   <div class="admin-behavior-supervision-container">
     <el-card>
       <template #header>
-        <div class="card-header">
+        <div class="card-header" :class="{ 'is-mobile': isMobile }">
           <span>管理员行为监督</span>
           <div class="header-actions">
-            <el-button type="success" @click="handleExport" :loading="exportLoading">
-              <el-icon><Download /></el-icon>导出记录
+            <el-button type="success" @click="handleExport" :loading="exportLoading" :size="isMobile ? 'small' : 'default'">
+              <el-icon><Download /></el-icon>{{ isMobile ? '' : '导出记录' }}
             </el-button>
-            <el-button type="primary" @click="handleRefresh" :loading="refreshLoading">
-              <el-icon><Refresh /></el-icon>刷新
+            <el-button type="primary" @click="handleRefresh" :loading="refreshLoading" :size="isMobile ? 'small' : 'default'">
+              <el-icon><Refresh /></el-icon>{{ isMobile ? '' : '刷新' }}
             </el-button>
           </div>
         </div>
       </template>
       
       <!-- 行为统计 -->
-      <el-row :gutter="20" style="margin-bottom: 20px;">
-        <el-col :span="6">
-          <el-card class="stat-card">
+      <el-row :gutter="isMobile ? 10 : 20" style="margin-bottom: 20px;">
+        <el-col :xs="24" :sm="12" :md="6" style="margin-bottom: 10px;">
+          <el-card class="stat-card" shadow="hover">
             <div class="stat-item">
-              <div class="stat-icon bg-primary">
-                <el-icon size="24"><User /></el-icon>
+              <div class="stat-icon bg-primary" :style="isMobile ? 'width: 40px; height: 40px;' : ''">
+                <el-icon :size="isMobile ? 20 : 24"><User /></el-icon>
               </div>
               <div class="stat-content">
                 <div class="stat-title">管理员总数</div>
@@ -31,11 +31,11 @@
           </el-card>
         </el-col>
         
-        <el-col :span="6">
-          <el-card class="stat-card">
+        <el-col :xs="24" :sm="12" :md="6" style="margin-bottom: 10px;">
+          <el-card class="stat-card" shadow="hover">
             <div class="stat-item">
-              <div class="stat-icon bg-warning">
-                <el-icon size="24"><Warning /></el-icon>
+              <div class="stat-icon bg-warning" :style="isMobile ? 'width: 40px; height: 40px;' : ''">
+                <el-icon :size="isMobile ? 20 : 24"><Warning /></el-icon>
               </div>
               <div class="stat-content">
                 <div class="stat-title">异常行为数</div>
@@ -45,11 +45,11 @@
           </el-card>
         </el-col>
         
-        <el-col :span="6">
-          <el-card class="stat-card">
+        <el-col :xs="24" :sm="12" :md="6" style="margin-bottom: 10px;">
+          <el-card class="stat-card" shadow="hover">
             <div class="stat-item">
-              <div class="stat-icon bg-success">
-                <el-icon size="24"><Check /></el-icon>
+              <div class="stat-icon bg-success" :style="isMobile ? 'width: 40px; height: 40px;' : ''">
+                <el-icon :size="isMobile ? 20 : 24"><Check /></el-icon>
               </div>
               <div class="stat-content">
                 <div class="stat-title">合规率</div>
@@ -59,11 +59,11 @@
           </el-card>
         </el-col>
         
-        <el-col :span="6">
-          <el-card class="stat-card">
+        <el-col :xs="24" :sm="12" :md="6" style="margin-bottom: 10px;">
+          <el-card class="stat-card" shadow="hover">
             <div class="stat-item">
-              <div class="stat-icon bg-info">
-                <el-icon size="24"><DataLine /></el-icon>
+              <div class="stat-icon bg-info" :style="isMobile ? 'width: 40px; height: 40px;' : ''">
+                <el-icon :size="isMobile ? 20 : 24"><DataLine /></el-icon>
               </div>
               <div class="stat-content">
                 <div class="stat-title">本周异常</div>
@@ -75,49 +75,68 @@
       </el-row>
       
       <!-- 功能选项卡 -->
-      <el-tabs v-model="activeTab" type="card" style="margin-bottom: 20px;">
+      <el-tabs v-model="activeTab" type="card" style="margin-bottom: 20px;" :class="{'mobile-tabs': isMobile}">
         <el-tab-pane label="实时监控" name="realtime">
           <div class="realtime-monitor">
             <div class="monitor-header">
-              <el-tag type="danger" effect="dark" v-if="newAlerts > 0">
-                <el-icon><Bell /></el-icon> 新告警: {{ newAlerts }}
+              <el-tag type="danger" effect="dark" v-if="newAlerts > 0" :size="isMobile ? 'small' : 'default'">
+                <el-icon><Bell /></el-icon> {{ isMobile ? newAlerts : '新告警: ' + newAlerts }}
               </el-tag>
               <el-switch
                 v-model="autoRefresh"
-                active-text="自动刷新"
-                inactive-text="手动刷新"
+                :active-text="isMobile ? '' : '自动刷新'"
+                :inactive-text="isMobile ? '' : '手动刷新'"
                 @change="handleAutoRefreshChange"
               />
             </div>
-            <el-table :data="realtimeBehaviors" style="width: 100%" v-loading="realtimeLoading">
-              <el-table-column prop="id" label="ID" width="80" />
-              <el-table-column prop="adminName" label="管理员" width="120" />
-              <el-table-column prop="behaviorType" label="行为类型" width="120">
+            <el-table :data="realtimeBehaviors" style="width: 100%" v-loading="realtimeLoading" :size="isMobile ? 'small' : 'default'">
+              <el-table-column prop="id" label="ID" width="60" v-if="!isMobile" />
+              <el-table-column prop="adminName" label="管理员" width="100" />
+              <el-table-column prop="behaviorType" label="类型" width="100">
                 <template #default="scope">
                   {{ getBehaviorTypeText(scope.row.behaviorType) }}
                 </template>
               </el-table-column>
-              <el-table-column prop="description" label="行为描述" />
-              <el-table-column prop="ipAddress" label="IP地址" width="130" />
-              <el-table-column prop="riskLevel" label="风险等级" width="100">
+              <el-table-column prop="description" label="描述" min-width="150" show-overflow-tooltip />
+              <el-table-column prop="ipAddress" label="IP" width="120" v-if="!isMobile" />
+              <el-table-column prop="riskLevel" label="风险" width="80">
                 <template #default="scope">
-                  <el-tag :type="getRiskLevelTagType(scope.row.riskLevel)">
+                  <el-tag :type="getRiskLevelTagType(scope.row.riskLevel)" size="small">
                     {{ getRiskLevelText(scope.row.riskLevel) }}
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column prop="behaviorTime" label="行为时间" width="160" />
-              <el-table-column label="操作" width="150">
+              <el-table-column prop="behaviorTime" label="时间" width="150" v-if="!isMobile" />
+              <el-table-column label="操作" :width="isMobile ? 70 : 150" fixed="right">
                 <template #default="scope">
-                  <el-button size="small" @click="handleView(scope.row)">查看详情</el-button>
-                  <el-button 
-                    size="small" 
-                    type="danger" 
-                    @click="handleBlockAdmin(scope.row)"
-                    :disabled="scope.row.blocked"
-                  >
-                    {{ scope.row.blocked ? '已封禁' : '封禁' }}
-                  </el-button>
+                  <template v-if="!isMobile">
+                    <el-button size="small" @click="handleView(scope.row)">详情</el-button>
+                    <el-button 
+                      size="small" 
+                      type="danger" 
+                      @click="handleBlockAdmin(scope.row)"
+                      :disabled="scope.row.blocked"
+                    >
+                      {{ scope.row.blocked ? '已封禁' : '封禁' }}
+                    </el-button>
+                  </template>
+                  <el-dropdown v-else trigger="click">
+                    <el-button size="small" type="primary" link>
+                      <el-icon><More /></el-icon>
+                    </el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item @click="handleView(scope.row)">查看详情</el-dropdown-item>
+                        <el-dropdown-item 
+                          @click="handleBlockAdmin(scope.row)"
+                          :disabled="scope.row.blocked"
+                          style="color: var(--el-color-danger)"
+                        >
+                          {{ scope.row.blocked ? '已封禁' : '封禁管理员' }}
+                        </el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
                 </template>
               </el-table-column>
             </el-table>
@@ -127,87 +146,127 @@
         <el-tab-pane label="操作日志" name="logs">
           <!-- 搜索和筛选 -->
           <div class="search-bar">
-            <el-form :model="searchForm" label-width="80px" inline>
-              <el-form-item label="管理员">
-                <el-select v-model="searchForm.adminId" placeholder="请选择管理员" clearable filterable>
-                  <el-option 
-                    v-for="admin in adminList" 
-                    :key="admin.id" 
-                    :label="admin.name" 
-                    :value="admin.id" 
-                  />
-                </el-select>
-              </el-form-item>
-              
-              <el-form-item label="行为类型">
-                <el-select v-model="searchForm.behaviorType" placeholder="请选择行为类型" clearable>
-                  <el-option label="登录" value="login" />
-                  <el-option label="登出" value="logout" />
-                  <el-option label="新增数据" value="create" />
-                  <el-option label="修改数据" value="update" />
-                  <el-option label="删除数据" value="delete" />
-                  <el-option label="权限变更" value="permission" />
-                  <el-option label="系统配置" value="config" />
-                </el-select>
-              </el-form-item>
-              
-              <el-form-item label="风险等级">
-                <el-select v-model="searchForm.riskLevel" placeholder="请选择风险等级" clearable>
-                  <el-option label="低风险" value="low" />
-                  <el-option label="中风险" value="medium" />
-                  <el-option label="高风险" value="high" />
-                </el-select>
-              </el-form-item>
-              
-              <el-form-item label="时间范围">
-                <el-date-picker
-                  v-model="searchForm.dateRange"
-                  type="datetimerange"
-                  range-separator="至"
-                  start-placeholder="开始时间"
-                  end-placeholder="结束时间"
-                  format="YYYY-MM-DD HH:mm:ss"
-                  value-format="YYYY-MM-DD HH:mm:ss"
-                />
-              </el-form-item>
-              
-              <el-form-item>
-                <el-button type="primary" @click="handleSearch">查询</el-button>
-                <el-button @click="handleReset">重置</el-button>
-              </el-form-item>
+            <el-form :model="searchForm" :label-width="isMobile ? '70px' : '80px'" :label-position="isMobile ? 'top' : 'left'" :inline="!isMobile">
+              <el-row :gutter="isMobile ? 10 : 20">
+                <el-col :xs="12" :sm="8" :md="6">
+                  <el-form-item label="管理员">
+                    <el-select v-model="searchForm.adminId" placeholder="选择" clearable filterable style="width: 100%">
+                      <el-option 
+                        v-for="admin in adminList" 
+                        :key="admin.id" 
+                        :label="admin.name" 
+                        :value="admin.id" 
+                      />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                
+                <el-col :xs="12" :sm="8" :md="6">
+                  <el-form-item label="行为类型">
+                    <el-select v-model="searchForm.behaviorType" placeholder="选择" clearable style="width: 100%">
+                      <el-option label="登录" value="login" />
+                      <el-option label="登出" value="logout" />
+                      <el-option label="新增" value="create" />
+                      <el-option label="修改" value="update" />
+                      <el-option label="删除" value="delete" />
+                      <el-option label="权限" value="permission" />
+                      <el-option label="配置" value="config" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                
+                <el-col :xs="12" :sm="8" :md="6" v-if="!isMobile || showMoreFilters">
+                  <el-form-item label="风险等级">
+                    <el-select v-model="searchForm.riskLevel" placeholder="选择" clearable style="width: 100%">
+                      <el-option label="低风险" value="low" />
+                      <el-option label="中风险" value="medium" />
+                      <el-option label="高风险" value="high" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                
+                <el-col :xs="24" :sm="12" :md="8" v-if="!isMobile || showMoreFilters">
+                  <el-form-item label="时间范围">
+                    <el-date-picker
+                      v-model="searchForm.dateRange"
+                      type="datetimerange"
+                      range-separator="-"
+                      start-placeholder="开始"
+                      end-placeholder="结束"
+                      format="YYYY-MM-DD HH:mm"
+                      value-format="YYYY-MM-DD HH:mm:ss"
+                      style="width: 100%"
+                    />
+                  </el-form-item>
+                </el-col>
+                
+                <el-col :xs="24" :sm="8" :md="6">
+                  <el-form-item label-width="0">
+                    <div class="search-actions" :style="isMobile ? 'display: flex; gap: 10px; width: 100%;' : ''">
+                      <el-button type="primary" @click="handleSearch" :style="isMobile ? 'flex: 1;' : ''">
+                        <el-icon><Search /></el-icon>{{ isMobile ? '' : '查询' }}
+                      </el-button>
+                      <el-button @click="handleReset" :style="isMobile ? 'flex: 1;' : ''">
+                        <el-icon><RefreshRight /></el-icon>{{ isMobile ? '' : '重置' }}
+                      </el-button>
+                      <el-button v-if="isMobile" type="info" plain @click="showMoreFilters = !showMoreFilters" style="flex: 1;">
+                        <el-icon><Filter /></el-icon>
+                      </el-button>
+                    </div>
+                  </el-form-item>
+                </el-col>
+              </el-row>
             </el-form>
           </div>
           
           <!-- 行为列表 -->
-          <el-table :data="behaviorList" style="width: 100%" v-loading="loading">
-            <el-table-column prop="id" label="ID" width="80" />
-            <el-table-column prop="adminName" label="管理员" width="120" />
-            <el-table-column prop="behaviorType" label="行为类型" width="120">
+          <el-table :data="behaviorList" style="width: 100%" v-loading="loading" :size="isMobile ? 'small' : 'default'">
+            <el-table-column prop="id" label="ID" width="60" v-if="!isMobile" />
+            <el-table-column prop="adminName" label="管理员" width="100" />
+            <el-table-column prop="behaviorType" label="类型" width="100">
               <template #default="scope">
                 {{ getBehaviorTypeText(scope.row.behaviorType) }}
               </template>
             </el-table-column>
-            <el-table-column prop="description" label="行为描述" />
-            <el-table-column prop="ipAddress" label="IP地址" width="130" />
-            <el-table-column prop="riskLevel" label="风险等级" width="100">
+            <el-table-column prop="description" label="描述" min-width="150" show-overflow-tooltip />
+            <el-table-column prop="riskLevel" label="风险" width="80">
               <template #default="scope">
-                <el-tag :type="getRiskLevelTagType(scope.row.riskLevel)">
+                <el-tag :type="getRiskLevelTagType(scope.row.riskLevel)" size="small">
                   {{ getRiskLevelText(scope.row.riskLevel) }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="behaviorTime" label="行为时间" width="160" />
-            <el-table-column label="操作" width="150">
+            <el-table-column prop="behaviorTime" label="时间" width="150" v-if="!isMobile" />
+            <el-table-column label="操作" :width="isMobile ? 70 : 150" fixed="right">
               <template #default="scope">
-                <el-button size="small" @click="handleView(scope.row)">查看详情</el-button>
-                <el-button 
-                  size="small" 
-                  type="danger" 
-                  @click="handleBlockAdmin(scope.row)"
-                  :disabled="scope.row.blocked"
-                >
-                  {{ scope.row.blocked ? '已封禁' : '封禁' }}
-                </el-button>
+                <template v-if="!isMobile">
+                  <el-button size="small" @click="handleView(scope.row)">详情</el-button>
+                  <el-button 
+                    size="small" 
+                    type="danger" 
+                    @click="handleBlockAdmin(scope.row)"
+                    :disabled="scope.row.blocked"
+                  >
+                    {{ scope.row.blocked ? '已封禁' : '封禁' }}
+                  </el-button>
+                </template>
+                <el-dropdown v-else trigger="click">
+                  <el-button size="small" type="primary" link>
+                    <el-icon><More /></el-icon>
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item @click="handleView(scope.row)">查看详情</el-dropdown-item>
+                      <el-dropdown-item 
+                        @click="handleBlockAdmin(scope.row)"
+                        :disabled="scope.row.blocked"
+                        style="color: var(--el-color-danger)"
+                      >
+                        {{ scope.row.blocked ? '已封禁' : '封禁管理员' }}
+                      </el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
               </template>
             </el-table-column>
           </el-table>
@@ -216,9 +275,10 @@
             <el-pagination
               v-model:current-page="currentPage"
               v-model:page-size="pageSize"
-              :page-sizes="[10, 20, 50, 100]"
-              layout="total, sizes, prev, pager, next, jumper"
+              :page-sizes="[10, 20, 50]"
+              :layout="isMobile ? 'prev, pager, next' : 'total, sizes, prev, pager, next, jumper'"
               :total="total"
+              :small="isMobile"
               @size-change="handleSizeChange"
               @current-change="handleCurrentChange"
             />
@@ -227,31 +287,42 @@
         
         <el-tab-pane label="行为轨迹" name="track">
           <div class="track-analysis">
-            <el-form :inline="true" class="track-form">
-              <el-form-item label="选择管理员">
-                <el-select v-model="trackAdminId" placeholder="请选择管理员" filterable @change="handleTrackAdminChange">
-                  <el-option 
-                    v-for="admin in adminList" 
-                    :key="admin.id" 
-                    :label="admin.name" 
-                    :value="admin.id" 
-                  />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="时间范围">
-                <el-date-picker
-                  v-model="trackDateRange"
-                  type="datetimerange"
-                  range-separator="至"
-                  start-placeholder="开始时间"
-                  end-placeholder="结束时间"
-                  format="YYYY-MM-DD HH:mm:ss"
-                  value-format="YYYY-MM-DD HH:mm:ss"
-                />
-              </el-form-item>
-              <el-form-item>
-                <el-button type="primary" @click="handleAnalyzeTrack">分析轨迹</el-button>
-              </el-form-item>
+            <el-form :inline="!isMobile" class="track-form" :label-position="isMobile ? 'top' : 'left'">
+              <el-row :gutter="isMobile ? 10 : 20">
+                <el-col :xs="24" :sm="10">
+                  <el-form-item label="管理员">
+                    <el-select v-model="trackAdminId" placeholder="请选择" filterable @change="handleTrackAdminChange" style="width: 100%">
+                      <el-option 
+                        v-for="admin in adminList" 
+                        :key="admin.id" 
+                        :label="admin.name" 
+                        :value="admin.id" 
+                      />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="10">
+                  <el-form-item label="时间范围">
+                    <el-date-picker
+                      v-model="trackDateRange"
+                      type="datetimerange"
+                      range-separator="-"
+                      start-placeholder="开始"
+                      end-placeholder="结束"
+                      format="YYYY-MM-DD HH:mm"
+                      value-format="YYYY-MM-DD HH:mm:ss"
+                      style="width: 100%"
+                    />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="4">
+                  <el-form-item label-width="0">
+                    <el-button type="primary" @click="handleAnalyzeTrack" :style="isMobile ? 'width: 100%' : ''">
+                      <el-icon><Search /></el-icon>{{ isMobile ? '分析' : '分析轨迹' }}
+                    </el-button>
+                  </el-form-item>
+                </el-col>
+              </el-row>
             </el-form>
             
             <div v-if="trackData.length > 0" class="track-timeline">
@@ -261,17 +332,18 @@
                   :key="index"
                   :timestamp="activity.behaviorTime"
                   :type="getTimelineType(activity.riskLevel)"
+                  :size="isMobile ? 'normal' : 'large'"
                 >
-                  <el-card>
+                  <el-card shadow="hover">
                     <h4>{{ activity.adminName }} - {{ getBehaviorTypeText(activity.behaviorType) }}</h4>
-                    <p>{{ activity.description }}</p>
-                    <p class="track-detail">
+                    <p style="margin: 10px 0; color: #666;">{{ activity.description }}</p>
+                    <div class="track-detail">
                       <el-tag :type="getRiskLevelTagType(activity.riskLevel)" size="small">
                         {{ getRiskLevelText(activity.riskLevel) }}
                       </el-tag>
-                      <span class="track-ip">IP: {{ activity.ipAddress }}</span>
+                      <span class="track-ip" v-if="!isMobile">IP: {{ activity.ipAddress }}</span>
                       <span class="track-duration">耗时: {{ activity.duration }}ms</span>
-                    </p>
+                    </div>
                   </el-card>
                 </el-timeline-item>
               </el-timeline>
@@ -282,43 +354,55 @@
         
         <el-tab-pane label="异常告警" name="alerts">
           <div class="abnormal-alerts">
-            <el-table :data="alertList" style="width: 100%" v-loading="alertsLoading">
-              <el-table-column prop="id" label="ID" width="80" />
-              <el-table-column prop="adminName" label="管理员" width="120" />
-              <el-table-column prop="alertType" label="告警类型" width="120">
+            <el-table :data="alertList" style="width: 100%" v-loading="alertsLoading" :size="isMobile ? 'small' : 'default'">
+              <el-table-column prop="id" label="ID" width="60" v-if="!isMobile" />
+              <el-table-column prop="adminName" label="管理员" width="100" />
+              <el-table-column prop="alertType" label="类型" width="100">
                 <template #default="scope">
-                  <el-tag :type="getAlertTypeTagType(scope.row.alertType)">
+                  <el-tag :type="getAlertTypeTagType(scope.row.alertType)" size="small">
                     {{ getAlertTypeText(scope.row.alertType) }}
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column prop="description" label="告警描述" />
-              <el-table-column prop="level" label="风险等级" width="100">
+              <el-table-column prop="description" label="描述" min-width="150" show-overflow-tooltip />
+              <el-table-column prop="status" label="状态" width="80">
                 <template #default="scope">
-                  <el-tag :type="getRiskLevelTagType(scope.row.level)">
-                    {{ getRiskLevelText(scope.row.level) }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="status" label="状态" width="100">
-                <template #default="scope">
-                  <el-tag :type="scope.row.status === 'handled' ? 'success' : 'danger'">
+                  <el-tag :type="scope.row.status === 'handled' ? 'success' : 'danger'" size="small">
                     {{ scope.row.status === 'handled' ? '已处理' : '待处理' }}
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column prop="createTime" label="告警时间" width="160" />
-              <el-table-column label="操作" width="150">
+              <el-table-column prop="createTime" label="时间" width="150" v-if="!isMobile" />
+              <el-table-column label="操作" :width="isMobile ? 70 : 150" fixed="right">
                 <template #default="scope">
-                  <el-button size="small" @click="handleViewAlert(scope.row)">查看详情</el-button>
-                  <el-button 
-                    size="small" 
-                    type="success" 
-                    @click="handleMarkAsHandled(scope.row)"
-                    :disabled="scope.row.status === 'handled'"
-                  >
-                    {{ scope.row.status === 'handled' ? '已处理' : '标记处理' }}
-                  </el-button>
+                  <template v-if="!isMobile">
+                    <el-button size="small" @click="handleViewAlert(scope.row)">详情</el-button>
+                    <el-button 
+                      size="small" 
+                      type="success" 
+                      @click="handleMarkAsHandled(scope.row)"
+                      :disabled="scope.row.status === 'handled'"
+                    >
+                      {{ scope.row.status === 'handled' ? '已处理' : '处理' }}
+                    </el-button>
+                  </template>
+                  <el-dropdown v-else trigger="click">
+                    <el-button size="small" type="primary" link>
+                      <el-icon><More /></el-icon>
+                    </el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item @click="handleViewAlert(scope.row)">查看详情</el-dropdown-item>
+                        <el-dropdown-item 
+                          @click="handleMarkAsHandled(scope.row)"
+                          :disabled="scope.row.status === 'handled'"
+                          style="color: var(--el-color-success)"
+                        >
+                          {{ scope.row.status === 'handled' ? '已处理' : '标记已处理' }}
+                        </el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
                 </template>
               </el-table-column>
             </el-table>
@@ -327,62 +411,79 @@
         
         <el-tab-pane label="统计报告" name="reports">
           <div class="operation-reports">
-            <el-form :inline="true" class="report-form">
-              <el-form-item label="报告类型">
-                <el-select v-model="reportType" placeholder="请选择报告类型">
-                  <el-option label="日报" value="daily" />
-                  <el-option label="周报" value="weekly" />
-                  <el-option label="月报" value="monthly" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="管理员">
-                <el-select v-model="reportAdminId" placeholder="全部管理员" clearable filterable>
-                  <el-option 
-                    v-for="admin in adminList" 
-                    :key="admin.id" 
-                    :label="admin.name" 
-                    :value="admin.id" 
-                  />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="时间范围">
-                <el-date-picker
-                  v-model="reportDateRange"
-                  type="datetimerange"
-                  range-separator="至"
-                  start-placeholder="开始时间"
-                  end-placeholder="结束时间"
-                  format="YYYY-MM-DD HH:mm:ss"
-                  value-format="YYYY-MM-DD HH:mm:ss"
-                />
-              </el-form-item>
-              <el-form-item>
-                <el-button type="primary" @click="handleGenerateReport">生成报告</el-button>
-              </el-form-item>
+            <el-form :inline="!isMobile" class="report-form" :label-position="isMobile ? 'top' : 'left'">
+              <el-row :gutter="isMobile ? 10 : 20">
+                <el-col :xs="12" :sm="6">
+                  <el-form-item label="类型">
+                    <el-select v-model="reportType" placeholder="选择" style="width: 100%">
+                      <el-option label="日报" value="daily" />
+                      <el-option label="周报" value="weekly" />
+                      <el-option label="月报" value="monthly" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="12" :sm="6">
+                  <el-form-item label="管理员">
+                    <el-select v-model="reportAdminId" placeholder="全部" clearable filterable style="width: 100%">
+                      <el-option 
+                        v-for="admin in adminList" 
+                        :key="admin.id" 
+                        :label="admin.name" 
+                        :value="admin.id" 
+                      />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="8">
+                  <el-form-item label="时间范围">
+                    <el-date-picker
+                      v-model="reportDateRange"
+                      type="datetimerange"
+                      range-separator="-"
+                      start-placeholder="开始"
+                      end-placeholder="结束"
+                      format="YYYY-MM-DD"
+                      value-format="YYYY-MM-DD HH:mm:ss"
+                      style="width: 100%"
+                    />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="4">
+                  <el-form-item label-width="0">
+                    <el-button type="primary" @click="handleGenerateReport" :style="isMobile ? 'width: 100%' : ''">
+                      <el-icon><DataAnalysis /></el-icon>{{ isMobile ? '生成' : '生成报告' }}
+                    </el-button>
+                  </el-form-item>
+                </el-col>
+              </el-row>
             </el-form>
             
             <div v-if="reportData" class="report-content">
-              <el-row :gutter="20">
-                <el-col :span="12">
-                  <el-card>
-                    <div ref="behaviorChartRef" style="height: 300px;"></div>
+              <el-row :gutter="isMobile ? 10 : 20">
+                <el-col :xs="24" :sm="12" style="margin-bottom: 20px;">
+                  <el-card shadow="hover">
+                    <div ref="behaviorChartRef" :style="{ height: isMobile ? '250px' : '300px' }"></div>
                   </el-card>
                 </el-col>
-                <el-col :span="12">
-                  <el-card>
-                    <div ref="riskChartRef" style="height: 300px;"></div>
+                <el-col :xs="24" :sm="12" style="margin-bottom: 20px;">
+                  <el-card shadow="hover">
+                    <div ref="riskChartRef" :style="{ height: isMobile ? '250px' : '300px' }"></div>
                   </el-card>
                 </el-col>
               </el-row>
               
-              <el-card style="margin-top: 20px;">
-                <h3>操作统计详情</h3>
-                <el-table :data="reportData.operationStats" style="width: 100%">
+              <el-card style="margin-top: 20px;" shadow="hover">
+                <template #header>
+                  <div class="card-header">
+                    <span>操作统计详情</span>
+                  </div>
+                </template>
+                <el-table :data="reportData.operationStats" style="width: 100%" :size="isMobile ? 'small' : 'default'">
                   <el-table-column prop="adminName" label="管理员" />
-                  <el-table-column prop="totalOperations" label="总操作数" />
-                  <el-table-column prop="normalOperations" label="正常操作" />
-                  <el-table-column prop="abnormalOperations" label="异常操作" />
-                  <el-table-column prop="complianceRate" label="合规率">
+                  <el-table-column prop="totalOperations" label="总数" width="80" />
+                  <el-table-column prop="normalOperations" label="正常" width="80" v-if="!isMobile" />
+                  <el-table-column prop="abnormalOperations" label="异常" width="80" />
+                  <el-table-column prop="complianceRate" label="合规率" width="100">
                     <template #default="scope">
                       {{ scope.row.complianceRate }}%
                     </template>
@@ -397,27 +498,26 @@
     </el-card>
     
     <!-- 行为详情对话框 -->
-    <el-dialog v-model="detailDialogVisible" title="行为详情" width="700px">
-      <el-descriptions :column="2" border>
+    <el-dialog v-model="detailDialogVisible" title="行为详情" :width="isMobile ? '95%' : '700px'" :fullscreen="isMobile">
+      <el-descriptions :column="isMobile ? 1 : 2" border :size="isMobile ? 'small' : 'default'">
         <el-descriptions-item label="行为ID">{{ detailData.id }}</el-descriptions-item>
         <el-descriptions-item label="管理员">{{ detailData.adminName }}</el-descriptions-item>
-        <el-descriptions-item label="行为类型">{{ getBehaviorTypeText(detailData.behaviorType) }}</el-descriptions-item>
-        <el-descriptions-item label="风险等级">
-          <el-tag :type="getRiskLevelTagType(detailData.riskLevel)">
+        <el-descriptions-item label="类型">{{ getBehaviorTypeText(detailData.behaviorType) }}</el-descriptions-item>
+        <el-descriptions-item label="风险">
+          <el-tag :type="getRiskLevelTagType(detailData.riskLevel)" size="small">
             {{ getRiskLevelText(detailData.riskLevel) }}
           </el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="行为描述" :span="2">{{ detailData.description }}</el-descriptions-item>
-        <el-descriptions-item label="请求参数" :span="2">
+        <el-descriptions-item label="描述" :span="isMobile ? 1 : 2">{{ detailData.description }}</el-descriptions-item>
+        <el-descriptions-item label="请求参数" :span="isMobile ? 1 : 2">
           <pre class="code-block">{{ detailData.requestParams }}</pre>
         </el-descriptions-item>
-        <el-descriptions-item label="响应结果" :span="2">
+        <el-descriptions-item label="响应结果" :span="isMobile ? 1 : 2">
           <pre class="code-block">{{ detailData.responseResult }}</pre>
         </el-descriptions-item>
         <el-descriptions-item label="IP地址">{{ detailData.ipAddress }}</el-descriptions-item>
-        <el-descriptions-item label="浏览器">{{ detailData.browser }}</el-descriptions-item>
-        <el-descriptions-item label="操作系统">{{ detailData.os }}</el-descriptions-item>
-        <el-descriptions-item label="行为时间">{{ detailData.behaviorTime }}</el-descriptions-item>
+        <el-descriptions-item label="浏览器" v-if="!isMobile">{{ detailData.browser }}</el-descriptions-item>
+        <el-descriptions-item label="时间">{{ detailData.behaviorTime }}</el-descriptions-item>
         <el-descriptions-item label="耗时">{{ detailData.duration }}ms</el-descriptions-item>
       </el-descriptions>
       
@@ -436,28 +536,28 @@
     </el-dialog>
     
     <!-- 告警详情对话框 -->
-    <el-dialog v-model="alertDialogVisible" title="告警详情" width="600px">
-      <el-descriptions :column="2" border>
+    <el-dialog v-model="alertDialogVisible" title="告警详情" :width="isMobile ? '95%' : '600px'" :fullscreen="isMobile">
+      <el-descriptions :column="isMobile ? 1 : 2" border :size="isMobile ? 'small' : 'default'">
         <el-descriptions-item label="告警ID">{{ alertDetail.id }}</el-descriptions-item>
         <el-descriptions-item label="管理员">{{ alertDetail.adminName }}</el-descriptions-item>
-        <el-descriptions-item label="告警类型">
-          <el-tag :type="getAlertTypeTagType(alertDetail.alertType)">
+        <el-descriptions-item label="类型">
+          <el-tag :type="getAlertTypeTagType(alertDetail.alertType)" size="small">
             {{ getAlertTypeText(alertDetail.alertType) }}
           </el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="风险等级">
-          <el-tag :type="getRiskLevelTagType(alertDetail.level)">
+        <el-descriptions-item label="风险">
+          <el-tag :type="getRiskLevelTagType(alertDetail.level)" size="small">
             {{ getRiskLevelText(alertDetail.level) }}
           </el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="告警描述" :span="2">{{ alertDetail.description }}</el-descriptions-item>
-        <el-descriptions-item label="相关行为ID">{{ alertDetail.behaviorId }}</el-descriptions-item>
+        <el-descriptions-item label="描述" :span="isMobile ? 1 : 2">{{ alertDetail.description }}</el-descriptions-item>
+        <el-descriptions-item label="行为ID">{{ alertDetail.behaviorId }}</el-descriptions-item>
         <el-descriptions-item label="状态">
-          <el-tag :type="alertDetail.status === 'handled' ? 'success' : 'danger'">
+          <el-tag :type="alertDetail.status === 'handled' ? 'success' : 'danger'" size="small">
             {{ alertDetail.status === 'handled' ? '已处理' : '待处理' }}
           </el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="告警时间" :span="2">{{ alertDetail.createTime }}</el-descriptions-item>
+        <el-descriptions-item label="时间" :span="isMobile ? 1 : 2">{{ alertDetail.createTime }}</el-descriptions-item>
       </el-descriptions>
       
       <template #footer>
@@ -479,12 +579,18 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { User, Warning, Check, DataLine, Download, Refresh, Bell } from '@element-plus/icons-vue'
+import { User, Warning, Check, DataLine, Download, Refresh, Bell, Search, RefreshRight, Filter, More, DataAnalysis } from '@element-plus/icons-vue'
 import { adminBehaviorApi } from '@/api/adminBehavior'
 import * as echarts from 'echarts'
 
 // 响应式数据
-const stats = ref({
+const isMobile = ref(false)
+const showMoreFilters = ref(false)
+
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
+  const stats = ref({
   totalAdmins: 0,
   abnormalBehaviors: 0,
   complianceRate: 0,
@@ -1057,24 +1163,33 @@ const renderCharts = () => {
   
   // 渲染行为类型分布图
   if (behaviorChartRef.value) {
+    if (behaviorChart) behaviorChart.dispose()
     behaviorChart = echarts.init(behaviorChartRef.value)
     const behaviorOption = {
       title: {
         text: '行为类型分布',
-        left: 'center'
+        left: 'center',
+        textStyle: {
+          fontSize: isMobile.value ? 14 : 18
+        }
       },
       tooltip: {
         trigger: 'item'
       },
       legend: {
-        orient: 'vertical',
-        left: 'left'
+        orient: isMobile.value ? 'horizontal' : 'vertical',
+        bottom: isMobile.value ? 0 : 'auto',
+        left: isMobile.value ? 'center' : 'left',
+        textStyle: {
+          fontSize: isMobile.value ? 10 : 12
+        }
       },
       series: [
         {
           name: '行为类型',
           type: 'pie',
-          radius: '50%',
+          radius: isMobile.value ? ['35%', '60%'] : '50%',
+          center: isMobile.value ? ['50%', '45%'] : ['50%', '55%'],
           data: reportData.value.behaviorTypeStats || [],
           emphasis: {
             itemStyle: {
@@ -1091,11 +1206,21 @@ const renderCharts = () => {
   
   // 渲染风险等级分布图
   if (riskChartRef.value) {
+    if (riskChart) riskChart.dispose()
     riskChart = echarts.init(riskChartRef.value)
     const riskOption = {
       title: {
         text: '风险等级分布',
-        left: 'center'
+        left: 'center',
+        textStyle: {
+          fontSize: isMobile.value ? 14 : 18
+        }
+      },
+      grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '3%',
+        containLabel: true
       },
       tooltip: {
         trigger: 'axis',
@@ -1105,16 +1230,29 @@ const renderCharts = () => {
       },
       xAxis: {
         type: 'category',
-        data: ['低风险', '中风险', '高风险']
+        data: ['低风险', '中风险', '高风险'],
+        axisLabel: {
+          fontSize: isMobile.value ? 10 : 12
+        }
       },
       yAxis: {
-        type: 'value'
+        type: 'value',
+        axisLabel: {
+          fontSize: isMobile.value ? 10 : 12
+        }
       },
       series: [
         {
           name: '操作数量',
           type: 'bar',
-          data: reportData.value.riskLevelStats || []
+          barWidth: isMobile.value ? '40%' : '60%',
+          data: reportData.value.riskLevelStats || [],
+          itemStyle: {
+            color: (params: any) => {
+              const colors = ['#67C23A', '#E6A23C', '#F56C6C']
+              return colors[params.dataIndex]
+            }
+          }
         }
       ]
     }
@@ -1134,9 +1272,22 @@ const handleCurrentChange = (val: number) => {
   fetchBehaviorList()
 }
 
+// 监听窗口大小变化以重绘图表
+const handleResize = () => {
+  checkMobile()
+  if (behaviorChart) {
+    behaviorChart.resize()
+  }
+  if (riskChart) {
+    riskChart.resize()
+  }
+}
+
 // 组件挂载
 onMounted(async () => {
   console.log('👮 管理员行为监督页面加载完成')
+  checkMobile()
+  window.addEventListener('resize', handleResize)
   
   // 初始化数据
   await Promise.all([
@@ -1156,6 +1307,7 @@ onMounted(async () => {
 // 组件卸载
 onUnmounted(() => {
   stopAutoRefresh()
+  window.removeEventListener('resize', handleResize)
   
   // 销毁图表实例
   if (behaviorChart) {
@@ -1329,6 +1481,12 @@ onUnmounted(() => {
 
 /* 响应式设计 */
 @media (max-width: 768px) {
+  .card-header.is-mobile {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
   .stat-item {
     flex-direction: column;
     text-align: center;
@@ -1340,14 +1498,57 @@ onUnmounted(() => {
   }
   
   .header-actions {
-    flex-direction: column;
+    width: 100%;
+    justify-content: flex-start;
     gap: 5px;
+  }
+
+  .header-actions .el-button {
+    flex: 1;
   }
   
   .monitor-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 10px;
+  }
+
+  .mobile-tabs :deep(.el-tabs__header) {
+    margin-bottom: 10px;
+  }
+
+  .mobile-tabs :deep(.el-tabs__nav) {
+    width: 100%;
+    display: flex;
+  }
+
+  .mobile-tabs :deep(.el-tabs__item) {
+    flex: 1;
+    text-align: center;
+    padding: 0 5px !important;
+    font-size: 12px;
+  }
+
+  .track-form, .report-form {
+    padding: 10px;
+  }
+
+  .track-timeline :deep(.el-card__body) {
+    padding: 10px;
+  }
+
+  .track-timeline h4 {
+    font-size: 14px;
+    margin-bottom: 5px;
+  }
+
+  .track-timeline p {
+    font-size: 12px !important;
+  }
+
+  .code-block {
+    font-size: 11px;
+    max-height: 150px;
   }
 }
 </style>

@@ -93,6 +93,11 @@ class AdminAuthService {
       }
 
       // 5. 验证密码
+      logger.debug('[AdminAuthService] 验证密码', { 
+        inputPassword: password, 
+        hashInDb: user.passwordHash,
+        match: await bcrypt.compare(password, user.passwordHash)
+      });
       const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
       if (!isPasswordValid) {
         return this.handleFailedLogin(username, '密码错误');

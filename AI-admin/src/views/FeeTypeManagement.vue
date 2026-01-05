@@ -1,102 +1,113 @@
 <template>
-  <div class="fee-type-management-container">
+  <div class="fee-type-management-container" :class="{ 'is-mobile': isMobile }">
     <el-card>
       <template #header>
-        <div class="card-header">
-          <span>费用类型管理</span>
-          <div>
-            <el-button @click="handleImport">导入</el-button>
-            <el-button @click="handleExport">导出</el-button>
-            <el-button type="primary" @click="handleAdd">新增费用类型</el-button>
+        <div class="card-header" :class="{ 'is-mobile': isMobile }">
+          <span class="title">费用类型管理</span>
+          <div class="header-actions">
+            <el-button @click="handleImport">{{ isMobile ? '导入' : '导入' }}</el-button>
+            <el-button @click="handleExport">{{ isMobile ? '导出' : '导出' }}</el-button>
+            <el-button type="primary" @click="handleAdd">{{ isMobile ? '新增' : '新增费用类型' }}</el-button>
           </div>
         </div>
       </template>
       
       <!-- 搜索和筛选 -->
-      <div class="search-bar">
-        <el-form :model="searchForm" label-width="80px" inline>
-          <el-form-item label="费用类型名称">
-            <el-input v-model="searchForm.name" placeholder="请输入费用类型名称" clearable />
-          </el-form-item>
-          
-          <el-form-item label="状态">
-            <el-select v-model="searchForm.status" placeholder="请选择状态" clearable>
-              <el-option label="启用" value="enabled" />
-              <el-option label="禁用" value="disabled" />
-            </el-select>
-          </el-form-item>
-          
-          <el-form-item>
-            <el-button type="primary" @click="handleSearch">查询</el-button>
-            <el-button @click="handleReset">重置</el-button>
-          </el-form-item>
+      <div class="search-bar" :class="{ 'is-mobile': isMobile }">
+        <el-form :model="searchForm" :label-width="isMobile ? '70px' : '100px'" :inline="!isMobile" class="responsive-form">
+          <el-row :gutter="isMobile ? 0 : 20">
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-form-item label="名称">
+                <el-input v-model="searchForm.name" placeholder="请输入名称" clearable style="width: 100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-form-item label="状态">
+                <el-select v-model="searchForm.status" placeholder="请选择状态" clearable style="width: 100%">
+                  <el-option label="启用" value="enabled" />
+                  <el-option label="禁用" value="disabled" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="24" :md="8">
+              <el-form-item class="form-buttons">
+                <el-button type="primary" @click="handleSearch">查询</el-button>
+                <el-button @click="handleReset">重置</el-button>
+              </el-form-item>
+            </el-col>
+          </el-row>
         </el-form>
       </div>
       
       <!-- 费用类型表格 -->
-      <el-table 
-        :data="tableData" 
-        style="width: 100%" 
-        v-loading="loading"
-        @sort-change="handleSortChange"
-      >
-        <el-table-column prop="id" label="ID" width="80" sortable="custom" />
-        <el-table-column prop="name" label="费用类型名称" />
-        <el-table-column prop="code" label="费用类型编码" />
-        <el-table-column prop="description" label="描述" />
-        <el-table-column prop="defaultAmount" label="默认金额(元)" sortable="custom" />
-        <el-table-column prop="billingCycle" label="计费周期">
-          <template #default="scope">
-            {{ getBillingCycleText(scope.row.billingCycle) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="allocationRule" label="默认分摊规则">
-          <template #default="scope">
-            {{ getAllocationRuleText(scope.row.allocationRule) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="usageCount" label="使用次数" sortable="custom" />
-        <el-table-column prop="sortOrder" label="显示顺序" width="120">
-          <template #default="scope">
-            <el-input-number 
-              v-model="scope.row.sortOrder" 
-              :min="1" 
-              :max="999" 
-              size="small" 
-              @change="handleSortOrderChange(scope.row)"
-            />
-          </template>
-        </el-table-column>
-        <el-table-column prop="status" label="状态" width="100">
-          <template #default="scope">
-            <el-switch
-              v-model="scope.row.status"
-              active-value="enabled"
-              inactive-value="disabled"
-              @change="handleStatusChange(scope.row)"
-            />
-            <el-tag :type="scope.row.status === 'enabled' ? 'success' : 'danger'" style="margin-left: 10px;">
-              {{ scope.row.status === 'enabled' ? '启用' : '禁用' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="250">
-          <template #default="scope">
-            <el-button size="small" @click="handleView(scope.row)">查看</el-button>
-            <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
-            <el-button size="small" type="primary" @click="handleAnalyze(scope.row)">统计</el-button>
-            <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <div class="table-container mobile-scroll">
+        <el-table 
+          :data="tableData" 
+          style="width: 100%" 
+          v-loading="loading"
+          @sort-change="handleSortChange"
+          :size="isMobile ? 'small' : 'default'"
+        >
+          <el-table-column prop="id" label="ID" width="70" sortable="custom" v-if="!isMobile" />
+          <el-table-column prop="name" label="名称" min-width="120" show-overflow-tooltip />
+          <el-table-column prop="code" label="编码" min-width="120" v-if="!isMobile" />
+          <el-table-column prop="defaultAmount" label="默认金额" width="100" sortable="custom">
+            <template #default="scope">
+              ¥{{ scope.row.defaultAmount }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="status" label="状态" width="140">
+            <template #default="scope">
+              <div class="status-cell">
+                <el-switch
+                  v-model="scope.row.status"
+                  active-value="enabled"
+                  inactive-value="disabled"
+                  @change="handleStatusChange(scope.row)"
+                  size="small"
+                />
+                <el-tag :type="scope.row.status === 'enabled' ? 'success' : 'danger'" size="small" style="margin-left: 8px;">
+                  {{ scope.row.status === 'enabled' ? '启用' : '禁用' }}
+                </el-tag>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" :width="isMobile ? 120 : 250" fixed="right">
+            <template #default="scope">
+              <template v-if="isMobile">
+                <el-dropdown trigger="click">
+                  <el-button type="primary" size="small" text>
+                    操作<el-icon class="el-icon--right"><arrow-down /></el-icon>
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item @click="handleView(scope.row)">查看</el-dropdown-item>
+                      <el-dropdown-item @click="handleEdit(scope.row)">编辑</el-dropdown-item>
+                      <el-dropdown-item @click="handleAnalyze(scope.row)">统计</el-dropdown-item>
+                      <el-dropdown-item divided @click="handleDelete(scope.row)" style="color: #f56c6c">删除</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </template>
+              <template v-else>
+                <el-button size="small" @click="handleView(scope.row)" text>查看</el-button>
+                <el-button size="small" @click="handleEdit(scope.row)" text>编辑</el-button>
+                <el-button size="small" type="primary" @click="handleAnalyze(scope.row)" text>统计</el-button>
+                <el-button size="small" type="danger" @click="handleDelete(scope.row)" text>删除</el-button>
+              </template>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
       
       <div class="pagination-container">
         <el-pagination
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
           :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
+          :layout="isMobile ? 'prev, pager, next' : 'total, sizes, prev, pager, next, jumper'"
           :total="total"
+          :small="isMobile"
           @size-change="handleSizeChange"
           @current-change="handleCurrentChange"
         />
@@ -104,17 +115,22 @@
     </el-card>
     
     <!-- 新增/编辑对话框 -->
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="700px">
-      <el-form :model="formData" :rules="formRules" ref="formRef" label-width="120px">
-        <el-form-item label="费用类型名称" prop="name">
+    <el-dialog 
+      v-model="dialogVisible" 
+      :title="dialogTitle" 
+      :width="isMobile ? '95%' : '700px'"
+      :fullscreen="isMobile"
+    >
+      <el-form :model="formData" :rules="formRules" ref="formRef" :label-width="isMobile ? '80px' : '120px'">
+        <el-form-item label="名称" prop="name">
           <el-input v-model="formData.name" placeholder="请输入费用类型名称" />
         </el-form-item>
         
-        <el-form-item label="费用类型编码" prop="code">
+        <el-form-item label="编码" prop="code">
           <el-input v-model="formData.code" placeholder="请输入费用类型编码" />
         </el-form-item>
         
-        <el-form-item label="默认金额(元)" prop="defaultAmount">
+        <el-form-item label="默认金额" prop="defaultAmount">
           <el-input-number 
             v-model="formData.defaultAmount" 
             :min="0" 
@@ -134,7 +150,7 @@
           </el-select>
         </el-form-item>
         
-        <el-form-item label="默认分摊规则" prop="allocationRule">
+        <el-form-item label="分摊规则" prop="allocationRule">
           <el-select v-model="formData.allocationRule" placeholder="请选择默认分摊规则" style="width: 100%;">
             <el-option label="按人平均分摊" value="average" />
             <el-option label="按寝室分摊" value="dormitory" />
@@ -142,7 +158,7 @@
           </el-select>
         </el-form-item>
         
-        <el-form-item label="显示顺序" prop="sortOrder">
+        <el-form-item label="排序" prop="sortOrder">
           <el-input-number 
             v-model="formData.sortOrder" 
             :min="1" 
@@ -178,13 +194,18 @@
     </el-dialog>
     
     <!-- 查看详情对话框 -->
-    <el-dialog v-model="detailDialogVisible" title="费用类型详情" width="700px">
-      <el-descriptions :column="2" border>
-        <el-descriptions-item label="费用类型名称">{{ detailData.name }}</el-descriptions-item>
-        <el-descriptions-item label="费用类型编码">{{ detailData.code }}</el-descriptions-item>
+    <el-dialog 
+      v-model="detailDialogVisible" 
+      title="费用类型详情" 
+      :width="isMobile ? '95%' : '700px'"
+      :fullscreen="isMobile"
+    >
+      <el-descriptions :column="isMobile ? 1 : 2" border>
+        <el-descriptions-item label="名称">{{ detailData.name }}</el-descriptions-item>
+        <el-descriptions-item label="编码">{{ detailData.code }}</el-descriptions-item>
         <el-descriptions-item label="默认金额">{{ detailData.defaultAmount }} 元</el-descriptions-item>
         <el-descriptions-item label="计费周期">{{ getBillingCycleText(detailData.billingCycle) }}</el-descriptions-item>
-        <el-descriptions-item label="默认分摊规则">{{ getAllocationRuleText(detailData.allocationRule) }}</el-descriptions-item>
+        <el-descriptions-item label="分摊规则">{{ getAllocationRuleText(detailData.allocationRule) }}</el-descriptions-item>
         <el-descriptions-item label="显示顺序">{{ detailData.sortOrder }}</el-descriptions-item>
         <el-descriptions-item label="使用次数">{{ detailData.usageCount }}</el-descriptions-item>
         <el-descriptions-item label="状态">
@@ -192,14 +213,14 @@
             {{ detailData.status === 'enabled' ? '启用' : '禁用' }}
           </el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="创建时间" :span="2">{{ detailData.createTime }}</el-descriptions-item>
-        <el-descriptions-item label="描述" :span="2">{{ detailData.description }}</el-descriptions-item>
+        <el-descriptions-item label="创建时间" :span="isMobile ? 1 : 2">{{ detailData.createTime }}</el-descriptions-item>
+        <el-descriptions-item label="描述" :span="isMobile ? 1 : 2">{{ detailData.description }}</el-descriptions-item>
       </el-descriptions>
       
       <!-- 使用统计图表 -->
       <el-divider />
       <h3>使用统计</h3>
-      <div ref="usageChartRef" style="height: 300px;"></div>
+      <div ref="usageChartRef" :style="{ height: isMobile ? '250px' : '300px' }"></div>
       
       <template #footer>
         <span class="dialog-footer">
@@ -209,7 +230,11 @@
     </el-dialog>
     
     <!-- 导入对话框 -->
-    <el-dialog v-model="importDialogVisible" title="导入费用类型" width="500px">
+    <el-dialog 
+      v-model="importDialogVisible" 
+      title="导入费用类型" 
+      :width="isMobile ? '95%' : '500px'"
+    >
       <el-upload
         class="upload-demo"
         drag
@@ -240,13 +265,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { UploadFilled } from '@element-plus/icons-vue'
+import { UploadFilled, ArrowDown } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 
 // 导入统一验证规则库
 import { commonRules, businessRules } from '@/utils/validationRules'
+
+// 响应式布局
+const isMobile = ref(false)
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
 
 // 图表引用
 const usageChartRef = ref()
@@ -634,15 +665,22 @@ const submitImport = () => {
 
 // 组件挂载
 onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', handleResize)
   console.log('💰 费用类型管理页面加载完成')
 })
 
-// 监听窗口大小变化，重新渲染图表
-window.addEventListener('resize', () => {
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+})
+
+// 统一处理窗口大小变化
+const handleResize = () => {
+  checkMobile()
   if (usageChart) {
     usageChart.resize()
   }
-})
+}
 
 /**
  * 费用类型管理页面
@@ -673,5 +711,73 @@ window.addEventListener('resize', () => {
 
 .upload-demo {
   width: 100%;
+}
+
+/* 响应式样式 */
+.card-header.is-mobile {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.card-header.is-mobile .header-actions {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+}
+
+.card-header.is-mobile .header-actions .el-button {
+  flex: 1;
+  margin-left: 0;
+  margin-right: 8px;
+}
+
+.card-header.is-mobile .header-actions .el-button:last-child {
+  margin-right: 0;
+}
+
+.search-bar.is-mobile {
+  margin-bottom: 15px;
+}
+
+.responsive-form :deep(.el-form-item) {
+  margin-bottom: 12px;
+}
+
+.is-mobile .form-buttons {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.is-mobile .form-buttons .el-button {
+  flex: 1;
+}
+
+.mobile-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.status-cell {
+  display: flex;
+  align-items: center;
+}
+
+:deep(.el-dialog.is-fullscreen) {
+  display: flex;
+  flex-direction: column;
+}
+
+:deep(.el-dialog.is-fullscreen .el-dialog__body) {
+  flex: 1;
+  overflow-y: auto;
+  padding: 15px;
+}
+
+@media (max-width: 768px) {
+  .el-descriptions {
+    padding: 0;
+  }
 }
 </style>

@@ -43,7 +43,10 @@ const adminAuthMiddleware = async (req, res, next) => {
 
     const decoded = result.data;
     // 验证用户是否为管理员
-    if (!decoded.role || !decoded.role.includes('admin')) {
+    const userRoles = Array.isArray(decoded.role) ? decoded.role : [decoded.role];
+    const isAdmin = userRoles.some(role => role === 'admin' || role === 'system_admin');
+    
+    if (!isAdmin) {
       logger.security(req, '管理员认证失败', { 
         reason: '用户不是管理员',
         userId: decoded.userId,

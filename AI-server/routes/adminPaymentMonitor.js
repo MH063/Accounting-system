@@ -83,6 +83,13 @@ router.get('/charts/success-rate', adminPaymentMonitorController.getSuccessRateC
 router.get('/charts/time-distribution', adminPaymentMonitorController.getTimeDistributionChartData);
 
 /**
+ * @route   GET /api/admin/payments/monitor/realtime
+ * @desc    获取实时监控数据 (SSE)
+ * @access  Admin
+ */
+router.get('/realtime', adminPaymentMonitorController.getRealtimeMonitorStream);
+
+/**
  * @route   GET /api/admin/payments/monitor/export
  * @desc    导出支付记录
  * @access  Admin

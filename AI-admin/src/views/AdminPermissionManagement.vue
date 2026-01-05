@@ -2,75 +2,75 @@
   <div class="admin-permission-management-container">
     <el-card>
       <template #header>
-        <div class="card-header">
+        <div class="card-header" :class="{ 'is-mobile': isMobile }">
           <span>管理员权限管理</span>
           <div class="header-actions">
-            <el-button type="success" @click="handleExport" :loading="exportLoading">
-              <el-icon><Download /></el-icon>导出记录
+            <el-button type="success" @click="handleExport" :loading="exportLoading" :size="isMobile ? 'small' : 'default'">
+              <el-icon><Download /></el-icon>{{ isMobile ? '' : '导出记录' }}
             </el-button>
-            <el-button type="primary" @click="handleCreateAdmin" :loading="loading">
-              <el-icon><Plus /></el-icon>创建管理员
+            <el-button type="primary" @click="handleCreateAdmin" :loading="loading" :size="isMobile ? 'small' : 'default'">
+              <el-icon><Plus /></el-icon>{{ isMobile ? '' : '创建管理员' }}
             </el-button>
-            <el-button @click="handleRefresh" :loading="refreshLoading">
-              <el-icon><Refresh /></el-icon>刷新
+            <el-button @click="handleRefresh" :loading="refreshLoading" :size="isMobile ? 'small' : 'default'">
+              <el-icon><Refresh /></el-icon>{{ isMobile ? '' : '刷新' }}
             </el-button>
           </div>
         </div>
       </template>
       
       <!-- 权限统计 -->
-      <el-row :gutter="20" style="margin-bottom: 20px;">
-        <el-col :span="6">
+      <el-row :gutter="isMobile ? 10 : 20" style="margin-bottom: 20px;">
+        <el-col :xs="24" :sm="12" :md="6" style="margin-bottom: 10px;">
           <el-card class="stat-card">
             <div class="stat-item">
               <div class="stat-icon bg-primary">
-                <el-icon size="24"><User /></el-icon>
+                <el-icon :size="isMobile ? 20 : 24"><User /></el-icon>
               </div>
               <div class="stat-content">
                 <div class="stat-title">管理员总数</div>
-                <div class="stat-value">{{ stats.totalAdmins }}</div>
+                <div class="stat-value" :style="isMobile ? 'font-size: 20px;' : ''">{{ stats.totalAdmins }}</div>
               </div>
             </div>
           </el-card>
         </el-col>
         
-        <el-col :span="6">
+        <el-col :xs="24" :sm="12" :md="6" style="margin-bottom: 10px;">
           <el-card class="stat-card">
             <div class="stat-item">
               <div class="stat-icon bg-success">
-                <el-icon size="24"><Check /></el-icon>
+                <el-icon :size="isMobile ? 20 : 24"><Check /></el-icon>
               </div>
               <div class="stat-content">
                 <div class="stat-title">活跃管理员</div>
-                <div class="stat-value">{{ stats.activeAdmins }}</div>
+                <div class="stat-value" :style="isMobile ? 'font-size: 20px;' : ''">{{ stats.activeAdmins }}</div>
               </div>
             </div>
           </el-card>
         </el-col>
         
-        <el-col :span="6">
+        <el-col :xs="24" :sm="12" :md="6" style="margin-bottom: 10px;">
           <el-card class="stat-card">
             <div class="stat-item">
               <div class="stat-icon bg-warning">
-                <el-icon size="24"><Warning /></el-icon>
+                <el-icon :size="isMobile ? 20 : 24"><Warning /></el-icon>
               </div>
               <div class="stat-content">
                 <div class="stat-title">待审批申请</div>
-                <div class="stat-value">{{ stats.pendingApprovals }}</div>
+                <div class="stat-value" :style="isMobile ? 'font-size: 20px;' : ''">{{ stats.pendingApprovals }}</div>
               </div>
             </div>
           </el-card>
         </el-col>
         
-        <el-col :span="6">
+        <el-col :xs="24" :sm="12" :md="6" style="margin-bottom: 10px;">
           <el-card class="stat-card">
             <div class="stat-item">
               <div class="stat-icon bg-info">
-                <el-icon size="24"><DataLine /></el-icon>
+                <el-icon :size="isMobile ? 20 : 24"><DataLine /></el-icon>
               </div>
               <div class="stat-content">
                 <div class="stat-title">权限变更次数</div>
-                <div class="stat-value">{{ stats.permissionChanges }}</div>
+                <div class="stat-value" :style="isMobile ? 'font-size: 20px;' : ''">{{ stats.permissionChanges }}</div>
               </div>
             </div>
           </el-card>
@@ -81,77 +81,89 @@
       <el-tabs v-model="activeTab" @tab-change="handleTabChange">
         <!-- 管理员账户管理 -->
         <el-tab-pane label="管理员账户" name="admins">
-          <div class="search-bar">
-            <el-form :model="adminSearchForm" label-width="80px" inline>
-              <el-form-item label="关键字">
-                <el-input v-model="adminSearchForm.keyword" placeholder="用户名/姓名/邮箱" clearable />
-              </el-form-item>
-              
-              <el-form-item label="状态">
-                <el-select v-model="adminSearchForm.status" placeholder="请选择状态" clearable>
-                  <el-option label="活跃" value="active" />
-                  <el-option label="未激活" value="inactive" />
-                  <el-option label="锁定" value="locked" />
-                  <el-option label="待审核" value="pending" />
-                </el-select>
-              </el-form-item>
-              
-              <el-form-item>
-                <el-button type="primary" @click="handleAdminSearch">查询</el-button>
-                <el-button @click="handleAdminReset">重置</el-button>
-              </el-form-item>
+          <div class="search-bar" :class="{ 'is-mobile': isMobile }">
+            <el-form :model="adminSearchForm" :label-width="isMobile ? '70px' : '80px'" :label-position="isMobile ? 'top' : 'right'" :inline="!isMobile">
+              <el-row :gutter="10">
+                <el-col :xs="24" :sm="10">
+                  <el-form-item label="关键字">
+                    <el-input v-model="adminSearchForm.keyword" placeholder="用户名/姓名/邮箱" clearable />
+                  </el-form-item>
+                </el-col>
+                
+                <el-col :xs="24" :sm="10" v-if="!isMobile || showMoreFilters">
+                  <el-form-item label="状态">
+                    <el-select v-model="adminSearchForm.status" placeholder="请选择状态" clearable style="width: 100%">
+                      <el-option label="活跃" value="active" />
+                      <el-option label="未激活" value="inactive" />
+                      <el-option label="锁定" value="locked" />
+                      <el-option label="待审核" value="pending" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                
+                <el-col :xs="24" :sm="4">
+                  <el-form-item label-width="0">
+                    <el-button type="primary" @click="handleAdminSearch">查询</el-button>
+                    <el-button @click="handleAdminReset">重置</el-button>
+                    <el-button v-if="isMobile" type="primary" link @click="showMoreFilters = !showMoreFilters">
+                      {{ showMoreFilters ? '收起' : '更多' }}
+                    </el-button>
+                  </el-form-item>
+                </el-col>
+              </el-row>
             </el-form>
           </div>
           
-          <el-table :data="adminList" style="width: 100%" v-loading="loading">
-            <el-table-column prop="id" label="ID" width="80" />
-            <el-table-column prop="username" label="用户名">
+          <el-table :data="adminList" style="width: 100%" v-loading="loading" :size="isMobile ? 'small' : 'default'">
+            <el-table-column prop="id" label="ID" width="60" v-if="!isMobile" />
+            <el-table-column prop="username" label="用户名" min-width="120">
               <template #default="scope">
                 <span>{{ scope.row.username }}</span>
                 <el-tag v-if="scope.row.isSystemRole" size="small" type="info" effect="plain" style="margin-left: 8px;">系统角色</el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="realName" label="真实姓名" />
-            <el-table-column prop="email" label="邮箱" />
-            <el-table-column prop="phone" label="手机号" />
-            <el-table-column prop="roleNames" label="角色" width="200">
+            <el-table-column prop="realName" label="姓名" width="100" v-if="!isMobile" />
+            <el-table-column prop="status" label="状态" width="80">
               <template #default="scope">
-                <el-tag 
-                  v-for="roleName in scope.row.roleNames" 
-                  :key="roleName" 
-                  style="margin-right: 5px;"
-                >
-                  {{ roleName }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="status" label="状态" width="100">
-              <template #default="scope">
-                <el-tag 
-                  :type="getStatusType(scope.row.status)"
-                >
+                <el-tag :type="getStatusType(scope.row.status)" size="small">
                   {{ getStatusText(scope.row.status) }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="lastLoginTime" label="最后登录" width="160" />
-            <el-table-column label="操作" width="300">
+            <el-table-column prop="lastLoginTime" label="最后登录" width="160" v-if="!isMobile" />
+            <el-table-column label="操作" :width="isMobile ? 80 : 250" fixed="right">
               <template #default="scope">
-                <el-button size="small" @click="handleViewAdmin(scope.row)">查看</el-button>
-                <el-button size="small" @click="handleEditAdmin(scope.row)">编辑</el-button>
-                <el-button size="small" type="warning" @click="handleResetPassword(scope.row)">重置密码</el-button>
-                <el-dropdown @command="(command: string) => handleStatusCommand(command, scope.row)">
-                  <el-button size="small" type="info">
-                    状态<el-icon class="el-icon--right"><arrow-down /></el-icon>
+                <el-dropdown v-if="isMobile" trigger="click">
+                  <el-button size="small" type="primary" link>
+                    <el-icon><arrow-down /></el-icon>
                   </el-button>
                   <template #dropdown>
                     <el-dropdown-menu>
-                      <el-dropdown-item command="active">激活</el-dropdown-item>
-                      <el-dropdown-item command="inactive">禁用</el-dropdown-item>
-                      <el-dropdown-item command="locked">锁定</el-dropdown-item>
+                      <el-dropdown-item @click="handleViewAdmin(scope.row)">查看</el-dropdown-item>
+                      <el-dropdown-item @click="handleEditAdmin(scope.row)">编辑</el-dropdown-item>
+                      <el-dropdown-item @click="handleResetPassword(scope.row)">重置密码</el-dropdown-item>
+                      <el-dropdown-item divided @click="handleStatusCommand('active', scope.row)">激活</el-dropdown-item>
+                      <el-dropdown-item @click="handleStatusCommand('inactive', scope.row)">禁用</el-dropdown-item>
                     </el-dropdown-menu>
                   </template>
                 </el-dropdown>
+                <template v-else>
+                  <el-button size="small" link type="primary" @click="handleViewAdmin(scope.row)">查看</el-button>
+                  <el-button size="small" link type="primary" @click="handleEditAdmin(scope.row)">编辑</el-button>
+                  <el-dropdown @command="(command: string) => handleStatusCommand(command, scope.row)" style="margin-left: 10px;">
+                    <el-button size="small" type="primary" link>
+                      更多<el-icon class="el-icon--right"><arrow-down /></el-icon>
+                    </el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item @click="handleResetPassword(scope.row)">重置密码</el-dropdown-item>
+                        <el-dropdown-item command="active">激活</el-dropdown-item>
+                        <el-dropdown-item command="inactive">禁用</el-dropdown-item>
+                        <el-dropdown-item command="locked">锁定</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                </template>
               </template>
             </el-table-column>
           </el-table>
@@ -161,7 +173,7 @@
               v-model:current-page="adminCurrentPage"
               v-model:page-size="adminPageSize"
               :page-sizes="[10, 20, 50, 100]"
-              layout="total, sizes, prev, pager, next, jumper"
+              :layout="isMobile ? 'total, prev, next' : 'total, sizes, prev, pager, next, jumper'"
               :total="adminTotal"
               @size-change="handleAdminSizeChange"
               @current-change="handleAdminCurrentChange"
@@ -171,52 +183,73 @@
         
         <!-- 权限角色管理 -->
         <el-tab-pane label="权限角色" name="roles">
-          <div class="search-bar">
-            <el-form :model="roleSearchForm" label-width="80px" inline>
-              <el-form-item label="关键字">
-                <el-input v-model="roleSearchForm.keyword" placeholder="角色名称/描述" clearable />
-              </el-form-item>
-              
-              <el-form-item label="状态">
-                <el-select v-model="roleSearchForm.status" placeholder="请选择状态" clearable>
-                  <el-option label="启用" value="active" />
-                  <el-option label="禁用" value="inactive" />
-                </el-select>
-              </el-form-item>
-              
-              <el-form-item>
-                <el-button type="primary" @click="handleRoleSearch">查询</el-button>
-                <el-button @click="handleRoleReset">重置</el-button>
-                <el-button type="success" @click="handleCreateRole">新建角色</el-button>
-              </el-form-item>
+          <div class="search-bar" :class="{ 'is-mobile': isMobile }">
+            <el-form :model="roleSearchForm" :label-width="isMobile ? '70px' : '80px'" :label-position="isMobile ? 'top' : 'right'" :inline="!isMobile">
+              <el-row :gutter="10">
+                <el-col :xs="24" :sm="10">
+                  <el-form-item label="关键字">
+                    <el-input v-model="roleSearchForm.keyword" placeholder="角色名称/描述" clearable />
+                  </el-form-item>
+                </el-col>
+                
+                <el-col :xs="24" :sm="10" v-if="!isMobile || showMoreFilters">
+                  <el-form-item label="状态">
+                    <el-select v-model="roleSearchForm.status" placeholder="请选择状态" clearable style="width: 100%">
+                      <el-option label="启用" value="active" />
+                      <el-option label="禁用" value="inactive" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                
+                <el-col :xs="24" :sm="4">
+                  <el-form-item label-width="0">
+                    <el-button type="primary" @click="handleRoleSearch">查询</el-button>
+                    <el-button @click="handleRoleReset">重置</el-button>
+                    <el-button v-if="isMobile" type="primary" link @click="showMoreFilters = !showMoreFilters">
+                      {{ showMoreFilters ? '收起' : '更多' }}
+                    </el-button>
+                    <el-button type="success" @click="handleCreateRole" :size="isMobile ? 'small' : 'default'">新建</el-button>
+                  </el-form-item>
+                </el-col>
+              </el-row>
             </el-form>
           </div>
           
-          <el-table :data="roleList" style="width: 100%" v-loading="loading">
-            <el-table-column prop="id" label="ID" width="80" />
-            <el-table-column prop="name" label="角色名称">
-            <template #default="scope">
-              <span>{{ scope.row.name }}</span>
-              <el-tag v-if="scope.row.isSystemRole" size="small" type="info" effect="plain" style="margin-left: 8px;">系统角色</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="code" label="角色代码" />
-            <el-table-column prop="description" label="描述" />
-            <el-table-column prop="status" label="状态" width="100">
+          <el-table :data="roleList" style="width: 100%" v-loading="loading" :size="isMobile ? 'small' : 'default'">
+            <el-table-column prop="id" label="ID" width="60" v-if="!isMobile" />
+            <el-table-column prop="name" label="角色名称" min-width="120">
               <template #default="scope">
-                <el-tag 
-                  :type="scope.row.status === 'active' ? 'success' : 'danger'"
-                >
+                <span>{{ scope.row.name }}</span>
+                <el-tag v-if="scope.row.isSystemRole" size="small" type="info" effect="plain" style="margin-left: 8px;">系统</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="status" label="状态" width="80">
+              <template #default="scope">
+                <el-tag :type="scope.row.status === 'active' ? 'success' : 'danger'" size="small">
                   {{ scope.row.status === 'active' ? '启用' : '禁用' }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="createTime" label="创建时间" width="160" />
-            <el-table-column label="操作" width="250">
+            <el-table-column prop="createTime" label="创建时间" width="160" v-if="!isMobile" />
+            <el-table-column label="操作" :width="isMobile ? 80 : 200" fixed="right">
               <template #default="scope">
-                <el-button size="small" @click="handleViewRole(scope.row)">查看</el-button>
-                <el-button size="small" @click="handleEditRole(scope.row)">编辑</el-button>
-                <el-button size="small" type="danger" @click="handleDeleteRole(scope.row)">删除</el-button>
+                <el-dropdown v-if="isMobile" trigger="click">
+                  <el-button size="small" type="primary" link>
+                    <el-icon><arrow-down /></el-icon>
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item @click="handleViewRole(scope.row)">查看</el-dropdown-item>
+                      <el-dropdown-item @click="handleEditRole(scope.row)">编辑</el-dropdown-item>
+                      <el-dropdown-item divided @click="handleDeleteRole(scope.row)" style="color: var(--el-color-danger)">删除</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+                <template v-else>
+                  <el-button size="small" link type="primary" @click="handleViewRole(scope.row)">查看</el-button>
+                  <el-button size="small" link type="primary" @click="handleEditRole(scope.row)">编辑</el-button>
+                  <el-button size="small" link type="danger" @click="handleDeleteRole(scope.row)">删除</el-button>
+                </template>
               </template>
             </el-table-column>
           </el-table>
@@ -224,73 +257,86 @@
         
         <!-- 权限变更历史 -->
         <el-tab-pane label="权限变更历史" name="history">
-          <div class="search-bar">
-            <el-form :model="historySearchForm" label-width="80px" inline>
-              <el-form-item label="管理员">
-                <el-select v-model="historySearchForm.adminId" placeholder="请选择管理员" clearable filterable>
-                  <el-option 
-                    v-for="admin in adminList" 
-                    :key="admin.id" 
-                    :label="admin.realName" 
-                    :value="admin.id" 
-                  />
-                </el-select>
-              </el-form-item>
-              
-              <el-form-item label="变更类型">
-                <el-select v-model="historySearchForm.changeType" placeholder="请选择变更类型" clearable>
-                  <el-option label="创建管理员" value="create" />
-                  <el-option label="更新管理员" value="update" />
-                  <el-option label="删除管理员" value="delete" />
-                  <el-option label="状态变更" value="status_change" />
-                  <el-option label="密码重置" value="password_reset" />
-                  <el-option label="权限变更" value="permission_change" />
-                </el-select>
-              </el-form-item>
-              
-              <el-form-item label="时间范围">
-                <el-date-picker
-                  v-model="historySearchForm.dateRange"
-                  type="daterange"
-                  range-separator="至"
-                  start-placeholder="开始日期"
-                  end-placeholder="结束日期"
-                  format="YYYY-MM-DD"
-                  value-format="YYYY-MM-DD"
-                />
-              </el-form-item>
-              
-              <el-form-item>
-                <el-button type="primary" @click="handleHistorySearch">查询</el-button>
-                <el-button @click="handleHistoryReset">重置</el-button>
-              </el-form-item>
+          <div class="search-bar" :class="{ 'is-mobile': isMobile }">
+            <el-form :model="historySearchForm" :label-width="isMobile ? '70px' : '80px'" :label-position="isMobile ? 'top' : 'right'" :inline="!isMobile">
+              <el-row :gutter="10">
+                <el-col :xs="24" :sm="8">
+                  <el-form-item label="管理员">
+                    <el-select v-model="historySearchForm.adminId" placeholder="请选择管理员" clearable filterable style="width: 100%">
+                      <el-option 
+                        v-for="admin in adminList" 
+                        :key="admin.id" 
+                        :label="admin.realName" 
+                        :value="admin.id" 
+                      />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                
+                <el-col :xs="24" :sm="8" v-if="!isMobile || showMoreFilters">
+                  <el-form-item label="变更类型">
+                    <el-select v-model="historySearchForm.changeType" placeholder="请选择变更类型" clearable style="width: 100%">
+                      <el-option label="创建管理员" value="create" />
+                      <el-option label="更新管理员" value="update" />
+                      <el-option label="删除管理员" value="delete" />
+                      <el-option label="状态变更" value="status_change" />
+                      <el-option label="密码重置" value="password_reset" />
+                      <el-option label="权限变更" value="permission_change" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                
+                <el-col :xs="24" :sm="8" v-if="!isMobile || showMoreFilters">
+                  <el-form-item label="时间范围">
+                    <el-date-picker
+                      v-model="historySearchForm.dateRange"
+                      type="daterange"
+                      range-separator="至"
+                      start-placeholder="开始日期"
+                      end-placeholder="结束日期"
+                      format="YYYY-MM-DD"
+                      value-format="YYYY-MM-DD"
+                      style="width: 100%"
+                    />
+                  </el-form-item>
+                </el-col>
+                
+                <el-col :xs="24" :sm="24" style="text-align: right;">
+                  <el-form-item label-width="0">
+                    <el-button type="primary" @click="handleHistorySearch">查询</el-button>
+                    <el-button @click="handleHistoryReset">重置</el-button>
+                    <el-button v-if="isMobile" type="primary" link @click="showMoreFilters = !showMoreFilters">
+                      {{ showMoreFilters ? '收起' : '更多' }}
+                    </el-button>
+                  </el-form-item>
+                </el-col>
+              </el-row>
             </el-form>
           </div>
           
-          <el-table :data="historyList" style="width: 100%" v-loading="loading">
-            <el-table-column prop="id" label="ID" width="80" />
-            <el-table-column prop="adminName" label="管理员" />
-            <el-table-column prop="changeType" label="变更类型" width="120">
+          <el-table :data="historyList" style="width: 100%" v-loading="loading" :size="isMobile ? 'small' : 'default'">
+            <el-table-column prop="id" label="ID" width="60" v-if="!isMobile" />
+            <el-table-column prop="adminName" label="管理员" min-width="100" />
+            <el-table-column prop="changeType" label="类型" width="100">
               <template #default="scope">
-                <el-tag :type="getChangeTypeTag(scope.row.changeType)">
+                <el-tag :type="getChangeTypeTag(scope.row.changeType)" size="small">
                   {{ getChangeTypeText(scope.row.changeType) }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="changeDescription" label="变更描述" />
-            <el-table-column prop="operatorName" label="操作人" />
-            <el-table-column prop="ipAddress" label="IP地址" />
-            <el-table-column prop="changeTime" label="变更时间" width="160" />
-            <el-table-column prop="approved" label="审批状态" width="100">
+            <el-table-column prop="changeDescription" label="变更描述" v-if="!isMobile" />
+            <el-table-column prop="operatorName" label="操作人" width="100" v-if="!isMobile" />
+            <el-table-column prop="changeTime" label="变更时间" width="160" v-if="!isMobile" />
+            <el-table-column prop="approved" label="状态" width="80">
               <template #default="scope">
-                <el-tag :type="scope.row.approved ? 'success' : 'warning'">
+                <el-tag :type="scope.row.approved ? 'success' : 'warning'" size="small">
                   {{ scope.row.approved ? '已审批' : '待审批' }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="120">
+            <el-table-column label="操作" width="80" fixed="right">
               <template #default="scope">
-                <el-button size="small" @click="handleViewHistory(scope.row)">查看</el-button>
+                <el-button size="small" link type="primary" @click="handleViewHistory(scope.row)">查看</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -300,7 +346,7 @@
               v-model:current-page="historyCurrentPage"
               v-model:page-size="historyPageSize"
               :page-sizes="[10, 20, 50, 100]"
-              layout="total, sizes, prev, pager, next, jumper"
+              :layout="isMobile ? 'total, prev, next' : 'total, sizes, prev, pager, next, jumper'"
               :total="historyTotal"
               @size-change="handleHistorySizeChange"
               @current-change="handleHistoryCurrentChange"
@@ -310,83 +356,88 @@
         
         <!-- 权限审批流程 -->
         <el-tab-pane label="权限审批流程" name="approvals">
-          <div class="search-bar">
-            <el-form :model="approvalSearchForm" label-width="80px" inline>
-              <el-form-item label="申请类型">
-                <el-select v-model="approvalSearchForm.type" placeholder="请选择申请类型" clearable>
-                  <el-option label="创建管理员" value="create_admin" />
-                  <el-option label="修改权限" value="modify_permission" />
-                  <el-option label="重置密码" value="reset_password" />
-                  <el-option label="更改状态" value="change_status" />
-                  <el-option label="删除管理员" value="delete_admin" />
-                </el-select>
-              </el-form-item>
-              
-              <el-form-item label="状态">
-                <el-select v-model="approvalSearchForm.status" placeholder="请选择状态" clearable>
-                  <el-option label="待审批" value="pending" />
-                  <el-option label="已审批" value="approved" />
-                  <el-option label="已拒绝" value="rejected" />
-                  <el-option label="已取消" value="cancelled" />
-                </el-select>
-              </el-form-item>
-              
-              <el-form-item label="申请人">
-                <el-select v-model="approvalSearchForm.applicantId" placeholder="请选择申请人" clearable filterable>
-                  <el-option 
-                    v-for="admin in adminList" 
-                    :key="admin.id" 
-                    :label="admin.realName" 
-                    :value="admin.id" 
-                  />
-                </el-select>
-              </el-form-item>
-              
-              <el-form-item>
-                <el-button type="primary" @click="handleApprovalSearch">查询</el-button>
-                <el-button @click="handleApprovalReset">重置</el-button>
-              </el-form-item>
+          <div class="search-bar" :class="{ 'is-mobile': isMobile }">
+            <el-form :model="approvalSearchForm" :label-width="isMobile ? '70px' : '80px'" :label-position="isMobile ? 'top' : 'right'" :inline="!isMobile">
+              <el-row :gutter="10">
+                <el-col :xs="24" :sm="8">
+                  <el-form-item label="申请类型">
+                    <el-select v-model="approvalSearchForm.type" placeholder="请选择类型" clearable style="width: 100%">
+                      <el-option label="创建管理员" value="create_admin" />
+                      <el-option label="修改权限" value="modify_permission" />
+                      <el-option label="重置密码" value="reset_password" />
+                      <el-option label="更改状态" value="change_status" />
+                      <el-option label="删除管理员" value="delete_admin" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                
+                <el-col :xs="24" :sm="8" v-if="!isMobile || showMoreFilters">
+                  <el-form-item label="状态">
+                    <el-select v-model="approvalSearchForm.status" placeholder="请选择状态" clearable style="width: 100%">
+                      <el-option label="待审批" value="pending" />
+                      <el-option label="已审批" value="approved" />
+                      <el-option label="已拒绝" value="rejected" />
+                      <el-option label="已取消" value="cancelled" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                
+                <el-col :xs="24" :sm="8" v-if="!isMobile || showMoreFilters">
+                  <el-form-item label="申请人">
+                    <el-select v-model="approvalSearchForm.applicantId" placeholder="请选择申请人" clearable filterable style="width: 100%">
+                      <el-option 
+                        v-for="admin in adminList" 
+                        :key="admin.id" 
+                        :label="admin.realName" 
+                        :value="admin.id" 
+                      />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                
+                <el-col :xs="24" :sm="24" style="text-align: right;">
+                  <el-form-item label-width="0">
+                    <el-button type="primary" @click="handleApprovalSearch">查询</el-button>
+                    <el-button @click="handleApprovalReset">重置</el-button>
+                    <el-button v-if="isMobile" type="primary" link @click="showMoreFilters = !showMoreFilters">
+                      {{ showMoreFilters ? '收起' : '更多' }}
+                    </el-button>
+                  </el-form-item>
+                </el-col>
+              </el-row>
             </el-form>
           </div>
           
-          <el-table :data="approvalList" style="width: 100%" v-loading="loading">
-            <el-table-column prop="id" label="ID" width="80" />
-            <el-table-column prop="title" label="申请标题" />
-            <el-table-column prop="type" label="申请类型" width="120">
+          <el-table :data="approvalList" style="width: 100%" v-loading="loading" :size="isMobile ? 'small' : 'default'">
+            <el-table-column prop="id" label="ID" width="60" v-if="!isMobile" />
+            <el-table-column prop="title" label="申请标题" min-width="120" />
+            <el-table-column prop="type" label="类型" width="100">
               <template #default="scope">
-                <el-tag :type="getApprovalTypeTag(scope.row.type)">
+                <el-tag :type="getApprovalTypeTag(scope.row.type)" size="small">
                   {{ getApprovalTypeText(scope.row.type) }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="applicantName" label="申请人" />
-            <el-table-column prop="targetAdminName" label="目标管理员" />
-            <el-table-column prop="status" label="状态" width="100">
+            <el-table-column prop="applicantName" label="申请人" width="100" v-if="!isMobile" />
+            <el-table-column prop="status" label="状态" width="80">
               <template #default="scope">
-                <el-tag :type="getApprovalStatusTag(scope.row.status)">
+                <el-tag :type="getApprovalStatusTag(scope.row.status)" size="small">
                   {{ getApprovalStatusText(scope.row.status) }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="applyTime" label="申请时间" width="160" />
-            <el-table-column label="操作" width="200">
+            <el-table-column prop="applyTime" label="时间" width="160" v-if="!isMobile" />
+            <el-table-column label="操作" :width="isMobile ? 120 : 180" fixed="right">
               <template #default="scope">
-                <el-button size="small" @click="handleViewApproval(scope.row)">查看</el-button>
+                <el-button size="small" link type="primary" @click="handleViewApproval(scope.row)">查看</el-button>
                 <el-button 
                   v-if="scope.row.status === 'pending'" 
                   size="small" 
+                  link
                   type="success" 
                   @click="handleApprove(scope.row)"
                 >
                   审批
-                </el-button>
-                <el-button 
-                  v-if="scope.row.status === 'pending'" 
-                  size="small" 
-                  type="danger" 
-                  @click="handleReject(scope.row)"
-                >
-                  拒绝
                 </el-button>
               </template>
             </el-table-column>
@@ -397,7 +448,7 @@
               v-model:current-page="approvalCurrentPage"
               v-model:page-size="approvalPageSize"
               :page-sizes="[10, 20, 50, 100]"
-              layout="total, sizes, prev, pager, next, jumper"
+              :layout="isMobile ? 'total, prev, next' : 'total, sizes, prev, pager, next, jumper'"
               :total="approvalTotal"
               @size-change="handleApprovalSizeChange"
               @current-change="handleApprovalCurrentChange"
@@ -411,18 +462,18 @@
     <el-dialog 
       v-model="viewAdminDialogVisible" 
       title="管理员详情" 
-      width="800px"
+      :width="isMobile ? '95%' : '800px'"
     >
       <div class="admin-detail-container">
         <el-row :gutter="20">
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <div class="detail-item">
               <label class="detail-label">用户名:</label>
               <span class="detail-value">{{ currentViewAdmin.username }}</span>
               <el-tag v-if="currentViewAdmin.isSystemRole" size="small" type="info" effect="plain" style="margin-left: 8px;">系统角色</el-tag>
             </div>
           </el-col>
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <div class="detail-item">
               <label class="detail-label">真实姓名:</label>
               <span class="detail-value">{{ currentViewAdmin.realName }}</span>
@@ -431,13 +482,13 @@
         </el-row>
         
         <el-row :gutter="20">
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <div class="detail-item">
               <label class="detail-label">邮箱:</label>
               <span class="detail-value">{{ currentViewAdmin.email }}</span>
             </div>
           </el-col>
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <div class="detail-item">
               <label class="detail-label">手机号:</label>
               <span class="detail-value">{{ currentViewAdmin.phone }}</span>
@@ -446,7 +497,7 @@
         </el-row>
         
         <el-row :gutter="20">
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <div class="detail-item">
               <label class="detail-label">状态:</label>
               <el-tag :type="getStatusType(currentViewAdmin.status)">
@@ -454,7 +505,7 @@
               </el-tag>
             </div>
           </el-col>
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <div class="detail-item">
               <label class="detail-label">最后登录:</label>
               <span class="detail-value">{{ currentViewAdmin.lastLoginTime || '从未登录' }}</span>
@@ -549,7 +600,7 @@
     <el-dialog 
       v-model="adminDialogVisible" 
       :title="adminDialogTitle" 
-      width="700px"
+      :width="isMobile ? '95%' : '700px'"
       :close-on-click-modal="false"
     >
       <el-form 
@@ -568,12 +619,12 @@
           style="margin-bottom: 20px;"
         />
         <el-row :gutter="20">
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <el-form-item label="用户名" prop="username">
               <el-input v-model="adminFormData.username" placeholder="请输入用户名" />
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <el-form-item label="真实姓名" prop="realName">
               <el-input v-model="adminFormData.realName" placeholder="请输入真实姓名" />
             </el-form-item>
@@ -581,12 +632,12 @@
         </el-row>
         
         <el-row :gutter="20">
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <el-form-item label="邮箱" prop="email">
               <el-input v-model="adminFormData.email" placeholder="请输入邮箱" />
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <el-form-item label="手机号" prop="phone">
               <el-input v-model="adminFormData.phone" placeholder="请输入手机号" />
             </el-form-item>
@@ -635,7 +686,7 @@
     <el-dialog 
       v-model="passwordDialogVisible" 
       title="重置密码" 
-      width="500px"
+      :width="isMobile ? '90%' : '500px'"
       :close-on-click-modal="false"
     >
       <el-form 
@@ -683,7 +734,7 @@
     <el-dialog 
       v-model="roleDialogVisible" 
       :title="roleDialogTitle" 
-      width="600px"
+      :width="isMobile ? '95%' : '600px'"
       :close-on-click-modal="false"
     >
       <el-form 
@@ -740,10 +791,10 @@
     <el-dialog 
       v-model="approvalDialogVisible" 
       title="权限审批" 
-      width="600px"
+      :width="isMobile ? '95%' : '600px'"
       :close-on-click-modal="false"
     >
-      <el-descriptions :column="2" border>
+      <el-descriptions :column="isMobile ? 1 : 2" border>
         <el-descriptions-item label="申请ID">{{ currentApproval.id }}</el-descriptions-item>
         <el-descriptions-item label="申请类型">
           <el-tag :type="getApprovalTypeTag(currentApproval.type)">
@@ -752,8 +803,8 @@
         </el-descriptions-item>
         <el-descriptions-item label="申请人">{{ currentApproval.applicantName }}</el-descriptions-item>
         <el-descriptions-item label="目标管理员">{{ currentApproval.targetAdminName || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="申请时间" :span="2">{{ currentApproval.applyTime }}</el-descriptions-item>
-        <el-descriptions-item label="申请内容" :span="2">{{ currentApproval.content }}</el-descriptions-item>
+        <el-descriptions-item label="申请时间" :span="isMobile ? 1 : 2">{{ currentApproval.applyTime }}</el-descriptions-item>
+        <el-descriptions-item label="申请内容" :span="isMobile ? 1 : 2">{{ currentApproval.content }}</el-descriptions-item>
       </el-descriptions>
       
       <el-form 
@@ -791,17 +842,17 @@
     <el-dialog 
       v-model="viewRoleDialogVisible" 
       title="角色详情" 
-      width="700px"
+      :width="isMobile ? '95%' : '700px'"
     >
       <div class="role-detail-container">
         <el-row :gutter="20">
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <div class="detail-item">
               <label class="detail-label">角色名称:</label>
               <span class="detail-value">{{ currentViewRole.name }}</span>
             </div>
           </el-col>
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <div class="detail-item">
               <label class="detail-label">角色代码:</label>
               <span class="detail-value">{{ currentViewRole.code }}</span>
@@ -863,11 +914,11 @@
     <el-dialog 
       v-model="viewHistoryDialogVisible" 
       title="变更历史详情" 
-      width="800px"
+      :width="isMobile ? '95%' : '800px'"
     >
       <div class="history-detail-container">
         <el-row :gutter="20">
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <div class="detail-item">
               <label class="detail-label">变更类型:</label>
               <el-tag :type="getChangeTypeTag(currentViewHistory.changeType)">
@@ -875,7 +926,7 @@
               </el-tag>
             </div>
           </el-col>
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <div class="detail-item">
               <label class="detail-label">变更时间:</label>
               <span class="detail-value">{{ currentViewHistory.changeTime }}</span>
@@ -884,13 +935,13 @@
         </el-row>
         
         <el-row :gutter="20">
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <div class="detail-item">
               <label class="detail-label">操作人:</label>
               <span class="detail-value">{{ currentViewHistory.operatorName }}</span>
             </div>
           </el-col>
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <div class="detail-item">
               <label class="detail-label">IP地址:</label>
               <span class="detail-value">{{ currentViewHistory.ipAddress }}</span>
@@ -899,13 +950,13 @@
         </el-row>
         
         <el-row :gutter="20">
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <div class="detail-item">
               <label class="detail-label">管理员:</label>
               <span class="detail-value">{{ currentViewHistory.adminName }}</span>
             </div>
           </el-col>
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <div class="detail-item">
               <label class="detail-label">审批状态:</label>
               <el-tag :type="currentViewHistory.approved ? 'success' : 'warning'">
@@ -921,13 +972,13 @@
         </div>
         
         <el-row :gutter="20" v-if="currentViewHistory.oldValue || currentViewHistory.newValue">
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <div class="detail-item">
               <label class="detail-label">变更前:</label>
               <div class="detail-value">{{ currentViewHistory.oldValue || '-' }}</div>
             </div>
           </el-col>
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <div class="detail-item">
               <label class="detail-label">变更后:</label>
               <div class="detail-value">{{ currentViewHistory.newValue || '-' }}</div>
@@ -936,13 +987,13 @@
         </el-row>
         
         <el-row :gutter="20" v-if="currentViewHistory.approved && currentViewHistory.approvedByName">
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <div class="detail-item">
               <label class="detail-label">审批人:</label>
               <span class="detail-value">{{ currentViewHistory.approvedByName }}</span>
             </div>
           </el-col>
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <div class="detail-item">
               <label class="detail-label">审批时间:</label>
               <span class="detail-value">{{ currentViewHistory.approvedTime || '-' }}</span>
@@ -967,17 +1018,17 @@
     <el-dialog 
       v-model="viewApprovalDialogVisible" 
       title="审批流程详情" 
-      width="800px"
+      :width="isMobile ? '95%' : '800px'"
     >
       <div class="approval-detail-container">
         <el-row :gutter="20">
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <div class="detail-item">
               <label class="detail-label">申请标题:</label>
               <span class="detail-value">{{ currentViewApproval.title }}</span>
             </div>
           </el-col>
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <div class="detail-item">
               <label class="detail-label">申请类型:</label>
               <el-tag :type="getApprovalTypeTag(currentViewApproval.type)">
@@ -988,13 +1039,13 @@
         </el-row>
         
         <el-row :gutter="20">
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <div class="detail-item">
               <label class="detail-label">申请人:</label>
               <span class="detail-value">{{ currentViewApproval.applicantName }}</span>
             </div>
           </el-col>
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <div class="detail-item">
               <label class="detail-label">申请时间:</label>
               <span class="detail-value">{{ currentViewApproval.applyTime }}</span>
@@ -1003,13 +1054,13 @@
         </el-row>
         
         <el-row :gutter="20">
-          <el-col :span="12" v-if="currentViewApproval.targetAdminName">
+          <el-col :span="isMobile ? 24 : 12" v-if="currentViewApproval.targetAdminName">
             <div class="detail-item">
               <label class="detail-label">目标管理员:</label>
               <span class="detail-value">{{ currentViewApproval.targetAdminName }}</span>
             </div>
           </el-col>
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <div class="detail-item">
               <label class="detail-label">当前状态:</label>
               <el-tag :type="getApprovalStatusTag(currentViewApproval.status)">
@@ -1025,13 +1076,13 @@
         </div>
         
         <el-row :gutter="20" v-if="currentViewApproval.currentApproverName">
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <div class="detail-item">
               <label class="detail-label">当前审批人:</label>
               <span class="detail-value">{{ currentViewApproval.currentApproverName }}</span>
             </div>
           </el-col>
-          <el-col :span="12">
+          <el-col :span="isMobile ? 24 : 12">
             <div class="detail-item">
               <label class="detail-label">审批进度:</label>
               <span class="detail-value">{{ currentViewApproval.currentStep }} / {{ currentViewApproval.totalSteps }}</span>
@@ -1068,7 +1119,7 @@
     <el-dialog 
       v-model="exportDialogVisible" 
       title="导出权限管理记录" 
-      width="600px"
+      :width="isMobile ? '90%' : '600px'"
       :close-on-click-modal="false"
     >
       <el-form :model="exportFormData" label-width="120px">
@@ -1111,7 +1162,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive } from 'vue'
+import { ref, onMounted, onUnmounted, reactive, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   User, Warning, Check, DataLine, Download, Plus, Refresh, ArrowDown 
@@ -1132,6 +1183,25 @@ import {
 
 // 导入统一验证规则库
 import { commonRules, businessRules } from '@/utils/validationRules'
+
+// 移动端适配逻辑
+const isMobile = ref(false)
+const showMoreFilters = ref(false)
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
+
+onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+  fetchStats()
+  fetchAdminList()
+  fetchRoleList()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
+})
 // 响应式数据
 const stats = ref({
   totalAdmins: 0,

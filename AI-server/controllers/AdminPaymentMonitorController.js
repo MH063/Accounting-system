@@ -23,21 +23,22 @@ class AdminPaymentMonitorController extends BaseController {
    */
   async getMonitorStats(req, res, next) {
     try {
-      logger.info('获取监控统计数据');
+      logger.info('获取监控统计数据 (UTC+8)');
 
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayStr = today.toISOString();
+      // 明确使用北京时间 (UTC+8) 来定义“今天”
+      const todayResult = await query("SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'PRC')::date as today");
+      const todayStr = todayResult.rows[0].today;
+      logger.info(`当前统计日期 (北京时间): ${todayStr}`);
 
       const todaySuccessResult = await query(
         `SELECT COUNT(*) as count FROM payment_monitor_logs 
-         WHERE create_time >= $1 AND status = 'success'`,
+         WHERE (create_time AT TIME ZONE 'PRC')::date = $1::date AND status = 'success'`,
         [todayStr]
       );
 
       const todayFailedResult = await query(
         `SELECT COUNT(*) as count FROM payment_monitor_logs 
-         WHERE create_time >= $1 AND status = 'failed'`,
+         WHERE (create_time AT TIME ZONE 'PRC')::date = $1::date AND status = 'failed'`,
         [todayStr]
       );
 
@@ -48,7 +49,7 @@ class AdminPaymentMonitorController extends BaseController {
 
       const todayAmountResult = await query(
         `SELECT COALESCE(SUM(amount), 0) as total FROM payment_monitor_logs 
-         WHERE create_time >= $1 AND status = 'success'`,
+         WHERE (create_time AT TIME ZONE 'PRC')::date = $1::date AND status = 'success'`,
         [todayStr]
       );
 
@@ -58,6 +59,8 @@ class AdminPaymentMonitorController extends BaseController {
         pendingExceptions: parseInt(pendingExceptionsResult.rows[0]?.count || 0),
         todayAmount: parseFloat(todayAmountResult.rows[0]?.total || 0)
       };
+
+      logger.info('监控统计数据结果:', stats);
 
       return successResponse(res, stats, '获取监控统计数据成功');
     } catch (error) {
@@ -119,14 +122,25 @@ class AdminPaymentMonitorController extends BaseController {
         paramIndex++;
       }
 
+      if (startDate && endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const diffDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+        if (diffDays > 90) {
+          return errorResponse(res, '查询时间范围不能超过3个月', 400);
+        }
+      }
+
       if (startDate) {
-        whereConditions.push(`expense_date >= $${paramIndex}`);
+        // 使用时区转换确保精确匹配 (PRC)
+        whereConditions.push(`create_time >= $${paramIndex}::timestamp AT TIME ZONE 'PRC'`);
         params.push(startDate);
         paramIndex++;
       }
 
       if (endDate) {
-        whereConditions.push(`expense_date <= $${paramIndex}`);
+        // 使用时区转换确保精确匹配 (PRC)
+        whereConditions.push(`create_time <= $${paramIndex}::timestamp AT TIME ZONE 'PRC'`);
         params.push(endDate);
         paramIndex++;
       }
@@ -526,37 +540,47 @@ class AdminPaymentMonitorController extends BaseController {
   async getSuccessRateChartData(req, res, next) {
     try {
       const { days = 14 } = req.query;
-      logger.info('获取支付成功率趋势图表数据:', days);
+      logger.info('获取支付成功率趋势图表数据 (15天动态范围):', days);
 
       const daysNum = parseInt(days) || 14;
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - daysNum);
 
+      // 使用 generate_series 生成连续的 15 天日期序列 (今日 + 前 14 天)
       const result = await query(
-        `SELECT 
-           DATE(create_time) as date,
-           COUNT(*) as total,
-           SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success_count
-         FROM payment_monitor_logs 
-         WHERE create_time >= $1
-         GROUP BY DATE(create_time)
-         ORDER BY date ASC`,
-        [startDate]
+        `WITH date_series AS (
+           SELECT (CURRENT_DATE - (n || ' days')::INTERVAL)::date as stat_date
+           FROM generate_series(0, $1) n
+         ),
+         daily_stats AS (
+           SELECT 
+             (create_time AT TIME ZONE 'PRC')::date as record_date,
+             COUNT(*) as total,
+             SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success_count
+           FROM payment_monitor_logs 
+           WHERE create_time >= CURRENT_DATE - ($1 || ' days')::INTERVAL
+           GROUP BY record_date
+         )
+         SELECT 
+           TO_CHAR(ds.stat_date, 'YYYY-MM-DD') as date_str,
+           COALESCE(s.total, 0) as total,
+           COALESCE(s.success_count, 0) as success_count
+         FROM date_series ds
+         LEFT JOIN daily_stats s ON ds.stat_date = s.record_date
+         ORDER BY ds.stat_date ASC`,
+        [daysNum]
       );
 
       const dates = [];
       const rates = [];
 
       result.rows.forEach(row => {
-        const dateStr = row.date.toISOString().split('T')[0];
-        const monthDay = dateStr.substring(5);
-        dates.push(monthDay);
-
+        dates.push(row.date_str); // 返回完整的 YYYY-MM-DD 格式
         const total = parseInt(row.total);
         const successCount = parseInt(row.success_count);
         const rate = total > 0 ? Math.round((successCount / total) * 1000) / 10 : 0;
         rates.push(rate);
       });
+
+      logger.info('支付成功率趋势数据统计完成:', { count: dates.length });
 
       return successResponse(res, { dates, rates }, '获取支付成功率趋势图表数据成功');
     } catch (error) {
@@ -571,15 +595,15 @@ class AdminPaymentMonitorController extends BaseController {
    */
   async getTimeDistributionChartData(req, res, next) {
     try {
-      logger.info('获取支付时间分布图表数据');
+      logger.info('获取支付时间分布图表数据 (全量历史统计)');
 
       const result = await query(
         `SELECT 
-           EXTRACT(HOUR FROM create_time) as hour,
+           floor(EXTRACT(HOUR FROM create_time) / 2) * 2 as hour_group,
            COUNT(*) as count
          FROM payment_monitor_logs 
-         GROUP BY EXTRACT(HOUR FROM create_time)
-         ORDER BY hour`
+         GROUP BY hour_group
+         ORDER BY hour_group`
       );
 
       const timeSlots = [
@@ -591,12 +615,14 @@ class AdminPaymentMonitorController extends BaseController {
       const slotCounts = new Array(12).fill(0);
 
       result.rows.forEach(row => {
-        const hour = parseInt(row.hour);
-        const slotIndex = Math.floor(hour / 2);
+        const hourGroup = parseInt(row.hour_group);
+        const slotIndex = hourGroup / 2;
         if (slotIndex >= 0 && slotIndex < 12) {
-          slotCounts[slotIndex] += parseInt(row.count);
+          slotCounts[slotIndex] = parseInt(row.count);
         }
       });
+
+      logger.info('支付时间分布统计结果:', { slotCounts });
 
       return successResponse(res, { 
         timeSlots, 
@@ -606,6 +632,157 @@ class AdminPaymentMonitorController extends BaseController {
       logger.error('获取支付时间分布图表数据失败:', error);
       next(error);
     }
+  }
+
+  /**
+   * 获取实时监控数据流 (SSE)
+   * GET /api/admin/payments/monitor/realtime
+   */
+  async getRealtimeMonitorStream(req, res, next) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+
+    logger.info('客户端已连接实时监控数据流 (SSE)');
+
+    // 立即发送一次当前时间，用于同步
+    const sendEvent = (data, event = 'message') => {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    const fetchRealtimeData = async () => {
+      try {
+        // 1. 获取服务器当前时间
+        const serverTime = new Date();
+        
+        // 2. 获取今日核心统计指标
+        const todayStr = (await query("SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'PRC')::date as today")).rows[0].today;
+        
+        const statsResult = await query(
+          `SELECT 
+             COUNT(*) as total,
+             SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success_count,
+             SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed_count,
+             COALESCE(SUM(CASE WHEN status = 'success' THEN amount ELSE 0 END), 0) as total_amount
+           FROM payment_monitor_logs 
+           WHERE (create_time AT TIME ZONE 'PRC')::date = $1::date`,
+          [todayStr]
+        );
+
+        const pendingExceptionsResult = await query(
+          `SELECT COUNT(*) as count FROM payment_monitor_logs 
+           WHERE is_exception = true AND exception_status = 'pending'`
+        );
+
+        const stats = {
+          todaySuccess: parseInt(statsResult.rows[0]?.success_count || 0),
+          todayFailed: parseInt(statsResult.rows[0]?.failed_count || 0),
+          pendingExceptions: parseInt(pendingExceptionsResult.rows[0]?.count || 0),
+          todayAmount: parseFloat(statsResult.rows[0]?.total_amount || 0),
+          serverTime: serverTime.toISOString(),
+          timestamp: Date.now()
+        };
+
+        // 2.1 获取支付状态分布 (用于饼图)
+        const statusMap = { 'success': '成功', 'failed': '失败', 'processing': '处理中', 'refunded': '已退款', 'pending': '待支付' };
+        const colorMap = { 'success': '#67C23A', 'failed': '#F56C6C', 'processing': '#E6A23C', 'refunded': '#409EFF', 'pending': '#909399' };
+        
+        const statusDistResult = await query(
+          `SELECT status, COUNT(*) as count 
+           FROM payment_monitor_logs 
+           GROUP BY status`
+        );
+        const statusDistribution = statusDistResult.rows.map(row => ({
+          value: parseInt(row.count),
+          name: statusMap[row.status] || row.status,
+          itemStyle: { color: colorMap[row.status] || '#909399' }
+        }));
+
+        // 2.2 获取支付方式分布 (用于柱状图)
+        const methodDistResult = await query(
+          `SELECT payment_method as method, COUNT(*) as count 
+           FROM payment_monitor_logs 
+           GROUP BY payment_method 
+           ORDER BY count DESC`
+        );
+        const methodDistribution = {
+          categories: methodDistResult.rows.map(r => r.method),
+          data: methodDistResult.rows.map(r => parseInt(r.count))
+        };
+
+        // 3. 获取最近 30 分钟的成功率趋势 (分钟级)
+        // (规则：确保时间轴连续性，后端自动补全 30 分钟内的空点)
+        const trendResult = await query(
+          `WITH minutes AS (
+             SELECT TO_CHAR(CURRENT_TIMESTAMP - (n || ' minutes')::INTERVAL, 'HH24:MI') as minute_str
+             FROM generate_series(0, 29) n
+           )
+           SELECT 
+             m.minute_str,
+             COALESCE(COUNT(p.id), 0) as total,
+             COALESCE(SUM(CASE WHEN p.status = 'success' THEN 1 ELSE 0 END), 0) as success_count
+           FROM minutes m
+           LEFT JOIN payment_monitor_logs p ON TO_CHAR(p.create_time, 'HH24:MI') = m.minute_str
+             AND p.create_time >= CURRENT_TIMESTAMP - INTERVAL '30 minutes'
+           GROUP BY m.minute_str
+           ORDER BY m.minute_str ASC`
+        );
+
+        const trend = trendResult.rows.map(row => {
+          const total = parseInt(row.total);
+          const successCount = parseInt(row.success_count);
+          return {
+            time: row.minute_str,
+            rate: total > 0 ? Math.round((successCount / total) * 1000) / 10 : null, // 使用 null 标记无交易点
+            isEstimated: total === 0 // 标记是否为补间点
+          };
+        });
+
+        // 4. 获取支付时间分布 (全量历史统计，确保 0-24 小时数据完整性)
+        const timeDistResult = await query(
+          `SELECT 
+             floor(extract(hour from create_time) / 2) * 2 as hour_group,
+             COUNT(*) as count
+           FROM payment_monitor_logs
+           GROUP BY hour_group
+           ORDER BY hour_group ASC`
+        );
+
+        const timeSlots = ['0-2点', '2-4点', '4-6点', '6-8点', '8-10点', '10-12点', '12-14点', '14-16点', '16-18点', '18-20点', '20-22点', '22-24点'];
+        const timeDistData = new Array(12).fill(0);
+        timeDistResult.rows.forEach(row => {
+          const index = parseInt(row.hour_group) / 2;
+          if (index >= 0 && index < 12) {
+            timeDistData[index] = parseInt(row.count);
+          }
+        });
+
+        sendEvent({ 
+          stats, 
+          statusDistribution,
+          methodDistribution,
+          trend, 
+          timeDistribution: { timeSlots, data: timeDistData },
+          version: Date.now() 
+        });
+      } catch (error) {
+        logger.error('实时监控数据抓取失败:', error);
+        sendEvent({ error: '数据抓取失败', message: error.message }, 'error');
+      }
+    };
+
+    // 每 30 秒推送一次
+    const timer = setInterval(fetchRealtimeData, 30000);
+    
+    // 初始发送
+    fetchRealtimeData();
+
+    req.on('close', () => {
+      clearInterval(timer);
+      logger.info('客户端已断开实时监控数据流 (SSE)');
+      res.end();
+    });
   }
 
   /**

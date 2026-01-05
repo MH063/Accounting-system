@@ -2,55 +2,65 @@
   <div class="logs-container">
     <el-card>
       <template #header>
-        <div class="card-header">
-          <span>操作日志</span>
-          <div>
-            <el-button @click="handleRefresh">刷新</el-button>
-            <el-button type="primary" @click="handleExport">导出日志</el-button>
+        <div class="card-header" :class="{ 'is-mobile': isMobile }">
+          <span v-if="!isMobile">操作日志</span>
+          <div class="header-actions">
+            <el-button :size="isMobile ? 'small' : 'default'" @click="handleRefresh">刷新</el-button>
+            <el-button :size="isMobile ? 'small' : 'default'" type="primary" @click="handleExport">导出日志</el-button>
           </div>
         </div>
       </template>
       
-      <div class="search-form">
-        <el-form :inline="true" :model="searchForm" class="demo-form-inline">
+      <div class="search-form" :class="{ 'is-mobile': isMobile }">
+        <el-form :inline="!isMobile" :model="searchForm" class="demo-form-inline">
           <el-form-item label="操作用户">
             <el-input v-model="searchForm.user" placeholder="请输入用户名" clearable />
           </el-form-item>
-          <el-form-item label="操作类型">
-            <el-select v-model="searchForm.type" placeholder="请选择操作类型" clearable>
-              <el-option label="登录" value="login" />
-              <el-option label="新增" value="add" />
-              <el-option label="修改" value="edit" />
-              <el-option label="删除" value="delete" />
-              <el-option label="导出" value="export" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="操作时间">
-            <el-date-picker
-              v-model="searchForm.dateRange"
-              type="daterange"
-              range-separator="至"
-              start-placeholder="开始日期"
-              end-placeholder="结束日期"
-            />
-          </el-form-item>
+          
+          <template v-if="!isMobile || showMoreFilters">
+            <el-form-item label="操作类型">
+              <el-select v-model="searchForm.type" placeholder="请选择操作类型" clearable style="width: 100%">
+                <el-option label="登录" value="login" />
+                <el-option label="新增" value="add" />
+                <el-option label="修改" value="edit" />
+                <el-option label="删除" value="delete" />
+                <el-option label="导出" value="export" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="操作时间">
+              <el-date-picker
+                v-model="searchForm.dateRange"
+                type="daterange"
+                range-separator="至"
+                start-placeholder="开始日期"
+                end-placeholder="结束日期"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </template>
+
           <el-form-item>
             <el-button type="primary" @click="handleSearch">查询</el-button>
             <el-button @click="handleReset">重置</el-button>
+            <el-button v-if="isMobile" type="primary" link @click="showMoreFilters = !showMoreFilters">
+              {{ showMoreFilters ? '收起' : '更多' }}
+            </el-button>
           </el-form-item>
         </el-form>
       </div>
       
-      <el-table :data="tableData" style="width: 100%">
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="user" label="操作用户" />
-        <el-table-column prop="operation" label="操作类型" />
-        <el-table-column prop="description" label="操作描述" />
-        <el-table-column prop="ip" label="IP地址" />
-        <el-table-column prop="createTime" label="操作时间" />
-        <el-table-column label="操作" width="100">
+      <el-table :data="tableData" style="width: 100%" :size="isMobile ? 'small' : 'default'">
+        <el-table-column prop="id" label="ID" width="60" v-if="!isMobile" />
+        <el-table-column prop="user" label="操作用户" :width="isMobile ? 80 : 120" />
+        <el-table-column prop="operation" label="类型" :width="isMobile ? 70 : 100" />
+        <el-table-column prop="description" label="描述" min-width="150" show-overflow-tooltip />
+        <el-table-column prop="ip" label="IP地址" width="130" v-if="!isMobile" />
+        <el-table-column prop="createTime" label="时间" width="160" v-if="!isMobile" />
+        <el-table-column label="操作" :width="isMobile ? 70 : 100" fixed="right">
           <template #default="scope">
-            <el-button size="small" @click="handleDetail(scope.row)">详情</el-button>
+            <el-button :size="isMobile ? 'small' : 'default'" link type="primary" @click="handleDetail(scope.row)">
+              {{ isMobile ? '详情' : '详情' }}
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -60,8 +70,9 @@
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
           :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
+          :layout="isMobile ? 'total, prev, next' : 'total, sizes, prev, pager, next, jumper'"
           :total="total"
+          :small="isMobile"
           @size-change="handleSizeChange"
           @current-change="handleCurrentChange"
         />
@@ -71,8 +82,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
+
+// 移动端适配
+const isMobile = ref(false)
+const showMoreFilters = ref(false)
+
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
+
+onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
+})
 
 // 搜索表单
 const searchForm = ref({
@@ -179,6 +207,22 @@ const handleCurrentChange = (val: number) => {
   padding: 20px;
   background-color: #f5f7fa;
   border-radius: 4px;
+}
+
+.search-form.is-mobile {
+  padding: 15px;
+}
+
+.search-form.is-mobile :deep(.el-form-item) {
+  margin-bottom: 15px;
+  display: flex;
+  flex-direction: column;
+}
+
+.search-form.is-mobile :deep(.el-form-item__label) {
+  text-align: left;
+  margin-bottom: 5px;
+  font-weight: bold;
 }
 
 .pagination-container {

@@ -9,51 +9,53 @@
           </div>
         </template>
         
-        <el-table 
-          :data="availableDormitories" 
-          style="width: 100%" 
-          v-loading="loading.students"
-          class="dormitory-select-table"
-        >
-          <el-table-column prop="id" label="ID" width="80" />
-          <el-table-column prop="dormNumber" label="寝室号" />
-          <el-table-column prop="building" label="楼栋" />
-          <el-table-column prop="capacity" label="容量" />
-          <el-table-column prop="currentOccupancy" label="当前入住">
-            <template #default="scope">
-              <span :class="scope.row.currentOccupancy >= scope.row.capacity ? 'text-danger' : 'text-success'">
-                {{ scope.row.currentOccupancy }} / {{ scope.row.capacity }}
-              </span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="status" label="状态">
-            <template #default="scope">
-              <el-tag :type="getStatusTagType(scope.row.status)">
-                {{ getStatusText(scope.row.status) }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="createdAt" label="创建时间">
-            <template #default="scope">
-              {{ formatDate(scope.row.createdAt) }}
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="120">
-            <template #default="scope">
-              <el-button size="small" type="primary" @click="selectDormitory(scope.row)">
-                查看详情
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+        <div class="table-container">
+          <el-table 
+            :data="availableDormitories" 
+            style="width: 100%" 
+            v-loading="loading.students"
+            class="dormitory-select-table"
+          >
+            <el-table-column prop="id" label="ID" width="60" />
+            <el-table-column prop="dormNumber" label="寝室号" :min-width="isMobile ? 80 : 100" />
+            <el-table-column prop="building" label="楼栋" :min-width="isMobile ? 80 : 100" />
+            <el-table-column prop="capacity" label="容量" width="60" v-if="!isMobile" />
+            <el-table-column prop="currentOccupancy" label="入住" :width="isMobile ? 70 : 100">
+              <template #default="scope">
+                <span :class="scope.row.currentOccupancy >= scope.row.capacity ? 'text-danger' : 'text-success'">
+                  {{ scope.row.currentOccupancy }}/{{ scope.row.capacity }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="status" label="状态" width="80">
+              <template #default="scope">
+                <el-tag :type="getStatusTagType(scope.row.status)" size="small">
+                  {{ getStatusText(scope.row.status) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="createdAt" label="创建时间" width="120" v-if="!isMobile">
+              <template #default="scope">
+                {{ formatDate(scope.row.createdAt) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" :width="isMobile ? 80 : 120" fixed="right">
+              <template #default="scope">
+                <el-button :size="isMobile ? 'small' : 'default'" type="primary" link @click="selectDormitory(scope.row)">
+                  {{ isMobile ? '详情' : '查看详情' }}
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
       </el-card>
     </div>
     
     <!-- 有ID时显示具体寝室详情 -->
     <div v-else>
       <!-- 返回按钮 -->
-      <div class="return-section">
-        <el-button @click="returnToDormitoryList" type="default" plain>
+      <div class="return-section" :style="{ marginBottom: isMobile ? '10px' : '20px' }">
+        <el-button @click="returnToDormitoryList" type="default" plain :size="isMobile ? 'small' : 'default'">
           <el-icon><ArrowLeft /></el-icon>
           返回
         </el-button>
@@ -64,50 +66,47 @@
         <template #header>
           <div class="card-header">
             <span>寝室基本信息</span>
-            <el-button type="primary" @click="editDialogVisible = true" size="small">
+            <el-button type="primary" @click="editDialogVisible = true" :size="isMobile ? 'small' : 'default'">
               编辑信息
             </el-button>
           </div>
         </template>
         
-        <el-row :gutter="20">
-          <el-col :span="8">
+        <el-row :gutter="isMobile ? 10 : 20">
+          <el-col :xs="12" :sm="8">
             <div class="statistic-item">
               <div class="statistic-title">寝室号</div>
               <div class="statistic-value">{{ dormitoryInfo.dormNumber || '-' }}</div>
             </div>
           </el-col>
-          <el-col :span="8">
+          <el-col :xs="12" :sm="8">
             <div class="statistic-item">
               <div class="statistic-title">楼栋</div>
               <div class="statistic-value">{{ dormitoryInfo.building || '-' }}</div>
             </div>
           </el-col>
-          <el-col :span="8">
+          <el-col :xs="12" :sm="8">
             <div class="statistic-item">
               <div class="statistic-title">容量</div>
               <div class="statistic-value">{{ dormitoryInfo.capacity || 0 }}</div>
             </div>
           </el-col>
-        </el-row>
-        
-        <el-row :gutter="20" style="margin-top: 20px;">
-          <el-col :span="8">
+          <el-col :xs="12" :sm="8">
             <div class="statistic-item">
               <div class="statistic-title">当前入住</div>
               <div class="statistic-value">{{ dormitoryInfo.currentOccupancy || 0 }}</div>
             </div>
           </el-col>
-          <el-col :span="8">
+          <el-col :xs="12" :sm="8">
             <div class="statistic-item">
               <div class="statistic-title">空床位</div>
               <div class="statistic-value">{{ (dormitoryInfo.capacity || 0) - (dormitoryInfo.currentOccupancy || 0) }}</div>
             </div>
           </el-col>
-          <el-col :span="8">
+          <el-col :xs="12" :sm="8">
             <div class="statistic-item">
               <div class="statistic-title">状态</div>
-              <el-tag :type="getStatusTagType(dormitoryInfo.status)" size="default">
+              <el-tag :type="getStatusTagType(dormitoryInfo.status)" :size="isMobile ? 'small' : 'default'">
                 {{ getStatusText(dormitoryInfo.status) }}
               </el-tag>
             </div>
@@ -115,11 +114,13 @@
         </el-row>
         
         <el-divider />
-        <div>
-          <strong>创建时间：</strong>{{ formatDate(dormitoryInfo.createdAt) }}
-        </div>
-        <div v-if="dormitoryInfo.description" style="margin-top: 10px;">
-          <strong>描述：</strong>{{ dormitoryInfo.description }}
+        <div class="info-footer" :class="{ 'is-mobile': isMobile }">
+          <div class="info-item">
+            <strong>创建时间：</strong>{{ formatDate(dormitoryInfo.createdAt) }}
+          </div>
+          <div v-if="dormitoryInfo.description" class="info-item">
+            <strong>描述：</strong>{{ dormitoryInfo.description }}
+          </div>
         </div>
       </el-card>
       
@@ -128,29 +129,31 @@
         <template #header>
           <div class="card-header">
             <span>寝室成员 ({{ students.length }})</span>
-            <el-button type="primary" @click="openAddMemberDialog" size="small">
+            <el-button type="primary" @click="openAddMemberDialog" :size="isMobile ? 'small' : 'default'">
               添加成员
             </el-button>
           </div>
         </template>
         
-        <el-table :data="students" style="width: 100%" v-loading="loading.students">
-          <el-table-column prop="id" label="ID" width="80" />
-          <el-table-column prop="name" label="姓名" />
-          <el-table-column prop="phone" label="联系电话" />
-          <el-table-column label="床位">
-            <template #default="scope">
-              <span>床位 {{ scope.row.bedNumber }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="120">
-            <template #default="scope">
-              <el-button size="small" @click="removeStudent(scope.row)" type="danger">
-                移除
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+        <div class="table-container">
+          <el-table :data="students" style="width: 100%" v-loading="loading.students">
+            <el-table-column prop="id" label="ID" width="60" />
+            <el-table-column prop="name" label="姓名" :min-width="100" />
+            <el-table-column prop="phone" label="联系电话" :min-width="isMobile ? 120 : 150" v-if="!isMobile" />
+            <el-table-column label="床位" :width="isMobile ? 80 : 120">
+              <template #default="scope">
+                <span>{{ isMobile ? '' : '床位 ' }}{{ scope.row.bedNumber }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" :width="isMobile ? 70 : 120" fixed="right">
+              <template #default="scope">
+                <el-button :size="isMobile ? 'small' : 'default'" @click="removeStudent(scope.row)" type="danger" link>
+                  移除
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
         
         <div v-if="students.length === 0" style="text-align: center; padding: 40px;">
           <el-empty description="暂无成员" />
@@ -158,25 +161,25 @@
       </el-card>
       
       <!-- 费用统计卡片 -->
-      <el-row :gutter="20" style="margin-top: 20px;">
-        <el-col :span="8">
-          <el-card shadow="hover">
-            <el-statistic title="本月费用" :value="feeStats.totalAmount" prefix="¥" />
+      <el-row :gutter="isMobile ? 10 : 20" style="margin-top: 20px;">
+        <el-col :xs="24" :sm="8" style="margin-bottom: 15px;">
+          <el-card shadow="hover" :body-style="{ padding: isMobile ? '15px' : '20px' }">
+            <el-statistic title="本月费用" :value="feeStats.totalAmount" prefix="¥" :value-style="{ fontSize: isMobile ? '22px' : '24px' }" />
             <div style="margin-top: 10px;">
-              <el-tag :type="feeStats.status === 'paid' ? 'success' : (feeStats.status === 'overdue' ? 'danger' : 'warning')">
+              <el-tag :type="feeStats.status === 'paid' ? 'success' : (feeStats.status === 'overdue' ? 'danger' : 'warning')" :size="isMobile ? 'small' : 'default'">
                 {{ getFeeStatusText(feeStats.status) }}
               </el-tag>
             </div>
           </el-card>
         </el-col>
-        <el-col :span="8">
-          <el-card shadow="hover">
-            <el-statistic title="累计费用" :value="feeStats.totalCumulative" prefix="¥" />
+        <el-col :xs="12" :sm="8" style="margin-bottom: 15px;">
+          <el-card shadow="hover" :body-style="{ padding: isMobile ? '15px' : '20px' }">
+            <el-statistic title="累计费用" :value="feeStats.totalCumulative" prefix="¥" :value-style="{ fontSize: isMobile ? '20px' : '24px' }" />
           </el-card>
         </el-col>
-        <el-col :span="8">
-          <el-card shadow="hover">
-            <el-statistic title="未缴费" :value="feeStats.unpaid" prefix="¥" :value-style="{ color: feeStats.unpaid > 0 ? '#f56c6c' : '#67c23a' }" />
+        <el-col :xs="12" :sm="8" style="margin-bottom: 15px;">
+          <el-card shadow="hover" :body-style="{ padding: isMobile ? '15px' : '20px' }">
+            <el-statistic title="未缴费" :value="feeStats.unpaid" prefix="¥" :value-style="{ color: feeStats.unpaid > 0 ? '#f56c6c' : '#67c23a', fontSize: isMobile ? '20px' : '24px' }" />
           </el-card>
         </el-col>
       </el-row>
@@ -184,30 +187,48 @@
       <!-- 维修记录卡片 -->
       <el-card style="margin-top: 20px;">
         <template #header>
-          <span>维修记录</span>
+          <div class="card-header">
+            <span>维修记录</span>
+          </div>
         </template>
         
-        <el-timeline>
-          <el-timeline-item
-            v-for="(record, index) in maintenanceRecords"
-            :key="index"
-            :timestamp="record.date"
-            placement="top"
-          >
-            <el-card>
-              <h4>{{ record.title }}</h4>
-              <p>{{ record.description }}</p>
-              <p>维修人员: {{ record.maintainer }}</p>
-            </el-card>
-          </el-timeline-item>
+        <div class="maintenance-timeline-container" :class="{ 'is-mobile': isMobile }">
+          <el-timeline>
+            <el-timeline-item
+              v-for="(record, index) in maintenanceRecords"
+              :key="index"
+              :timestamp="formatDate(record.date)"
+              placement="top"
+            >
+              <el-card :body-style="{ padding: isMobile ? '12px' : '15px' }">
+                <h4 style="margin: 0 0 8px 0; font-size: 16px;">{{ record.title }}</h4>
+                <p style="margin: 0 0 8px 0; font-size: 14px; color: #606266;">{{ record.description }}</p>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+                  <span style="font-size: 12px; color: #909399;">维修人员: {{ record.maintainer }}</span>
+                  <el-tag v-if="record.statusText" size="small" type="info">{{ record.statusText }}</el-tag>
+                </div>
+              </el-card>
+            </el-timeline-item>
+          </el-timeline>
           <el-empty v-if="maintenanceRecords.length === 0" description="暂无维修记录" />
-        </el-timeline>
+        </div>
       </el-card>
     </div>
     
     <!-- 编辑对话框 -->
-    <el-dialog v-model="editDialogVisible" title="编辑寝室信息" width="500px">
-      <el-form :model="editFormData" :rules="editFormRules" ref="editFormRef" label-width="100px">
+    <el-dialog 
+      v-model="editDialogVisible" 
+      title="编辑寝室信息" 
+      :width="isMobile ? '95%' : '500px'"
+      :fullscreen="isMobile"
+    >
+      <el-form 
+        :model="editFormData" 
+        :rules="editFormRules" 
+        ref="editFormRef" 
+        :label-width="isMobile ? '80px' : '100px'"
+        :label-position="isMobile ? 'top' : 'left'"
+      >
         <el-form-item label="寝室号" prop="dormNumber">
           <el-input v-model="editFormData.dormNumber" placeholder="请输入寝室号" />
         </el-form-item>
@@ -217,11 +238,11 @@
         </el-form-item>
         
         <el-form-item label="容量" prop="capacity">
-          <el-input-number v-model="editFormData.capacity" :min="1" :max="20" />
+          <el-input-number v-model="editFormData.capacity" :min="1" :max="20" style="width: 100%" />
         </el-form-item>
         
         <el-form-item label="状态" prop="status">
-          <el-select v-model="editFormData.status" placeholder="请选择状态" :disabled="dormitoryInfo.status === 'deleted'">
+          <el-select v-model="editFormData.status" placeholder="请选择状态" :disabled="dormitoryInfo.status === 'deleted'" style="width: 100%">
             <el-option label="正常" value="active" />
             <el-option label="维修中" value="maintenance" />
             <el-option label="冻结" value="inactive" />
@@ -230,7 +251,7 @@
         </el-form-item>
         
         <el-form-item label="描述">
-          <el-input v-model="editFormData.description" type="textarea" placeholder="请输入描述" />
+          <el-input v-model="editFormData.description" type="textarea" placeholder="请输入描述" :rows="3" />
         </el-form-item>
       </el-form>
       
@@ -243,8 +264,17 @@
     </el-dialog>
     
     <!-- 添加成员对话框 -->
-    <el-dialog v-model="addMemberDialogVisible" title="添加寝室成员" width="600px">
-      <el-form :model="addMemberForm" label-width="80px">
+    <el-dialog 
+      v-model="addMemberDialogVisible" 
+      title="添加寝室成员" 
+      :width="isMobile ? '95%' : '600px'"
+      :fullscreen="isMobile"
+    >
+      <el-form 
+        :model="addMemberForm" 
+        :label-width="isMobile ? '80px' : '80px'"
+        :label-position="isMobile ? 'top' : 'left'"
+      >
         <el-form-item label="选择用户">
           <el-select 
             v-model="addMemberForm.userId" 
@@ -273,7 +303,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
@@ -283,6 +313,12 @@ import { userApi } from '../api/user'
 // 路由相关
 const router = useRouter()
 const route = useRoute()
+
+// 响应式数据
+const isMobile = ref(false)
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
 
 // 从路由参数获取寝室ID
 const dormitoryId = computed(() => {
@@ -353,6 +389,9 @@ const loading = ref({
 
 // 组件挂载时加载数据
 onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+  
   if (dormitoryId.value) {
     // 如果有ID，加载具体寝室详情
     loadDormitoryDetail()
@@ -360,6 +399,10 @@ onMounted(() => {
     // 如果没有ID，显示寝室列表选择
     loadDormitoryList()
   }
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
 })
 
 // 监听路由参数变化，当进入或返回页面时加载对应数据
@@ -774,5 +817,66 @@ const formatDate = (dateString: string) => {
   font-size: 24px;
   font-weight: 600;
   color: #303133;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.info-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.info-footer.is-mobile {
+  flex-direction: column;
+  gap: 10px;
+}
+
+.info-item {
+  font-size: 14px;
+}
+
+.maintenance-timeline-container.is-mobile {
+  padding: 0 5px;
+}
+
+.maintenance-timeline-container.is-mobile :deep(.el-timeline-item__wrapper) {
+  padding-left: 15px;
+}
+
+.maintenance-timeline-container.is-mobile :deep(.el-timeline-item__timestamp) {
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+
+@media (max-width: 768px) {
+  .dormitory-detail-container {
+    padding: 10px;
+  }
+  
+  .card-header {
+    font-size: 14px;
+  }
+  
+  .statistic-item {
+    margin-bottom: 10px;
+  }
+  
+  .statistic-title {
+    font-size: 12px;
+  }
+  
+  .statistic-value {
+    font-size: 16px;
+  }
 }
 </style>

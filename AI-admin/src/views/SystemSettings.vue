@@ -1,17 +1,22 @@
 <template>
-  <div class="system-settings-container">
+  <div class="system-settings-container" :class="{ 'is-mobile': isMobile }">
     <el-card>
       <template #header>
-        <div class="card-header">
+        <div class="card-header" :class="{ 'is-mobile': isMobile }">
           <span>系统设置</span>
-          <el-button type="primary" @click="handleSave">保存设置</el-button>
+          <el-button type="primary" @click="handleSave" :size="isMobile ? 'small' : 'default'">保存设置</el-button>
         </div>
       </template>
       
-      <el-tabs v-model="activeTab">
+      <el-tabs v-model="activeTab" :class="{ 'mobile-tabs': isMobile }">
         <!-- 基本设置 -->
         <el-tab-pane label="基本设置" name="basic">
-          <el-form :model="basicForm" label-width="120px" style="max-width: 600px;">
+          <el-form 
+            :model="basicForm" 
+            :label-width="isMobile ? '80px' : '120px'" 
+            :label-position="isMobile ? 'top' : 'right'"
+            :style="!isMobile ? 'max-width: 600px;' : ''"
+          >
             <el-form-item label="系统名称">
               <el-input v-model="basicForm.systemName" placeholder="请输入系统名称" />
             </el-form-item>
@@ -39,7 +44,7 @@
             </el-form-item>
             
             <el-form-item label="默认主题">
-              <el-select v-model="basicForm.theme" placeholder="请选择默认主题">
+              <el-select v-model="basicForm.theme" placeholder="请选择默认主题" style="width: 100%">
                 <el-option label="默认主题" value="default" />
                 <el-option label="深色主题" value="dark" />
                 <el-option label="浅色主题" value="light" />
@@ -47,7 +52,7 @@
             </el-form-item>
             
             <el-form-item label="系统语言">
-              <el-select v-model="basicForm.language" placeholder="请选择系统语言">
+              <el-select v-model="basicForm.language" placeholder="请选择系统语言" style="width: 100%">
                 <el-option label="中文" value="zh-CN" />
                 <el-option label="English" value="en-US" />
               </el-select>
@@ -57,7 +62,11 @@
         
         <!-- 支付设置 -->
         <el-tab-pane label="支付设置" name="payment">
-          <el-form :model="paymentForm" label-width="150px">
+          <el-form 
+            :model="paymentForm" 
+            :label-width="isMobile ? '100px' : '150px'"
+            :label-position="isMobile ? 'top' : 'right'"
+          >
             <el-form-item label="启用的支付方式">
               <el-checkbox-group v-model="paymentForm.enabledPayments">
                 <el-checkbox v-for="payment in paymentMethods" :key="payment.value" :label="payment.value">
@@ -69,14 +78,14 @@
             <el-divider />
             
             <div v-for="payment in enabledPaymentMethods" :key="payment.value">
-              <h3>{{ payment.label }}配置</h3>
+              <h3 :style="{ fontSize: isMobile ? '16px' : '18px' }">{{ payment.label }}配置</h3>
               
               <div v-if="payment.value === 'alipay'">
                 <el-form-item :label="`${payment.label} AppID`">
                   <el-input 
                     v-model="paymentForm.config.alipay.appId" 
                     :placeholder="`请输入${payment.label} AppID`" 
-                    style="width: 300px;"
+                    :style="{ width: isMobile ? '100%' : '300px' }"
                   />
                 </el-form-item>
                 
@@ -84,7 +93,7 @@
                   <el-input 
                     v-model="paymentForm.config.alipay.merchantId" 
                     :placeholder="`请输入${payment.label}商户号`" 
-                    style="width: 300px;"
+                    :style="{ width: isMobile ? '100%' : '300px' }"
                   />
                 </el-form-item>
                 
@@ -94,7 +103,7 @@
                     type="password" 
                     :placeholder="`请输入${payment.label} API密钥`" 
                     show-password 
-                    style="width: 300px;"
+                    :style="{ width: isMobile ? '100%' : '300px' }"
                   />
                 </el-form-item>
                 
@@ -112,7 +121,7 @@
                   <el-input 
                     v-model="paymentForm.config.wechat.appId" 
                     :placeholder="`请输入${payment.label} AppID`" 
-                    style="width: 300px;"
+                    :style="{ width: isMobile ? '100%' : '300px' }"
                   />
                 </el-form-item>
                 
@@ -120,7 +129,7 @@
                   <el-input 
                     v-model="paymentForm.config.wechat.merchantId" 
                     :placeholder="`请输入${payment.label}商户号`" 
-                    style="width: 300px;"
+                    :style="{ width: isMobile ? '100%' : '300px' }"
                   />
                 </el-form-item>
                 
@@ -130,7 +139,7 @@
                     type="password" 
                     :placeholder="`请输入${payment.label} API密钥`" 
                     show-password 
-                    style="width: 300px;"
+                    :style="{ width: isMobile ? '100%' : '300px' }"
                   />
                 </el-form-item>
                 
@@ -148,7 +157,7 @@
                   <el-input 
                     v-model="paymentForm.config.unionpay.appId" 
                     :placeholder="`请输入${payment.label} AppID`" 
-                    style="width: 300px;"
+                    :style="{ width: isMobile ? '100%' : '300px' }"
                   />
                 </el-form-item>
                 
@@ -156,7 +165,7 @@
                   <el-input 
                     v-model="paymentForm.config.unionpay.merchantId" 
                     :placeholder="`请输入${payment.label}商户号`" 
-                    style="width: 300px;"
+                    :style="{ width: isMobile ? '100%' : '300px' }"
                   />
                 </el-form-item>
                 
@@ -166,7 +175,7 @@
                     type="password" 
                     :placeholder="`请输入${payment.label} API密钥`" 
                     show-password 
-                    style="width: 300px;"
+                    :style="{ width: isMobile ? '100%' : '300px' }"
                   />
                 </el-form-item>
                 
@@ -183,7 +192,7 @@
             </div>
             
             <el-form-item label="默认支付方式">
-              <el-select v-model="paymentForm.defaultPayment" placeholder="请选择默认支付方式" style="width: 300px;">
+              <el-select v-model="paymentForm.defaultPayment" placeholder="请选择默认支付方式" :style="{ width: isMobile ? '100%' : '300px' }">
                 <el-option 
                   v-for="payment in enabledPaymentMethods" 
                   :key="payment.value" 
@@ -197,13 +206,18 @@
         
         <!-- 邮件设置 -->
         <el-tab-pane label="邮件设置" name="email">
-          <el-form :model="emailForm" label-width="120px" style="max-width: 600px;">
+          <el-form 
+            :model="emailForm" 
+            :label-width="isMobile ? '100px' : '120px'" 
+            :label-position="isMobile ? 'top' : 'right'"
+            :style="!isMobile ? 'max-width: 600px;' : ''"
+          >
             <el-form-item label="SMTP服务器">
               <el-input v-model="emailForm.smtpServer" placeholder="请输入SMTP服务器地址" />
             </el-form-item>
             
             <el-form-item label="SMTP端口">
-              <el-input-number v-model="emailForm.smtpPort" :min="1" :max="65535" />
+              <el-input-number v-model="emailForm.smtpPort" :min="1" :max="65535" style="width: 100%" />
             </el-form-item>
             
             <el-form-item label="邮箱账号">
@@ -224,16 +238,21 @@
             </el-form-item>
             
             <el-form-item>
-              <el-button type="primary" @click="testEmailConnection">测试连接</el-button>
+              <el-button type="primary" @click="testEmailConnection" :style="{ width: isMobile ? '100%' : 'auto' }">测试连接</el-button>
             </el-form-item>
           </el-form>
         </el-tab-pane>
         
         <!-- 安全设置 -->
         <el-tab-pane label="安全设置" name="security">
-          <el-form :model="securityForm" label-width="150px" style="max-width: 600px;">
+          <el-form 
+            :model="securityForm" 
+            :label-width="isMobile ? '120px' : '150px'" 
+            :label-position="isMobile ? 'top' : 'right'"
+            :style="!isMobile ? 'max-width: 600px;' : ''"
+          >
             <el-form-item label="密码强度要求">
-              <el-select v-model="securityForm.passwordStrength" placeholder="请选择密码强度要求">
+              <el-select v-model="securityForm.passwordStrength" placeholder="请选择密码强度要求" style="width: 100%">
                 <el-option label="低（至少6位）" value="low" />
                 <el-option label="中（至少8位，包含数字和字母）" value="medium" />
                 <el-option label="高（至少10位，包含数字、字母和特殊字符）" value="high" />
@@ -241,18 +260,18 @@
             </el-form-item>
             
             <el-form-item label="登录失败次数限制">
-              <el-input-number v-model="securityForm.loginFailCount" :min="1" :max="10" />
-              <span class="form-tip">次</span>
+              <el-input-number v-model="securityForm.loginFailCount" :min="1" :max="10" style="width: calc(100% - 30px)" />
+              <span class="form-tip" style="margin-left: 10px">次</span>
             </el-form-item>
             
             <el-form-item label="账户锁定时间">
-              <el-input-number v-model="securityForm.lockTime" :min="1" :max="1440" />
-              <span class="form-tip">分钟</span>
+              <el-input-number v-model="securityForm.lockTime" :min="1" :max="1440" style="width: calc(100% - 50px)" />
+              <span class="form-tip" style="margin-left: 10px">分钟</span>
             </el-form-item>
             
             <el-form-item label="会话超时时间">
-              <el-input-number v-model="securityForm.sessionTimeout" :min="1" :max="1440" />
-              <span class="form-tip">分钟</span>
+              <el-input-number v-model="securityForm.sessionTimeout" :min="1" :max="1440" style="width: calc(100% - 50px)" />
+              <span class="form-tip" style="margin-left: 10px">分钟</span>
             </el-form-item>
             
             <el-form-item label="启用双因素认证">
@@ -267,15 +286,20 @@
         
         <!-- 通知设置 -->
         <el-tab-pane label="通知设置" name="notification">
-          <el-tabs v-model="notificationActiveTab">
+          <el-tabs v-model="notificationActiveTab" :class="{ 'mobile-tabs': isMobile }">
             <el-tab-pane label="通知规则" name="rules">
-              <el-form :model="notificationForm" label-width="150px" style="max-width: 600px;">
+              <el-form 
+                :model="notificationForm" 
+                :label-width="isMobile ? '120px' : '150px'" 
+                :label-position="isMobile ? 'top' : 'right'"
+                :style="!isMobile ? 'max-width: 600px;' : ''"
+              >
                 <el-form-item label="系统通知方式">
                   <el-checkbox-group v-model="notificationForm.systemNotifications">
-                    <el-checkbox label="email">邮件通知</el-checkbox>
-                    <el-checkbox label="sms">短信通知</el-checkbox>
-                    <el-checkbox label="wechat">微信通知</el-checkbox>
-                    <el-checkbox label="dingtalk">钉钉通知</el-checkbox>
+                    <el-checkbox label="email">邮件</el-checkbox>
+                    <el-checkbox label="sms">短信</el-checkbox>
+                    <el-checkbox label="wechat">微信</el-checkbox>
+                    <el-checkbox label="dingtalk">钉钉</el-checkbox>
                   </el-checkbox-group>
                 </el-form-item>
                 
@@ -310,31 +334,33 @@
             </el-tab-pane>
             
             <el-tab-pane label="通知模板" name="templates">
-              <el-table :data="notificationTemplates" style="width: 100%">
-                <el-table-column prop="name" label="模板名称" width="150" />
-                <el-table-column prop="type" label="通知类型" width="100" />
-                <el-table-column prop="content" label="模板内容" />
-                <el-table-column label="操作" width="150">
-                  <template #default="scope">
-                    <el-button size="small" @click="handleEditTemplate(scope.row)">编辑</el-button>
-                  </template>
-                </el-table-column>
-              </el-table>
+              <div class="table-container mobile-scroll">
+                <el-table :data="notificationTemplates" style="width: 100%" :size="isMobile ? 'small' : 'default'">
+                  <el-table-column prop="name" label="模板名称" :width="isMobile ? 120 : 150" />
+                  <el-table-column prop="type" label="通知类型" :width="isMobile ? 90 : 100" />
+                  <el-table-column prop="content" label="模板内容" show-overflow-tooltip />
+                  <el-table-column label="操作" :width="isMobile ? 70 : 150" fixed="right">
+                    <template #default="scope">
+                      <el-button :size="isMobile ? 'small' : 'default'" type="primary" link @click="handleEditTemplate(scope.row)">编辑</el-button>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
               
-              <el-button type="primary" @click="handleAddTemplate" style="margin-top: 20px;">新增模板</el-button>
+              <el-button type="primary" @click="handleAddTemplate" style="margin-top: 20px;" :size="isMobile ? 'small' : 'default'" :style="{ width: isMobile ? '100%' : 'auto' }">新增模板</el-button>
             </el-tab-pane>
           </el-tabs>
         </el-tab-pane>
         
         <!-- 系统信息 -->
         <el-tab-pane label="系统信息" name="systemInfo">
-          <el-row :gutter="20">
-            <el-col :span="12">
-              <el-card>
+          <el-row :gutter="isMobile ? 10 : 20">
+            <el-col :xs="24" :sm="12" style="margin-bottom: 20px;">
+              <el-card shadow="hover">
                 <template #header>
                   <span>系统基本信息</span>
                 </template>
-                <el-descriptions :column="1" border>
+                <el-descriptions :column="1" border :size="isMobile ? 'small' : 'default'">
                   <el-descriptions-item label="系统名称">{{ systemInfo.name }}</el-descriptions-item>
                   <el-descriptions-item label="系统版本">{{ systemInfo.version }}</el-descriptions-item>
                   <el-descriptions-item label="运行环境">{{ systemInfo.environment }}</el-descriptions-item>
@@ -344,24 +370,26 @@
               </el-card>
             </el-col>
             
-            <el-col :span="12">
-              <el-card>
+            <el-col :xs="24" :sm="12" style="margin-bottom: 20px;">
+              <el-card shadow="hover">
                 <template #header>
                   <span>服务状态</span>
                 </template>
-                <el-table :data="serviceStatus" style="width: 100%">
-                  <el-table-column prop="name" label="服务名称" />
-                  <el-table-column prop="status" label="状态" width="100">
-                    <template #default="scope">
-                      <el-tag :type="scope.row.status === '正常' ? 'success' : 'danger'">
-                        {{ scope.row.status }}
-                      </el-tag>
-                    </template>
-                  </el-table-column>
-                  <el-table-column prop="responseTime" label="响应时间" width="120" />
-                </el-table>
+                <div class="table-container mobile-scroll">
+                  <el-table :data="serviceStatus" style="width: 100%" :size="isMobile ? 'small' : 'default'">
+                    <el-table-column prop="name" label="服务名称" />
+                    <el-table-column prop="status" label="状态" :width="isMobile ? 70 : 100">
+                      <template #default="scope">
+                        <el-tag :type="scope.row.status === '正常' ? 'success' : 'danger'" size="small">
+                          {{ scope.row.status }}
+                        </el-tag>
+                      </template>
+                    </el-table-column>
+                    <el-table-column prop="responseTime" label="响应时间" :width="isMobile ? 80 : 120" />
+                  </el-table>
+                </div>
                 
-                <el-button type="primary" @click="refreshServiceStatus" style="margin-top: 20px;">刷新状态</el-button>
+                <el-button type="primary" @click="refreshServiceStatus" style="margin-top: 20px;" :size="isMobile ? 'small' : 'default'" :style="{ width: isMobile ? '100%' : 'auto' }">刷新状态</el-button>
               </el-card>
             </el-col>
           </el-row>
@@ -369,18 +397,24 @@
         
         <!-- 业务规则 -->
         <el-tab-pane label="业务规则" name="businessRules">
-          <el-form :model="businessRulesForm" label-width="200px">
+          <el-form 
+            :model="businessRulesForm" 
+            :label-width="isMobile ? '120px' : '200px'"
+            :label-position="isMobile ? 'top' : 'right'"
+          >
             <el-form-item label="费用逾期宽限期">
               <el-input-number 
                 v-model="businessRulesForm.overdueGracePeriod" 
                 :min="0" 
                 :max="30" 
-              /> 天
+                style="width: calc(100% - 30px)"
+              /> 
+              <span style="margin-left: 10px">天</span>
               <div class="form-tip">费用逾期后的宽限天数</div>
             </el-form-item>
             
             <el-form-item label="滞纳金计算方式">
-              <el-select v-model="businessRulesForm.lateFeeCalculation" style="width: 200px;">
+              <el-select v-model="businessRulesForm.lateFeeCalculation" style="width: 100%">
                 <el-option label="按日计算" value="daily" />
                 <el-option label="按月计算" value="monthly" />
               </el-select>
@@ -393,7 +427,9 @@
                 :max="100" 
                 :precision="2" 
                 :step="0.1" 
-              /> %
+                style="width: calc(100% - 30px)"
+              /> 
+              <span style="margin-left: 10px">%</span>
               <div class="form-tip">每日或每月的滞纳金比例</div>
             </el-form-item>
             
@@ -402,7 +438,9 @@
                 v-model="businessRulesForm.maxLateFee" 
                 :min="0" 
                 :precision="2" 
-              /> 元
+                style="width: calc(100% - 30px)"
+              /> 
+              <span style="margin-left: 10px">元</span>
               <div class="form-tip">滞纳金的最大金额限制</div>
             </el-form-item>
             
@@ -411,7 +449,9 @@
                 v-model="businessRulesForm.refundPeriod" 
                 :min="1" 
                 :max="365" 
-              /> 天
+                style="width: calc(100% - 30px)"
+              /> 
+              <span style="margin-left: 10px">天</span>
               <div class="form-tip">费用缴费后可申请退款的时间期限</div>
             </el-form-item>
             
@@ -422,7 +462,9 @@
                 :max="100" 
                 :precision="2" 
                 :step="0.1" 
-              /> %
+                style="width: calc(100% - 30px)"
+              /> 
+              <span style="margin-left: 10px">%</span>
               <div class="form-tip">退款时收取的手续费比例</div>
             </el-form-item>
           </el-form>
@@ -430,9 +472,14 @@
         
         <!-- 日志设置 -->
         <el-tab-pane label="日志设置" name="log">
-          <el-form :model="logForm" label-width="150px" style="max-width: 600px;">
+          <el-form 
+            :model="logForm" 
+            :label-width="isMobile ? '120px' : '150px'" 
+            :label-position="isMobile ? 'top' : 'right'"
+            :style="!isMobile ? 'max-width: 600px;' : ''"
+          >
             <el-form-item label="日志级别">
-              <el-select v-model="logForm.level" placeholder="请选择日志级别">
+              <el-select v-model="logForm.level" placeholder="请选择日志级别" style="width: 100%">
                 <el-option label="DEBUG" value="debug" />
                 <el-option label="INFO" value="info" />
                 <el-option label="WARN" value="warn" />
@@ -445,7 +492,9 @@
                 v-model="logForm.retentionDays" 
                 :min="1" 
                 :max="365" 
-              /> 天
+                style="width: calc(100% - 30px)"
+              /> 
+              <span style="margin-left: 10px">天</span>
             </el-form-item>
             
             <el-form-item label="日志文件大小限制">
@@ -453,7 +502,9 @@
                 v-model="logForm.maxFileSize" 
                 :min="1" 
                 :max="1024" 
-              /> MB
+                style="width: calc(100% - 40px)"
+              /> 
+              <span style="margin-left: 10px">MB</span>
             </el-form-item>
             
             <el-form-item label="启用日志轮转">
@@ -473,8 +524,13 @@
     </el-card>
     
     <!-- 通知模板编辑对话框 -->
-    <el-dialog v-model="templateDialogVisible" :title="templateDialogTitle" width="600px">
-      <el-form :model="templateForm" label-width="100px">
+    <el-dialog 
+      v-model="templateDialogVisible" 
+      :title="templateDialogTitle" 
+      :width="isMobile ? '95%' : '600px'"
+      :fullscreen="isMobile"
+    >
+      <el-form :model="templateForm" :label-width="isMobile ? '80px' : '100px'" :label-position="isMobile ? 'top' : 'right'">
         <el-form-item label="模板名称">
           <el-input v-model="templateForm.name" placeholder="请输入模板名称" />
         </el-form-item>
