@@ -104,19 +104,20 @@ api.interceptors.response.use(
     
     const resData = response.data
     
+    // 关键位置打印日志方便调试 (规则 7)
+    console.log(`📦 [API Response Data] ${response.config.url}:`, resData)
+    
     if (resData && typeof resData === 'object') {
       // 如果包含 success 字段，说明是标准的后端返回结构
       if (resData.hasOwnProperty('success')) {
         if (resData.success === true) {
-          // 关键位置打印日志方便调试 (规则 7)
-          console.log(`✅ [API Success] ${response.config.method?.toUpperCase()} ${response.config.url}`, {
-            hasData: !!resData.data,
-            timestamp: new Date().toISOString()
-          })
+          console.log(`✅ [API Success Helper] ${response.config.url} - data present:`, resData.data !== undefined)
           
           // 返回 resData.data，这样在组件中访问 res.xxx 就相当于访问了原始的 response.data.data.xxx
           // 如果 resData.data 不存在，则返回整个 resData 
-          return resData.data !== undefined ? resData.data : resData
+          const result = resData.data !== undefined ? resData.data : resData
+          console.log(`📤 [API Returning] ${response.config.url}:`, result)
+          return result
         } else {
           // 业务逻辑错误
           const errorMsg = resData.message || '请求失败'

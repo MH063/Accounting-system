@@ -1933,8 +1933,8 @@ const refreshSystemStatusOverview = async () => {
       const metrics = clientDataTyped.metrics || {}
       console.log('🔍 [DEBUG] 客户端指标(metrics):', metrics)
       
-      // 客户端版本从配置文件获取，不使用API返回值
-      // clientStats.value.version = metrics.version || clientDataTyped.version || clientStats.value.version
+      // 客户端版本从后端API获取
+      clientStats.value.version = metrics.version || clientDataTyped.version || clientStats.value.version
       clientStats.value.onlineUsers = metrics.onlineUsers || clientDataTyped.onlineUsers || clientStats.value.onlineUsers
       clientStats.value.userDistribution = metrics.userDistribution || clientDataTyped.userDistribution || { high: 0, normal: 0, suspicious: 0 }
       clientStats.value.qualityIndex = metrics.qualityIndex || clientDataTyped.qualityIndex || 100
@@ -1964,8 +1964,8 @@ const refreshSystemStatusOverview = async () => {
         const metrics = backendDataTyped.metrics || {}
         console.log('🔍 [DEBUG] 后端指标(metrics):', metrics)
         
-        // 后端版本从配置文件获取，不使用API返回值
-        // backendStats.value.version = metrics.version || backendDataTyped.version || backendStats.value.version
+        // 后端版本从后端API获取
+        backendStats.value.version = metrics.version || backendDataTyped.version || backendStats.value.version
         backendStats.value.apiResponseTime = metrics.apiResponseTime || backendDataTyped.apiResponseTime || backendStats.value.apiResponseTime
         backendStats.value.qps = metrics.qps ?? backendDataTyped.qps ?? backendStats.value.qps
         backendStats.value.uptime = metrics.uptime ?? backendDataTyped.uptime ?? backendStats.value.uptime
@@ -1988,8 +1988,8 @@ const refreshSystemStatusOverview = async () => {
         const metrics = databaseDataTyped.metrics || {}
         console.log('🔍 [DEBUG] 数据库指标(metrics):', metrics)
         
-        // 数据库版本从配置文件获取，不使用API返回值
-        // databaseStats.value.version = metrics.version || databaseDataTyped.version || databaseStats.value.version
+        // 数据库版本从后端API获取
+        databaseStats.value.version = metrics.version || databaseDataTyped.version || databaseStats.value.version
         databaseStats.value.connections = metrics.activeConnections || databaseDataTyped.activeConnections || databaseStats.value.connections
         databaseStats.value.maxConnections = metrics.maxConnections || databaseDataTyped.maxConnections || databaseStats.value.maxConnections
         databaseStats.value.cacheHitRate = metrics.cacheHitRate || databaseDataTyped.cacheHitRate || databaseStats.value.cacheHitRate
@@ -3016,8 +3016,8 @@ const fetchSystemStats = async () => {
       
       // 更新系统信息数据
       if (statsData.systemInfo) {
-        // 版本号从配置文件获取，不使用API返回值
-        // systemInfo.value.version = statsData.systemInfo.version || systemInfo.value.version
+        // 系统版本从后端API获取
+        systemInfo.value.version = statsData.systemInfo.version || systemInfo.value.version
         systemInfo.value.uptime = statsData.systemInfo.uptime || systemInfo.value.uptime
         systemInfo.value.environment = statsData.systemInfo.environment || systemInfo.value.environment
         systemInfo.value.startTime = statsData.systemInfo.startTime || systemInfo.value.startTime
@@ -3050,8 +3050,8 @@ const fetchSystemStats = async () => {
         
         // 优先从 metrics 获取指标
         const metrics = clientDataTyped.metrics || {}
-        // 客户端版本从配置文件获取，不使用API返回值
-        // clientStats.value.version = metrics.version || clientDataTyped.version || clientStats.value.version
+        // 客户端版本从后端API获取
+        clientStats.value.version = metrics.version || clientDataTyped.version || clientStats.value.version
         clientStats.value.onlineUsers = metrics.onlineUsers || clientDataTyped.onlineUsers || clientStats.value.onlineUsers
         clientStats.value.userDistribution = metrics.userDistribution || clientDataTyped.userDistribution || { high: 0, normal: 0, suspicious: 0 }
         clientStats.value.qualityIndex = metrics.qualityIndex || clientDataTyped.qualityIndex || 100
@@ -3075,8 +3075,8 @@ const fetchSystemStats = async () => {
         
         // 优先从 metrics 获取指标
         const metrics = backendDataTyped.metrics || {}
-        // 后端版本从配置文件获取，不使用API返回值
-        // backendStats.value.version = metrics.version || backendDataTyped.version || backendStats.value.version
+        // 后端版本从后端API获取
+        backendStats.value.version = metrics.version || backendDataTyped.version || backendStats.value.version
         backendStats.value.apiResponseTime = metrics.apiResponseTime || backendDataTyped.apiResponseTime || backendStats.value.apiResponseTime
         backendStats.value.qps = metrics.qps ?? backendDataTyped.qps ?? backendStats.value.qps
         backendStats.value.uptime = metrics.uptime ?? backendDataTyped.uptime ?? backendStats.value.uptime
@@ -3094,8 +3094,8 @@ const fetchSystemStats = async () => {
         
         // 优先从 metrics 获取指标
         const metrics = databaseDataTyped.metrics || {}
-        // 数据库版本从配置文件获取，不使用API返回值
-        // databaseStats.value.version = metrics.version || databaseDataTyped.version || databaseStats.value.version
+        // 数据库版本从后端API获取
+        databaseStats.value.version = metrics.version || databaseDataTyped.version || databaseStats.value.version
         databaseStats.value.connections = metrics.activeConnections || databaseDataTyped.activeConnections || databaseStats.value.connections
         databaseStats.value.maxConnections = metrics.maxConnections || databaseDataTyped.maxConnections || databaseStats.value.maxConnections
         databaseStats.value.cacheHitRate = metrics.cacheHitRate || databaseDataTyped.cacheHitRate || databaseStats.value.cacheHitRate

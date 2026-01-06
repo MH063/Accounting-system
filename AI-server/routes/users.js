@@ -65,7 +65,7 @@ router.get('/', authenticateToken, responseWrapper(async (req, res) => {
     let paramIndex = 1;
 
     if (keyword) {
-      whereConditions.push(`(u.username ILIKE $${paramIndex} OR u.email ILIKE $${paramIndex})`);
+      whereConditions.push(`(u.username ILIKE $${paramIndex} OR u.email ILIKE $${paramIndex} OR u.phone ILIKE $${paramIndex})`);
       queryParams.push(`%${keyword}%`);
       paramIndex++;
     }

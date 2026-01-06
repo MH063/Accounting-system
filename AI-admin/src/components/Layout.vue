@@ -55,17 +55,20 @@ onUnmounted(() => {
 }
 
 .main-content {
-  display: flex;
+  /* 移除 display: flex，因为侧边栏是 fixed 布局 */
+  /* 这样 .content-area 作为块级元素会自动计算宽度为 100% - margin-left */
   padding-top: 60px; /* 导航栏高度 */
+  min-height: 100vh;
+  box-sizing: border-box;
 }
 
 .content-area {
-  flex: 1;
   margin-left: 220px; /* 侧边栏宽度 */
   padding: 20px;
   min-height: calc(100vh - 60px);
   box-sizing: border-box;
   transition: margin-left 0.3s;
+  /* 移除 flex: 1，避免在父级非 flex 容器中产生错误宽度 */
 }
 
 .sidebar-collapsed .content-area {

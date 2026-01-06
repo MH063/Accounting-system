@@ -166,21 +166,33 @@ const chartHeight = computed(() => {
 const initChart = () => {
   if (!chartRef.value) return
   
+  // 检查 DOM 宽高，如果为 0 则不初始化，避免 ECharts 报错
+  const { clientWidth, clientHeight } = chartRef.value
+  if (clientWidth === 0 || clientHeight === 0) {
+    // 容器不可见时静默跳过，ResizeObserver 会在容器可见时触发 resizeChart 从而重新初始化
+    return
+  }
+  
   // 销毁已存在的图表实例
   if (chartInstance.value) {
     chartInstance.value.dispose()
   }
   
-  // 初始化新的图表实例
-  chartInstance.value = echarts.init(chartRef.value, props.theme)
-  
-  // 设置图表选项
-  if (props.options) {
-    chartInstance.value.setOption(props.options)
+  try {
+    // 初始化新的图表实例
+    chartInstance.value = echarts.init(chartRef.value, props.theme)
+    console.log(`[ChartContainer] 图表 "${props.title}" 初始化成功`)
+    
+    // 设置图表选项
+    if (props.options) {
+      chartInstance.value.setOption(props.options)
+    }
+    
+    // 发送图表就绪事件
+    emit('chart-ready', chartInstance.value)
+  } catch (error) {
+    console.error('[ChartContainer] 初始化图表失败:', error)
   }
-  
-  // 发送图表就绪事件
-  emit('chart-ready', chartInstance.value)
 }
 
 /**
@@ -189,6 +201,9 @@ const initChart = () => {
 const resizeChart = () => {
   if (chartInstance.value) {
     chartInstance.value.resize()
+  } else {
+    // 如果实例不存在，尝试重新初始化（处理初始宽高为0的情况）
+    initChart()
   }
 }
 
@@ -197,8 +212,13 @@ const resizeChart = () => {
  * @param options 图表配置项
  */
 const updateChart = (options: any) => {
-  if (chartInstance.value && options) {
-    chartInstance.value.setOption(options, true)
+  if (chartInstance.value) {
+    if (options) {
+      chartInstance.value.setOption(options, true)
+    }
+  } else {
+    // 如果实例不存在，尝试初始化（可能之前因为宽高为0没初始化成功）
+    initChart()
   }
 }
 
@@ -288,7 +308,7 @@ watch(() => props.options, (newOptions) => {
 }, { deep: true })
 
 watch(() => props.loading, (newLoading) => {
-  if (!newLoading && chartInstance.value) {
+  if (!newLoading) {
     nextTick(() => {
       resizeChart()
     })

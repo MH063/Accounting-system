@@ -136,6 +136,27 @@ app.use('/uploads', (req, res, next) => {
 });
 app.use('/uploads', express.static('uploads'));
 
+// 确保必要的上传目录存在
+const fs = require('fs');
+const path = require('path');
+const dirs = [
+  path.join(__dirname, 'uploads'),
+  path.join(__dirname, 'uploads/avatars'),
+  path.join(__dirname, 'uploads/images'),
+  path.join(__dirname, 'uploads/qrcodes')
+];
+
+dirs.forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      logger.info(`创建上传目录: ${dir}`);
+    } catch (err) {
+      logger.error(`创建上传目录失败: ${dir}`, { error: err.message });
+    }
+  }
+});
+
 // 信息泄露防护中间件 - 必须在静态文件服务之后，其他中间件之前
 app.use(infoLeakProtection()); // 防护响应信息泄露
 
@@ -272,6 +293,9 @@ app.use('/api/payments', require('./routes/payments'));
 
 // 管理员支付监控路由
 app.use('/api/admin/payments/monitor', require('./routes/adminPaymentMonitor'));
+
+// 管理员收款码管理路由
+app.use('/api/admin/payment-codes', require('./routes/adminPaymentCodes'));
 
 // 收款码相关路由
 app.use('/api/qr-codes', require('./routes/qrCodes'));

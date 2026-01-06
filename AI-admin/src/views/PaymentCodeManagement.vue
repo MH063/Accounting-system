@@ -5,148 +5,165 @@
         <div class="card-header">
           <span>收款码管理</span>
           <div>
-            <el-button type="primary" @click="handleBatchCheck">批量安全检查</el-button>
+            <el-button type="primary" @click="handleBatchCheck" :disabled="selectedRows.length === 0">批量安全检查</el-button>
             <el-button type="primary" @click="handleAdd">新增收款码</el-button>
           </div>
         </div>
       </template>
       
-      <!-- 搜索和筛选 -->
       <div class="search-bar">
-        <el-form :model="searchForm" label-width="80px" inline>
-          <el-form-item label="收款码名称">
-            <el-input v-model="searchForm.name" placeholder="请输入收款码名称" clearable />
-          </el-form-item>
+        <el-form :model="searchForm" ref="searchFormRef" class="responsive-search-form" label-width="auto">
+          <div class="search-items">
+            <el-form-item label="收款码名称">
+              <el-input v-model="searchForm.name" placeholder="请输入名称" clearable @keyup.enter="handleSearch" />
+            </el-form-item>
+            
+            <el-form-item label="收款码类型">
+              <el-select v-model="searchForm.type" placeholder="全部类型" clearable>
+                <el-option label="支付宝" value="alipay" />
+                <el-option label="微信" value="wechat" />
+                <el-option label="银联" value="unionpay" />
+              </el-select>
+            </el-form-item>
+            
+            <el-form-item label="状态">
+              <el-select v-model="searchForm.status" placeholder="全部状态" clearable>
+                <el-option label="启用" value="enabled" />
+                <el-option label="禁用" value="disabled" />
+                <el-option label="审核中" value="pending" />
+                <el-option label="已停用" value="stopped" />
+              </el-select>
+            </el-form-item>
+            
+            <el-form-item label="安全状态">
+              <el-select v-model="searchForm.securityStatus" placeholder="全部安全状态" clearable>
+                <el-option label="安全" value="safe" />
+                <el-option label="风险" value="risk" />
+                <el-option label="异常" value="abnormal" />
+              </el-select>
+            </el-form-item>
+          </div>
           
-          <el-form-item label="收款码类型">
-            <el-select v-model="searchForm.type" placeholder="请选择收款码类型" clearable>
-              <el-option label="支付宝" value="alipay" />
-              <el-option label="微信" value="wechat" />
-              <el-option label="银联" value="unionpay" />
-            </el-select>
-          </el-form-item>
-          
-          <el-form-item label="状态">
-            <el-select v-model="searchForm.status" placeholder="请选择状态" clearable>
-              <el-option label="启用" value="enabled" />
-              <el-option label="禁用" value="disabled" />
-              <el-option label="审核中" value="pending" />
-              <el-option label="已停用" value="stopped" />
-            </el-select>
-          </el-form-item>
-          
-          <el-form-item label="安全状态">
-            <el-select v-model="searchForm.securityStatus" placeholder="请选择安全状态" clearable>
-              <el-option label="安全" value="safe" />
-              <el-option label="风险" value="risk" />
-              <el-option label="异常" value="abnormal" />
-            </el-select>
-          </el-form-item>
-          
-          <el-form-item>
+          <div class="search-actions">
             <el-button type="primary" @click="handleSearch">查询</el-button>
             <el-button @click="handleReset">重置</el-button>
-          </el-form-item>
+          </div>
         </el-form>
       </div>
       
-      <!-- 收款码表格 -->
-      <el-table :data="tableData" style="width: 100%" v-loading="loading" @selection-change="handleSelectionChange">
-        <el-table-column type="selection" width="55" />
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="name" label="收款码名称" />
-        <el-table-column prop="type" label="收款码类型">
-          <template #default="scope">
-            {{ getPaymentTypeText(scope.row.type) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="account" label="收款账户" />
-        <el-table-column label="收款码图片" width="150">
-          <template #default="scope">
-            <div class="qr-codes-container">
-              <el-image 
-                v-for="(qrCode, index) in scope.row.qrCodeUrls.slice(0, 2)" 
-                :key="index"
-                :src="qrCode" 
-                :preview-src-list="scope.row.qrCodeUrls" 
-                fit="cover" 
-                style="width: 60px; height: 60px; border-radius: 4px; margin: 2px;"
-              />
-              <div v-if="scope.row.qrCodeUrls.length > 2" class="more-images">
-                +{{ scope.row.qrCodeUrls.length - 2 }}
+      <div class="table-wrapper">
+        <el-table 
+          :data="tableData" 
+          style="width: 100%" 
+          v-loading="loading" 
+          @selection-change="handleSelectionChange"
+          class="responsive-table"
+        >
+          <el-table-column type="selection" width="45" fixed="left" />
+          <el-table-column prop="id" label="ID" width="60" />
+          <el-table-column prop="name" label="收款码名称" min-width="150" show-overflow-tooltip />
+          <el-table-column prop="type" label="类型" min-width="90">
+            <template #default="scope">
+              {{ getPaymentTypeText(scope.row.type) }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="account" label="收款账户" min-width="180" show-overflow-tooltip />
+          <el-table-column label="图片" min-width="120">
+            <template #default="scope">
+              <div class="qr-codes-container" v-if="scope.row.qrCodeUrls && scope.row.qrCodeUrls.length > 0">
+                <el-image 
+                  v-for="(qrCode, index) in scope.row.qrCodeUrls.slice(0, 2)" 
+                  :key="index"
+                  :src="qrCode" 
+                  :preview-src-list="scope.row.qrCodeUrls" 
+                  fit="cover" 
+                  class="table-qr-image"
+                />
+                <div v-if="scope.row.qrCodeUrls.length > 2" class="more-images-badge">
+                  +{{ scope.row.qrCodeUrls.length - 2 }}
+                </div>
               </div>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column prop="status" label="状态" width="100">
-          <template #default="scope">
-            <el-tag :type="getStatusTagType(scope.row.status)">
-              {{ getStatusText(scope.row.status) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="securityStatus" label="安全状态" width="100">
-          <template #default="scope">
-            <el-tag :type="getSecurityStatusTagType(scope.row.securityStatus)">
-              {{ getSecurityStatusText(scope.row.securityStatus) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="auditStatus" label="审核状态" width="100">
-          <template #default="scope">
-            <el-tag :type="getAuditStatusTagType(scope.row.auditStatus)">
-              {{ getAuditStatusText(scope.row.auditStatus) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="usageCount" label="使用次数" width="100" />
-        <el-table-column prop="lastUsedTime" label="最后使用时间" width="160" />
-        <el-table-column prop="createTime" label="创建时间" width="160" />
-        <el-table-column label="操作" width="250">
-          <template #default="scope">
-            <el-button size="small" @click="handleView(scope.row)">查看</el-button>
-            <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
-            <el-button 
-              size="small" 
-              type="warning" 
-              @click="handleStop(scope.row)" 
-              v-if="scope.row.status === 'enabled'"
-            >
-              停用
-            </el-button>
-            <el-button 
-              size="small" 
-              type="danger" 
-              @click="handleDelete(scope.row)"
-            >
-              删除
-            </el-button>
-            <el-button 
-              size="small" 
-              type="primary" 
-              @click="handleSecurityCheck(scope.row)"
-            >
-              安全检查
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      
+              <span v-else class="no-image">暂无图片</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="status" label="状态" min-width="90">
+            <template #default="scope">
+              <el-tag :type="getStatusTagType(scope.row.status)" size="small">
+                {{ getStatusText(scope.row.status) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="securityStatus" label="安全" min-width="90">
+            <template #default="scope">
+              <el-tag :type="getSecurityStatusTagType(scope.row.securityStatus)" size="small">
+                {{ getSecurityStatusText(scope.row.securityStatus) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="auditStatus" label="审核" min-width="90">
+            <template #default="scope">
+              <el-tag :type="getAuditStatusTagType(scope.row.auditStatus)" size="small">
+                {{ getAuditStatusText(scope.row.auditStatus) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="usageCount" label="使用" min-width="80" sortable />
+          <el-table-column prop="lastUsedTime" label="最后使用" min-width="160" show-overflow-tooltip v-if="!isMobile" />
+          <el-table-column prop="createTime" label="创建时间" min-width="160" show-overflow-tooltip v-if="!isMobile" />
+          <el-table-column label="操作" min-width="220" fixed="right">
+            <template #default="scope">
+              <div class="action-buttons">
+                <el-link type="primary" :underline="false" @click="handleView(scope.row)">查看</el-link>
+                <el-link type="primary" :underline="false" @click="handleEdit(scope.row)">编辑</el-link>
+                <el-link 
+                  type="warning" 
+                  :underline="false" 
+                  @click="handleStop(scope.row)" 
+                  v-if="scope.row.status === 'enabled'"
+                >
+                  停用
+                </el-link>
+                <el-link 
+                  type="danger" 
+                  :underline="false" 
+                  @click="handleDelete(scope.row)"
+                >
+                  删除
+                </el-link>
+                <el-link 
+                  type="primary" 
+                  :underline="false" 
+                  @click="handleSecurityCheck(scope.row)"
+                >
+                  安检
+                </el-link>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
       <div class="pagination-container">
         <el-pagination
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
           :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
+          :layout="isMobile ? 'prev, pager, next' : 'total, sizes, prev, pager, next, jumper'"
           :total="total"
+          :small="isMobile"
           @size-change="handleSizeChange"
           @current-change="handleCurrentChange"
         />
       </div>
     </el-card>
     
-    <!-- 新增/编辑对话框 -->
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="700px">
+    <el-dialog 
+      v-model="dialogVisible" 
+      :title="dialogTitle" 
+      :width="dialogWidth"
+      class="responsive-dialog"
+      @close="handleDialogClose"
+    >
       <el-form :model="formData" :rules="formRules" ref="formRef" label-width="100px">
         <el-form-item label="收款码名称" prop="name">
           <el-input v-model="formData.name" placeholder="请输入收款码名称" />
@@ -175,6 +192,7 @@
               :on-remove="handleRemove"
               :on-success="handleUploadSuccess"
               :before-upload="beforeUpload"
+              :http-request="handleCustomUpload"
               multiple
             >
               <el-icon><Plus /></el-icon>
@@ -198,53 +216,59 @@
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="dialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="submitForm">确定</el-button>
+          <el-button type="primary" @click="submitForm" :loading="submitLoading">确定</el-button>
         </span>
       </template>
     </el-dialog>
     
-    <!-- 查看详情对话框 -->
-    <el-dialog v-model="detailDialogVisible" title="收款码详情" width="700px">
-      <div class="qr-code-detail">
-        <div class="qr-codes-gallery">
+    <el-dialog 
+      v-model="detailDialogVisible" 
+      title="收款码详情" 
+      :width="dialogWidth"
+      class="responsive-dialog"
+    >
+      <div class="qr-code-detail" v-if="detailData.id">
+        <div class="qr-codes-gallery" v-if="detailData.qrCodeUrls && detailData.qrCodeUrls.length > 0">
           <el-image 
             v-for="(qrCode, index) in detailData.qrCodeUrls" 
             :key="index"
             :src="qrCode" 
             :preview-src-list="detailData.qrCodeUrls" 
             fit="contain" 
-            style="width: 150px; height: 150px; margin: 5px; border-radius: 4px;"
+            class="detail-qr-image"
           />
         </div>
         <div class="detail-info">
-          <p><strong>收款码名称:</strong> {{ detailData.name }}</p>
-          <p><strong>收款码类型:</strong> {{ getPaymentTypeText(detailData.type) }}</p>
-          <p><strong>收款账户:</strong> {{ detailData.account }}</p>
-          <p><strong>状态:</strong> 
-            <el-tag :type="getStatusTagType(detailData.status)">
+          <div class="info-item"><span class="label">收款码名称:</span> <span class="value">{{ detailData.name }}</span></div>
+          <div class="info-item"><span class="label">收款码类型:</span> <span class="value">{{ getPaymentTypeText(detailData.type) }}</span></div>
+          <div class="info-item"><span class="label">收款账户:</span> <span class="value">{{ detailData.account }}</span></div>
+          <div class="info-item">
+            <span class="label">状态:</span> 
+            <el-tag :type="getStatusTagType(detailData.status)" size="small">
               {{ getStatusText(detailData.status) }}
             </el-tag>
-          </p>
-          <p><strong>安全状态:</strong> 
-            <el-tag :type="getSecurityStatusTagType(detailData.securityStatus)">
+          </div>
+          <div class="info-item">
+            <span class="label">安全状态:</span> 
+            <el-tag :type="getSecurityStatusTagType(detailData.securityStatus)" size="small">
               {{ getSecurityStatusText(detailData.securityStatus) }}
             </el-tag>
-          </p>
-          <p><strong>审核状态:</strong> 
-            <el-tag :type="getAuditStatusTagType(detailData.auditStatus)">
+          </div>
+          <div class="info-item">
+            <span class="label">审核状态:</span> 
+            <el-tag :type="getAuditStatusTagType(detailData.auditStatus)" size="small">
               {{ getAuditStatusText(detailData.auditStatus) }}
             </el-tag>
-          </p>
-          <p><strong>使用次数:</strong> {{ detailData.usageCount }}</p>
-          <p><strong>最后使用时间:</strong> {{ detailData.lastUsedTime }}</p>
-          <p><strong>创建时间:</strong> {{ detailData.createTime }}</p>
-          <p><strong>备注:</strong> {{ detailData.remark }}</p>
+          </div>
+          <div class="info-item"><span class="label">使用次数:</span> <span class="value">{{ detailData.usageCount }}</span></div>
+          <div class="info-item"><span class="label">最后使用时间:</span> <span class="value">{{ detailData.lastUsedTime || '-' }}</span></div>
+          <div class="info-item"><span class="label">创建时间:</span> <span class="value">{{ detailData.createTime }}</span></div>
+          <div class="info-item" v-if="detailData.remark"><span class="label">备注:</span> <span class="value">{{ detailData.remark }}</span></div>
         </div>
         
-        <!-- 使用统计 -->
         <el-divider />
         <h3>使用统计</h3>
-        <div ref="usageChartRef" style="height: 300px;"></div>
+        <div ref="usageChartRef" class="usage-chart"></div>
       </div>
       
       <template #footer>
@@ -254,12 +278,16 @@
       </template>
     </el-dialog>
     
-    <!-- 安全检查对话框 -->
-    <el-dialog v-model="securityDialogVisible" title="安全检查报告" width="700px">
-      <el-descriptions :column="1" border>
+    <el-dialog 
+      v-model="securityDialogVisible" 
+      title="安全检查报告" 
+      :width="dialogWidth"
+      class="responsive-dialog"
+    >
+      <el-descriptions :column="isMobile ? 1 : 2" border v-if="securityReport.checkTime">
         <el-descriptions-item label="检查时间">{{ securityReport.checkTime }}</el-descriptions-item>
         <el-descriptions-item label="检查结果">
-          <el-tag :type="securityReport.result === 'safe' ? 'success' : securityReport.result === 'risk' ? 'warning' : 'danger'">
+          <el-tag :type="securityReport.result === 'safe' ? 'success' : securityReport.result === 'risk' ? 'warning' : 'danger'" size="small">
             {{ securityReport.result === 'safe' ? '安全' : securityReport.result === 'risk' ? '存在风险' : '异常' }}
           </el-tag>
         </el-descriptions-item>
@@ -268,18 +296,18 @@
         <el-descriptions-item label="发现问题数">{{ securityReport.issuesFound }}</el-descriptions-item>
       </el-descriptions>
       
-      <el-divider />
+      <el-divider v-if="securityReport.details && securityReport.details.length > 0" />
       
-      <el-table :data="securityReport.details" style="width: 100%">
-        <el-table-column prop="item" label="检查项目" />
-        <el-table-column prop="status" label="状态" width="100">
+      <el-table :data="securityReport.details || []" style="width: 100%" class="security-details-table" v-if="securityReport.details">
+        <el-table-column prop="item" label="检查项目" min-width="120" />
+        <el-table-column prop="status" label="状态" width="80">
           <template #default="scope">
-            <el-tag :type="scope.row.status === 'pass' ? 'success' : scope.row.status === 'warning' ? 'warning' : 'danger'">
+            <el-tag :type="scope.row.status === 'pass' ? 'success' : scope.row.status === 'warning' ? 'warning' : 'danger'" size="small">
               {{ scope.row.status === 'pass' ? '通过' : scope.row.status === 'warning' ? '警告' : '失败' }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="description" label="描述" />
+        <el-table-column prop="description" label="描述" min-width="150" show-overflow-tooltip />
       </el-table>
       
       <template #footer>
@@ -289,8 +317,7 @@
         </span>
       </template>
     </el-dialog>
-    
-    <!-- 图片预览对话框 -->
+
     <el-dialog v-model="previewDialogVisible" title="图片预览">
       <img :src="previewImageUrl" style="width: 100%;" />
     </el-dialog>
@@ -298,77 +325,38 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
-import { validateCustomFile, createCustomFileType } from '@/utils/fileUploadValidator'
+import paymentCodeService, { 
+  PaymentCode, 
+  PaymentCodeParams,
+  CreatePaymentCodeData,
+  UpdatePaymentCodeData,
+  SecurityCheckResult 
+} from '@/api/paymentCode'
 
-// 图表引用
+const windowWidth = ref(window.innerWidth)
+const isMobile = computed(() => windowWidth.value < 768)
+const dialogWidth = computed(() => isMobile.value ? '95%' : '700px')
+
+const handleResize = () => {
+  windowWidth.value = window.innerWidth
+  if (usageChart) {
+    usageChart.resize()
+  }
+}
+
 const usageChartRef = ref()
-
-// 图表实例
 let usageChart: any = null
 
-// 响应式数据
-const tableData = ref([
-  {
-    id: 1,
-    name: '学费收款码',
-    type: 'alipay',
-    account: 'alipay@school.edu.cn',
-    qrCodeUrls: [
-      'https://picsum.photos/seed/alipay1/200/200',
-      'https://picsum.photos/seed/alipay2/200/200',
-      'https://picsum.photos/seed/alipay3/200/200'
-    ],
-    status: 'enabled',
-    securityStatus: 'safe',
-    auditStatus: 'approved',
-    usageCount: 128,
-    lastUsedTime: '2023-10-15 14:30:25',
-    createTime: '2023-01-01 10:00:00',
-    remark: '用于收取学费'
-  },
-  {
-    id: 2,
-    name: '住宿费收款码',
-    type: 'wechat',
-    account: 'wechat@school.edu.cn',
-    qrCodeUrls: [
-      'https://picsum.photos/seed/wechat1/200/200',
-      'https://picsum.photos/seed/wechat2/200/200'
-    ],
-    status: 'enabled',
-    securityStatus: 'risk',
-    auditStatus: 'approved',
-    usageCount: 86,
-    lastUsedTime: '2023-10-15 11:15:42',
-    createTime: '2023-01-02 10:00:00',
-    remark: '用于收取住宿费'
-  },
-  {
-    id: 3,
-    name: '其他费用收款码',
-    type: 'unionpay',
-    account: 'unionpay@school.edu.cn',
-    qrCodeUrls: [
-      'https://picsum.photos/seed/unionpay1/200/200'
-    ],
-    status: 'disabled',
-    securityStatus: 'abnormal',
-    auditStatus: 'rejected',
-    usageCount: 0,
-    lastUsedTime: '-',
-    createTime: '2023-01-03 10:00:00',
-    remark: '用于收取其他杂费'
-  }
-])
-
+const tableData = ref<PaymentCode[]>([])
 const loading = ref(false)
+const submitLoading = ref(false)
 const currentPage = ref(1)
-const pageSize = ref(10) // 按照分页设置规范，默认值为10
-const total = ref(100)
+const pageSize = ref(10)
+const total = ref(0)
 
 const searchForm = ref({
   name: '',
@@ -384,179 +372,149 @@ const previewDialogVisible = ref(false)
 const dialogTitle = ref('')
 const isEdit = ref(false)
 
-const selectedRows = ref<any[]>([])
+const selectedRows = ref<PaymentCode[]>([])
 const previewImageUrl = ref('')
 
-const fileList = ref([])
+const fileList = ref<{ name: string; url: string }[]>([])
 
 const formData = ref({
   id: 0,
   name: '',
   type: '',
   account: '',
-  qrCodeUrls: [],
+  qrCodeUrls: [] as string[],
   status: 'enabled',
   remark: ''
 })
 
-const detailData = ref({
-  id: 0,
-  name: '',
-  type: '',
-  account: '',
-  qrCodeUrls: [],
-  status: 'enabled',
-  securityStatus: 'safe',
-  auditStatus: 'pending',
-  usageCount: 0,
-  lastUsedTime: '',
-  createTime: '',
-  remark: ''
-})
+const detailData = ref<PaymentCode>({} as PaymentCode)
 
-// 安全检查报告
-const securityReport = ref({
-  checkTime: '2023-10-15 15:30:00',
-  result: 'risk',
-  riskLevel: '中等',
-  checkItems: 12,
-  issuesFound: 2,
-  details: [
-    { item: '二维码有效性', status: 'pass', description: '二维码可正常识别' },
-    { item: '账户状态', status: 'pass', description: '收款账户状态正常' },
-    { item: '风控检测', status: 'warning', description: '近期有异常交易记录' },
-    { item: '合规性检查', status: 'pass', description: '符合平台规范' },
-    { item: '安全证书', status: 'fail', description: 'SSL证书即将过期' }
-  ]
+const securityReport = ref<SecurityCheckResult>({
+  checkTime: '',
+  result: 'safe',
+  riskLevel: '无',
+  checkItems: 0,
+  issuesFound: 0,
+  details: []
 })
 
 const formRules = {
   name: [{ required: true, message: '请输入收款码名称', trigger: 'blur' }],
   type: [{ required: true, message: '请选择收款码类型', trigger: 'change' }],
-  account: [{ required: true, message: '请输入收款账户', trigger: 'blur' }],
-  qrCodeUrls: [{ required: true, message: '请上传收款码图片', trigger: 'change', validator: validateQrCodeUrls }]
+  account: [{ required: true, message: '请输入收款账户', trigger: 'blur' }]
 }
 
 const formRef = ref()
 
-// 自定义验证规则
-function validateQrCodeUrls(rule: any, value: any, callback: any) {
-  if (!value || value.length === 0) {
-    callback(new Error('请上传收款码图片'));
-  } else {
-    callback();
-  }
-}
-
-// 获取支付类型文本
 const getPaymentTypeText = (type: string) => {
   switch (type) {
-    case 'alipay':
-      return '支付宝'
-    case 'wechat':
-      return '微信'
-    case 'unionpay':
-      return '银联'
-    default:
-      return '未知'
+    case 'alipay': return '支付宝'
+    case 'wechat': return '微信'
+    case 'unionpay': return '银联'
+    default: return '未知'
   }
 }
 
-// 获取状态标签类型
 const getStatusTagType = (status: string) => {
   switch (status) {
-    case 'enabled':
-      return 'success'
-    case 'disabled':
-      return 'info'
-    case 'pending':
-      return 'warning'
-    case 'stopped':
-      return 'danger'
-    default:
-      return 'info'
+    case 'enabled': return 'success'
+    case 'disabled': return 'info'
+    case 'pending': return 'warning'
+    case 'stopped': return 'danger'
+    case 'active': return 'success'
+    case 'inactive': return 'info'
+    default: return 'info'
   }
 }
 
-// 获取状态文本
 const getStatusText = (status: string) => {
   switch (status) {
-    case 'enabled':
-      return '启用'
-    case 'disabled':
-      return '禁用'
-    case 'pending':
-      return '审核中'
-    case 'stopped':
-      return '已停用'
-    default:
-      return '未知'
+    case 'enabled': return '启用'
+    case 'disabled': return '禁用'
+    case 'pending': return '审核中'
+    case 'stopped': return '已停用'
+    case 'active': return '启用'
+    case 'inactive': return '禁用'
+    default: return '未知'
   }
 }
 
-// 获取安全状态标签类型
 const getSecurityStatusTagType = (status: string) => {
   switch (status) {
-    case 'safe':
-      return 'success'
-    case 'risk':
-      return 'warning'
-    case 'abnormal':
-      return 'danger'
-    default:
-      return 'info'
+    case 'safe': return 'success'
+    case 'risk': return 'warning'
+    case 'abnormal': return 'danger'
+    default: return 'info'
   }
 }
 
-// 获取安全状态文本
 const getSecurityStatusText = (status: string) => {
   switch (status) {
-    case 'safe':
-      return '安全'
-    case 'risk':
-      return '风险'
-    case 'abnormal':
-      return '异常'
-    default:
-      return '未知'
+    case 'safe': return '安全'
+    case 'risk': return '风险'
+    case 'abnormal': return '异常'
+    default: return '未知'
   }
 }
 
-// 获取审核状态标签类型
 const getAuditStatusTagType = (status: string) => {
   switch (status) {
-    case 'approved':
-      return 'success'
-    case 'rejected':
-      return 'danger'
-    case 'pending':
-      return 'warning'
-    default:
-      return 'info'
+    case 'approved': return 'success'
+    case 'rejected': return 'danger'
+    case 'pending': return 'warning'
+    default: return 'info'
   }
 }
 
-// 获取审核状态文本
 const getAuditStatusText = (status: string) => {
   switch (status) {
-    case 'approved':
-      return '已通过'
-    case 'rejected':
-      return '已拒绝'
-    case 'pending':
-      return '审核中'
-    default:
-      return '未知'
+    case 'approved': return '已通过'
+    case 'rejected': return '已拒绝'
+    case 'pending': return '审核中'
+    default: return '未知'
   }
 }
 
-// 搜索
-const handleSearch = () => {
-  console.log('🔍 搜索收款码:', searchForm.value)
-  ElMessage.success('查询功能待实现')
+const fetchData = async () => {
+  loading.value = true
+  try {
+    const params: PaymentCodeParams = {
+      page: currentPage.value,
+      size: pageSize.value
+    }
+    
+    if (searchForm.value.name) params.name = searchForm.value.name
+    if (searchForm.value.type) params.type = searchForm.value.type
+    if (searchForm.value.status) params.status = searchForm.value.status
+    if (searchForm.value.securityStatus) params.securityStatus = searchForm.value.securityStatus
+    
+    const response = await paymentCodeService.getList(params)
+    // 统一处理响应结构，兼容解包和未解包的情况 (规则 5)
+    const data = response?.data?.data || response?.data || response
+    
+    if (data && (data.records || data.list)) {
+      tableData.value = data.records || data.list || []
+      total.value = data.total || 0
+    } else if (response?.success === false || data?.success === false) {
+      ElMessage.error(response?.message || data?.message || '获取数据失败')
+    } else {
+      // 如果数据为空但请求成功，也可能是正常的
+      tableData.value = []
+      total.value = 0
+    }
+  } catch (error: any) {
+    console.error('获取收款码列表失败:', error)
+    ElMessage.error(error.message || '获取数据失败')
+  } finally {
+    loading.value = false
+  }
 }
 
-// 重置
+const handleSearch = () => {
+  currentPage.value = 1
+  fetchData()
+}
+
 const handleReset = () => {
   searchForm.value = {
     name: '',
@@ -564,81 +522,81 @@ const handleReset = () => {
     status: '',
     securityStatus: ''
   }
-  ElMessage.success('重置搜索条件')
+  currentPage.value = 1
+  fetchData()
 }
 
-// 查看详情
-const handleView = (row: any) => {
-  detailData.value = { ...row }
-  detailDialogVisible.value = true
-  // 初始化使用统计图表
-  nextTick(() => {
-    initUsageChart()
-  })
+const handleView = async (row: PaymentCode) => {
+  try {
+    loading.value = true
+    const response = await paymentCodeService.getById(row.id)
+    if (response.data?.success && response.data?.data) {
+      detailData.value = response.data.data
+      detailDialogVisible.value = true
+      nextTick(() => {
+        initUsageChart()
+      })
+    } else {
+      ElMessage.error(response.data?.message || '获取详情失败')
+    }
+  } catch (error: any) {
+    console.error('获取收款码详情失败:', error)
+    ElMessage.error(error.message || '获取详情失败')
+  } finally {
+    loading.value = false
+  }
 }
 
-// 初始化使用统计图表
-const initUsageChart = () => {
-  if (usageChartRef.value) {
+const initUsageChart = async () => {
+  if (!usageChartRef.value) return
+  
+  if (!usageChart) {
     usageChart = echarts.init(usageChartRef.value)
-    renderUsageChart()
   }
-}
-
-// 渲染使用统计图表
-const renderUsageChart = () => {
-  if (!usageChart) return
   
-  const option = {
-    tooltip: {
-      trigger: 'axis'
-    },
-    legend: {
-      data: ['使用次数']
-    },
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '3%',
-      containLabel: true
-    },
-    xAxis: {
-      type: 'category',
-      boundaryGap: false,
-      data: ['10-01', '10-02', '10-03', '10-04', '10-05', '10-06', '10-07', '10-08', '10-09', '10-10', '10-11', '10-12', '10-13', '10-14', '10-15']
-    },
-    yAxis: {
-      type: 'value'
-    },
-    series: [
-      {
-        name: '使用次数',
-        type: 'line',
-        data: [12, 8, 15, 18, 22, 19, 25, 30, 28, 35, 40, 38, 42, 39, 45],
-        smooth: true,
-        itemStyle: {
-          color: '#409EFF'
+  try {
+    const response = await paymentCodeService.getUsageStatistics(detailData.value.id, 15)
+    if (response.data?.success && response.data?.data) {
+      const stats = response.data.data
+      const dates = stats.dailyStats.map((item: any) => item.date ? item.date.substring(5) : '')
+      const counts = stats.dailyStats.map((item: any) => item.count || 0)
+      
+      const option = {
+        tooltip: { trigger: 'axis' },
+        legend: { data: ['使用次数'] },
+        grid: {
+          left: '3%',
+          right: '4%',
+          bottom: '3%',
+          containLabel: true
         },
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            {
-              offset: 0,
-              color: 'rgba(64, 158, 255, 0.3)'
-            },
-            {
-              offset: 1,
-              color: 'rgba(64, 158, 255, 0.1)'
-            }
-          ])
-        }
+        xAxis: {
+          type: 'category',
+          boundaryGap: false,
+          data: dates
+        },
+        yAxis: { type: 'value' },
+        series: [{
+          name: '使用次数',
+          type: 'line',
+          data: counts,
+          smooth: true,
+          itemStyle: { color: '#409EFF' },
+          areaStyle: {
+            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              { offset: 0, color: 'rgba(64, 158, 255, 0.3)' },
+              { offset: 1, color: 'rgba(64, 158, 255, 0.1)' }
+            ])
+          }
+        }]
       }
-    ]
+      usageChart.setOption(option)
+    }
+  } catch (error) {
+    console.error('获取使用统计失败:', error)
   }
-  
-  usageChart.setOption(option)
 }
 
-// 新增
 const handleAdd = () => {
   dialogTitle.value = '新增收款码'
   isEdit.value = false
@@ -648,31 +606,36 @@ const handleAdd = () => {
     type: '',
     account: '',
     qrCodeUrls: [],
-    status: 'pending', // 默认为审核中
+    status: 'pending',
     remark: ''
   }
   fileList.value = []
   dialogVisible.value = true
 }
 
-// 编辑
-const handleEdit = (row: any) => {
+const handleEdit = (row: PaymentCode) => {
   dialogTitle.value = '编辑收款码'
   isEdit.value = true
-  formData.value = { ...row }
-  // 构建文件列表用于显示
-  fileList.value = row.qrCodeUrls.map((url: string, index: number) => ({
+  formData.value = {
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    account: row.account,
+    qrCodeUrls: row.qrCodeUrls || [],
+    status: row.status,
+    remark: row.remark || ''
+  }
+  fileList.value = (row.qrCodeUrls || []).map((url: string, index: number) => ({
     name: `qr-${index}.jpg`,
     url: url
   }))
   dialogVisible.value = true
 }
 
-// 删除
-const handleDelete = async (row: any) => {
+const handleDelete = async (row: PaymentCode) => {
   try {
     await ElMessageBox.confirm(
-      `确定要删除收款码 "${row.name}" 吗？`,
+      `确定要删除收款码 "${row.name}" 吗？此操作不可恢复！`,
       '确认删除',
       {
         confirmButtonText: '确定',
@@ -681,18 +644,27 @@ const handleDelete = async (row: any) => {
       }
     )
     
-    console.log('🗑️ 删除收款码:', row.id)
-    ElMessage.success('收款码删除成功')
+    loading.value = true
+    const response = await paymentCodeService.delete(row.id)
+    // 统一处理响应结构 (规则 5)
+    const data = response?.data || response
+    if (response?.success !== false && data?.success !== false) {
+      ElMessage.success('删除收款码成功')
+      fetchData()
+    } else {
+      ElMessage.error(response?.message || data?.message || '删除失败')
+    }
   } catch (error: any) {
     if (error !== 'cancel') {
-      console.error('❌ 删除收款码失败:', error)
-      ElMessage.error('删除收款码失败')
+      console.error('删除收款码失败:', error)
+      ElMessage.error(error.message || '删除失败')
     }
+  } finally {
+    loading.value = false
   }
 }
 
-// 强制停用
-const handleStop = async (row: any) => {
+const handleStop = async (row: PaymentCode) => {
   try {
     await ElMessageBox.confirm(
       `确定要停用收款码 "${row.name}" 吗？`,
@@ -704,192 +676,498 @@ const handleStop = async (row: any) => {
       }
     )
     
-    // 更新状态
-    const index = tableData.value.findIndex(item => item.id === row.id)
-    if (index !== -1) {
-      tableData.value[index].status = 'stopped'
+    loading.value = true
+    const response = await paymentCodeService.updateStatus(row.id, { status: 'stopped' })
+    // 统一处理响应结构 (规则 5)
+    const data = response?.data || response
+    if (response?.success !== false && data?.success !== false) {
+      ElMessage.success(`收款码"${row.name}"已停用`)
+      fetchData()
+    } else {
+      ElMessage.error(response?.message || data?.message || '停用失败')
     }
-    
-    ElMessage.success(`收款码"${row.name}"已停用`)
   } catch (error: any) {
     if (error !== 'cancel') {
-      console.error('❌ 停用收款码失败:', error)
-      ElMessage.error('停用收款码失败')
+      console.error('停用收款码失败:', error)
+      ElMessage.error(error.message || '停用失败')
     }
+  } finally {
+    loading.value = false
   }
 }
 
-// 上传成功处理
-const handleUploadSuccess = (response: any, file: any, fileList: any) => {
-  console.log('📤 上传成功:', response)
-  // 更新表单数据中的图片URL列表
-  formData.value.qrCodeUrls = fileList.map((item: any) => item.url || URL.createObjectURL(item.raw))
-  ElMessage.success('收款码上传成功')
+const handleCustomUpload = async (options: any) => {
+  try {
+    console.log('🚀 [Upload] 开始上传图片:', options.file.name)
+    const response = await paymentCodeService.uploadImage(options.file)
+    
+    // 关键位置打印日志 (规则 7)
+    console.log('✅ [Upload] paymentCodeService.uploadImage 返回:', response)
+    
+    if (!response) {
+      console.error('❌ [Upload] 接口返回为空')
+      options.onError(new Error('接口返回数据为空'))
+      return
+    }
+
+    // 统一处理响应结构，根据规则 5 兼容多层嵌套
+    // api 拦截器可能已经返回了 data.data 或 data
+    let resultData = response
+    if (response?.data?.data) {
+      resultData = response.data.data
+    } else if (response?.data) {
+      resultData = response.data
+    }
+    
+    console.log('🔍 [Upload] 尝试提取的数据:', resultData)
+
+    // 提取最终的对象，确保它不是 undefined
+    const finalData = resultData || response
+    
+    console.log('📦 [Upload] 准备调用 onSuccess, finalData:', finalData)
+    
+    if (finalData) {
+      // 确保 finalData 是一个对象
+      options.onSuccess(finalData)
+    } else {
+      console.error('❌ [Upload] 无法提取有效响应数据')
+      options.onError(new Error('无法提取有效响应数据'))
+    }
+  } catch (error: any) {
+    console.error('❌ [Upload] 捕获到异常:', error)
+    options.onError(error)
+  }
 }
 
-// 移除图片
-const handleRemove = (file: any, fileList: any) => {
-  console.log('🗑️ 移除文件:', file)
-  // 更新表单数据中的图片URL列表
-  formData.value.qrCodeUrls = fileList.map((item: any) => item.url || URL.createObjectURL(item.raw))
+const handleUploadSuccess = (response: any, uploadFile: any) => {
+  console.log('🎨 [Upload Success] ElementPlus 回调数据:', response)
+  console.log('📂 [Upload Success] UploadFile:', uploadFile)
+  
+  if (!response) {
+    console.error('❌ [Upload Success] 回调数据为 undefined. 尝试从 uploadFile 获取响应')
+    // 尝试从 uploadFile.response 获取
+    if (uploadFile && uploadFile.response) {
+      response = uploadFile.response
+      console.log('🔄 [Upload Success] 已从 uploadFile.response 恢复数据:', response)
+    } else {
+      console.error('❌ [Upload Success] 仍然无法获取有效响应数据')
+      ElMessage.error('上传回调数据异常')
+      return
+    }
+  }
+
+  // 统一处理响应结构 (规则 5)
+  // handleCustomUpload 传递过来的可能是解包后的数据，也可能是原始响应
+  const data = response?.data?.data || response?.data || response
+  
+  if (data && data.url) {
+    formData.value.qrCodeUrls.push(data.url)
+    ElMessage.success('收款码上传成功')
+    console.log('📍 [Upload Success] 图片已添加至列表:', data.url)
+  } else {
+    console.error('❌ [Upload Success] 未能从数据中找到 url 字段:', data)
+    ElMessage.error('上传成功但未获取到图片地址')
+  }
 }
 
-// 图片预览
+const handleRemove = (file: any, fileListParam: any) => {
+  const index = formData.value.qrCodeUrls.findIndex((url: string) => url === file.url || url === file.response?.url)
+  if (index !== -1) {
+    formData.value.qrCodeUrls.splice(index, 1)
+  }
+}
+
 const handlePictureCardPreview = (file: any) => {
-  previewImageUrl.value = file.url || URL.createObjectURL(file.raw)
+  previewImageUrl.value = file.url || file.response?.url || ''
   previewDialogVisible.value = true
 }
 
-// 上传前检查
 const beforeUpload = (file: any) => {
-  // 创建自定义文件类型配置（收款码图片）
-  const qrCodeFileType = createCustomFileType(
-    ['.jpg', '.jpeg', '.png'],
-    ['image/jpeg', 'image/png'],
-    2,
-    '收款码图片'
-  )
+  const isImage = file.type.startsWith('image/')
+  const isLt2M = file.size / 1024 / 1024 < 2
   
-  return validateCustomFile(file, qrCodeFileType)
+  if (!isImage) {
+    ElMessage.error('只能上传图片文件!')
+    return false
+  }
+  if (!isLt2M) {
+    ElMessage.error('图片大小不能超过 2MB!')
+    return false
+  }
+  return true
 }
 
-// 提交表单
-const submitForm = () => {
-  formRef.value.validate((valid: boolean) => {
-    if (valid) {
-      if (isEdit.value) {
-        console.log('✏️ 编辑收款码:', formData.value)
-        ElMessage.success('收款码编辑成功')
-      } else {
-        console.log('➕ 新增收款码:', formData.value)
-        ElMessage.success('收款码新增成功')
+const handleDialogClose = () => {
+  formRef.value?.resetFields()
+  fileList.value = []
+}
+
+const submitForm = async () => {
+  try {
+    await formRef.value?.validate()
+    
+    submitLoading.value = true
+    
+    if (isEdit.value) {
+      const data: UpdatePaymentCodeData = {
+        name: formData.value.name,
+        type: formData.value.type,
+        account: formData.value.account,
+        qrCodeUrls: formData.value.qrCodeUrls,
+        status: formData.value.status,
+        remark: formData.value.remark
       }
-      dialogVisible.value = false
+      
+      const response = await paymentCodeService.update(formData.value.id, data)
+      // 统一处理响应结构 (规则 5)
+      const resData = response?.data || response
+      if (response?.success !== false && resData?.success !== false) {
+        ElMessage.success('收款码编辑成功')
+        dialogVisible.value = false
+        fetchData()
+      } else {
+        ElMessage.error(response?.message || resData?.message || '编辑失败')
+      }
     } else {
-      ElMessage.warning('请填写完整信息')
+      const data: CreatePaymentCodeData = {
+        name: formData.value.name,
+        type: formData.value.type,
+        account: formData.value.account,
+        qrCodeUrls: formData.value.qrCodeUrls,
+        status: formData.value.status,
+        remark: formData.value.remark
+      }
+      
+      const response = await paymentCodeService.create(data)
+      // 统一处理响应结构 (规则 5)
+      const resData = response?.data || response
+      if (response?.success !== false && resData?.success !== false) {
+        ElMessage.success('收款码创建成功')
+        dialogVisible.value = false
+        fetchData()
+      } else {
+        ElMessage.error(response?.message || resData?.message || '创建失败')
+      }
     }
-  })
+  } catch (error) {
+    console.error('提交表单失败:', error)
+    ElMessage.error('请填写完整信息')
+  } finally {
+    submitLoading.value = false
+  }
 }
 
-// 分页相关
 const handleSizeChange = (val: number) => {
   pageSize.value = val
   currentPage.value = 1
-  console.log(`📈 每页显示 ${val} 条`)
+  fetchData()
 }
 
 const handleCurrentChange = (val: number) => {
   currentPage.value = val
-  console.log(`📄 当前页: ${val}`)
+  fetchData()
 }
 
-// 表格选择变更
-const handleSelectionChange = (rows: any[]) => {
+const handleSelectionChange = (rows: PaymentCode[]) => {
   selectedRows.value = rows
 }
 
-// 批量安全检查
 const handleBatchCheck = async () => {
   if (selectedRows.value.length === 0) {
     ElMessage.warning('请先选择要检查的收款码')
     return
   }
   
-  loading.value = true
-  ElMessage.info(`正在对${selectedRows.value.length}个收款码进行安全检查...`)
+  const ids = selectedRows.value.map(row => row.id)
   
-  // 模拟检查过程
-  setTimeout(() => {
-    loading.value = false
-    ElMessage.success('批量安全检查完成')
+  try {
+    loading.value = true
+    ElMessage.info(`正在对${selectedRows.value.length}个收款码进行安全检查...`)
     
-    // 更新选中行的安全状态
-    selectedRows.value.forEach((row: any, index: number) => {
-      const dataIndex = tableData.value.findIndex(item => item.id === row.id)
-      if (dataIndex !== -1) {
-        // 使用固定规则设置安全状态，实际应用中应通过API获取真实安全状态
-        const statuses = ['safe', 'risk', 'abnormal']
-        tableData.value[dataIndex].securityStatus = statuses[index % statuses.length]
-      }
-    })
-  }, 2000)
-}
-
-// 单个安全检查
-const handleSecurityCheck = async (row: any) => {
-  loading.value = true
-  ElMessage.info(`正在对收款码"${row.name}"进行安全检查...`)
-  
-  // 模拟检查过程
-  setTimeout(() => {
+    const response = await paymentCodeService.batchSecurityCheck(ids)
+    // 统一处理响应结构 (规则 5)
+    const data = response?.data || response
+    if (response?.success !== false && data?.success !== false) {
+      ElMessage.success(`批量安全检查完成，成功: ${data.successCount || 0}，失败: ${data.failCount || 0}`)
+      fetchData()
+    } else {
+      ElMessage.error(response?.message || data?.message || '批量安全检查失败')
+    }
+  } catch (error: any) {
+    console.error('批量安全检查失败:', error)
+    ElMessage.error(error.message || '批量安全检查失败')
+  } finally {
     loading.value = false
-    securityDialogVisible.value = true
-    ElMessage.success('安全检查完成')
-  }, 1500)
+  }
 }
 
-// 修复问题
+const handleSecurityCheck = async (row: PaymentCode) => {
+  try {
+    loading.value = true
+    ElMessage.info(`正在对收款码"${row.name}"进行安全检查...`)
+    
+    const response = await paymentCodeService.performSecurityCheck(row.id)
+    // 统一处理响应结构 (规则 5)
+    const data = response?.data || response
+    if (response?.success !== false && data !== undefined) {
+      securityReport.value = data
+      securityDialogVisible.value = true
+      ElMessage.success('安全检查完成')
+      fetchData()
+    } else {
+      ElMessage.error(response?.message || data?.message || '安全检查失败')
+    }
+  } catch (error: any) {
+    console.error('安全检查失败:', error)
+    ElMessage.error(error.message || '安全检查失败')
+  } finally {
+    loading.value = false
+  }
+}
+
 const handleFixIssues = () => {
   ElMessage.success('问题修复功能待实现')
   securityDialogVisible.value = false
 }
 
-// 组件挂载
 onMounted(() => {
   console.log('📱 收款码管理页面加载完成')
+  fetchData()
+  window.addEventListener('resize', handleResize)
 })
 
-// 监听窗口大小变化，重新渲染图表
-window.addEventListener('resize', () => {
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
   if (usageChart) {
-    usageChart.resize()
+    usageChart.dispose()
+    usageChart = null
   }
 })
-
-/**
- * 收款码管理页面
- * 管理各种支付方式的收款码
- */
 </script>
 
 <style scoped>
 .payment-code-management-container {
   width: 100%;
+  box-sizing: border-box;
+}
+
+:deep(.el-card) {
+  border-radius: 8px;
+  border: none;
+  box-shadow: 0 2px 12px 0 rgba(0,0,0,0.05);
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .search-bar {
   margin-bottom: 20px;
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 8px;
 }
 
-.pagination-container {
-  margin-top: 20px;
+.responsive-search-form {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.search-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px 20px;
+}
+
+.search-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+  border-radius: 4px;
+}
+
+:deep(.el-table__body), :deep(.el-table__header) {
+  width: 100% !important;
+  min-width: 1000px;
+}
+
+@media screen and (max-width: 768px) {
+  :deep(.el-table__body), :deep(.el-table__header) {
+    min-width: 800px;
+  }
+}
+
+.responsive-table :deep(.el-table__cell) {
+  padding: 8px 0;
 }
 
 .qr-codes-container {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  gap: 4px;
 }
 
-.more-images {
-  width: 60px;
-  height: 60px;
-  background-color: #f5f7fa;
+.table-qr-image {
+  width: 40px;
+  height: 40px;
   border-radius: 4px;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.table-qr-image:hover {
+  transform: scale(1.1);
+}
+
+.more-images-badge {
+  font-size: 10px;
+  color: #909399;
+  background: #f0f2f5;
+  padding: 2px 4px;
+  border-radius: 10px;
+}
+
+.no-image {
+  color: #909399;
+  font-size: 12px;
+}
+
+.action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pagination-container {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.qr-code-detail {
+  max-width: 100%;
+}
+
+.qr-codes-gallery {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.detail-qr-image {
+  width: 120px;
+  height: 120px;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px 0 rgba(0,0,0,0.1);
+}
+
+.detail-info {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 12px;
+  text-align: left;
+}
+
+.info-item {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  color: #909399;
-  margin: 2px;
+  font-size: 14px;
+}
+
+.info-item .label {
+  font-weight: bold;
+  color: #606266;
+  margin-right: 8px;
+  min-width: 90px;
+}
+
+.info-item .value {
+  color: #303133;
+  word-break: break-all;
+}
+
+.usage-chart {
+  width: 100%;
+  height: 300px;
+  margin-top: 20px;
+}
+
+@media screen and (max-width: 768px) {
+  .card-header span {
+    width: 100%;
+    margin-bottom: 10px;
+  }
+  
+  .card-header div {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .search-items {
+    grid-template-columns: 1fr;
+  }
+  
+  .search-actions {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .search-actions .el-button {
+    flex: 1;
+  }
+
+  .detail-info {
+    grid-template-columns: 1fr;
+  }
+  
+  .responsive-dialog :deep(.el-dialog__body) {
+    padding: 10px 15px;
+  }
+  
+  .responsive-dialog :deep(.el-form-item__label) {
+    float: none;
+    display: block;
+    text-align: left;
+    margin-bottom: 5px;
+  }
+  
+  .responsive-dialog :deep(.el-form-item__content) {
+    margin-left: 0 !important;
+  }
+
+  .usage-chart {
+    height: 200px;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .table-qr-image {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .action-buttons {
+    flex-direction: column;
+    gap: 4px;
+  }
 }
 
 .qr-code-uploads {
@@ -897,33 +1175,13 @@ window.addEventListener('resize', () => {
 }
 
 .qr-code-uploader :deep(.el-upload--picture-card) {
-  width: 100px;
-  height: 100px;
-  line-height: 100px;
+  width: 80px;
+  height: 80px;
+  line-height: 80px;
 }
 
 .qr-code-uploader :deep(.el-upload-list--picture-card .el-upload-list__item) {
-  width: 100px;
-  height: 100px;
-}
-
-.qr-code-detail {
-  text-align: center;
-}
-
-.qr-codes-gallery {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  margin-bottom: 20px;
-}
-
-.detail-info {
-  text-align: left;
-  margin-top: 20px;
-}
-
-.detail-info p {
-  margin: 10px 0;
+  width: 80px;
+  height: 80px;
 }
 </style>

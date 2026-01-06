@@ -238,7 +238,7 @@ router.get('/', authenticateToken, responseWrapper(async (req, res) => {
     const countQuery = `
       SELECT COUNT(*) AS total FROM (
         -- 1. 费用相关的活动
-        SELECT e.id
+        SELECT e.id, u.id as user_id
         FROM expenses e
         JOIN users u ON e.applicant_id = u.id
         JOIN dorms d ON e.dorm_id = d.id
@@ -247,7 +247,7 @@ router.get('/', authenticateToken, responseWrapper(async (req, res) => {
         UNION ALL
         
         -- 2. 费用支付活动
-        SELECT es.id
+        SELECT es.id, u.id as user_id
         FROM expense_splits es
         JOIN users u ON es.user_id = u.id
         JOIN dorms d ON es.dorm_id = d.id
@@ -256,7 +256,7 @@ router.get('/', authenticateToken, responseWrapper(async (req, res) => {
         UNION ALL
         
         -- 3. 报修相关的活动
-        SELECT mr.id
+        SELECT mr.id, u.id as user_id
         FROM maintenance_requests mr
         JOIN users u ON mr.requester_id = u.id
         JOIN dorms d ON mr.dorm_id = d.id
@@ -265,7 +265,7 @@ router.get('/', authenticateToken, responseWrapper(async (req, res) => {
         UNION ALL
         
         -- 4. 成员加入/离开活动
-        SELECT ud.id
+        SELECT ud.id, u.id as user_id
         FROM user_dorms ud
         JOIN users u ON ud.user_id = u.id
         JOIN dorms d ON ud.dorm_id = d.id

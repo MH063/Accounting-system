@@ -24,51 +24,43 @@
       </template>
       
       <!-- 搜索和筛选 -->
-      <el-form :model="searchForm" :label-width="isMobile ? '60px' : '80px'" :inline="!isMobile" class="search-form">
-        <el-row :gutter="isMobile ? 10 : 20">
-          <el-col :xs="24" :sm="6">
-            <el-form-item label="关键字">
+      <div class="search-section">
+        <el-form :model="searchForm" inline class="search-form">
+          <div class="search-row">
+            <el-form-item label="关键字" class="keyword-item">
               <el-input
                 v-model="searchForm.keyword"
-                placeholder="搜索用户名称或邮箱"
-                style="width: 100%"
+                placeholder="搜索用户名/邮箱/手机号"
                 clearable
                 @keyup.enter="handleSearch"
+                class="keyword-input"
               />
             </el-form-item>
-          </el-col>
-          
-          <el-col :xs="12" :sm="6">
+
             <el-form-item label="角色">
-              <el-select v-model="searchForm.role" placeholder="角色" clearable style="width: 100%">
+              <el-select v-model="searchForm.role" placeholder="角色" clearable class="filter-item">
                 <el-option label="管理员" value="admin" />
                 <el-option label="普通用户" value="user" />
               </el-select>
             </el-form-item>
-          </el-col>
-          
-          <el-col :xs="12" :sm="6">
+            
             <el-form-item label="状态">
-              <el-select v-model="searchForm.status" placeholder="状态" clearable style="width: 100%">
+              <el-select v-model="searchForm.status" placeholder="状态" clearable class="filter-item">
                 <el-option label="激活" value="active" />
                 <el-option label="禁用" value="inactive" />
               </el-select>
             </el-form-item>
-          </el-col>
-          
-          <el-col :xs="24" :sm="6" v-if="!isMobile || showMoreFilters">
-            <el-form-item label="寝室">
+            
+            <el-form-item label="寝室" v-if="!isMobile || showMoreFilters">
               <el-input
                 v-model="searchForm.dormitory"
                 placeholder="请输入寝室号"
-                style="width: 100%"
                 clearable
+                class="filter-item dormitory-input"
               />
             </el-form-item>
-          </el-col>
-          
-          <el-col :xs="24" :sm="6" class="search-buttons">
-            <el-form-item label-width="0">
+
+            <div class="action-buttons">
               <el-button type="primary" @click="handleSearch" :icon="Search">搜索</el-button>
               <el-button @click="handleReset" :icon="Refresh">重置</el-button>
               <el-button 
@@ -76,30 +68,29 @@
                 type="primary" 
                 link 
                 @click="showMoreFilters = !showMoreFilters"
+                class="more-btn"
               >
                 {{ showMoreFilters ? '收起' : '更多' }}
                 <el-icon class="el-icon--right">
                   <component :is="showMoreFilters ? 'ArrowUp' : 'ArrowDown'" />
                 </el-icon>
               </el-button>
-            </el-form-item>
-          </el-col>
-        </el-row>
-      </el-form>
+            </div>
+          </div>
+        </el-form>
+      </div>
       
       <!-- 批量操作 -->
       <div class="batch-actions" :class="{ 'is-mobile': isMobile }">
-        <el-button-group>
-          <el-button type="primary" :disabled="selectedUsers.length === 0" @click="handleBatchEnable">
-            {{ isMobile ? '启用' : '批量启用' }}
-          </el-button>
-          <el-button type="warning" :disabled="selectedUsers.length === 0" @click="handleBatchDisable">
-            {{ isMobile ? '禁用' : '批量禁用' }}
-          </el-button>
-          <el-button type="danger" :disabled="selectedUsers.length === 0" @click="handleBatchDelete">
-            {{ isMobile ? '删除' : '批量删除' }}
-          </el-button>
-        </el-button-group>
+        <el-button type="primary" :disabled="selectedUsers.length === 0" @click="handleBatchEnable">
+          {{ isMobile ? '启用' : '批量启用' }}
+        </el-button>
+        <el-button type="warning" :disabled="selectedUsers.length === 0" @click="handleBatchDisable">
+          {{ isMobile ? '禁用' : '批量禁用' }}
+        </el-button>
+        <el-button type="danger" :disabled="selectedUsers.length === 0" @click="handleBatchDelete">
+          {{ isMobile ? '删除' : '批量删除' }}
+        </el-button>
       </div>
       
       <div class="table-wrapper">
@@ -111,36 +102,55 @@
           :empty-text="loading ? '加载中...' : '暂无数据'"
           @selection-change="handleSelectionChange"
         >
-          <el-table-column type="selection" width="50" />
-          <el-table-column prop="id" label="ID" width="70" v-if="!isMobile" />
-          <el-table-column prop="username" label="用户名" :min-width="100" show-overflow-tooltip />
-          <el-table-column prop="email" label="邮箱" :min-width="150" v-if="!isMobile" show-overflow-tooltip />
-          <el-table-column prop="role" label="角色" width="100">
+          <el-table-column type="selection" width="50" align="center" header-align="center" />
+          <el-table-column prop="id" label="ID" width="80" v-if="!isMobile" align="center" header-align="center" />
+          <el-table-column prop="username" label="用户名" width="150" show-overflow-tooltip align="center" header-align="center" />
+          <el-table-column prop="email" label="邮箱" width="250" v-if="!isMobile" show-overflow-tooltip align="center" header-align="center" />
+          <el-table-column prop="role" label="角色" width="140" align="center" header-align="center">
             <template #default="scope">
-              <el-tag :type="scope.row.role === 'admin' ? 'success' : 'info'" size="small">
-                {{ scope.row.role === 'admin' ? '管理员' : '用户' }}
+              <el-tag 
+                :type="scope.row.role === 'admin' ? 'danger' : 'info'" 
+                effect="light"
+                round
+                class="role-tag"
+              >
+                <el-icon v-if="scope.row.role === 'admin'"><Avatar /></el-icon>
+                <el-icon v-else><User /></el-icon>
+                {{ scope.row.role === 'admin' ? '管理员' : '普通用户' }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="dormitory" label="寝室" width="90" />
-          <el-table-column prop="status" label="状态" width="80">
+          <el-table-column prop="dormitory" label="寝室" width="120" align="center" header-align="center">
             <template #default="scope">
-              <el-tag :type="scope.row.status === 'active' ? 'success' : 'danger'" size="small">
+              <span class="dormitory-text">{{ scope.row.dormitory || '-' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="status" label="状态" width="120" align="center" header-align="center">
+            <template #default="scope">
+              <el-tag 
+                :type="scope.row.status === 'active' ? 'success' : 'info'" 
+                size="small"
+                effect="dark"
+                class="status-tag"
+              >
+                <span class="dot" :class="scope.row.status"></span>
                 {{ scope.row.status === 'active' ? '激活' : '禁用' }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" :width="isMobile ? 120 : 180" fixed="right">
+          <el-table-column label="操作" :width="isMobile ? 120 : 260" fixed="right" align="center" header-align="center">
             <template #default="scope">
-              <el-button size="small" link type="primary" @click="handleView(scope.row)">
-                {{ isMobile ? '看' : '查看' }}
-              </el-button>
-              <el-button size="small" link type="primary" @click="handleEdit(scope.row)">
-                {{ isMobile ? '改' : '编辑' }}
-              </el-button>
-              <el-button size="small" link type="danger" @click="handleDelete(scope.row)">
-                {{ isMobile ? '删' : '删除' }}
-              </el-button>
+              <div class="table-operations">
+                <el-button size="small" link type="primary" @click="handleView(scope.row)" :icon="View" class="op-btn">
+                  {{ isMobile ? '' : '查看' }}
+                </el-button>
+                <el-button size="small" link type="primary" @click="handleEdit(scope.row)" :icon="Edit" class="op-btn">
+                  {{ isMobile ? '' : '编辑' }}
+                </el-button>
+                <el-button size="small" link type="danger" @click="handleDelete(scope.row)" :icon="Delete" class="op-btn">
+                  {{ isMobile ? '' : '删除' }}
+                </el-button>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -771,68 +781,356 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* 页面整体容器 */
 .users-container {
   width: 100%;
+  padding: 0;
+}
+
+:deep(.el-card) {
+  border-radius: 16px;
+  border: none;
+  box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.05);
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 4px 0;
 }
 
-/* 搜索表单自适应 */
-.search-form {
-  margin-bottom: 20px;
+.card-header span {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1a1a1a;
+  position: relative;
+  padding-left: 12px;
 }
 
-.search-buttons {
+.card-header span::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 18px;
+  background: var(--el-color-primary);
+  border-radius: 2px;
+}
+
+.header-actions {
   display: flex;
-  justify-content: flex-end;
-  align-items: flex-end;
+  gap: 12px;
 }
 
-/* 批量操作按钮组 */
-.batch-actions {
-  margin-bottom: 15px;
+.header-actions .el-button {
+  box-shadow: 0 2px 6px 0 rgba(var(--el-color-primary-rgb), 0.2);
+  transition: all 0.3s;
+}
+
+.header-actions .el-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px 0 rgba(var(--el-color-primary-rgb), 0.3);
+}
+
+/* 搜索表单优化 */
+.search-section {
+  background-color: #ffffff;
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  border: 1px solid #ebeef5;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+}
+
+.search-section:hover {
+  box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.08);
+}
+
+.search-form {
+  margin-bottom: 0;
+}
+
+.search-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-}
-
-.batch-actions.is-mobile {
-  justify-content: space-between;
-}
-
-.batch-actions.is-mobile :deep(.el-button-group) {
-  display: flex;
+  align-items: center;
+  gap: 20px;
   width: 100%;
 }
 
-.batch-actions.is-mobile :deep(.el-button) {
-  flex: 1;
-  padding: 8px 4px;
+.keyword-item {
+  margin-bottom: 0 !important;
 }
 
-/* 表格容器，支持横向滚动 */
+/* 搜索框、下拉框背景与边框强化 */
+.keyword-input :deep(.el-input__wrapper),
+.filter-item :deep(.el-select__wrapper),
+.filter-item :deep(.el-input__wrapper),
+.dormitory-input :deep(.el-input__wrapper) {
+  background-color: #ffffff !important;
+  border: 1px solid #dcdfe6 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  transition: all 0.2s cubic-bezier(0.645, 0.045, 0.355, 1);
+}
+
+.keyword-input :deep(.el-input__inner),
+.filter-item :deep(.el-input__inner),
+.filter-item :deep(.el-select__selected-item),
+.dormitory-input :deep(.el-input__inner) {
+  color: #303133 !important;
+  text-align: center !important; /* 文字水平居中 */
+}
+
+.keyword-input :deep(.el-input__inner::placeholder),
+.filter-item :deep(.el-input__inner::placeholder),
+.filter-item :deep(.el-select__placeholder),
+.dormitory-input :deep(.el-input__inner::placeholder) {
+  color: #909399 !important;
+  text-align: center !important; /* 占位符文字水平居中 */
+}
+
+.keyword-input :deep(.el-input__wrapper):hover,
+.filter-item :deep(.el-select__wrapper):hover,
+.filter-item :deep(.el-input__wrapper):hover,
+.dormitory-input :deep(.el-input__wrapper):hover {
+  border-color: #c0c4cc !important;
+}
+
+.keyword-input :deep(.el-input__wrapper.is-focus),
+.filter-item :deep(.el-select__wrapper.is-focused),
+.filter-item :deep(.el-input__wrapper.is-focus),
+.dormitory-input :deep(.el-input__wrapper.is-focus) {
+  border-color: var(--el-color-primary) !important;
+  box-shadow: 0 0 0 2px rgba(var(--el-color-primary-rgb), 0.1) !important;
+}
+
+.keyword-input {
+  width: 260px;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.filter-item {
+  width: 130px;
+}
+
+.dormitory-input {
+  width: 150px;
+}
+
+.more-btn {
+  margin-left: 0;
+  font-weight: 500;
+}
+
+:deep(.el-form-item) {
+  margin-bottom: 0 !important;
+  margin-right: 0 !important;
+  display: flex;
+  align-items: center;
+}
+
+/* 统一搜索框、下拉框和按钮的高度 */
+:deep(.el-input__wrapper),
+:deep(.el-select__wrapper),
+:deep(.el-button) {
+  height: 36px !important;
+  box-sizing: border-box !important;
+  border-radius: 8px !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+:deep(.el-select__wrapper) {
+  padding: 0 12px !important;
+  display: flex !important;
+  justify-content: center !important; /* 下拉框内容容器居中 */
+}
+
+:deep(.el-select__placeholder) {
+  text-align: center !important;
+  width: 100% !important;
+}
+
+:deep(.el-select__selected-item) {
+  text-align: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+}
+
+:deep(.el-form-item__content) {
+  display: flex !important;
+  align-items: center !important;
+  line-height: 1 !important;
+}
+
+:deep(.el-form-item__label) {
+  font-weight: 600;
+  color: #606266;
+  padding-right: 12px;
+  width: 80px; /* 固定宽度以确保中心对齐 */
+  display: inline-flex;
+  justify-content: center; /* 中心对齐 */
+  align-items: center;
+  text-align: center;
+  height: 36px !important; /* 与输入框高度一致 */
+  line-height: 36px !important;
+}
+
+/* 针对两字和三字标签的特殊处理，确保中心点一致 */
+:deep(.el-form-item__label) {
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+/* 表格美化 */
 .table-wrapper {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #f0f2f5;
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 
+:deep(.el-table) {
+  --el-table-header-bg-color: #f8f9fa;
+  --el-table-row-hover-bg-color: #f5f7fa;
+}
+
+:deep(.el-table__header-wrapper th) {
+  font-weight: 700;
+  color: #303133;
+  height: 50px;
+}
+
+/* 表头标签中心点对齐优化 */
+:deep(.el-table__header .cell) {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 3em; /* 基于三字宽度计算 */
+}
+
+:deep(.el-table__row) {
+  height: 60px;
+  transition: background-color 0.3s;
+}
+
+.role-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  font-weight: 500;
+}
+
+.status-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: none;
+  font-weight: 600;
+  border-radius: 20px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: currentColor;
+}
+
+.dot.active {
+  background-color: #fff;
+  box-shadow: 0 0 4px #fff;
+}
+
+.dormitory-text {
+  color: #606266;
+  font-weight: 500;
+}
+
+.table-operations {
+  display: flex;
+  justify-content: center; /* 确保操作按钮组整体居中 */
+  align-items: center;
+  gap: 16px; /* 增加间距使布局更舒展 */
+  width: 100%;
+}
+
+.op-btn {
+  margin: 0 !important; /* 覆盖Element Plus默认边距 */
+  padding: 4px 8px !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.op-btn:hover {
+  transform: scale(1.05);
+}
+
+/* 调试辅助线 (生产环境请注释掉) 
+:deep(.el-form-item__label),
+:deep(.el-table__header .cell) {
+  background: rgba(64, 158, 255, 0.1);
+  position: relative;
+}
+:deep(.el-form-item__label)::after,
+:deep(.el-table__header .cell)::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 0, 0, 0.5);
+  z-index: 10;
+}
+*/
+
+/* 批量操作按钮组 */
+.batch-actions {
+  margin-bottom: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.batch-actions .el-button {
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+/* 分页美化 */
 .pagination-container {
-  margin-top: 20px;
+  margin-top: 32px;
   display: flex;
   justify-content: center;
 }
 
-.dialog-footer {
-  text-align: right;
+:deep(.el-pagination) {
+  --el-pagination-button-bg-color: #f4f4f5;
+  --el-pagination-hover-color: var(--el-color-primary);
 }
 
-.dialog-footer .el-button {
-  margin-left: 10px;
+:deep(.el-pagination.is-background .el-pager li:not(.is-active)) {
+  background-color: #f4f4f5;
+}
+
+:deep(.el-pagination.is-background .el-pager li.is-active) {
+  box-shadow: 0 2px 8px 0 rgba(var(--el-color-primary-rgb), 0.3);
 }
 
 /* 移动端适配 */
@@ -855,17 +1153,51 @@ onMounted(() => {
     padding: 15px 10px;
   }
 
-  .search-buttons {
-    margin-top: 10px;
-    justify-content: center;
+  .search-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .keyword-item {
     width: 100%;
   }
 
-  .search-buttons :deep(.el-form-item__content) {
-    display: flex;
-    justify-content: center;
-    gap: 10px;
+  .keyword-input {
+    width: 100% !important;
+  }
+
+  .action-buttons {
     width: 100%;
+    margin-left: 0;
+    justify-content: space-between;
+  }
+
+  .action-buttons :deep(.el-button) {
+    flex: 1;
+  }
+
+  .table-operations {
+    gap: 8px !important; /* 移动端减小按钮间距 */
+  }
+
+  .filter-item {
+    flex: 1;
+    min-width: calc(50% - 8px);
+  }
+
+  .dormitory-input {
+    min-width: 100%;
+  }
+
+  .more-btn {
+    width: 100%;
+    justify-content: center;
+    margin-top: 4px;
+  }
+
+  :deep(.el-form-item__label) {
+    display: none; /* 移动端隐藏标签节省空间 */
   }
 }
 </style>
