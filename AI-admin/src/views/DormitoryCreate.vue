@@ -358,12 +358,15 @@ const confirmRules = async () => {
     
     const response = await dormitoryApi.createDormitory(submitData)
     
-    if (response.data && (response.data.success || response.data.code === 200)) {
+    // 兼容处理拦截器返回的数据结构
+    const isSuccess = response === true || response?.success === true || response?.code === 200 || response?.data?.success === true
+    
+    if (isSuccess) {
       ElMessage.success('寝室创建成功')
       rulesDialogVisible.value = false
       router.push('/dormitory/list')
     } else {
-      throw new Error(response.data?.message || '创建失败')
+      throw new Error(response?.message || response?.data?.message || '创建失败')
     }
   } catch (error: any) {
     console.error('创建寝室出错:', error)

@@ -530,14 +530,18 @@ const handleView = async (row: PaymentCode) => {
   try {
     loading.value = true
     const response = await paymentCodeService.getById(row.id)
-    if (response.data?.success && response.data?.data) {
-      detailData.value = response.data.data
+    
+    // 兼容处理拦截器返回的数据结构
+    const actualData = response?.id ? response : (response?.data || response)
+    
+    if (actualData && actualData.id) {
+      detailData.value = actualData
       detailDialogVisible.value = true
       nextTick(() => {
         initUsageChart()
       })
     } else {
-      ElMessage.error(response.data?.message || '获取详情失败')
+      ElMessage.error(response?.message || '获取详情失败')
     }
   } catch (error: any) {
     console.error('获取收款码详情失败:', error)
@@ -556,8 +560,11 @@ const initUsageChart = async () => {
   
   try {
     const response = await paymentCodeService.getUsageStatistics(detailData.value.id, 15)
-    if (response.data?.success && response.data?.data) {
-      const stats = response.data.data
+    
+    // 兼容处理拦截器返回的数据结构
+    const stats = response?.dailyStats ? response : (response?.data || response)
+    
+    if (stats && stats.dailyStats) {
       const dates = stats.dailyStats.map((item: any) => item.date ? item.date.substring(5) : '')
       const counts = stats.dailyStats.map((item: any) => item.count || 0)
       

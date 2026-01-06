@@ -89,7 +89,7 @@ async function logConfigChange(options) {
     configKey,
     oldValue,
     newValue,
-    changeType = 'update',
+    changeType,
     userId,
     username,
     ipAddress,
@@ -97,6 +97,7 @@ async function logConfigChange(options) {
     reason,
     isRollback = false,
     rollbackFromId = null,
+    configVersion = null, // 新增版本号支持
     client = null // 支持外部传入数据库客户端
   } = options;
   
@@ -123,8 +124,8 @@ async function logConfigChange(options) {
   const sql = `
     INSERT INTO ${CONFIG_AUDIT_LOG_TABLE}
     (config_key, old_value, new_value, change_type, changed_by, changed_by_username, 
-     ip_address, user_agent, reason, is_rollback, rollback_from_id)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     ip_address, user_agent, reason, is_rollback, rollback_from_id, config_version)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
     RETURNING id
   `;
   
@@ -139,7 +140,8 @@ async function logConfigChange(options) {
     userAgent,
     reason,
     isRollback,
-    rollbackFromId
+    rollbackFromId,
+    configVersion
   ];
   
   try {

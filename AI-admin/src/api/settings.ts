@@ -55,11 +55,16 @@ interface SecurityConfig {
     sessionTimeout: number
     twoFactorAuth: boolean
     ipRestriction: boolean
+    ipControlMode: 'whitelist' | 'blacklist'
+    ipWhitelist: string[]
+    ipBlacklist: string[]
     passwordPolicy: {
         minLength: number
         requireSpecial: boolean
         requireNumber: boolean
         requireUppercase: boolean
+        historyLimit: number
+        expirationDays: number
     }
 }
 
@@ -131,7 +136,19 @@ export const settingsApi = {
         api.post(`/admin/settings/configs/${key}/reset`),
 
     getConfigHistory: (key: string, limit?: number) =>
-        api.get(`/admin/settings/configs/${key}/history`, { params: { limit } }),
+        api.get(`/admin/settings/config-history/${key}`, { params: { limit } }),
+
+    getAuditLogs: (params: {
+        configKey?: string;
+        userId?: number;
+        startDate?: string;
+        endDate?: string;
+        page?: number;
+        pageSize?: number;
+    }) => api.get('/admin/settings/audit-logs', { params }),
+
+    rollbackConfig: (data: { configKey: string; targetVersion: number; reason?: string }) =>
+        api.post('/admin/settings/config-rollback', data),
 
     getPaymentConfigs: () =>
         api.get('/admin/settings/payment/configs'),
@@ -168,6 +185,9 @@ export const settingsApi = {
 
     deleteNotificationTemplate: (id: number) =>
         api.delete(`/admin/settings/notification/templates/${id}`),
+
+    batchDeleteNotificationTemplates: (ids: number[]) =>
+        api.delete('/admin/settings/notification/templates/batch', { data: { ids } }),
 
     getNotificationRules: () =>
         api.get('/admin/settings/notification/rules'),

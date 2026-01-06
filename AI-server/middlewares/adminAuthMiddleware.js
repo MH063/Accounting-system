@@ -42,14 +42,18 @@ const adminAuthMiddleware = async (req, res, next) => {
     }
 
     const decoded = result.data;
-    // 验证用户是否为管理员
+    // 验证用户是否为管理员 (不区分大小写，增加健壮性)
     const userRoles = Array.isArray(decoded.role) ? decoded.role : [decoded.role];
-    const isAdmin = userRoles.some(role => role === 'admin' || role === 'system_admin');
+    const isAdmin = userRoles.some(role => {
+      if (typeof role !== 'string') return false;
+      const lowerRole = role.toLowerCase();
+      return lowerRole === 'admin' || lowerRole === 'system_admin';
+    });
     
     if (!isAdmin) {
       logger.security(req, '管理员认证失败', { 
         reason: '用户不是管理员',
-        userId: decoded.userId,
+        userId: decoded.userId || decoded.id,
         role: decoded.role,
         timestamp: new Date().toISOString()
       });
@@ -103,11 +107,14 @@ const superAdminAuthMiddleware = async (req, res, next) => {
       });
     });
 
-    // 验证是否为系统管理员
-    if (req.user.adminLevel !== 'system_admin') {
+    // 验证是否为系统管理员 (不区分大小写)
+    const isAdminLevel = req.user.adminLevel && typeof req.user.adminLevel === 'string' && 
+                        req.user.adminLevel.toLowerCase() === 'system_admin';
+                        
+    if (!isAdminLevel) {
       logger.security(req, '系统管理员权限验证失败', { 
         reason: '用户不是系统管理员',
-        userId: req.user.id,
+        userId: req.user.id || req.user.userId,
         adminLevel: req.user.adminLevel,
         timestamp: new Date().toISOString()
       });
@@ -153,14 +160,17 @@ const permissionMiddleware = (requiredPermission) => {
 
       // 检查是否有指定权限
       const userPermissions = req.user.permissions || [];
+      const isAdminLevel = req.user.adminLevel && typeof req.user.adminLevel === 'string' && 
+                          req.user.adminLevel.toLowerCase() === 'system_admin';
+                          
       const hasPermission = userPermissions.includes(requiredPermission) || 
                            userPermissions.includes('all') || // 拥有所有权限
-                           req.user.adminLevel === 'system_admin'; // 系统管理员拥有所有权限
+                           isAdminLevel; // 系统管理员拥有所有权限
 
       if (!hasPermission) {
         logger.security(req, '权限检查失败', { 
           reason: '缺少必要权限',
-          userId: req.user.id,
+          userId: req.user.id || req.user.userId,
           requiredPermission,
           userPermissions,
           timestamp: new Date().toISOString()
@@ -209,11 +219,13 @@ const multiPermissionMiddleware = (requiredPermissions, requireAll = false) => {
       });
 
       const userPermissions = req.user.permissions || [];
+      const isAdminLevel = req.user.adminLevel && typeof req.user.adminLevel === 'string' && 
+                          req.user.adminLevel.toLowerCase() === 'system_admin';
       
       // 系统管理员拥有所有权限
-      if (req.user.adminLevel === 'system_admin') {
+      if (isAdminLevel) {
         logger.info('[MultiPermissionMiddleware] 系统管理员，权限检查通过', { 
-          userId: req.user.id
+          userId: req.user.id || req.user.userId
         });
         return next();
       }
@@ -235,7 +247,7 @@ const multiPermissionMiddleware = (requiredPermissions, requireAll = false) => {
       if (!hasRequiredPermission) {
         logger.security(req, '多权限检查失败', { 
           reason: '缺少必要权限',
-          userId: req.user.id,
+          userId: req.user.id || req.user.userId,
           requiredPermissions,
           userPermissions,
           requireAll,

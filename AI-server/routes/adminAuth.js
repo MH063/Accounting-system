@@ -79,6 +79,15 @@ router.post('/logout', adminAuthMiddleware, (req, res, next) => {
 });
 
 /**
+ * @route   POST /api/admin/verify-password
+ * @desc    验证管理员密码 (敏感操作二次确认)
+ * @access  Private (需要管理员认证)
+ */
+router.post('/verify-password', adminAuthMiddleware, (req, res, next) => {
+  adminAuthController.verifyPassword(req, res, next);
+});
+
+/**
  * @route   GET /api/admin/profile
  * @desc    获取管理员资料
  * @access  Private (需要管理员认证)

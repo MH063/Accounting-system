@@ -191,6 +191,51 @@ class AdminAuthService {
   }
 
   /**
+   * 验证管理员密码（用于敏感操作二次验证）
+   * @param {number} userId - 用户ID
+   * @param {string} password - 待验证的密码
+   * @returns {Promise<Object>} 验证结果
+   */
+  async verifyPassword(userId, password) {
+    try {
+      logger.info('[AdminAuthService] 开始验证管理员密码', { userId });
+
+      if (!userId || !password) {
+        return { success: false, message: '用户ID或密码不能为空' };
+      }
+
+      const user = await this.userRepository.findById(userId);
+      if (!user) {
+        return { success: false, message: '用户不存在' };
+      }
+
+      // 1. 检查账户状态
+      if (!user.isActive) {
+        return { success: false, message: '账户未激活' };
+      }
+
+      // 2. 验证是否具有管理员权限
+      const userWithRoles = await this.userRepository.findUserWithRoles(user.username);
+      const isAdmin = this.checkAdminAccess(user, userWithRoles);
+      if (!isAdmin) {
+        return { success: false, message: '权限不足，仅管理员可以进行此操作' };
+      }
+
+      // 3. 验证密码
+      const isPasswordValid = await PasswordService.verifyPassword(password, user.passwordHash);
+      if (!isPasswordValid) {
+        return { success: false, message: '密码验证失败，请重新输入' };
+      }
+
+      logger.info('[AdminAuthService] 管理员密码验证通过', { userId });
+      return { success: true, message: '身份验证成功' };
+    } catch (error) {
+      logger.error('[AdminAuthService] 管理员密码验证异常', { error: error.message, userId });
+      return { success: false, message: '身份验证失败，请稍后重试' };
+    }
+  }
+
+  /**
    * 验证双因素认证码
    * @param {number} userId - 用户ID
    * @param {string} code - 认证码
@@ -270,6 +315,8 @@ class AdminAuthService {
       return { success: false, message: '验证失败，请稍后重试' };
     }
   }
+
+
 
   /**
    * 处理登录失败

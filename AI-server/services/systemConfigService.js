@@ -35,6 +35,8 @@ const DEFAULT_CONFIGS = [
   { key: 'security.2fa_required', value: false, type: 'boolean', group: 'security', category: 'SECURITY_CONFIG', displayName: '强制双重验证', desc: '是否强制所有管理员启用2FA' },
   { key: 'security.ip_control.enabled', value: false, type: 'boolean', group: 'security', category: 'SECURITY_CONFIG', displayName: '启用IP访问控制', desc: '是否开启基于IP的黑白名单控制' },
   { key: 'security.ip_control.mode', value: 'blacklist', type: 'string', group: 'security', category: 'SECURITY_CONFIG', displayName: 'IP控制模式', desc: 'IP控制的模式: whitelist(白名单)/blacklist(黑名单)' },
+  { key: 'security.ip_control.whitelist', value: [], type: 'array', group: 'security', category: 'SECURITY_CONFIG', displayName: 'IP白名单', desc: '允许访问的IP列表' },
+  { key: 'security.ip_control.blacklist', value: [], type: 'array', group: 'security', category: 'SECURITY_CONFIG', displayName: 'IP黑名单', desc: '禁止访问的IP列表' },
   { key: 'security.session.idle_timeout', value: 30, type: 'integer', group: 'security', category: 'SECURITY_CONFIG', displayName: '空闲超时', desc: '用户无操作自动登出的时长(分钟)' },
   { key: 'feature.registration_enabled', value: true, type: 'boolean', group: 'feature', category: 'FEATURE_FLAGS', displayName: '用户注册', desc: '是否允许新用户注册' },
   { key: 'feature.password_reset_enabled', value: true, type: 'boolean', group: 'feature', category: 'FEATURE_FLAGS', displayName: '密码重置', desc: '是否允许重置密码' },
@@ -79,7 +81,17 @@ const DEFAULT_CONFIGS = [
 
   // 日志相关
   { key: 'log.rotation_enabled', value: true, type: 'boolean', group: 'log', category: 'LOG_CONFIG', displayName: '日志轮转', desc: '是否启用日志自动轮转' },
-  { key: 'log.output_targets', value: ['file', 'console'], type: 'array', group: 'log', category: 'LOG_CONFIG', displayName: '日志输出目标', desc: '日志记录的目标(file/console/database)' }
+  { key: 'log.output_targets', value: ['file', 'console'], type: 'array', group: 'log', category: 'LOG_CONFIG', displayName: '日志输出目标', desc: '日志记录的目标(file/console/database)' },
+  { key: 'log.level', value: 'info', type: 'string', group: 'log', category: 'LOG_CONFIG', displayName: '日志级别', desc: '系统运行时的日志记录级别(debug/info/warn/error)' },
+  { key: 'log.max_files', value: 30, type: 'integer', group: 'log', category: 'LOG_CONFIG', displayName: '日志保留天数', desc: '日志文件在磁盘上保留的最大天数' },
+  { key: 'log.max_size', value: 100, type: 'integer', group: 'log', category: 'LOG_CONFIG', displayName: '日志文件大小限制', desc: '单个日志文件的最大容量(MB)' },
+  
+  // UI 和显示配置
+  { key: 'system.theme', value: 'light', type: 'string', group: 'system', category: 'UI_CONFIG', displayName: '系统主题', desc: '系统显示主题: light/dark' },
+  { key: 'system.language', value: 'zh-CN', type: 'string', group: 'system', category: 'UI_CONFIG', displayName: '系统语言', desc: '系统界面显示语言' },
+  { key: 'system.layout', value: 'side', type: 'string', group: 'system', category: 'UI_CONFIG', displayName: '系统布局', desc: '系统导航菜单布局方式' },
+  { key: 'system.show_breadcrumb', value: true, type: 'boolean', group: 'system', category: 'UI_CONFIG', displayName: '显示面包屑', desc: '是否在页面顶部显示面包屑导航' },
+  { key: 'system.fixed_header', value: true, type: 'boolean', group: 'system', category: 'UI_CONFIG', displayName: '固定顶栏', desc: '是否固定页面顶部栏' }
 ];
 
 function getCacheKey(key) {
@@ -350,7 +362,9 @@ async function getSecurityConfigs(options = {}) {
     expirationDays: 90,
     twoFactorAuth: false,
     ipControlEnabled: false,
-    ipControlMode: 'blacklist'
+    ipControlMode: 'blacklist',
+    ipWhitelist: [],
+    ipBlacklist: []
   };
 
   for (const [key, config] of Object.entries(configs)) {
@@ -369,11 +383,68 @@ async function getSecurityConfigs(options = {}) {
     else if (key === 'security.2fa_required') security.twoFactorAuth = Boolean(value);
     else if (key === 'security.ip_control.enabled') security.ipControlEnabled = Boolean(value);
     else if (key === 'security.ip_control.mode') security.ipControlMode = value || 'blacklist';
+    else if (key === 'security.ip_control.whitelist') security.ipWhitelist = Array.isArray(value) ? value : [];
+    else if (key === 'security.ip_control.blacklist') security.ipBlacklist = Array.isArray(value) ? value : [];
   }
 
   return security;
 }
 
+/**
+ * 验证配置值的合法性 (Rule 18: 多层验证机制)
+ * @param {string} key 配置键
+ * @param {any} value 配置值
+ * @param {string} type 配置类型
+ */
+function validateConfigValue(key, value, type) {
+  // 1. 基本类型检查
+  if (type === 'integer' || type === 'number') {
+    if (isNaN(Number(value))) {
+      throw new Error(`配置项 ${key} 必须是数字类型`);
+    }
+  }
+
+  // 2. 特定安全配置校验
+  if (key === 'security.login.max_attempts') {
+    const val = parseInt(value);
+    if (val < 1 || val > 20) throw new Error('登录失败锁定次数必须在 1-20 之间');
+  }
+
+  if (key === 'security.login.lockout_duration') {
+    const val = parseInt(value);
+    if (val < 1) throw new Error('账号锁定时间不能小于 1 分钟');
+  }
+
+  if (key === 'security.session.idle_timeout') {
+    const val = parseInt(value);
+    if (val < 5 || val > 1440) throw new Error('会话超时时间必须在 5-1440 分钟之间');
+  }
+
+  if (key === 'security.password_policy.min_length') {
+    const val = parseInt(value);
+    if (val < 6 || val > 32) throw new Error('密码最小长度必须在 6-32 之间');
+  }
+
+  if (key.includes('ip_control')) {
+    if (!Array.isArray(value)) {
+      throw new Error(`IP控制列表 ${key} 必须是数组格式`);
+    }
+    // 简单的 IP 格式校验
+    const ipRegex = /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/;
+    value.forEach(ip => {
+      if (!ipRegex.test(ip) && ip !== '*' && ip !== 'localhost') {
+        throw new Error(`无效的 IP 地址格式: ${ip}`);
+      }
+    });
+  }
+}
+
+/**
+ * 设置配置项
+ * @param {string} key 配置键
+ * @param {any} value 配置值
+ * @param {Object} options 选项
+ */
 async function setConfig(key, value, options = {}) {
   const { 
     description, 
@@ -383,7 +454,7 @@ async function setConfig(key, value, options = {}) {
     username = null, 
     ipAddress = null, 
     userAgent = null, 
-    reason = null,
+    reason = null, 
     client = null // 支持外部传入数据库客户端（用于事务）
   } = options;
   
@@ -391,10 +462,11 @@ async function setConfig(key, value, options = {}) {
   
   let current = await getConfig(key, { client });
   
-  // 如果配置不存在，尝试从默认配置中恢复
+  // 如果配置不存在，尝试从默认配置中恢复，或者动态创建
   if (!current) {
-    console.log(`Config ${key} not found, checking defaults...`);
+    console.log(`Config ${key} not found, checking defaults or creating dynamic config...`);
     const defaultConfig = DEFAULT_CONFIGS.find(c => c.key === key);
+    
     if (defaultConfig) {
       console.log(`Creating missing config ${key} from defaults...`);
       await db.query(
@@ -411,13 +483,38 @@ async function setConfig(key, value, options = {}) {
           description || defaultConfig.desc
         ]
       );
-      current = await getConfig(key, { client });
+    } else {
+      // 动态创建新配置项 (Rule: 允许前端扩展配置而不崩溃)
+      console.log(`Creating new dynamic config ${key}...`);
+      const inferredType = typeof value === 'number' ? 'integer' : 
+                          typeof value === 'boolean' ? 'boolean' : 
+                          Array.isArray(value) ? 'array' : 'string';
+      const inferredGroup = inferGroup(key);
+      
+      await db.query(
+        `INSERT INTO admin_system_configs 
+         (config_key, config_value, data_type, config_group, config_category, display_name, description, is_system_config, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, false, true)`,
+        [
+          key, 
+          JSON.stringify(value), 
+          inferredType, 
+          inferredGroup, 
+          'SYSTEM_GENERAL',
+          displayName || key, 
+          description || `动态创建的配置项: ${key}`
+        ]
+      );
     }
+    current = await getConfig(key, { client });
   }
 
   if (!current) {
-    throw new Error(`Configuration key not found: ${key}`);
+    throw new Error(`Failed to create or find configuration key: ${key}`);
   }
+
+  // 验证值合法性
+  validateConfigValue(key, value, current.dataType);
   
   const oldValue = current.value;
   const formattedValue = formatValue(value, current.dataType);
@@ -447,6 +544,7 @@ async function setConfig(key, value, options = {}) {
       ipAddress,
       userAgent,
       reason: reason || description || '配置更新',
+      configVersion: newVersion, // 传入新版本号
       client: client // 审计日志也支持事务
     });
     
@@ -472,7 +570,7 @@ async function setConfig(key, value, options = {}) {
  * @param {Object} options 选项
  */
 async function setConfigsTransactional(configMap, options = {}) {
-  const { userId, username, ipAddress, userAgent, reason } = options;
+  const { userId, username, role, ipAddress, userAgent, reason } = options;
   const { pool } = require('../config/database');
   const client = await pool.connect();
   
@@ -498,7 +596,51 @@ async function setConfigsTransactional(configMap, options = {}) {
       }
     }
     
+    // 记录配置变更审计日志 (Rule 18: 记录敏感操作)
+    // 放在 COMMIT 之前，确保审计日志与配置变更原子性
+    const auditQuery = `
+      INSERT INTO admin_operationlogs (
+        operator_id, operator_username, operator_role, operator_ip, operator_user_agent,
+        operation_type, operation_module, operation_description, operation_details, 
+        operation_status, operation_timestamp
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+    `;
+
+    // 处理 IP 地址，确保兼容 PostgreSQL 的 INET 类型
+    let cleanIp = ipAddress || '127.0.0.1';
+    if (cleanIp.includes('::ffff:')) {
+      cleanIp = cleanIp.replace('::ffff:', '');
+    }
+
+    await client.query(auditQuery, [
+      userId || 0,
+      username || 'system',
+      role || 'admin',
+      cleanIp,
+      userAgent || 'system',
+      'SYSTEM_CONFIG_UPDATE', // 必须是 Schema 约束中的值
+      'SYSTEM_CONFIG',        // 必须是 Schema 约束中的值
+      `批量更新系统配置: ${Object.keys(configMap).join(', ')}`,
+      JSON.stringify({ configs: configMap, reason: reason }),
+      'success'
+    ]);
+
     await client.query('COMMIT');
+    
+    // 触发实时同步通知 (WebSocket) - 放在事务提交后
+    try {
+      const websocketService = require('./websocketService');
+      websocketService.broadcast({
+        type: 'CONFIG_UPDATED',
+        payload: {
+          keys: Object.keys(configMap),
+          timestamp: new Date().toISOString(),
+          reason: reason || '配置已更新'
+        }
+      });
+    } catch (wsError) {
+      console.warn('[SystemConfig] Failed to broadcast config update:', wsError.message);
+    }
     
     // 触发服务刷新逻辑（如果是邮件配置）
     const hasEmailConfig = Object.keys(configMap).some(key => key.startsWith('notification.'));

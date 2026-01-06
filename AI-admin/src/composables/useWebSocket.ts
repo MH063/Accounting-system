@@ -68,6 +68,26 @@ export function useWebSocket() {
 
     if (data.type === 'FORCE_LOGOUT') {
       handleForceLogout(data.payload?.message)
+    } else if (data.type === 'CONFIG_UPDATED') {
+      handleConfigUpdate(data.payload)
+    }
+  }
+
+  /**
+   * 处理配置更新通知
+   */
+  const handleConfigUpdate = (payload: any) => {
+    console.log('⚙️ 收到配置更新通知:', payload)
+    
+    // 如果包含安全配置，提示用户
+    const hasSecurityConfig = payload.keys?.some((key: string) => key.startsWith('security.'))
+    if (hasSecurityConfig) {
+      ElMessage({
+        message: '系统安全配置已由管理员更新，部分设置可能需要重新加载。',
+        type: 'info',
+        duration: 5000,
+        showClose: true
+      })
     }
   }
 

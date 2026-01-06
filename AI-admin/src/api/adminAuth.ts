@@ -24,6 +24,10 @@ export const adminAuthApi = {
   verifyAdminToken: () =>
     api.get('/admin/verify'),
   
+  // 验证管理员密码 (敏感操作二次确认)
+  verifyPassword: (data: { password: string }) =>
+    api.post('/admin/verify-password', data),
+
   // 管理员心跳上报
   heartbeat: (data?: any) =>
     api.post('/admin/heartbeat', data)

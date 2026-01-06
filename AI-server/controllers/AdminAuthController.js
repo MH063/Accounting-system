@@ -24,6 +24,7 @@ class AdminAuthController extends BaseController {
     this.refreshAdminToken = this.refreshAdminToken.bind(this);
     this.heartbeat = this.heartbeat.bind(this);
     this.verifyTwoFactor = this.verifyTwoFactor.bind(this);
+    this.verifyPassword = this.verifyPassword.bind(this);
   }
 
   /**
@@ -329,6 +330,45 @@ class AdminAuthController extends BaseController {
 
     } catch (error) {
       logger.error('[AdminAuthController] 管理员登出失败', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * 验证管理员密码 (用于敏感操作二次确认)
+   * POST /api/admin/verify-password
+   */
+  async verifyPassword(req, res, next) {
+    try {
+      const { password } = req.body;
+      // 兼容多种用户信息存储方式，优先使用 req.user.id，其次是 req.user.userId
+      const userId = req.user?.id || req.user?.userId;
+
+      if (!userId) {
+        logger.warn('[AdminAuthController] 密码验证失败: 未获取到用户ID', { 
+          user: req.user ? 'exists' : 'missing' 
+        });
+        return errorResponse(res, '用户未登录', 401);
+      }
+
+      if (!password) {
+        return errorResponse(res, '请输入密码', 400);
+      }
+
+      const result = await this.adminAuthService.verifyPassword(userId, password);
+
+      if (result.success) {
+        logger.audit(req, '管理员敏感操作密码验证成功', { userId });
+        return successResponse(res, null, '验证成功');
+      } else {
+        logger.warn('管理员敏感操作密码验证失败', { userId, reason: result.message });
+        return errorResponse(res, result.message, 401);
+      }
+    } catch (error) {
+      logger.error('[AdminAuthController] 密码验证异常', { 
+        error: error.message,
+        stack: error.stack
+      });
       next(error);
     }
   }

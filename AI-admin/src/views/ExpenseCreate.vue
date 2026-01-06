@@ -699,12 +699,16 @@ const handleUploadSuccess = (response: any, file: any) => {
   console.log('📎 上传成功:', response, file)
   
   // 更新表单中的附件信息，确保存储后端返回的文件路径
-  if (response.success && response.data && response.data.files) {
+  // 兼容处理拦截器返回的数据结构和 Element Plus 的原始响应
+  const resData = response?.data?.data || response?.data || response
+  const isSuccess = response?.success === true || response?.code === 200 || response?.data?.success === true || !!resData.files
+  
+  if (isSuccess && resData.files) {
     // 找到当前上传的文件并更新其 url
     const uploadedFile = expenseForm.attachments.find(f => f.uid === file.uid)
     if (uploadedFile) {
       // 假设后端返回的数据中包含文件路径，这里根据 Rule 5 处理双层嵌套
-      const fileData = response.data.files[0] // 对应单次上传中的第一个文件
+      const fileData = resData.files[0] // 对应单次上传中的第一个文件
       // @ts-ignore
       uploadedFile.url = fileData.url || fileData.path
       // @ts-ignore
