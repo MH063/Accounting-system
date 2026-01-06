@@ -79,6 +79,22 @@ const authenticateToken = async (req, res, next) => {
       jti: user.jti || user.jwtid,
       isRevoked: false
     };
+
+    // 验证会话有效性（包含过期和空闲超时检查）
+    const sessionValidation = await userService.validateSession(user.id, token);
+    if (!sessionValidation.success) {
+      logger.security(req, '会话验证失败', { 
+        userId: user.id, 
+        reason: sessionValidation.message,
+        code: sessionValidation.code 
+      });
+      return res.status(401).json({
+        success: false,
+        code: sessionValidation.code,
+        message: sessionValidation.message
+      });
+    }
+
     logger.security(req, 'JWT认证成功', {
       userId: user.id,
       tokenType: user.type,

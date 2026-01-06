@@ -1,6 +1,7 @@
 const express = require('express');
 const { logManager } = require('../utils/logManager');
 const logger = require('../config/logger');
+const versionManager = require('../config/versionManager');
 
 const router = express.Router();
 
@@ -19,12 +20,13 @@ router.get('/', (req, res) => {
 
     const stats = logManager.getLogStats();
     const files = logManager.getLogFiles();
+    const serverVersion = versionManager.getServerVersion();
     
     res.json({
       success: true,
       data: {
         service: '日志管理API',
-        version: '1.0.0',
+        version: serverVersion.version,
         status: 'running',
         features: {
           '日志搜索': 'GET /api/logs/search',

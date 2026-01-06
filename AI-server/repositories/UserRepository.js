@@ -290,33 +290,50 @@ class UserRepository extends BaseRepository {
   /**
    * 增加登录失败次数
    * @param {number} userId - 用户ID
-   * @param {number} maxAttempts - 最大失败次数
-   * @returns {Promise<Object>} 操作结果
+   * @param {string} ip - IP地址
+   * @param {string} userAgent - 用户代理
+   * @param {number} maxAttempts - 最大尝试次数
+   * @param {number} lockTime - 锁定时间（分钟）
+   * @param {number} resetWindow - 计数重置窗口（分钟）
+   * @returns {Promise<Object>} 处理结果
    */
-  async increaseFailedAttempts(userId, maxAttempts = 5) {
+  async increaseFailedAttempts(userId, ip = 'unknown', userAgent = 'unknown', maxAttempts = 5, lockTime = 30, resetWindow = 30) {
     try {
       const { query } = require('../config/database');
-      const result = await query(`
-        UPDATE users 
-        SET failed_login_attempts = failed_login_attempts + 1
-        WHERE id = $1
-        RETURNING failed_login_attempts
-      `, [userId]);
-
-      if (result.rows.length === 0) {
-        return { success: false, attempts: 0 };
-      }
-
-      const attempts = result.rows[0].failed_login_attempts;
       
-      // 如果达到最大失败次数，锁定账户
+      // 1. 记录登录失败日志
+      await query(`
+        INSERT INTO security_login_logs 
+        (user_id, ip_address, user_agent, status, attempt_at)
+        VALUES ($1, $2, $3, 'failure', NOW())
+      `, [userId, ip, userAgent]);
+
+      // 2. 统计窗口期内的失败次数
+      const countResult = await query(`
+        SELECT COUNT(*) as count 
+        FROM security_login_logs 
+        WHERE user_id = $1 
+        AND status = 'failure'
+        AND attempt_at > NOW() - INTERVAL '1 minute' * $2
+      `, [userId, resetWindow]);
+
+      const attempts = parseInt(countResult.rows[0].count);
+      
+      // 3. 更新用户表中的失败次数（兼容旧逻辑）
+      await query(`
+        UPDATE users 
+        SET failed_login_attempts = $1
+        WHERE id = $2
+      `, [attempts, userId]);
+
+      // 4. 如果达到最大失败次数，锁定账户
       if (attempts >= maxAttempts) {
-        await this.lockUser(userId, 30, '登录失败次数过多');
+        await this.lockUser(userId, lockTime, '登录失败次数过多');
         return { 
           success: true, 
           attempts, 
           locked: true,
-          message: `登录失败次数过多，账户已被锁定30分钟`
+          message: `登录失败次数过多，账户已被锁定${lockTime}分钟`
         };
       }
 
@@ -324,10 +341,31 @@ class UserRepository extends BaseRepository {
         success: true, 
         attempts, 
         locked: false,
-        message: `登录失败，还剩 ${maxAttempts - attempts} 次机会`
+        message: `登录失败，在${resetWindow}分钟内还剩 ${Math.max(0, maxAttempts - attempts)} 次机会`
       };
     } catch (error) {
       logger.error('[UserRepository] 增加登录失败次数失败', { error: error.message, userId });
+      throw error;
+    }
+  }
+
+  /**
+   * 重置登录失败次数
+   * @param {number} userId - 用户ID
+   * @returns {Promise<boolean>} 是否更新成功
+   */
+  async resetLoginAttempts(userId) {
+    try {
+      const { query } = require('../config/database');
+      const result = await query(`
+        UPDATE users 
+        SET failed_login_attempts = 0, locked_until = NULL
+        WHERE id = $1
+      `, [userId]);
+
+      return result.rowCount > 0;
+    } catch (error) {
+      logger.error('[UserRepository] 重置登录失败次数失败', { error: error.message, userId });
       throw error;
     }
   }

@@ -96,11 +96,14 @@ async function logConfigChange(options) {
     userAgent,
     reason,
     isRollback = false,
-    rollbackFromId = null
+    rollbackFromId = null,
+    client = null // 支持外部传入数据库客户端
   } = options;
   
+  const db = client || { query: require('../config/database').query };
+  
   try {
-    const tableCheck = await query(`
+    const tableCheck = await db.query(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
         WHERE table_schema = 'public' 
@@ -140,7 +143,7 @@ async function logConfigChange(options) {
   ];
   
   try {
-    const result = await query(sql, params);
+    const result = await db.query(sql, params);
     return result.rows[0].id;
   } catch (error) {
     console.error('[ConfigAudit] 记录配置变更日志失败:', error.message);
@@ -155,11 +158,14 @@ async function saveConfigHistory(options) {
     configVersion,
     userId,
     username,
-    changeReason
+    changeReason,
+    client = null // 支持外部传入数据库客户端
   } = options;
   
+  const db = client || { query: require('../config/database').query };
+  
   try {
-    const tableCheck = await query(`
+    const tableCheck = await db.query(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
         WHERE table_schema = 'public' 
@@ -193,7 +199,7 @@ async function saveConfigHistory(options) {
   ];
   
   try {
-    const result = await query(sql, params);
+    const result = await db.query(sql, params);
     return result.rows[0].id;
   } catch (error) {
     console.error('[ConfigAudit] 保存配置历史失败:', error.message);

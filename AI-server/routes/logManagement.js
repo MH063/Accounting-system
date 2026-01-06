@@ -8,6 +8,7 @@ const router = express.Router();
 const { getLogStats, performLogRotation, compressOldLogFiles, LOG_CONFIG } = require('../utils/logRotation');
 const loggerModule = require('../config/logger');
 const logger = loggerModule.logger;
+const versionManager = require('../config/versionManager');
 
 /**
  * 日志API根路径 - 显示日志服务状态
@@ -24,12 +25,13 @@ router.get('/', async (req, res) => {
 
     // 获取基本统计信息
     const stats = await getLogStats();
+    const serverVersion = versionManager.getServerVersion();
     
     res.json({
       success: true,
       data: {
         service: '日志管理API',
-        version: '1.0.0',
+        version: serverVersion.version,
         status: 'running',
         features: {
           '日志搜索': 'GET /api/logs/search',

@@ -7,6 +7,7 @@ const axios = require('axios');
 const path = require('path');
 const fs = require('fs').promises;
 const logger = require('../config/logger');
+const versionManager = require('../config/versionManager');
 
 class CDNManager {
   constructor(config = {}) {
@@ -70,16 +71,14 @@ class CDNManager {
       return this.cache.get('version');
     }
     
-    const packageJsonPath = path.join(__dirname, '..', 'package.json');
-    const version = '1.0.0'; // 默认版本
+    const serverVersion = versionManager.getServerVersion();
+    const version = serverVersion.version;
     
     try {
-      const data = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-      const ver = data.version || version;
-      this.cache.set('version', ver);
-      return ver;
+      this.cache.set('version', version);
+      return version;
     } catch (error) {
-      logger.warn('无法读取package.json版本，使用默认版本:', error.message);
+      logger.warn('无法获取版本号，使用默认版本:', error.message);
       return version;
     }
   }

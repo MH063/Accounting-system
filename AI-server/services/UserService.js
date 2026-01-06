@@ -11,6 +11,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const logger = require('../config/logger');
 const TotpService = require('./TotpService');
+const PasswordService = require('./PasswordService');
 const { getQueue, QUEUES } = require('../config/messageQueue');
 const { 
   generateTokenPair, 
@@ -19,6 +20,7 @@ const {
 } = require('../config/jwtManager');
 
 const AdminAuthService = require('./AdminAuthService');
+const systemConfigService = require('./systemConfigService');
 
 class UserService extends BaseService {
   constructor() {
@@ -27,6 +29,15 @@ class UserService extends BaseService {
     this.userRepository = userRepository;
     this.twoFactorRepository = new TwoFactorRepository();
     this.totpService = new TotpService();
+  }
+
+  /**
+   * 验证密码强度
+   * @param {string} password - 原始密码
+   * @returns {Promise<void>} 验证失败抛出异常
+   */
+  async validatePassword(password) {
+    await PasswordService.validateStrength(password);
   }
 
   /**
@@ -48,6 +59,9 @@ class UserService extends BaseService {
       if (!userData.username || !userData.email || !userData.password) {
         throw new Error('用户名、邮箱和密码为必填项');
       }
+
+      // 验证密码强度
+      await this.validatePassword(userData.password);
 
       // 验证邮箱格式
       logger.debug('[UserService] 验证邮箱格式', { 
@@ -75,9 +89,8 @@ class UserService extends BaseService {
         throw new Error(`${conflictField === 'username' ? '用户名' : '邮箱'} '${conflictValue}' 已被使用`);
       }
 
-      // 加密密码
-      const saltRounds = 12;
-      const passwordHash = await bcrypt.hash(userData.password, saltRounds);
+      // 加密密码 (使用 PBKDF2)
+      const passwordHash = await PasswordService.hashPassword(userData.password);
       
       logger.debug('[UserService] 加密后的密码哈希:', { 
         passwordHash: passwordHash,
@@ -159,6 +172,9 @@ class UserService extends BaseService {
       `;
 
       await client.query(assignRoleQuery, [userId]);
+      
+      // 记录密码历史
+      await PasswordService.recordPasswordHistory(userId, passwordHash, client);
       
       // 3. 生成邮箱验证码
       const verificationCode = Math.floor(100000 + Math.random() * 900000).toString(); // 6位数字验证码
@@ -441,18 +457,33 @@ class UserService extends BaseService {
         storedHashLength: user.passwordHash ? user.passwordHash.length : 0
       });
 
-      // 验证密码
-      const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+      // 验证密码 (支持 PBKDF2 和旧的 bcrypt)
+      const isPasswordValid = await PasswordService.verifyPassword(password, user.passwordHash);
       
       if (!isPasswordValid) {
         // 记录登录失败
-        await this.handleLoginFailure(user.id, username || email, user.login_protection_enabled);
+        await this.handleLoginFailure(user.id, username || email, ip, userAgent, user.login_protection_enabled);
         
         logger.warn('[UserService] 用户登录失败: 密码错误', { 
           userId: user.id,
           username: user.username 
         });
         return { success: false, message: '用户名或密码错误' };
+      }
+
+      // 检查密码是否过期
+      const isExpired = await PasswordService.isPasswordExpired(user.passwordChangedAt);
+      if (isExpired) {
+        logger.info('[UserService] 用户密码已过期，需要修改密码', { userId: user.id });
+        // 这里可以返回一个特殊的标识，让前端跳转到修改密码页面
+        return { 
+          success: true, 
+          data: { 
+            mustChangePassword: true,
+            user: user.toApiResponse()
+          }, 
+          message: '您的密码已过期，请修改密码后重新登录' 
+        };
       }
 
       // 密码正确，重置登录失败次数
@@ -562,7 +593,15 @@ class UserService extends BaseService {
    * @param {string} identifier - 用户标识符
    * @param {boolean} protectionEnabled - 是否启用登录保护
    */
-  async handleLoginFailure(userId, identifier, protectionEnabled = true) {
+  /**
+   * 处理登录失败
+   * @param {number} userId - 用户ID
+   * @param {string} identifier - 登录标识 (用户名或邮箱)
+   * @param {string} ip - IP地址
+   * @param {string} userAgent - 用户代理
+   * @param {boolean} protectionEnabled - 是否启用登录保护
+   */
+  async handleLoginFailure(userId, identifier, ip = 'unknown', userAgent = 'unknown', protectionEnabled = true) {
     try {
       // 如果未启用登录保护，仅记录日志，不执行锁定逻辑
       if (!protectionEnabled) {
@@ -574,7 +613,11 @@ class UserService extends BaseService {
         return;
       }
 
-      const result = await this.userRepository.increaseFailedAttempts(userId);
+      // 获取系统安全配置
+      const securityConfig = await systemConfigService.getSecurityConfigs();
+      const { loginFailCount, lockTime, resetWindow } = securityConfig;
+
+      const result = await this.userRepository.increaseFailedAttempts(userId, ip, userAgent, loginFailCount, lockTime, resetWindow);
       
       if (result.success) {
         const { loginAttempts, lockedUntil } = result;
@@ -1293,8 +1336,10 @@ class UserService extends BaseService {
       }
 
       // 验证新密码强度
-      if (!this.isValidPassword(newPassword)) {
-        const err = new Error('新密码不符合安全要求（至少8位，包含大小写字母、数字和特殊字符）');
+      try {
+        await this.validatePassword(newPassword);
+      } catch (validationError) {
+        const err = new Error(validationError.message);
         err.statusCode = 400;
         throw err;
       }
@@ -2207,9 +2252,13 @@ class UserService extends BaseService {
       // 解析用户代理信息
       const deviceInfo = this.parseUserAgent(userAgent);
 
-      // 设置会话过期时间（默认7天）
+      // 获取系统安全配置
+      const securityConfig = await systemConfigService.getSecurityConfigs();
+      const sessionTimeoutMinutes = securityConfig.sessionTimeout || 60; // 默认 60 分钟
+
+      // 设置会话过期时间
       const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
+      expiresAt.setMinutes(expiresAt.getMinutes() + sessionTimeoutMinutes);
 
       // 插入到数据库的 user_sessions 表
       let insertQuery, params;
@@ -2529,10 +2578,78 @@ class UserService extends BaseService {
   }
 
   /**
+   * 验证会话有效性 (检查过期和空闲超时)
+   * @param {number} userId - 用户ID
+   * @param {string} sessionToken - 会话令牌
+   * @returns {Promise<Object>} 验证结果 { success, message, code }
+   */
+  async validateSession(userId, sessionToken) {
+    try {
+      const query = `
+        SELECT id, expires_at, last_accessed_at, status
+        FROM user_sessions
+        WHERE user_id = $1 AND session_token = $2
+      `;
+      const result = await this.userRepository.executeQuery(query, [userId, sessionToken]);
+      
+      if (result.rowCount === 0) {
+        return { success: false, message: '会话不存在', code: 'SESSION_NOT_FOUND' };
+      }
+
+      const session = result.rows[0];
+
+      if (session.status !== 'active') {
+        return { success: false, message: '会话已失效', code: 'SESSION_INACTIVE' };
+      }
+
+      const now = new Date();
+      
+      // 1. 检查绝对过期时间
+      if (new Date(session.expires_at) < now) {
+        await this.revokeSession(session.id, 'EXPIRED');
+        return { success: false, message: '登录已过期，请重新登录', code: 'SESSION_EXPIRED' };
+      }
+
+      // 2. 检查空闲超时
+      const securityConfig = await systemConfigService.getSecurityConfigs();
+      const idleTimeoutMinutes = securityConfig.idleTimeout || 120;
+      
+      const lastAccessed = new Date(session.last_accessed_at);
+      const idleMinutes = (now - lastAccessed) / (1000 * 60);
+
+      if (idleMinutes > idleTimeoutMinutes) {
+        await this.revokeSession(session.id, 'IDLE_TIMEOUT');
+        return { success: false, message: '由于长时间未操作，您的会话已超时，请重新登录', code: 'SESSION_IDLE_TIMEOUT' };
+      }
+
+      return { success: true };
+    } catch (error) {
+      logger.error('[UserService] 验证会话失败', { error: error.message, userId });
+      return { success: false, message: '会话验证出错', code: 'ERROR' };
+    }
+  }
+
+  /**
+   * 撤销会话
+   */
+  async revokeSession(sessionId, reason = 'REVOKED') {
+    try {
+      await this.userRepository.executeQuery(
+        'UPDATE user_sessions SET status = $1, updated_at = NOW() WHERE id = $2',
+        [reason.toLowerCase(), sessionId]
+      );
+      return true;
+    } catch (error) {
+      logger.error('[UserService] 撤销会话失败', { error: error.message, sessionId });
+      return false;
+    }
+  }
+
+  /**
    * 增加业务请求计数
    * @param {number} userId - 用户ID
    * @param {string} sessionToken - 会话令牌
-   * @returns {Promise<boolean>} 是否成功
+   * @returns {Promise<boolean>} 是否更新成功
    */
   async incrementBusinessRequest(userId, sessionToken) {
     try {

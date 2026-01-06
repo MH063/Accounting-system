@@ -24,12 +24,62 @@ const DEFAULT_CONFIGS = [
   { key: 'security.ssl_certificate', value: '已启用', type: 'string', group: 'security', category: 'SECURITY_CONFIG', displayName: 'SSL证书', desc: 'SSL证书状态' },
   { key: 'security.encryption_algorithm', value: 'AES-256', type: 'string', group: 'security', category: 'SECURITY_CONFIG', displayName: '加密算法', desc: '数据加密算法' },
   { key: 'security.password_policy.min_length', value: 8, type: 'integer', group: 'security', category: 'SECURITY_CONFIG', displayName: '密码最小长度', desc: '用户密码的最短字符数' },
+  { key: 'security.password_policy.require_special', value: true, type: 'boolean', group: 'security', category: 'SECURITY_CONFIG', displayName: '要求特殊字符', desc: '密码是否必须包含特殊字符' },
+  { key: 'security.password_policy.require_number', value: true, type: 'boolean', group: 'security', category: 'SECURITY_CONFIG', displayName: '要求数字', desc: '密码是否必须包含数字' },
+  { key: 'security.password_policy.require_uppercase', value: false, type: 'boolean', group: 'security', category: 'SECURITY_CONFIG', displayName: '要求大写字母', desc: '密码是否必须包含大写字母' },
+  { key: 'security.password_policy.history_limit', value: 5, type: 'integer', group: 'security', category: 'SECURITY_CONFIG', displayName: '密码历史限制', desc: '禁止重复最近几次使用的密码' },
+  { key: 'security.password_policy.expiration_days', value: 90, type: 'integer', group: 'security', category: 'SECURITY_CONFIG', displayName: '密码有效期', desc: '用户密码的最长有效天数' },
   { key: 'security.login.max_attempts', value: 5, type: 'integer', group: 'security', category: 'SECURITY_CONFIG', displayName: '登录失败次数', desc: '允许的最大登录尝试次数' },
   { key: 'security.login.lockout_duration', value: 30, type: 'integer', group: 'security', category: 'SECURITY_CONFIG', displayName: '锁定时间', desc: '账号锁定持续时间(分钟)' },
+  { key: 'security.login.reset_window', value: 30, type: 'integer', group: 'security', category: 'SECURITY_CONFIG', displayName: '失败计数重置窗口', desc: '失败计数自动清零的时间间隔(分钟)' },
+  { key: 'security.2fa_required', value: false, type: 'boolean', group: 'security', category: 'SECURITY_CONFIG', displayName: '强制双重验证', desc: '是否强制所有管理员启用2FA' },
+  { key: 'security.ip_control.enabled', value: false, type: 'boolean', group: 'security', category: 'SECURITY_CONFIG', displayName: '启用IP访问控制', desc: '是否开启基于IP的黑白名单控制' },
+  { key: 'security.ip_control.mode', value: 'blacklist', type: 'string', group: 'security', category: 'SECURITY_CONFIG', displayName: 'IP控制模式', desc: 'IP控制的模式: whitelist(白名单)/blacklist(黑名单)' },
+  { key: 'security.session.idle_timeout', value: 120, type: 'integer', group: 'security', category: 'SECURITY_CONFIG', displayName: '空闲超时', desc: '用户无操作自动登出的时长(分钟)' },
   { key: 'feature.registration_enabled', value: true, type: 'boolean', group: 'feature', category: 'FEATURE_FLAGS', displayName: '用户注册', desc: '是否允许新用户注册' },
   { key: 'feature.password_reset_enabled', value: true, type: 'boolean', group: 'feature', category: 'FEATURE_FLAGS', displayName: '密码重置', desc: '是否允许重置密码' },
   { key: 'feature.audit_log_enabled', value: true, type: 'boolean', group: 'feature', category: 'FEATURE_FLAGS', displayName: '审计日志', desc: '是否启用审计日志' },
-  { key: 'feature.maintenance_mode', value: false, type: 'boolean', group: 'feature', category: 'FEATURE_FLAGS', displayName: '维护模式', desc: '是否开启维护模式' }
+  { key: 'feature.maintenance_mode', value: false, type: 'boolean', group: 'feature', category: 'FEATURE_FLAGS', displayName: '维护模式', desc: '是否开启维护模式' },
+  
+  // 支付配置
+  { key: 'payment.enabled_methods', value: ['alipay', 'wechat'], type: 'array', group: 'payment', category: 'INTEGRATION_CONFIG', displayName: '启用支付方式', desc: '启用的支付渠道列表' },
+  { key: 'payment.default_method', value: 'alipay', type: 'string', group: 'payment', category: 'INTEGRATION_CONFIG', displayName: '默认支付方式', desc: '默认选中的支付方式' },
+  { key: 'payment.alipay.appId', value: '', type: 'string', group: 'payment', category: 'INTEGRATION_CONFIG', displayName: '支付宝AppID', desc: '支付宝应用ID' },
+  { key: 'payment.alipay.merchantId', value: '', type: 'string', group: 'payment', category: 'INTEGRATION_CONFIG', displayName: '支付宝商户号', desc: '支付宝商户ID' },
+  { key: 'payment.alipay.apiKey', value: '', type: 'string', group: 'payment', category: 'INTEGRATION_CONFIG', displayName: '支付宝密钥', desc: '支付宝API密钥' },
+  { key: 'payment.alipay.enabled', value: false, type: 'boolean', group: 'payment', category: 'INTEGRATION_CONFIG', displayName: '启用支付宝', desc: '是否启用支付宝' },
+  { key: 'payment.wechat.appId', value: '', type: 'string', group: 'payment', category: 'INTEGRATION_CONFIG', displayName: '微信AppID', desc: '微信应用ID' },
+  { key: 'payment.wechat.merchantId', value: '', type: 'string', group: 'payment', category: 'INTEGRATION_CONFIG', displayName: '微信商户号', desc: '微信商户ID' },
+  { key: 'payment.wechat.apiKey', value: '', type: 'string', group: 'payment', category: 'INTEGRATION_CONFIG', displayName: '微信密钥', desc: '微信API密钥' },
+  { key: 'payment.wechat.enabled', value: false, type: 'boolean', group: 'payment', category: 'INTEGRATION_CONFIG', displayName: '启用微信支付', desc: '是否启用微信支付' },
+  { key: 'payment.unionpay.appId', value: '', type: 'string', group: 'payment', category: 'INTEGRATION_CONFIG', displayName: '银联AppID', desc: '银联应用ID' },
+  { key: 'payment.unionpay.merchantId', value: '', type: 'string', group: 'payment', category: 'INTEGRATION_CONFIG', displayName: '银联商户号', desc: '银联商户ID' },
+  { key: 'payment.unionpay.apiKey', value: '', type: 'string', group: 'payment', category: 'INTEGRATION_CONFIG', displayName: '银联密钥', desc: '银联API密钥' },
+  { key: 'payment.unionpay.enabled', value: false, type: 'boolean', group: 'payment', category: 'INTEGRATION_CONFIG', displayName: '启用银联支付', desc: '是否启用银联支付' },
+
+  // 通知配置
+  { key: 'notification.smtp_server', value: '', type: 'string', group: 'notification', category: 'EMAIL_CONFIG', displayName: 'SMTP服务器', desc: '邮件发送服务器地址' },
+  { key: 'notification.smtp_port', value: 587, type: 'integer', group: 'notification', category: 'EMAIL_CONFIG', displayName: 'SMTP端口', desc: '邮件发送服务器端口' },
+  { key: 'notification.email_account', value: '', type: 'string', group: 'notification', category: 'EMAIL_CONFIG', displayName: '发送邮箱', desc: '系统发送邮件的邮箱账号' },
+  { key: 'notification.email_password', value: '', type: 'string', group: 'notification', category: 'EMAIL_CONFIG', displayName: '邮箱密码', desc: '系统发送邮件的密码或授权码' },
+  { key: 'notification.sender_name', value: '系统管理员', type: 'string', group: 'notification', category: 'EMAIL_CONFIG', displayName: '发送人名称', desc: '邮件发送显示名称' },
+  { key: 'notification.smtp_secure', value: true, type: 'boolean', group: 'notification', category: 'EMAIL_CONFIG', displayName: 'SSL/TLS', desc: '是否启用安全连接' },
+  { key: 'notification.email_enabled', value: true, type: 'boolean', group: 'notification', category: 'EMAIL_CONFIG', displayName: '启用邮件通知', desc: '是否开启邮件通知渠道' },
+  { key: 'notification.important_operation_notify', value: true, type: 'boolean', group: 'notification', category: 'EMAIL_CONFIG', displayName: '重要操作通知', desc: '关键操作是否发送通知' },
+  { key: 'notification.scheduled_task_notify', value: true, type: 'boolean', group: 'notification', category: 'EMAIL_CONFIG', displayName: '定时任务通知', desc: '定时任务执行结果通知' },
+  { key: 'notification.alert_notify', value: true, type: 'boolean', group: 'notification', category: 'EMAIL_CONFIG', displayName: '告警通知', desc: '系统异常告警通知' },
+
+  // 业务规则
+  { key: 'business.overdue_grace_period', value: 7, type: 'integer', group: 'business', category: 'SYSTEM_GENERAL', displayName: '逾期宽限期', desc: '费用逾期宽限天数' },
+  { key: 'business.late_fee_calculation', value: 'daily', type: 'string', group: 'business', category: 'SYSTEM_GENERAL', displayName: '滞纳金计算方式', desc: 'daily-按日计算, monthly-按月计算, once-单次收取' },
+  { key: 'business.late_fee_rate', value: 0.0005, type: 'decimal', group: 'business', category: 'SYSTEM_GENERAL', displayName: '滞纳金率', desc: '每日滞纳金比例' },
+  { key: 'business.max_late_fee', value: 100, type: 'decimal', group: 'business', category: 'SYSTEM_GENERAL', displayName: '最高滞纳金', desc: '单次收取的最高滞纳金限额' },
+  { key: 'business.refund_period', value: 7, type: 'integer', group: 'business', category: 'SYSTEM_GENERAL', displayName: '退款期限', desc: '允许申请退款的天数' },
+  { key: 'business.refund_fee_rate', value: 0.02, type: 'decimal', group: 'business', category: 'SYSTEM_GENERAL', displayName: '退款手续费率', desc: '退款时收取的服务费比例' },
+
+  // 日志相关
+  { key: 'log.rotation_enabled', value: true, type: 'boolean', group: 'log', category: 'LOG_CONFIG', displayName: '日志轮转', desc: '是否启用日志自动轮转' },
+  { key: 'log.output_targets', value: ['file', 'console'], type: 'array', group: 'log', category: 'LOG_CONFIG', displayName: '日志输出目标', desc: '日志记录的目标(file/console/database)' }
 ];
 
 function getCacheKey(key) {
@@ -74,6 +124,7 @@ function parseValue(value, dataType) {
       return value === 'true' || value === 'True' || value === true;
     case 'json':
     case 'object':
+    case 'array':
       if (typeof value === 'object') return value;
       try {
         return typeof value === 'string' ? JSON.parse(value) : value;
@@ -144,6 +195,8 @@ function inferGroup(key) {
     'performance': 'performance',
     'backup': 'backup',
     'notification': 'notification',
+    'payment': 'payment',
+    'business': 'business',
     'client': 'client',
     'feature': 'feature'
   };
@@ -222,12 +275,18 @@ async function getConfigsByGroup(group) {
   return getAllConfigs({ group, activeOnly: true });
 }
 
-async function getConfig(key) {
+async function getConfig(key, options = {}) {
+  const { client = null } = options;
+  const db = client || { query };
+
   const cacheKey = getCacheKey(key);
-  const cached = getCache(cacheKey);
-  if (cached) return cached;
+  // 如果是在事务中，跳过缓存，确保读取最新数据
+  if (!client) {
+    const cached = getCache(cacheKey);
+    if (cached) return cached;
+  }
   
-  const result = await query(
+  const result = await db.query(
     `SELECT id, config_key, config_value, data_type, display_name, description,
             config_group, requires_restart, is_readonly, is_active,
             requires_permission, editable_by_roles, environment, version
@@ -261,15 +320,76 @@ async function getConfig(key) {
     version: row.version,
     dataType: row.data_type
   };
-  
-  setCache(cacheKey, config);
+
+  // 只有非事务查询才更新缓存
+  if (!client) {
+    setCache(cacheKey, config);
+  }
+
   return config;
 }
 
+/**
+ * 获取安全相关配置
+ * @param {Object} options - 选项
+ * @returns {Promise<Object>} 安全配置对象
+ */
+async function getSecurityConfigs(options = {}) {
+  const configs = await getAllConfigs({ group: 'security', ...options });
+  const security = {
+    loginFailCount: 5,
+    lockTime: 30,
+    resetWindow: 30,
+    sessionTimeout: 60,
+    idleTimeout: 120,
+    minLength: 8,
+    requireSpecial: true,
+    requireNumber: true,
+    requireUppercase: false,
+    historyLimit: 5,
+    expirationDays: 90,
+    twoFactorAuth: false,
+    ipControlEnabled: false,
+    ipControlMode: 'blacklist'
+  };
+
+  for (const [key, config] of Object.entries(configs)) {
+    const value = config.value;
+    if (key === 'security.login.max_attempts') security.loginFailCount = parseInt(value) || 5;
+    else if (key === 'security.login.lockout_duration') security.lockTime = parseInt(value) || 30;
+    else if (key === 'security.login.reset_window') security.resetWindow = parseInt(value) || 30;
+    else if (key === 'session.timeout') security.sessionTimeout = parseInt(value) || 60;
+    else if (key === 'security.session.idle_timeout') security.idleTimeout = parseInt(value) || 120;
+    else if (key === 'security.password_policy.min_length') security.minLength = parseInt(value) || 8;
+    else if (key === 'security.password_policy.require_special') security.requireSpecial = Boolean(value);
+    else if (key === 'security.password_policy.require_number') security.requireNumber = Boolean(value);
+    else if (key === 'security.password_policy.require_uppercase') security.requireUppercase = Boolean(value);
+    else if (key === 'security.password_policy.history_limit') security.historyLimit = parseInt(value) || 5;
+    else if (key === 'security.password_policy.expiration_days') security.expirationDays = parseInt(value) || 90;
+    else if (key === 'security.2fa_required') security.twoFactorAuth = Boolean(value);
+    else if (key === 'security.ip_control.enabled') security.ipControlEnabled = Boolean(value);
+    else if (key === 'security.ip_control.mode') security.ipControlMode = value || 'blacklist';
+  }
+
+  return security;
+}
+
 async function setConfig(key, value, options = {}) {
-  const { description, displayName, userId = null, requiresRestart = false, username = null, ipAddress = null, userAgent = null, reason = null } = options;
+  const { 
+    description, 
+    displayName, 
+    userId = null, 
+    requiresRestart = false, 
+    username = null, 
+    ipAddress = null, 
+    userAgent = null, 
+    reason = null,
+    client = null // 支持外部传入数据库客户端（用于事务）
+  } = options;
   
-  let current = await getConfig(key);
+  const db = client || { query: require('../config/database').query };
+  
+  let current = await getConfig(key, { client });
   
   // 如果配置不存在，尝试从默认配置中恢复
   if (!current) {
@@ -277,7 +397,7 @@ async function setConfig(key, value, options = {}) {
     const defaultConfig = DEFAULT_CONFIGS.find(c => c.key === key);
     if (defaultConfig) {
       console.log(`Creating missing config ${key} from defaults...`);
-      await query(
+      await db.query(
         `INSERT INTO admin_system_configs 
          (config_key, config_value, data_type, config_group, config_category, display_name, description, is_system_config, is_active)
          VALUES ($1, $2, $3, $4, $5, $6, $7, true, true)`,
@@ -291,7 +411,7 @@ async function setConfig(key, value, options = {}) {
           description || defaultConfig.desc
         ]
       );
-      current = await getConfig(key);
+      current = await getConfig(key, { client });
     }
   }
 
@@ -303,7 +423,7 @@ async function setConfig(key, value, options = {}) {
   const formattedValue = formatValue(value, current.dataType);
   const newVersion = (current.version || 0) + 1;
   
-  await query(
+  await db.query(
     `UPDATE admin_system_configs 
      SET config_value = $1, 
          updated_at = CURRENT_TIMESTAMP,
@@ -326,7 +446,8 @@ async function setConfig(key, value, options = {}) {
       username,
       ipAddress,
       userAgent,
-      reason: reason || description || '配置更新'
+      reason: reason || description || '配置更新',
+      client: client // 审计日志也支持事务
     });
     
     await configAuditService.saveConfigHistory({
@@ -335,13 +456,72 @@ async function setConfig(key, value, options = {}) {
       configVersion: newVersion,
       userId,
       username,
-      changeReason: reason || description || '配置更新'
+      changeReason: reason || description || '配置更新',
+      client: client // 历史记录也支持事务
     });
   } catch (auditError) {
     console.error('[ConfigAudit] Failed to log config change:', auditError.message);
   }
   
   return { key, value, version: newVersion, requiresRestart };
+}
+
+/**
+ * 事务性批量更新配置
+ * @param {Object} configMap 配置映射 { key: value }
+ * @param {Object} options 选项
+ */
+async function setConfigsTransactional(configMap, options = {}) {
+  const { userId, username, ipAddress, userAgent, reason } = options;
+  const { pool } = require('../config/database');
+  const client = await pool.connect();
+  
+  const results = [];
+  const restartRequired = [];
+  
+  try {
+    await client.query('BEGIN');
+    
+    for (const [key, value] of Object.entries(configMap)) {
+      const result = await setConfig(key, value, {
+        userId,
+        username,
+        ipAddress,
+        userAgent,
+        reason: reason || '批量配置更新',
+        client
+      });
+      
+      results.push({ key, success: true, version: result.version });
+      if (result.requiresRestart) {
+        restartRequired.push(key);
+      }
+    }
+    
+    await client.query('COMMIT');
+    
+    // 触发服务刷新逻辑（如果是邮件配置）
+    const hasEmailConfig = Object.keys(configMap).some(key => key.startsWith('notification.'));
+    if (hasEmailConfig) {
+      try {
+        const emailJob = require('../jobs/emailJob');
+        // 异步刷新，不阻塞主流程，确保高可用
+        emailJob.createEmailTransporter(true).catch(err => {
+          console.error('[EmailJob] Failed to refresh transporter after config update:', err);
+        });
+      } catch (err) {
+        console.warn('[EmailJob] Email module not available for refresh');
+      }
+    }
+
+    return { success: true, results, restartRequired };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('[SystemConfig] Transactional update failed, rolled back:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function setConfigs(configMap, userId = null) {
@@ -448,8 +628,10 @@ module.exports = {
   getAllConfigs,
   getConfigsByGroup,
   getConfig,
+  getSecurityConfigs,
   setConfig,
   setConfigs,
+  setConfigsTransactional,
   deleteConfig,
   resetConfig,
   getConfigGroups,

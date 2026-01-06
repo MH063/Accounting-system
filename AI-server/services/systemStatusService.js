@@ -2,30 +2,8 @@ const { pool } = require('../config/database');
 const logger = require('../config/logger');
 const alertService = require('./alertService');
 const os = require('os');
-const path = require('path');
-const fs = require('fs');
+const versionManager = require('../config/versionManager');
 const { monitor: performanceMonitor } = require('../middleware/performanceMonitor');
-
-// 获取后端服务真实版本号
-let backendVersion = '1.0.0';
-try {
-  const packageInfo = require('../package.json');
-  backendVersion = packageInfo.version || '1.0.0';
-} catch (e) {
-  logger.warn('[SystemStatusService] 无法获取后端package.json版本号，使用默认值');
-}
-
-// 获取客户端真实版本号
-let clientVersion = '0.0.0';
-try {
-  const adminPackagePath = path.join(__dirname, '../../AI-admin/package.json');
-  if (fs.existsSync(adminPackagePath)) {
-    const adminPackageInfo = JSON.parse(fs.readFileSync(adminPackagePath, 'utf8'));
-    clientVersion = adminPackageInfo.version || '0.0.0';
-  }
-} catch (e) {
-  logger.warn('[SystemStatusService] 无法获取前端package.json版本号，使用默认值');
-}
 
 class SystemStatusService {
   constructor() {
@@ -514,7 +492,7 @@ class SystemStatusService {
         statusText: statusText,
         healthScore: healthScore,
         metrics: {
-          version: clientVersion, // 使用真实的客户端版本号
+          version: versionManager.getAdminVersion().version,
           onlineUsers: onlineUserData.total,
           userDistribution: onlineUserData.distribution,
           qualityIndex: onlineUserData.qualityIndex, // 新增：质量指数
@@ -940,7 +918,7 @@ class SystemStatusService {
         statusText: statusText,
         healthScore: finalScore,
         metrics: {
-          version: backendVersion, // 真实版本号
+          version: versionManager.getServerVersion().version,
           apiResponseTime: apiResponseTime,
           qps: qps, // 返回 QPS 数据
           uptime: uptime,

@@ -35,6 +35,7 @@ const systemConfigRoutes = require('./systemConfig');
 const environmentConfigRoutes = require('./environmentConfig');
 const performanceRoutes = require('./performance');
 const templateRoutes = require('./templates');
+const adminSettingsRoutes = require('./adminSettings');
 
 module.exports = {
   authRoutes,
@@ -68,5 +69,6 @@ module.exports = {
   systemConfigRoutes,
   environmentConfigRoutes,
   performanceRoutes,
-  templateRoutes
+  templateRoutes,
+  adminSettingsRoutes
 };

@@ -236,6 +236,11 @@
             <el-form-item label="发件人名称">
               <el-input v-model="emailForm.senderName" placeholder="请输入发件人名称" />
             </el-form-item>
+
+            <el-form-item label="启用 SSL/TLS">
+              <el-switch v-model="emailForm.secureConnection" />
+              <span class="form-tip" style="margin-left: 10px">端口 465 通常需要开启，587 通常不需要</span>
+            </el-form-item>
             
             <el-form-item>
               <el-button type="primary" @click="testEmailConnection" :style="{ width: isMobile ? '100%' : 'auto' }">测试连接</el-button>
@@ -576,11 +581,27 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { userApi } from '@/api/user'
+import { settingsApi } from '@/api/settings'
 import { updateGlobalSystemConfig, getSystemConfig } from '@/utils/systemConfig'
 
-// 响应式数据
+const isMobile = computed(() => {
+  if (typeof window !== 'undefined') {
+    return window.innerWidth < 768
+  }
+  return false
+})
+
+const handleResize = () => {
+}
+
+onMounted(() => {
+  window.addEventListener('resize', handleResize)
+  loadAllSettings()
+})
+
 const activeTab = ref('basic')
 const notificationActiveTab = ref('rules')
+const loading = ref(false)
 
 const globalConfig = getSystemConfig()
 const basicForm = ref({
@@ -596,15 +617,15 @@ const paymentForm = ref({
   defaultPayment: 'alipay',
   config: {
     alipay: {
-      appId: 'your-alipay-appid-here',
-      merchantId: 'your-alipay-merchant-id-here',
-      apiKey: 'your-alipay-api-key-here',
+      appId: '',
+      merchantId: '',
+      apiKey: '',
       enabled: false
     },
     wechat: {
-      appId: 'your-wechat-appid-here',
-      merchantId: 'your-merchant-id-here',
-      apiKey: 'your-wechat-api-key-here',
+      appId: '',
+      merchantId: '',
+      apiKey: '',
       enabled: false
     },
     unionpay: {
@@ -617,11 +638,12 @@ const paymentForm = ref({
 })
 
 const emailForm = ref({
-  smtpServer: 'smtp.example.com',
+  smtpServer: '',
   smtpPort: 587,
-  emailAccount: 'admin@example.com',
+  emailAccount: '',
   emailPassword: '',
-  senderName: '系统管理员'
+  senderName: '系统管理员',
+  secureConnection: true
 })
 
 const securityForm = ref({
@@ -658,7 +680,7 @@ const logForm = ref({
   outputTargets: ['file', 'console']
 })
 
-const adminList = ref([
+const adminList = ref<Array<{id: number; name: string}>>([
   { id: 1, name: '张三' },
   { id: 2, name: '李四' },
   { id: 3, name: '王五' }
@@ -672,7 +694,7 @@ const systemInfo = ref({
   uptime: ''
 })
 
-const serviceStatus = ref([
+const serviceStatus = ref<Array<{name: string; status: string; responseTime: string}>>([
   { name: '用户服务', status: '正常', responseTime: '45ms' },
   { name: '费用服务', status: '正常', responseTime: '62ms' },
   { name: '支付服务', status: '正常', responseTime: '78ms' },
@@ -680,7 +702,7 @@ const serviceStatus = ref([
   { name: '数据库服务', status: '正常', responseTime: '15ms' }
 ])
 
-const notificationTemplates = ref([
+const notificationTemplates = ref<Array<{id: number; name: string; type: string; content: string}>>([
   { id: 1, name: '费用缴纳通知', type: 'email', content: '尊敬的{userName}，您有一笔{amount}元的{feeType}费用待缴纳，请在{dueDate}前完成支付。' },
   { id: 2, name: '逾期提醒', type: 'sms', content: '【AI管理系统】提醒：您的{feeType}费用已逾期{days}天，请尽快处理。' },
   { id: 3, name: '支付成功通知', type: 'wechat', content: '您已成功支付{amount}元{feeType}费用，支付时间为{payTime}。' }
@@ -699,28 +721,223 @@ const templateForm = ref({
 
 const templateVariables = ref(['{userName}', '{amount}', '{feeType}', '{dueDate}', '{payTime}', '{days}'])
 
-// 支付方式选项
 const paymentMethods = ref([
   { value: 'alipay', label: '支付宝' },
   { value: 'wechat', label: '微信支付' },
   { value: 'unionpay', label: '银联支付' }
 ])
 
-// 计算已启用的支付方式
 const enabledPaymentMethods = computed(() => {
   return paymentMethods.value.filter(method => 
     paymentForm.value.enabledPayments.includes(method.value)
   )
 })
 
-// Logo上传成功处理
-const handleLogoSuccess = (response: any, file: any) => {
+async function loadAllSettings() {
+  loading.value = true
+  try {
+    await Promise.all([
+      loadBasicSettings(),
+      loadPaymentSettings(),
+      loadEmailSettings(),
+      loadSecuritySettings(),
+      loadNotificationSettings(),
+      loadBusinessRules(),
+      loadLogSettings(),
+      loadSystemInfo()
+    ])
+    console.log('✅ 所有设置加载完成')
+  } catch (error) {
+    console.error('❌ 加载设置失败:', error)
+  } finally {
+    loading.value = false
+  }
+}
+
+async function loadBasicSettings() {
+  try {
+    const response = await settingsApi.getConfigs('basic')
+    const data = response.data?.data || response.data || response
+    if (data.configs) {
+      const configs = data.configs
+      if (configs['system.name']) {
+        basicForm.value.systemName = configs['system.name'].value || basicForm.value.systemName
+      }
+      if (configs['system.theme']) {
+        basicForm.value.theme = configs['system.theme'].value || basicForm.value.theme
+      }
+      if (configs['system.language']) {
+        basicForm.value.language = configs['system.language'].value || basicForm.value.language
+      }
+    }
+    console.log('✅ 基本设置加载完成')
+  } catch (error) {
+    console.error('❌ 加载基本设置失败:', error)
+  }
+}
+
+async function loadPaymentSettings() {
+  try {
+    const response = await settingsApi.getPaymentConfigs()
+    const data = response.data?.data || response.data || response
+    if (data) {
+      if (data.enabledPayments) {
+        paymentForm.value.enabledPayments = data.enabledPayments
+      }
+      if (data.defaultPayment) {
+        paymentForm.value.defaultPayment = data.defaultPayment
+      }
+      if (data.configs) {
+        paymentForm.value.config = data.configs
+      }
+    }
+    console.log('✅ 支付设置加载完成')
+  } catch (error) {
+    console.error('❌ 加载支付设置失败:', error)
+  }
+}
+
+async function loadEmailSettings() {
+  try {
+    const response = await settingsApi.getEmailConfig()
+    const data = response.data?.data || response.data || response
+    if (data) {
+      emailForm.value.smtpServer = data.smtpServer || emailForm.value.smtpServer
+      emailForm.value.smtpPort = data.smtpPort || emailForm.value.smtpPort
+      emailForm.value.emailAccount = data.emailAccount || emailForm.value.emailAccount
+      emailForm.value.senderName = data.senderName || emailForm.value.senderName
+      emailForm.value.secureConnection = data.secureConnection ?? emailForm.value.secureConnection
+    }
+    console.log('✅ 邮件设置加载完成')
+  } catch (error) {
+    console.error('❌ 加载邮件设置失败:', error)
+  }
+}
+
+async function loadSecuritySettings() {
+  try {
+    const response = await settingsApi.getSecurityConfig()
+    const data = response.data?.data || response.data || response
+    if (data) {
+      securityForm.value.passwordStrength = data.passwordStrength || securityForm.value.passwordStrength
+      securityForm.value.loginFailCount = data.loginFailCount || securityForm.value.loginFailCount
+      securityForm.value.lockTime = data.lockTime || securityForm.value.lockTime
+      securityForm.value.sessionTimeout = data.sessionTimeout || securityForm.value.sessionTimeout
+      securityForm.value.twoFactorAuth = data.twoFactorAuth || securityForm.value.twoFactorAuth
+      securityForm.value.ipRestriction = data.ipRestriction || securityForm.value.ipRestriction
+    }
+    console.log('✅ 安全设置加载完成')
+  } catch (error) {
+    console.error('❌ 加载安全设置失败:', error)
+  }
+}
+
+async function loadNotificationSettings() {
+  try {
+    const [rulesResponse, templatesResponse, recipientsResponse] = await Promise.all([
+      settingsApi.getNotificationRules(),
+      settingsApi.getNotificationTemplates(),
+      settingsApi.getNotificationRecipients()
+    ])
+
+    const rulesData = rulesResponse.data?.data || rulesResponse.data || rulesResponse
+    if (rulesData) {
+      notificationForm.value.systemNotifications = rulesData.systemNotifications || notificationForm.value.systemNotifications
+      notificationForm.value.importantOperationNotify = rulesData.importantOperationNotify ?? notificationForm.value.importantOperationNotify
+      notificationForm.value.scheduledTaskNotify = rulesData.scheduledTaskNotify ?? notificationForm.value.scheduledTaskNotify
+      notificationForm.value.alertNotify = rulesData.alertNotify ?? notificationForm.value.alertNotify
+    }
+
+    const templatesData = templatesResponse.data?.data || templatesResponse.data || templatesResponse
+    if (templatesData && templatesData.templates) {
+      notificationTemplates.value = templatesData.templates
+    }
+
+    const recipientsData = recipientsResponse.data?.data || recipientsResponse.data || recipientsResponse
+    if (recipientsData && recipientsData.recipients) {
+      notificationForm.value.recipients = recipientsData.recipients.map((r: any) => r.id)
+      adminList.value = recipientsData.recipients
+    }
+
+    console.log('✅ 通知设置加载完成')
+  } catch (error) {
+    console.error('❌ 加载通知设置失败:', error)
+  }
+}
+
+async function loadBusinessRules() {
+  try {
+    const response = await settingsApi.getBusinessRules()
+    const data = response.data?.data || response.data || response
+    if (data) {
+      businessRulesForm.value.overdueGracePeriod = data.overdueGracePeriod ?? businessRulesForm.value.overdueGracePeriod
+      businessRulesForm.value.lateFeeCalculation = data.lateFeeCalculation || businessRulesForm.value.lateFeeCalculation
+      businessRulesForm.value.lateFeeRate = data.lateFeeRate ?? businessRulesForm.value.lateFeeRate
+      businessRulesForm.value.maxLateFee = data.maxLateFee ?? businessRulesForm.value.maxLateFee
+      businessRulesForm.value.refundPeriod = data.refundPeriod ?? businessRulesForm.value.refundPeriod
+      businessRulesForm.value.refundFeeRate = data.refundFeeRate ?? businessRulesForm.value.refundFeeRate
+    }
+    console.log('✅ 业务规则加载完成')
+  } catch (error) {
+    console.error('❌ 加载业务规则失败:', error)
+  }
+}
+
+async function loadLogSettings() {
+  try {
+    const response = await settingsApi.getLogConfig()
+    const data = response.data?.data || response.data || response
+    if (data) {
+      logForm.value.level = data.level || logForm.value.level
+      logForm.value.retentionDays = data.retentionDays ?? logForm.value.retentionDays
+      logForm.value.maxFileSize = data.maxFileSize ?? logForm.value.maxFileSize
+      logForm.value.rotationEnabled = data.rotationEnabled ?? logForm.value.rotationEnabled
+      logForm.value.outputTargets = data.outputTargets || logForm.value.outputTargets
+    }
+    console.log('✅ 日志设置加载完成')
+  } catch (error) {
+    console.error('❌ 加载日志设置失败:', error)
+  }
+}
+
+async function loadSystemInfo() {
+  try {
+    const [infoResponse, statusResponse] = await Promise.all([
+      settingsApi.getSystemInfo(),
+      settingsApi.getServiceStatus()
+    ])
+
+    const infoData = infoResponse.data?.data || infoResponse.data || infoResponse
+    if (infoData) {
+      systemInfo.value.name = infoData.name || systemInfo.value.name
+      systemInfo.value.version = infoData.version || systemInfo.value.version
+      systemInfo.value.environment = infoData.environment || systemInfo.value.environment
+      systemInfo.value.startTime = infoData.startTime || systemInfo.value.startTime
+      systemInfo.value.uptime = infoData.uptime || systemInfo.value.uptime
+      updateGlobalSystemConfig({
+        name: systemInfo.value.name,
+        version: systemInfo.value.version,
+        environment: systemInfo.value.environment
+      })
+    }
+
+    const statusData = statusResponse.data?.data || statusResponse.data || statusResponse
+    if (statusData && statusData.services) {
+      serviceStatus.value = statusData.services
+    }
+
+    console.log('✅ 系统信息加载完成')
+  } catch (error) {
+    console.error('❌ 加载系统信息失败:', error)
+  }
+}
+
+function handleLogoSuccess(response: any, file: any) {
   basicForm.value.logoUrl = URL.createObjectURL(file.raw)
   ElMessage.success('Logo上传成功')
 }
 
-// Logo上传前检查
-const beforeLogoUpload = (file: any) => {
+function beforeLogoUpload(file: any) {
   const isJPG = file.type === 'image/jpeg' || file.type === 'image/png'
   const isLt2M = file.size / 1024 / 1024 < 2
   
@@ -734,66 +951,167 @@ const beforeLogoUpload = (file: any) => {
   return isJPG && isLt2M
 }
 
-// 测试邮件连接
-const testEmailConnection = () => {
-  console.log('📧 测试邮件连接:', emailForm.value)
-  ElMessage.info('邮件连接测试功能待实现')
-}
-
-// 保存设置
-const handleSave = async () => {
+async function testEmailConnection() {
   try {
-    console.log('💾 保存系统设置:', {
-      basic: basicForm.value,
-      payment: paymentForm.value,
-      email: emailForm.value,
-      security: securityForm.value,
-      notification: notificationForm.value,
-      businessRules: businessRulesForm.value,
-      log: logForm.value
+    ElMessage.info('正在测试邮件连接...')
+    await settingsApi.testEmailConfig({
+      testEmail: emailForm.value.emailAccount,
+      config: {
+        smtpServer: emailForm.value.smtpServer,
+        smtpPort: emailForm.value.smtpPort,
+        emailAccount: emailForm.value.emailAccount,
+        emailPassword: emailForm.value.emailPassword,
+        senderName: emailForm.value.senderName,
+        secureConnection: emailForm.value.secureConnection
+      }
     })
-    
-    // 构建配置对象
-    const configs: Record<string, any> = {}
-    configs['system.name'] = basicForm.value.systemName
-    configs['system.environment'] = systemInfo.value.environment === '开发环境' ? 'development' : 
-                                     systemInfo.value.environment === '测试环境' ? 'testing' : 'production'
-    
-    // 调用API保存配置
-    const response = await userApi.setConfig({ configs })
-    console.log('✅ 配置保存响应:', response)
-    
-    // 保存成功后刷新systemInfo
-    await fetchSystemConfigForSettings()
-    
-    ElMessage.success('系统设置保存成功')
-  } catch (error) {
-    console.error('❌ 保存系统设置失败:', error)
-    ElMessage.error('保存系统设置失败: ' + (error as Error).message)
+    ElMessage.success('邮件测试发送成功，请检查收件箱')
+  } catch (error: any) {
+    console.error('邮件连接测试失败:', error)
+    const errorMsg = error.response?.data?.message || error.message || '邮件连接测试失败'
+    ElMessage.error(errorMsg)
   }
 }
 
-// 刷新服务状态
-const refreshServiceStatus = () => {
-  ElMessage.info('正在刷新服务状态...')
-  // 模拟刷新过程
-  setTimeout(() => {
-    // 随机更新一些服务状态
-    // 使用固定状态更新规则，实际应用中应通过API获取真实服务状态
-    serviceStatus.value.forEach((service, index) => {
-      if (index % 5 === 0) {
-        service.status = '异常'
-      } else {
-        service.status = '正常'
-      }
-      service.responseTime = (index * 20 + 50) + 'ms'
-    })
-    ElMessage.success('服务状态刷新完成')
-  }, 1000)
+async function handleSave() {
+  try {
+    console.log('💾 保存系统设置...', activeTab.value)
+    loading.value = true
+
+    switch (activeTab.value) {
+      case 'basic':
+        await saveBasicSettings()
+        break
+      case 'payment':
+        await savePaymentSettings()
+        break
+      case 'email':
+        await saveEmailSettings()
+        break
+      case 'security':
+        await saveSecuritySettings()
+        break
+      case 'notification':
+        await saveNotificationSettings()
+        break
+      case 'businessRules':
+        await saveBusinessRules()
+        break
+      case 'log':
+        await saveLogSettings()
+        break
+      case 'systemInfo':
+        // 系统信息通常是只读的，或者是刷新操作，这里可以不做任何事或者提示
+        ElMessage.info('系统信息为只读页面')
+        return
+      default:
+        console.warn('未知的设置标签页:', activeTab.value)
+    }
+
+    ElMessage.success('设置保存成功')
+  } catch (error) {
+    console.error('❌ 保存系统设置失败:', error)
+    ElMessage.error('保存系统设置失败: ' + (error as Error).message)
+  } finally {
+    loading.value = false
+  }
 }
 
-// 编辑通知模板
-const handleEditTemplate = (row: any) => {
+async function saveBasicSettings() {
+  await settingsApi.updateConfigs({
+    configs: {
+      'system.name': basicForm.value.systemName,
+      'system.theme': basicForm.value.theme,
+      'system.language': basicForm.value.language
+    },
+    reason: '更新系统基本设置'
+  })
+  await loadSystemInfo()
+}
+
+async function savePaymentSettings() {
+  // 1. 保存通用支付配置
+  await settingsApi.updateConfigs({
+    configs: {
+      'payment.enabled_methods': paymentForm.value.enabledPayments,
+      'payment.default_method': paymentForm.value.defaultPayment
+    },
+    reason: '更新支付方式设置'
+  })
+
+  // 2. 保存各支付渠道配置
+  const methods = ['alipay', 'wechat', 'unionpay']
+  for (const method of methods) {
+    // @ts-ignore
+    const config = { ...paymentForm.value.config[method] }
+    // 如果密钥为空，则不更新密钥，防止覆盖为控制
+    if (!config.apiKey) {
+      delete config.apiKey
+    }
+    await settingsApi.updatePaymentConfig(method, config)
+  }
+}
+
+async function saveEmailSettings() {
+  const config: any = {
+    smtpServer: emailForm.value.smtpServer,
+    smtpPort: emailForm.value.smtpPort,
+    emailAccount: emailForm.value.emailAccount,
+    senderName: emailForm.value.senderName,
+    secureConnection: emailForm.value.secureConnection
+  }
+  
+  // 只有当密码不为空时才更新
+  if (emailForm.value.emailPassword) {
+    config.emailPassword = emailForm.value.emailPassword
+  }
+  
+  await settingsApi.updateEmailConfig(config)
+}
+
+async function saveSecuritySettings() {
+  await settingsApi.updateSecurityConfig(securityForm.value)
+}
+
+async function saveNotificationSettings() {
+  // 保存规则
+  await settingsApi.updateNotificationRules({
+    systemNotifications: notificationForm.value.systemNotifications,
+    importantOperationNotify: notificationForm.value.importantOperationNotify,
+    scheduledTaskNotify: notificationForm.value.scheduledTaskNotify,
+    alertNotify: notificationForm.value.alertNotify
+  })
+  
+  // 保存接收人
+  await settingsApi.updateNotificationRecipients({
+    recipients: notificationForm.value.recipients
+  })
+}
+
+async function saveBusinessRules() {
+  await settingsApi.updateBusinessRules(businessRulesForm.value)
+}
+
+async function saveLogSettings() {
+  await settingsApi.updateLogConfig(logForm.value)
+}
+
+async function refreshServiceStatus() {
+  try {
+    ElMessage.info('正在刷新服务状态...')
+    const response = await settingsApi.getServiceStatus()
+    const data = response.data?.data || response.data || response
+    if (data && data.services) {
+      serviceStatus.value = data.services
+    }
+    ElMessage.success('服务状态刷新完成')
+  } catch (error) {
+    console.error('❌ 刷新服务状态失败:', error)
+    ElMessage.error('刷新服务状态失败')
+  }
+}
+
+function handleEditTemplate(row: any) {
   templateDialogTitle.value = '编辑通知模板'
   isEditingTemplate.value = true
   currentTemplateId.value = row.id
@@ -801,8 +1119,7 @@ const handleEditTemplate = (row: any) => {
   templateDialogVisible.value = true
 }
 
-// 新增通知模板
-const handleAddTemplate = () => {
+function handleAddTemplate() {
   templateDialogTitle.value = '新增通知模板'
   isEditingTemplate.value = false
   currentTemplateId.value = 0
@@ -814,112 +1131,53 @@ const handleAddTemplate = () => {
   templateDialogVisible.value = true
 }
 
-// 保存通知模板
-const saveTemplate = () => {
+async function saveTemplate() {
   if (!templateForm.value.name || !templateForm.value.content) {
     ElMessage.warning('请填写完整信息')
     return
   }
   
-  if (isEditingTemplate.value) {
-    // 编辑模板
-    const index = notificationTemplates.value.findIndex(t => t.id === currentTemplateId.value)
-    if (index !== -1) {
-      notificationTemplates.value[index] = { 
-        ...notificationTemplates.value[index], 
-        ...templateForm.value 
-      }
-    }
-  } else {
-    // 新增模板
-    const newId = Math.max(...notificationTemplates.value.map(t => t.id)) + 1
-    notificationTemplates.value.push({
-      id: newId,
-      ...templateForm.value
-    })
-  }
-  
-  templateDialogVisible.value = false
-  ElMessage.success('模板保存成功')
-}
-
-// 从API获取系统配置并同步到systemInfo
-const fetchSystemConfigForSettings = async () => {
   try {
-    console.log('🔄 SystemSettings: 开始获取系统配置...')
-    
-    const response = await userApi.getSystemConfigs()
-    console.log('📡 SystemSettings API响应:', response)
-    
-    // 标准化数据解析：兼容直接返回数据或嵌套在 data 中的结构
-    let data = response
-    if (response && response.data && !response.configs) {
-      data = response.data
-    }
-    
-    if (data && data.configs) {
-      const configs = data.configs
-      
-      const getConfigValue = (key1: string, key2: string) => {
-        const item = configs[key1] || configs[key2]
-        return item?.value !== undefined ? item.value : null
+    if (isEditingTemplate.value) {
+      await settingsApi.updateNotificationTemplate(currentTemplateId.value, templateForm.value)
+      const index = notificationTemplates.value.findIndex(t => t.id === currentTemplateId.value)
+      if (index !== -1) {
+        notificationTemplates.value[index] = { 
+          ...notificationTemplates.value[index], 
+          ...templateForm.value 
+        }
       }
-      
-      const name = getConfigValue('system.name', 'system_name') || '记账管理系统'
-      const version = getConfigValue('system.version', 'system_version') || '1.0.0'
-      const environment = getConfigValue('system.environment', 'system_environment') || '生产环境'
-      const startTime = getConfigValue('system.deploy_time', 'system_deploy_time') || new Date().toLocaleString('zh-CN', { hour12: false })
-      
-      // 更新 systemInfo
-      systemInfo.value = {
-        name,
-        version,
-        environment,
-        startTime,
-        uptime: calculateUptime(startTime)
-      }
-      
-      // 同时更新 basicForm 中的系统名称
-      basicForm.value.systemName = name
-      
-      // 同步更新全局配置（用于所有页面显示）
-      updateGlobalSystemConfig({ name, version, environment })
-      
-      console.log('✅ SystemSettings: 系统配置获取完成', { name, version, environment })
+    } else {
+      const response = await settingsApi.createNotificationTemplate(templateForm.value)
+      const newId = response.data?.data?.id || Date.now()
+      notificationTemplates.value.push({
+        id: newId,
+        ...templateForm.value
+      })
     }
+    templateDialogVisible.value = false
+    ElMessage.success('模板保存成功')
   } catch (error) {
-    console.error('❌ SystemSettings: 获取系统配置失败:', error)
+    console.error('❌ 保存模板失败:', error)
+    ElMessage.error('保存模板失败')
   }
 }
 
-// 计算运行时长
-const calculateUptime = (startTimeStr: string): string => {
+async function deleteTemplate(id: number) {
   try {
-    const startTime = new Date(startTimeStr)
-    if (isNaN(startTime.getTime())) {
-      return '未知'
-    }
-    const now = new Date()
-    const diffMs = now.getTime() - startTime.getTime()
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-    const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
-    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
-    return `${diffDays}天${diffHours}小时${diffMinutes}分钟`
-  } catch {
-    return '未知'
+    await settingsApi.deleteNotificationTemplate(id)
+    notificationTemplates.value = notificationTemplates.value.filter(t => t.id !== id)
+    ElMessage.success('模板删除成功')
+  } catch (error) {
+    console.error('❌ 删除模板失败:', error)
+    ElMessage.error('删除模板失败')
   }
 }
 
-// 组件挂载
 onMounted(async () => {
   console.log('⚙️ 系统设置页面加载完成')
-  await fetchSystemConfigForSettings()
+  await loadAllSettings()
 })
-
-/**
- * 系统设置页面
- * 管理系统的基本配置、邮件设置、安全设置和通知设置
- */
 </script>
 
 <style scoped>

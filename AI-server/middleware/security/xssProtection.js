@@ -16,7 +16,13 @@ const SKIP_CHECK_FIELDS = [
   'password', 'newPassword', 'currentPassword', 'confirmPassword',
   'answer', 'securityAnswer',
   'secret', 'backupCode', 'backupCodes',
-  'operation', 'action', 'type', 'outcome', 'status'
+  'operation', 'action', 'type', 'outcome', 'status',
+  // 支付相关配置字段
+  'appId', 'merchantId', 'apiKey', 'privateKey', 'publicKey', 
+  'cert', 'certificate', 'apiV3Key', 'partnerId', 'mchId', 
+  'serialNo', 'notifyUrl', 'returnUrl',
+  'private_key', 'public_key', 'api_key', 'mch_id', 'partner_id',
+  'alipayPublicKey', 'merchantPrivateKey', 'wechatPayKey', 'key'
 ];
 
 // 危险的HTML标签
@@ -117,6 +123,7 @@ const hasXssPayload = (content, fieldName = '', req = null) => {
       for (const tag of DANGEROUS_TAGS) {
         if (content.toLowerCase().includes(`<${tag}`)) {
           if (req) {
+            console.log(`[XSS DEBUG] Tag detected: ${tag} in field: ${fieldName}`);
             logger.security(req, 'XSS防护触发', {
               field: fieldName,
               dangerousTag: tag,
@@ -131,6 +138,7 @@ const hasXssPayload = (content, fieldName = '', req = null) => {
       for (const attr of DANGEROUS_ATTRS) {
         if (content.toLowerCase().includes(attr)) {
           if (req) {
+            console.log(`[XSS DEBUG] Attr detected: ${attr} in field: ${fieldName}`);
             logger.security(req, 'XSS防护触发', {
               field: fieldName,
               dangerousAttr: attr,
@@ -145,6 +153,7 @@ const hasXssPayload = (content, fieldName = '', req = null) => {
       for (const protocol of JAVASCRIPT_PROTOCOLS) {
         if (content.toLowerCase().includes(protocol)) {
           if (req) {
+            console.log(`[XSS DEBUG] Protocol detected: ${protocol} in field: ${fieldName}`);
             logger.security(req, 'XSS防护触发', {
               field: fieldName,
               dangerousProtocol: protocol,
@@ -169,6 +178,7 @@ const hasXssPayload = (content, fieldName = '', req = null) => {
       for (const pattern of dangerousPatterns) {
         if (pattern.test(content)) {
           if (req) {
+            console.log(`[XSS DEBUG] Pattern detected: ${pattern} in field: ${fieldName}`);
             logger.security(req, 'XSS防护触发', {
               field: fieldName,
               dangerousPattern: pattern.toString(),
@@ -183,6 +193,7 @@ const hasXssPayload = (content, fieldName = '', req = null) => {
     // 递归检查对象属性
     for (const key in content) {
       if (hasXssPayload(content[key], `${fieldName}.${key}`, req)) {
+        console.log(`[XSS DEBUG] Recursive check failed for key: ${key}, full field: ${fieldName}.${key}`);
         return true;
       }
     }

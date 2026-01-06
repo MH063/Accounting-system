@@ -8,6 +8,7 @@ const { logger } = require('../config/logger');
 const http = require('http');
 const https = require('https');
 const { redisManager } = require('../config/multiLevelCache');
+const versionManager = require('../config/versionManager');
 
 class LoadBalancerManager extends EventEmitter {
   constructor() {
@@ -50,7 +51,7 @@ class LoadBalancerManager extends EventEmitter {
       createdAt: new Date(),
       metadata: {
         type: 'local',
-        version: '1.0.0',
+        version: versionManager.getServerVersion().version,
         region: 'local'
       }
     };

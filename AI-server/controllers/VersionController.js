@@ -5,6 +5,7 @@
 
 const BaseController = require('./BaseController');
 const { successResponse } = require('../middleware/response');
+const versionManager = require('../config/versionManager');
 
 class VersionController extends BaseController {
   constructor() {
@@ -22,17 +23,8 @@ class VersionController extends BaseController {
    */
   async getLatestVersion(req, res, next) {
     try {
-      // 返回当前应用版本信息
-      const latestVersion = {
-        version: '1.0.0',
-        buildNumber: '2024.12.24.001',
-        releaseDate: '2024-12-24',
-        releaseNotes: '新增支付确认功能，优化系统性能，修复已知问题',
-        downloadUrl: 'https://example.com/download/latest',
-        checksum: 'abc123def456'
-      };
-
-      return successResponse(res, latestVersion, '获取最新版本信息成功');
+      const serverVersion = versionManager.getServerVersion();
+      return successResponse(res, serverVersion, '获取最新版本信息成功');
     } catch (error) {
       logger.error('获取最新版本信息失败', { 
         error: error.message,

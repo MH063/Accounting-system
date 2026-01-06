@@ -5,6 +5,7 @@
 
 const nodemailer = require('nodemailer');
 const logger = require('../config/logger');
+const systemConfigService = require('../services/systemConfigService');
 
 // 延后加载 messageQueue 以避免循环依赖
 const getEmailQueue = () => {
@@ -12,10 +13,10 @@ const getEmailQueue = () => {
   return getQueue(QUEUES.EMAIL);
 };
 
-// 邮件传输配置
-const emailConfig = {
+// 默认邮件传输配置（作为备选）
+const defaultEmailConfig = {
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: process.env.SMTP_PORT || 587,
+  port: parseInt(process.env.SMTP_PORT) || 587,
   secure: process.env.SMTP_SECURE === 'true',
   auth: {
     user: process.env.SMTP_USER,
@@ -30,16 +31,94 @@ const emailConfig = {
 
 // 创建邮件传输器
 let transporter = null;
+let currentConfigVersion = null;
 
-function createEmailTransporter() {
+/**
+ * 获取最新的邮件配置
+ */
+async function getLatestEmailConfig() {
   try {
-    transporter = nodemailer.createTransporter(emailConfig);
+    const configs = await systemConfigService.getAllConfigs({ group: 'notification' });
     
+    // 检查配置是否启用
+    const enabled = configs['notification.email_enabled']?.value !== false;
+    if (!enabled) {
+      logger.warn('邮件发送功能已在系统设置中禁用');
+      return null;
+    }
+
+    const smtpHost = configs['notification.smtp_server']?.value;
+    const smtpPort = parseInt(configs['notification.smtp_port']?.value);
+    const smtpUser = configs['notification.email_account']?.value;
+    const smtpPass = configs['notification.email_password']?.value;
+    const smtpSecure = configs['notification.smtp_secure']?.value;
+    const senderName = configs['notification.sender_name']?.value || '系统管理员';
+
+    // 如果数据库配置不完整，退回到环境变量配置
+    if (!smtpHost || !smtpUser || !smtpPass) {
+      logger.info('数据库邮件配置不完整，使用默认环境变量配置');
+      return {
+        ...defaultEmailConfig,
+        senderName: '会计系统',
+        smtpUser: defaultEmailConfig.auth.user
+      };
+    }
+
+    return {
+      host: smtpHost,
+      port: smtpPort || 587,
+      secure: smtpSecure !== undefined ? smtpSecure : (smtpPort === 465),
+      auth: {
+        user: smtpUser,
+        pass: smtpPass
+      },
+      senderName,
+      smtpUser: smtpUser,
+      pool: true,
+      maxConnections: 5,
+      maxMessages: 100,
+      rateDelta: 1000,
+      rateLimit: 5
+    };
+  } catch (error) {
+    logger.error('获取邮件配置失败，使用默认配置', { error: error.message });
+    return {
+      ...defaultEmailConfig,
+      senderName: '会计系统',
+      smtpUser: defaultEmailConfig.auth.user
+    };
+  }
+}
+
+/**
+ * 创建或更新邮件传输器
+ */
+async function createEmailTransporter(forceRefresh = false) {
+  try {
+    const config = await getLatestEmailConfig();
+    if (!config) return null;
+
+    // 如果已经有传输器且不需要强制刷新，则直接返回
+    if (transporter && !forceRefresh) {
+      return transporter;
+    }
+
+    // 关闭旧的传输器
+    if (transporter) {
+      transporter.close();
+    }
+
+    transporter = nodemailer.createTransport(config);
+    
+    // 挂载配置信息以便后续使用
+    transporter.systemSenderName = config.senderName;
+    transporter.systemSmtpUser = config.smtpUser;
+
     transporter.verify((error, success) => {
       if (error) {
-        logger.error('邮件传输器验证失败', { error: error.message });
+        logger.error('邮件传输器验证失败', { error: error.message, host: config.host });
       } else {
-        logger.info('邮件传输器验证成功');
+        logger.info('邮件传输器验证成功', { host: config.host, user: config.auth.user });
       }
     });
     
@@ -75,12 +154,16 @@ class EmailJobProcessor {
       
       // 创建或获取传输器
       if (!transporter) {
-        createEmailTransporter();
+        await createEmailTransporter();
+      }
+      
+      if (!transporter) {
+        throw new Error('邮件传输器不可用，请检查邮件配置是否开启');
       }
       
       // 邮件选项
       const mailOptions = {
-        from: from || `"会计系统" <${process.env.SMTP_USER}>`,
+        from: from || `"${transporter.systemSenderName}" <${transporter.systemSmtpUser}>`,
         to: Array.isArray(to) ? to.join(',') : to,
         subject: subject,
         html: html || undefined,

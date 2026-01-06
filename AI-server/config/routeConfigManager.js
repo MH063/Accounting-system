@@ -8,6 +8,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const logger = require('./logger');
 const { responseWrapper } = require('../middleware/response');
+const versionManager = require('./versionManager');
 
 /**
  * 路由配置结构
@@ -332,10 +333,11 @@ class VersionedRouteConfig {
    * 导出路由配置为JSON
    */
   exportConfig(format = 'json') {
+    const serverVersion = versionManager.getServerVersion();
     const config = {
       versions: Object.fromEntries(this.routeConfigs),
       exportedAt: new Date().toISOString(),
-      version: '1.0.0'
+      version: serverVersion.version
     };
 
     if (format === 'yaml') {

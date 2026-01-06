@@ -48,7 +48,13 @@ const sqlInjectionProtection = () => {
       'password', 'newPassword', 'currentPassword', 'confirmPassword',
       'answer', 'securityAnswer',
       'secret', 'backupCode', 'backupCodes',
-      'operation', 'action', 'type', 'outcome', 'status'
+      'operation', 'action', 'type', 'outcome', 'status',
+      // 支付相关配置字段
+      'appId', 'merchantId', 'apiKey', 'privateKey', 'publicKey', 
+      'cert', 'certificate', 'apiV3Key', 'partnerId', 'mchId', 
+      'serialNo', 'notifyUrl', 'returnUrl',
+      'private_key', 'public_key', 'api_key', 'mch_id', 'partner_id',
+      'alipayPublicKey', 'merchantPrivateKey', 'wechatPayKey', 'key'
     ];
     if (fieldName && SKIP_STRICT_CHECK_FIELDS.some(field => fieldName.includes(field))) {
       return false;

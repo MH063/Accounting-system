@@ -15,6 +15,7 @@ const { defaultRateLimiter } = require('./middleware/rateLimiter');
 const { responseWrapper } = require('./middleware/response');
 const { requestLogger } = require('./middleware/requestLogger');
 const { ipWhitelist, strictRateLimit, securityHeaders, sqlInjectionProtection, requestSizeLimit, securityAuditMiddleware } = require('./middleware/security/index');
+const ipControlMiddleware = require('./middleware/ipControl');
 // 直接从xssProtection.js导入以绕过索引问题
 const { xssProtection: xssProtectionMiddleware } = require('./middleware/security/xssProtection');
 // 导入csrfProtection
@@ -26,6 +27,7 @@ const { validateEnvConfig, getSafeEnvDisplay } = require('./utils/secureEnv');
 const { startScheduledTasks } = require('./utils/scheduledTasks');
 const { cacheMiddleware } = require('./middleware/apiCache');
 const { initSwaggerMiddleware } = require('./middleware/swagger');
+const versionManager = require('./config/versionManager');
 const authRoutes = require('./routes/auth');
 const dbRoutes = require('./routes/db');
 const uploadRoutes = require('./routes/upload');
@@ -161,6 +163,7 @@ dirs.forEach(dir => {
 app.use(infoLeakProtection()); // 防护响应信息泄露
 
 // 安全防护中间件 - 在速率限制之前应用
+app.use(ipControlMiddleware); // IP 访问控制
 app.use(securityHeaders()); // 请求头安全检查
 app.use(sqlInjectionProtection()); // SQL注入防护
 app.use(xssProtectionMiddleware); // XSS防护
@@ -223,6 +226,7 @@ app.use('/api/system', require('./routes/environmentSwitch'));
 // 这些路由将通过版本化中间件自动支持版本识别
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', require('./routes/adminAuth')); // 管理端认证路由
+app.use('/api/admin', require('./routes/adminSettings')); // 管理端设置路由
 app.use('/api/db', dbRoutes);
 app.use('/api/db', require('./routes/dbHealth'));
 app.use('/api/upload', uploadRoutes);
@@ -403,10 +407,12 @@ async function testDatabaseConnection() {
 
 // 基本路由
 app.get('/', responseWrapper((req, res) => {
+  const serverVersion = versionManager.getServerVersion();
   return res.json({
     success: true,
     message: 'API服务运行正常',
-    version: '1.0.0'
+    version: serverVersion.version,
+    name: serverVersion.name
   });
 }));
 

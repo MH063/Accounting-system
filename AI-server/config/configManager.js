@@ -6,6 +6,7 @@
 const dotenv = require('dotenv');
 const logger = require('./logger');
 const { getSecureEnv, getSafeEnvDisplay, validateEnvConfig } = require('../utils/secureEnv');
+const versionManager = require('./versionManager');
 
 // 加载环境变量
 dotenv.config({ path: '.env' });
@@ -68,12 +69,13 @@ class ConfigManager {
    * @returns {Object} 服务器配置
    */
   getServerConfig() {
+    const serverVersion = versionManager.getServerVersion();
     return {
       port: parseInt(getSecureEnv('PORT')) || 3000,
       host: getSecureEnv('HOST') || '0.0.0.0',
       environment: getSecureEnv('NODE_ENV') || 'development',
       appName: getSecureEnv('APP_NAME') || 'AI-Server',
-      version: getSecureEnv('APP_VERSION') || '1.0.0'
+      version: serverVersion.version
     };
   }
 

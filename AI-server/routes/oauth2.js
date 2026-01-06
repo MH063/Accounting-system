@@ -18,6 +18,7 @@ const {
 const { UserManager } = require('../config/permissions');
 const { responseWrapper } = require('../middleware/response');
 const logger = require('../config/logger');
+const versionManager = require('../config/versionManager');
 
 const router = express.Router();
 
@@ -529,11 +530,12 @@ router.delete('/clients/:clientId', responseWrapper((req, res) => {
  * 获取OAuth2.0服务器信息
  */
 router.get('/info', responseWrapper((req, res) => {
+  const serverVersion = versionManager.getServerVersion();
   return res.json({
     success: true,
     data: {
       server: 'OAuth2.0 Authorization Server',
-      version: '1.0.0',
+      version: serverVersion.version,
       issuer: 'accounting-system',
       supportedGrantTypes: [
         'authorization_code',

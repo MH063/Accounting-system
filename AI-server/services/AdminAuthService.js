@@ -9,14 +9,15 @@ const logger = require('../config/logger');
 const { generateTokenPair } = require('../config/jwtManager');
 const { ROLES, PERMISSIONS } = require('../config/permissions');
 const UserRepository = require('../repositories/UserRepository');
+const TwoFactorRepository = require('../repositories/TwoFactorRepository');
 const UserModel = require('../models/UserModel');
+const systemConfigService = require('./systemConfigService');
+const PasswordService = require('./PasswordService');
 
 class AdminAuthService {
   constructor() {
     this.userRepository = new UserRepository();
-    this.failedLoginAttempts = new Map(); // 登录失败记录
-    this.maxFailedAttempts = 5; // 最大失败尝试次数
-    this.lockoutDuration = 15 * 60 * 1000; // 锁定时间：15分钟
+    this.twoFactorRepository = new TwoFactorRepository();
   }
 
   /**
@@ -52,21 +53,17 @@ class AdminAuthService {
    * 管理员登录验证
    * @param {string} username - 用户名/邮箱
    * @param {string} password - 密码
-   * @param {Object} req - 请求对象 (用于审计等)
+   * @param {string} ip - IP地址
+   * @param {string} userAgent - 用户代理
    * @returns {Object} 登录结果
    */
-  async login(username, password, req = null) {
+  async login(username, password, ip = 'unknown', userAgent = 'unknown') {
     try {
       logger.info('[AdminAuthService] 管理员登录开始', { username });
 
-      // 1. 检查账户是否被锁定
-      const lockoutInfo = this.failedLoginAttempts.get(username);
-      if (lockoutInfo && lockoutInfo.lockedUntil > Date.now()) {
-        const remainingTime = Math.ceil((lockoutInfo.lockedUntil - Date.now()) / 1000);
-        return {
-          success: false,
-          message: `账户已被锁定，请在 ${remainingTime} 秒后重试`
-        };
+      // 1. 验证输入
+      if (!username || !password) {
+        return { success: false, message: '用户名和密码不能为空' };
       }
 
       // 2. 查找用户 (支持用户名或邮箱登录)
@@ -76,31 +73,74 @@ class AdminAuthService {
       }
 
       if (!user) {
-        return this.handleFailedLogin(username, '用户不存在');
+        return {
+          success: false,
+          message: '用户名或密码错误'
+        };
       }
 
-          // 3. 检查是否为管理员角色
+      // 3. 检查账户是否被锁定
+      if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
+        const remainingTime = Math.ceil((new Date(user.lockedUntil) - new Date()) / 1000);
+        const remainingMinutes = Math.ceil(remainingTime / 60);
+        return {
+          success: false,
+          message: `账户已被锁定，请在 ${remainingMinutes} 分钟后重试`,
+          locked: true,
+          lockedUntil: user.lockedUntil
+        };
+      }
+
+      // 4. 检查是否为管理员角色
       const userWithRoles = await this.userRepository.findUserWithRoles(username);
       const isAdmin = this.checkAdminAccess(user, userWithRoles);
       
       if (!isAdmin) {
-        return this.handleFailedLogin(username, '权限不足，仅管理员可以登录');
+        return this.handleFailedLogin(user.id, username, '权限不足，仅管理员可以登录', ip, userAgent);
       }
 
-      // 4. 检查用户是否激活
+      // 5. 检查用户是否激活
       if (!user.isActive) {
-        return this.handleFailedLogin(username, '账户未激活');
+        return this.handleFailedLogin(user.id, username, '账户未激活', ip, userAgent);
       }
 
-      // 5. 验证密码
-      logger.debug('[AdminAuthService] 验证密码', { 
-        inputPassword: password, 
-        hashInDb: user.passwordHash,
-        match: await bcrypt.compare(password, user.passwordHash)
-      });
-      const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+      // 6. 验证密码 (支持 PBKDF2 和旧的 bcrypt)
+      const isPasswordValid = await PasswordService.verifyPassword(password, user.passwordHash);
       if (!isPasswordValid) {
-        return this.handleFailedLogin(username, '密码错误');
+        return this.handleFailedLogin(user.id, username, '密码错误', ip, userAgent);
+      }
+
+      // 5.1 检查密码是否过期
+      const isExpired = await PasswordService.isPasswordExpired(user.passwordChangedAt);
+      if (isExpired) {
+        logger.info('[AdminAuthService] 管理员密码已过期', { userId: user.id });
+        return {
+          success: true,
+          data: {
+            mustChangePassword: true,
+            user: user.toApiResponse()
+          },
+          message: '您的密码已过期，请修改密码后重新登录'
+        };
+      }
+
+      // 5.2 检查是否启用了双因素认证 (2FA)
+      const securityConfig = await systemConfigService.getSecurityConfigs();
+      if (securityConfig.twoFactorEnabled) {
+        // 检查用户是否已绑定 2FA
+        const twoFactor = await this.twoFactorRepository.getTwoFactorAuthByUserId(user.id);
+        if (twoFactor && twoFactor.isEnabled) {
+          logger.info('[AdminAuthService] 需要双因素认证', { userId: user.id });
+          return {
+            success: true,
+            data: {
+              requireTwoFactor: true,
+              userId: user.id,
+              username: user.username
+            },
+            message: '请输入双因素认证码'
+          };
+        }
       }
 
       // 6. 生成令牌对
@@ -117,7 +157,7 @@ class AdminAuthService {
       await this.userRepository.updateLastLogin(user.id);
 
       // 8. 清除失败登录记录
-      this.failedLoginAttempts.delete(username);
+      await this.userRepository.resetLoginAttempts(user.id);
 
       logger.info('[AdminAuthService] 管理员登录成功', { 
         userId: user.id,
@@ -150,65 +190,118 @@ class AdminAuthService {
   }
 
   /**
-   * 处理登录失败
-   * @param {string} username - 用户名
-   * @param {string} reason - 失败原因
-   * @returns {Object} 失败结果
+   * 处理管理员登录
    */
-  async handleFailedLogin(username, reason) {
+  async login(username, password, ip = 'unknown', userAgent = 'unknown') {
+    // ... 原有逻辑已经在 login 中处理了 2FA 跳转
+  }
+
+  /**
+   * 验证双因素认证码
+   * @param {number} userId - 用户ID
+   * @param {string} code - 认证码
+   * @param {string} ip - IP地址
+   * @param {string} userAgent - 用户代理
+   * @returns {Object} 验证结果
+   */
+  async verifyTwoFactor(userId, code, ip = 'unknown', userAgent = 'unknown') {
     try {
-      // 记录失败次数
-      const attempts = (this.failedLoginAttempts.get(username)?.attempts || 0) + 1;
-      let lockedUntil = null;
+      logger.info('[AdminAuthService] 开始验证 2FA', { userId });
 
-      // 如果达到最大失败次数，锁定账户
-      if (attempts >= this.maxFailedAttempts) {
-        lockedUntil = Date.now() + this.lockoutDuration;
-        this.failedLoginAttempts.set(username, {
-          attempts,
-          lockedUntil,
-          lockedAt: Date.now()
-        });
-
-        logger.warn('[AdminAuthService] 管理员账户被锁定', { 
-          username,
-          attempts,
-          reason 
-        });
-      } else {
-        this.failedLoginAttempts.set(username, {
-          attempts,
-          lastAttempt: Date.now()
-        });
+      // 1. 获取用户
+      const user = await this.userRepository.findById(userId);
+      if (!user) {
+        return { success: false, message: '用户不存在' };
       }
 
+      // 2. 获取 2FA 密钥
+      const twoFactor = await this.twoFactorRepository.getTwoFactorAuthByUserId(userId);
+      if (!twoFactor || !twoFactor.isEnabled) {
+        return { success: false, message: '未启用双因素认证' };
+      }
+
+      // 3. 验证 TOTP 码
+      const TotpService = require('./TotpService');
+      const isValid = TotpService.verifyToken(twoFactor.secretKey, code);
+
+      if (!isValid) {
+        // 记录失败日志 (可选)
+        return { success: false, message: '验证码不正确或已过期' };
+      }
+
+      // 4. 验证通过，生成令牌对
+      const userWithRoles = await this.userRepository.findUserWithRoles(user.username);
+      const tokens = generateTokenPair(user.id, {
+        username: user.username,
+        email: user.email,
+        status: user.isActive ? 'active' : 'inactive',
+        role: userWithRoles?.role || user.role || 'admin',
+        permissions: userWithRoles?.permissions || user.permissions || ROLES.ADMIN.permissions,
+        isAdmin: true
+      });
+
+      // 5. 更新最后登录时间
+      await this.userRepository.updateLastLogin(user.id);
+
+      logger.info('[AdminAuthService] 2FA 验证成功', { userId });
+
+      return {
+        success: true,
+        data: {
+          user: user.toApiResponse(),
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          expiresIn: tokens.expiresIn,
+          tokenType: 'Bearer',
+          isAdmin: true
+        },
+        message: '验证成功'
+      };
+    } catch (error) {
+      logger.error('[AdminAuthService] 2FA 验证失败', { error: error.message, userId });
+      return { success: false, message: '验证失败，请稍后重试' };
+    }
+  }
+
+  /**
+   * 处理登录失败
+
+   * @param {number} userId - 用户ID
+   * @param {string} username - 用户名
+   * @param {string} reason - 失败原因
+   * @param {string} ip - IP地址
+   * @param {string} userAgent - 用户代理
+   * @returns {Object} 失败结果
+   */
+  async handleFailedLogin(userId, username, reason, ip = 'unknown', userAgent = 'unknown') {
+    try {
+      // 获取系统安全配置
+      const securityConfig = await systemConfigService.getSecurityConfigs();
+      const { loginFailCount, lockTime, resetWindow } = securityConfig;
+
+      // 增加失败次数并检查锁定
+      const result = await this.userRepository.increaseFailedAttempts(userId, ip, userAgent, loginFailCount, lockTime, resetWindow);
+
       // 记录安全事件
-      logger.security('管理员登录失败', {
+      logger.warn('[AdminAuthService] 管理员登录失败', {
+        userId,
         username,
         reason,
-        attempts,
-        locked: lockedUntil !== null,
-        lockedUntil
+        attempts: result.attempts,
+        locked: result.locked
       });
 
       return {
         success: false,
-        message: lockedUntil 
-          ? `登录失败次数过多，账户已被锁定 ${this.lockoutDuration / 60000} 分钟`
-          : `登录失败，还可尝试 ${this.maxFailedAttempts - attempts} 次`,
-        locked: lockedUntil !== null,
-        attempts
+        message: result.message || reason,
+        locked: result.locked,
+        attempts: result.attempts
       };
-
     } catch (error) {
-      logger.error('[AdminAuthService] 处理登录失败时出错', { 
-        error: error.message,
-        username,
-        reason 
-      });
+      logger.error('[AdminAuthService] 处理登录失败出错', { error: error.message, userId, username });
       return {
         success: false,
-        message: '登录失败，请稍后重试'
+        message: '登录失败'
       };
     }
   }

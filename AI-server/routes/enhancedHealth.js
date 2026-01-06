@@ -14,6 +14,7 @@ const logger = require('../config/logger');
 const { responseWrapper } = require('../middleware/response');
 const { getMetrics, recordHealthMetrics } = require('../middleware/prometheus');
 const { getMetrics: getCustomMetrics } = require('../middleware/monitoring');
+const versionManager = require('../config/versionManager');
 
 /**
  * 获取系统负载信息
@@ -249,13 +250,14 @@ router.get('/', responseWrapper(asyncHandler(async (req, res) => {
     const healthScore = calculateHealthScore(checks);
     
     // 构建响应数据
+    const serverVersion = versionManager.getServerVersion();
     const healthData = {
       status: healthScore.status,
       score: healthScore.score,
       checks: checks,
       issues: healthScore.issues,
       responseTime: Date.now() - startTime,
-      version: process.env.npm_package_version || '1.0.0'
+      version: serverVersion.version
     };
     
     // 记录健康指标到Prometheus

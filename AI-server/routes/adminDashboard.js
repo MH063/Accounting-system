@@ -13,6 +13,9 @@ const systemStatusService = require('../services/systemStatusService');
 const { createRestartCommand } = require('../services/commandSignatureService');
 const { publishClientRestart } = require('../config/pubsubManager');
 const { monitor: performanceMonitor } = require('../middleware/performanceMonitor');
+const versionManager = require('../config/versionManager');
+
+const adminVersion = versionManager.getAdminVersion().version;
 
 
 
@@ -524,7 +527,7 @@ router.get('/stats', authenticateToken, authorizeAdmin, responseWrapper(async (r
     }
     
     const clientStats = {
-      version: 'v2.1.0',
+      version: adminVersion,
       onlineUsers: clientOnlineUsers, // 客户端在线用户数（排除管理端）
       onlineDistribution: onlineUserData.distribution,
       qualityIndex: onlineUserData.qualityIndex,
@@ -557,7 +560,7 @@ router.get('/stats', authenticateToken, authorizeAdmin, responseWrapper(async (r
 
     // 后端服务状态统计
     const backendStats = {
-      version: 'v2.1.0',
+      version: adminVersion,
       apiResponseTime: Math.round(dbSlowQueries > 0 ? 50 + dbSlowQueries * 10 : 25), // 基于慢查询估算的响应时间
       qps: currentQps, // 真实获取 QPS
       uptime: Math.round(backendUptime), // 运行时长（秒）
@@ -601,7 +604,7 @@ router.get('/stats', authenticateToken, authorizeAdmin, responseWrapper(async (r
   
     // 系统信息
     const systemInfo = {
-      version: 'v2.1.0',
+      version: adminVersion,
       uptime: `${uptimeDays}天 ${uptimeHours}小时 ${uptimeMinutes}分钟`,
       environment: process.env.NODE_ENV || 'development',
       startTime: new Date(Date.now() - uptime * 1000).toLocaleString('zh-CN', { hour12: false })
@@ -1496,12 +1499,12 @@ router.get('/client/config', authenticateToken, authorizeAdmin, responseWrapper(
         data: result.rows[0].config_value
       });
     } else {
-      // 如果数据库中没有，返回默认配置（也可视为兜底逻辑）
+      const webVersion = versionManager.getWebVersion();
       res.json({
         success: true,
         message: '获取客户端默认配置成功',
         data: {
-          version: 'v1.0.0',
+          version: webVersion.version,
           autoUpdate: false,
           updateUrl: '',
           config: {
@@ -1539,13 +1542,14 @@ router.post('/client/update', authenticateToken, authorizeAdmin, responseWrapper
         data: result.rows[0].config_value
       });
     } else {
+      const webVersion = versionManager.getWebVersion();
       res.json({
         success: true,
         message: '未发现版本更新信息',
         data: {
           updated: false,
-          currentVersion: 'v1.0.0',
-          latestVersion: 'v1.0.0',
+          currentVersion: webVersion.version,
+          latestVersion: webVersion.version,
           downloadUrl: null
         }
       });
@@ -1602,12 +1606,12 @@ router.get('/backend/config', authenticateToken, authorizeAdmin, responseWrapper
         data: result.rows[0].config_value
       });
     } else {
-      // 兜底逻辑
+      const serverVersion = versionManager.getServerVersion();
       res.json({
         success: true,
         message: '获取后端默认配置成功',
         data: {
-          version: 'v1.0.0',
+          version: serverVersion.version,
           environment: process.env.NODE_ENV || 'development',
           port: process.env.PORT || 4000,
           config: {
@@ -1645,13 +1649,14 @@ router.post('/backend/update', authenticateToken, authorizeAdmin, responseWrappe
         data: result.rows[0].config_value
       });
     } else {
+      const serverVersion = versionManager.getServerVersion();
       res.json({
         success: true,
         message: '未发现版本更新信息',
         data: {
           updated: false,
-          currentVersion: 'v1.0.0',
-          latestVersion: 'v1.0.0',
+          currentVersion: serverVersion.version,
+          latestVersion: serverVersion.version,
           downloadUrl: null
         }
       });

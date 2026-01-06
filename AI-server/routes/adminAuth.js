@@ -60,6 +60,15 @@ router.post('/login', adminLoginLimiter, (req, res, next) => {
 });
 
 /**
+ * @route   POST /api/admin/verify-2fa
+ * @desc    验证双因素认证码
+ * @access  Public
+ */
+router.post('/verify-2fa', adminLoginLimiter, (req, res, next) => {
+  adminAuthController.verifyTwoFactor(req, res, next);
+});
+
+/**
  * @route   POST /api/admin/logout
  * @desc    管理员登出
  * @access  Private (需要管理员认证)

@@ -23,6 +23,7 @@ class AdminAuthController extends BaseController {
     this.getAdminProfile = this.getAdminProfile.bind(this);
     this.refreshAdminToken = this.refreshAdminToken.bind(this);
     this.heartbeat = this.heartbeat.bind(this);
+    this.verifyTwoFactor = this.verifyTwoFactor.bind(this);
   }
 
   /**
@@ -103,7 +104,12 @@ class AdminAuthController extends BaseController {
       logger.debug('输入验证通过');
 
       logger.debug('调用AdminAuthService进行登录验证');
-      const loginResult = await this.adminAuthService.login(loginIdentifier, password, req);
+      const loginResult = await this.adminAuthService.login(
+        loginIdentifier,
+        password,
+        req.ip,
+        req.get('User-Agent')
+      );
       
       logger.debug('AdminAuthService返回结果', { success: loginResult.success, message: loginResult.message });
 
@@ -199,6 +205,40 @@ class AdminAuthController extends BaseController {
 
     } catch (error) {
       logger.error('[AdminAuthController] 发生异常', { error: error.message, stack: error.stack });
+      next(error);
+    }
+  }
+
+  /**
+   * 验证双因素认证码
+   * POST /api/admin/verify-2fa
+   */
+  async verifyTwoFactor(req, res, next) {
+    try {
+      const { userId, code } = req.body;
+      
+      if (!userId || !code) {
+        return errorResponse(res, '用户ID和验证码不能为空', 400);
+      }
+
+      const result = await this.adminAuthService.verifyTwoFactor(
+        userId,
+        code,
+        req.ip,
+        req.get('User-Agent')
+      );
+
+      if (result.success) {
+        // 记录成功的安全事件
+        logger.audit(req, '管理员2FA验证成功', { userId });
+        return successResponse(res, result.data, result.message);
+      } else {
+        // 记录失败的安全事件
+        logger.warn('管理员2FA验证失败', { userId, reason: result.message });
+        return errorResponse(res, result.message, 401);
+      }
+    } catch (error) {
+      logger.error('[AdminAuthController] 2FA验证异常', { error: error.message });
       next(error);
     }
   }

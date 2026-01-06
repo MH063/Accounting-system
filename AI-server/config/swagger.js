@@ -6,6 +6,9 @@
 const swaggerJSDoc = require('swagger-jsdoc');
 const path = require('path');
 const fs = require('fs').promises;
+const versionManager = require('./versionManager');
+
+const serverVersion = versionManager.getServerVersion();
 
 /**
  * Swagger配置选项
@@ -14,12 +17,12 @@ const swaggerOptions = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title: '会计系统 API',
-      version: '1.0.0',
+      title: '记账宝系统 API',
+      version: serverVersion.version,
       description: `
-# 会计系统 API 文档
+# 记账宝系统 API 文档
 
-欢迎使用会计系统API！本系统提供了完整的会计数据管理功能。
+欢迎使用记账宝系统API！本系统提供了完整的记账数据管理功能。   
 
 ## 主要功能
 - 用户认证与授权 (JWT, OAuth2.0)
