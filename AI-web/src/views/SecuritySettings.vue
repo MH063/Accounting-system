@@ -3848,16 +3848,16 @@ const copyBackupCode = async (code: string): Promise<void> => {
 
 const regenerateBackupCodes = async (): Promise<void> => {
   try {
-    const { value: password } = await ElMessageBox.prompt('请输入密码以重新生成备用验证码', '确认操作', {
+    const { value: code } = await ElMessageBox.prompt('请输入6位动态验证码或备用码以重新生成备用验证码', '确认操作', {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
-      inputType: 'password',
-      inputPattern: /.+/,
-      inputErrorMessage: '密码不能为空'
+      inputType: 'text',
+      inputPattern: /^[a-zA-Z0-9]{6,10}$/,
+      inputErrorMessage: '请输入有效的验证码或备用码'
     })
     
     // 重新生成备份验证码
-    const response = await apiRegenerateBackupCodes(password)
+    const response = await apiRegenerateBackupCodes(code)
     
     // 关键点：处理双层 data 结构 (Rule 5)
     const actualData = response.data?.data || response.data;

@@ -215,8 +215,8 @@ class UserService extends BaseService {
           email_verified: false
         }),
         userId,
-        '127.0.0.1', // TODO: 实际部署时应获取真实IP
-        'API Client' // TODO: 实际部署时应获取真实User-Agent
+        userData.ip || '127.0.0.1',
+        userData.userAgent || 'API Client'
       ];
 
       await client.query(insertAuditQuery, auditValues);
@@ -307,8 +307,7 @@ class UserService extends BaseService {
 
             // 4. 处理密码 (如果没有提供，则使用默认密码)
             const password = userData.password || '123456';
-            const saltRounds = 12;
-            const passwordHash = await bcrypt.hash(password, saltRounds);
+            const passwordHash = await PasswordService.hashPassword(password);
 
             // 5. 创建用户模型
             const user = UserModel.create({
@@ -342,10 +341,15 @@ class UserService extends BaseService {
             const values = Object.values(dbData);
             const placeholders = keys.map((_, index) => `$${index + 1}`).join(', ');
             
-            await client.query(
-              `INSERT INTO users (${keys.join(', ')}) VALUES (${placeholders})`,
+            const insertResult = await client.query(
+              `INSERT INTO users (${keys.join(', ')}) VALUES (${placeholders}) RETURNING id`,
               values
             );
+            
+            const userId = insertResult.rows[0].id;
+
+            // 记录密码历史
+            await PasswordService.recordPasswordHistory(userId, passwordHash, client);
             
             results.success++;
           } catch (error) {
@@ -533,6 +537,26 @@ class UserService extends BaseService {
               userId: user.id 
             });
           }
+        }
+      }
+
+      // 检查是否启用了双因素认证 (2FA)
+      const securityConfig = await systemConfigService.getSecurityConfigs();
+      if (securityConfig.twoFactorEnabled) {
+        // 检查用户是否已绑定 2FA
+        const twoFactor = await this.twoFactorRepository.getTwoFactorAuthByUserId(user.id);
+        if (twoFactor && twoFactor.isEnabled) {
+          logger.info('[UserService] 用户登录需要双因素认证', { userId: user.id });
+          return {
+            success: true,
+            data: {
+              requireTwoFactor: true,
+              twoFactorType: 'totp',
+              userId: user.id,
+              username: user.username
+            },
+            message: '请输入双因素认证码'
+          };
         }
       }
 
@@ -1362,7 +1386,7 @@ class UserService extends BaseService {
       }
 
       // 验证当前密码
-      const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.passwordHash);
+      const isCurrentPasswordValid = await PasswordService.verifyPassword(currentPassword, user.passwordHash);
       
       if (!isCurrentPasswordValid) {
         logger.warn('[UserService] 修改密码失败: 当前密码错误', { userId });
@@ -1371,9 +1395,17 @@ class UserService extends BaseService {
         throw err;
       }
 
-      // 加密新密码
-      const saltRounds = 12;
-      const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+      // 检查是否为最近使用的密码
+      const isRecentlyUsed = await PasswordService.isRecentlyUsedPassword(userId, newPassword);
+      if (isRecentlyUsed) {
+        logger.warn('[UserService] 修改密码失败: 不能使用最近使用过的密码', { userId });
+        const err = new Error('不能使用最近使用过的密码');
+        err.statusCode = 400;
+        throw err;
+      }
+
+      // 加密新密码 (使用 PBKDF2)
+      const newPasswordHash = await PasswordService.hashPassword(newPassword);
 
       // 更新密码
       const success = await this.userRepository.updatePassword(userId, newPasswordHash);
@@ -1383,6 +1415,9 @@ class UserService extends BaseService {
         err.statusCode = 500;
         throw err;
       }
+
+      // 记录密码历史
+      await PasswordService.recordPasswordHistory(userId, newPasswordHash);
 
       logger.info('[UserService] 修改密码成功', { userId });
 
@@ -1845,20 +1880,31 @@ class UserService extends BaseService {
       }
 
       // 验证新密码强度
-      if (!this.isValidPassword(newPassword)) {
-        throw new Error('新密码不符合安全要求（至少8位，包含大小写字母、数字和特殊字符）');
+      try {
+        await PasswordService.validateStrength(newPassword);
+      } catch (validationError) {
+        throw new Error(validationError.message);
       }
 
-      // 加密新密码
-      const saltRounds = 12;
-      const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+      // 检查是否为最近使用的密码
+      const isRecentlyUsed = await PasswordService.isRecentlyUsedPassword(user.id, newPassword);
+      if (isRecentlyUsed) {
+        throw new Error('不能使用最近使用过的密码');
+      }
+
+      // 加密新密码 (使用 PBKDF2)
+      const newPasswordHash = await PasswordService.hashPassword(newPassword);
 
       // 更新密码并清除重置令牌
       await this.userRepository.update(user.id, {
         password_hash: newPasswordHash,
+        password_changed_at: new Date(),
         reset_token: null,
         reset_token_expires: null
       });
+
+      // 记录密码历史
+      await PasswordService.recordPasswordHistory(user.id, newPasswordHash);
 
       logger.info('[UserService] 密码重置成功', { userId: user.id });
 
@@ -1940,8 +1986,8 @@ class UserService extends BaseService {
         throw new Error('用户不存在');
       }
 
-      // 验证密码
-      const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+      // 验证密码 (支持 PBKDF2 和旧的 bcrypt)
+      const isPasswordValid = await PasswordService.verifyPassword(password, user.passwordHash);
       
       if (!isPasswordValid) {
         throw new Error('密码错误');
@@ -2067,6 +2113,11 @@ class UserService extends BaseService {
       
       // 调用管理员认证服务获取资料
       const result = await adminAuthService.getAdminProfile(userId);
+      
+      if (!result) {
+        logger.error('[UserService] adminAuthService.getAdminProfile 返回了 undefined');
+        return null;
+      }
       
       if (!result.success) {
         return null;
@@ -2254,7 +2305,7 @@ class UserService extends BaseService {
 
       // 获取系统安全配置
       const securityConfig = await systemConfigService.getSecurityConfigs();
-      const sessionTimeoutMinutes = securityConfig.sessionTimeout || 60; // 默认 60 分钟
+      const sessionTimeoutMinutes = securityConfig.sessionTimeout || 30; // 默认 30 分钟
 
       // 设置会话过期时间
       const expiresAt = new Date();
@@ -2450,18 +2501,22 @@ class UserService extends BaseService {
   async updateHeartbeat(userId, sessionToken, data = {}) {
     try {
       const { interactionCount, deviceFingerprint, metrics, behaviorData } = data;
-      logger.info('[UserService] 更新心跳参数', { userId, tokenSnippet: sessionToken?.substring(0, 20) });
+      logger.info('[UserService] 更新心跳参数', { userId, tokenSnippet: sessionToken?.substring(0, 20), interactionCount });
+      
+      // 如果有交互，则同时更新 last_accessed_at，重置空闲超时计时器
+      const updateLastAccessed = interactionCount > 0 ? ', last_accessed_at = NOW()' : '';
+      
       const query = `
         UPDATE user_sessions
         SET 
           updated_at = NOW(),
-          last_accessed_at = NOW(),
           last_heartbeat_at = NOW(),
           heartbeat_count = COALESCE(heartbeat_count, 0) + 1,
           interaction_count = COALESCE(interaction_count, 0) + $1,
           device_fingerprint = COALESCE($2, device_fingerprint),
           client_metrics = COALESCE(client_metrics, '{}'::jsonb) || $3::jsonb,
           behavior_data = COALESCE(behavior_data, '{}'::jsonb) || $4::jsonb
+          ${updateLastAccessed}
         WHERE user_id = $5 AND session_token = $6 AND status = 'active'
         RETURNING id
       `;
@@ -2612,7 +2667,7 @@ class UserService extends BaseService {
 
       // 2. 检查空闲超时
       const securityConfig = await systemConfigService.getSecurityConfigs();
-      const idleTimeoutMinutes = securityConfig.idleTimeout || 120;
+      const idleTimeoutMinutes = securityConfig.idleTimeout || 30;
       
       const lastAccessed = new Date(session.last_accessed_at);
       const idleMinutes = (now - lastAccessed) / (1000 * 60);
@@ -2751,41 +2806,69 @@ class UserService extends BaseService {
       if (!user) {
         throw new Error('用户不存在');
       }
-      
-      // 查找验证码记录
-      const verificationRecord = await this.twoFactorRepository.verifyTwoFactorCode({
-        email: user.email,
-        code,
-        codeType
-      });
 
-      if (!verificationRecord) {
-        throw new Error('验证码无效或已过期');
-      }
+      // 如果是 TOTP 验证
+      if (codeType === 'totp') {
+        const auth = await this.twoFactorRepository.getTwoFactorAuthByUserId(userId);
+        if (!auth || !auth.isEnabled) {
+          throw new Error('未启用 TOTP 双因素认证');
+        }
 
-      // 标记验证码为已使用
-      await this.twoFactorRepository.markCodeAsUsed(verificationRecord.id);
+        // 验证 TOTP 码
+        const isValid = this.totpService.verifyToken(auth.secretKey, code);
+        
+        if (!isValid) {
+          // 检查是否是备用码 (备用码通常是 8 位数字或字母组合)
+          const isBackupCodeValid = await this.twoFactorRepository.verifyAndUseBackupCode(userId, code);
+          if (!isBackupCodeValid) {
+            await this.twoFactorRepository.incrementVerificationAttempts(userId);
+            throw new Error('验证码或备用码无效');
+          }
+          // 如果是备用码，验证成功
+          logger.info('[UserService] 使用备用码验证成功', { userId });
+        }
 
-      // 更新用户的两步验证状态
-      if (codeType === 'login') {
-        await this.userRepository.update(userId, {
-          last_login_at: new Date(),
-          last_login_ip: ip
+        // 验证通过，重置尝试次数并更新最后使用时间
+        await this.twoFactorRepository.resetVerificationAttempts(userId);
+        await this.twoFactorRepository.updateTwoFactorAuth(auth.id, {
+          lastUsedAt: new Date()
         });
+      } else {
+        // 查找验证码记录 (Email/SMS)
+        const verificationRecord = await this.twoFactorRepository.verifyTwoFactorCode({
+          email: user.email,
+          code,
+          codeType
+        });
+
+        if (!verificationRecord) {
+          throw new Error('验证码无效或已过期');
+        }
+
+        // 标记验证码为已使用
+        await this.twoFactorRepository.markCodeAsUsed(verificationRecord.id);
       }
+
+      // 更新用户的最后登录状态
+      await this.userRepository.updateLastLogin(userId, ip);
 
       // 生成JWT双令牌
+      // 兼容多角色结构
+      const userRoles = Array.isArray(user.role) ? user.role : [user.role || 'user'];
+      
       const tokenPair = generateTokenPair(userId, {
         username: user.username,
         email: user.email,
-        role: user.role,
+        role: userRoles,
         permissions: user.permissions || []
       });
 
-      // 创建用户会话(传入JWT refreshToken)
+      // 创建用户会话
+      const isAdmin = userRoles.some(r => ['admin', 'system_admin'].includes(r));
       const session = await this.createUserSession(userId, ip, userAgent, {
         accessToken: tokenPair.accessToken,
-        refreshToken: tokenPair.refreshToken
+        refreshToken: tokenPair.refreshToken,
+        clientType: isAdmin ? 'admin' : 'client'
       });
 
       logger.info('[UserService] 两步验证成功', { userId });
@@ -3709,8 +3792,10 @@ class UserService extends BaseService {
       }
       
       // 验证新密码强度
-      if (!this.isValidPassword(newPassword)) {
-        throw new Error('新密码不符合安全要求（至少8位，包含大小写字母、数字和特殊字符）');
+      try {
+        await PasswordService.validateStrength(newPassword);
+      } catch (validationError) {
+        throw new Error(validationError.message);
       }
       
       // 开始事务
@@ -3761,12 +3846,18 @@ class UserService extends BaseService {
         await client.query('ROLLBACK');
         throw new Error('用户状态不正确，无法重置密码');
       }
+
+      // 5. 检查是否为最近使用的密码
+      const isRecentlyUsed = await PasswordService.isRecentlyUsedPassword(user.id, newPassword, client);
+      if (isRecentlyUsed) {
+        await client.query('ROLLBACK');
+        throw new Error('不能使用最近使用过的密码');
+      }
       
-      // 5. 加密新密码
-      const saltRounds = 12;
-      const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+      // 6. 加密新密码 (使用 PBKDF2)
+      const newPasswordHash = await PasswordService.hashPassword(newPassword);
       
-      // 6. 更新用户密码
+      // 7. 更新用户密码
       const updateUserQuery = `
         UPDATE users 
         SET 
@@ -3777,8 +3868,11 @@ class UserService extends BaseService {
       `;
       
       await client.query(updateUserQuery, [newPasswordHash, email]);
+
+      // 8. 记录密码历史
+      await PasswordService.recordPasswordHistory(user.id, newPasswordHash, client);
       
-      // 7. 记录审计日志
+      // 9. 记录审计日志
       const insertLogQuery = `
         INSERT INTO audit_logs (
             table_name, operation, record_id, new_values,

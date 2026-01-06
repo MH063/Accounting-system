@@ -135,6 +135,7 @@ class AdminAuthService {
             success: true,
             data: {
               requireTwoFactor: true,
+              twoFactorType: 'totp',
               userId: user.id,
               username: user.username
             },
@@ -190,13 +191,6 @@ class AdminAuthService {
   }
 
   /**
-   * 处理管理员登录
-   */
-  async login(username, password, ip = 'unknown', userAgent = 'unknown') {
-    // ... 原有逻辑已经在 login 中处理了 2FA 跳转
-  }
-
-  /**
    * 验证双因素认证码
    * @param {number} userId - 用户ID
    * @param {string} code - 认证码
@@ -222,14 +216,28 @@ class AdminAuthService {
 
       // 3. 验证 TOTP 码
       const TotpService = require('./TotpService');
-      const isValid = TotpService.verifyToken(twoFactor.secretKey, code);
+      let isValid = TotpService.verifyToken(twoFactor.secretKey, code);
 
       if (!isValid) {
-        // 记录失败日志 (可选)
-        return { success: false, message: '验证码不正确或已过期' };
+        // 检查是否是备用码
+        const isBackupCodeValid = TotpService.verifyBackupCode(twoFactor.backupCodes, code);
+        if (!isBackupCodeValid) {
+          // 增加验证失败次数
+          await this.twoFactorRepository.incrementVerificationAttempts(userId);
+          return { success: false, message: '验证码不正确或已过期' };
+        }
+        // 如果是备用码，验证成功
+        logger.info('[AdminAuthService] 使用备用码验证成功', { userId });
+        isValid = true;
       }
 
-      // 4. 验证通过，生成令牌对
+      // 4. 验证通过，重置尝试次数并更新最后使用时间
+      await this.twoFactorRepository.resetVerificationAttempts(userId);
+      await this.twoFactorRepository.updateTwoFactorAuth(twoFactor.id, {
+        lastUsedAt: new Date()
+      });
+
+      // 5. 生成令牌对
       const userWithRoles = await this.userRepository.findUserWithRoles(user.username);
       const tokens = generateTokenPair(user.id, {
         username: user.username,

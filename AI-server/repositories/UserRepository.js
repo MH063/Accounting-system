@@ -262,32 +262,6 @@ class UserRepository extends BaseRepository {
   }
 
   /**
-   * 重置登录失败次数
-   * @param {number} userId - 用户ID
-   * @returns {Promise<boolean>} 是否重置成功
-   */
-  async resetLoginAttempts(userId) {
-    try {
-      const { query } = require('../config/database');
-      const result = await query(`
-        UPDATE users 
-        SET failed_login_attempts = 0, locked_until = NULL
-        WHERE id = $1
-      `, [userId]);
-
-      if (result.rowCount > 0) {
-        logger.info('[UserRepository] 用户登录失败次数重置成功', { userId });
-        return true;
-      }
-
-      return false;
-    } catch (error) {
-      logger.error('[UserRepository] 重置登录失败次数失败', { error: error.message, userId });
-      throw error;
-    }
-  }
-
-  /**
    * 增加登录失败次数
    * @param {number} userId - 用户ID
    * @param {string} ip - IP地址
@@ -363,7 +337,13 @@ class UserRepository extends BaseRepository {
         WHERE id = $1
       `, [userId]);
 
-      return result.rowCount > 0;
+      if (result.rowCount > 0) {
+        // 同时记录一次成功的登录日志（可选，通常在 login 成功处记录）
+        logger.info('[UserRepository] 用户登录失败次数重置成功', { userId });
+        return true;
+      }
+
+      return false;
     } catch (error) {
       logger.error('[UserRepository] 重置登录失败次数失败', { error: error.message, userId });
       throw error;

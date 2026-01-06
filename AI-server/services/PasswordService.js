@@ -98,6 +98,26 @@ class PasswordService {
    * 检查是否为最近使用的密码
    * @param {number} userId - 用户ID
    * @param {string} password - 新密码
+   * @param {Object} [client] - 数据库客户端（用于事务）
+   * @returns {Promise<boolean>} 是否为最近使用的密码
+   */
+  async isRecentlyUsedPassword(userId, password, client = null) {
+    try {
+      await this.checkPasswordHistory(userId, password, client);
+      return false;
+    } catch (error) {
+      if (error.message.includes('不能使用最近')) {
+        return true;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * 检查是否为最近使用的密码 (兼容旧逻辑，抛出异常)
+   * @param {number} userId - 用户ID
+   * @param {string} password - 新密码
+   * @param {Object} [client] - 数据库客户端（用于事务）
    * @returns {Promise<void>} 如果是重复密码则抛出异常
    */
   async checkPasswordHistory(userId, password, client = null) {

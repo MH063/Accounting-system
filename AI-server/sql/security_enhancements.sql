@@ -27,15 +27,19 @@ CREATE INDEX IF NOT EXISTS idx_ip_controls_range ON security_ip_controls USING g
 -- 3. 登录失败详细日志（用于分级锁定和审计）
 CREATE TABLE IF NOT EXISTS security_login_logs (
     id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT,
     username VARCHAR(100),
     ip_address INET,
     user_agent TEXT,
-    status VARCHAR(20) NOT NULL CHECK (status IN ('success', 'failed', 'locked')),
+    status VARCHAR(20) NOT NULL CHECK (status IN ('success', 'failure', 'locked')),
     reason TEXT,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    attempt_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    CONSTRAINT fk_login_logs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
+CREATE INDEX IF NOT EXISTS idx_login_logs_user_id ON security_login_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_login_logs_username ON security_login_logs(username);
 CREATE INDEX IF NOT EXISTS idx_login_logs_ip ON security_login_logs(ip_address);
+CREATE INDEX IF NOT EXISTS idx_login_logs_attempt_at ON security_login_logs(attempt_at);
 
 -- 4. 插入新增的安全配置项到系统配置表 (如果还不存在)
 INSERT INTO admin_system_configs (config_key, config_value, config_type, config_group, description, display_name, config_category)

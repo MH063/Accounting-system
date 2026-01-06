@@ -29,6 +29,13 @@ class AuthController extends BaseController {
     this.verifyEmail = this.verifyEmail.bind(this);
     this.heartbeat = this.heartbeat.bind(this);
     this.importUsers = this.importUsers.bind(this);
+    this.verifyTwoFactorCode = this.verifyTwoFactorCode.bind(this);
+    this.enableTwoFactor = this.enableTwoFactor.bind(this);
+    this.disableTwoFactor = this.disableTwoFactor.bind(this);
+    this.getTwoFactorStatus = this.getTwoFactorStatus.bind(this);
+    this.generateTwoFactorCode = this.generateTwoFactorCode.bind(this);
+    this.generateTotpSecret = this.generateTotpSecret.bind(this);
+    this.regenerateBackupCodes = this.regenerateBackupCodes.bind(this);
   }
 
   /**
@@ -212,6 +219,15 @@ class AuthController extends BaseController {
         return errorResponse(res, loginResult.message, statusCode);
       }
 
+      // 检查是否需要双因素认证 (2FA)
+      if (loginResult.data && loginResult.data.requireTwoFactor) {
+        logger.info('[AuthController] 用户登录需要两步验证', { 
+          userId: loginResult.data.userId,
+          username: loginResult.data.username 
+        });
+        return successResponse(res, loginResult.data, loginResult.message);
+      }
+
       const { user, tokens, session } = loginResult.data;
 
       logger.auth('登录成功', { username, userId: user.id });
@@ -258,6 +274,205 @@ class AuthController extends BaseController {
   }
 
   /**
+   * 验证两步验证码
+   * POST /api/auth/two-factor/verify
+   */
+  async verifyTwoFactorCode(req, res, next) {
+    try {
+      const { userId, code, codeType } = req.body;
+      
+      if (!userId || !code || !codeType) {
+        return errorResponse(res, '用户ID、验证码和验证类型不能为空', 400);
+      }
+
+      const result = await this.userService.verifyTwoFactorCode({
+        userId,
+        code,
+        codeType,
+        ip: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+
+      // 记录审计日志
+      logger.audit(req, '两步验证成功', { userId, codeType });
+
+      return successResponse(res, result.data, result.message);
+    } catch (error) {
+      logger.error('[AuthController] 两步验证失败', { error: error.message });
+      return errorResponse(res, error.message || '验证失败', 401);
+    }
+  }
+
+  /**
+   * 启用两步验证
+   * POST /api/auth/two-factor/enable
+   */
+  async enableTwoFactor(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const { code, codeType, secret, backupCodes } = req.body;
+
+      if (!code || !codeType) {
+        return errorResponse(res, '验证码和验证类型不能为空', 400);
+      }
+
+      let result;
+      if (codeType === 'totp') {
+        if (!secret) {
+          return errorResponse(res, 'TOTP 密钥不能为空', 400);
+        }
+        result = await this.userService.enableTotpAuth(userId, {
+          code,
+          secret,
+          backupCodes
+        });
+      } else {
+        result = await this.userService.enableTwoFactor(userId, {
+          code,
+          codeType
+        });
+      }
+
+      // 记录安全审计事件
+      logSecurityEvent({
+        type: SECURITY_EVENTS.MFA_ENABLED,
+        userId: userId,
+        sourceIp: req.ip,
+        userAgent: req.get('User-Agent'),
+        resource: '/api/auth/two-factor/enable',
+        action: 'enable_mfa',
+        outcome: 'success',
+        severity: 'medium',
+        data: { codeType }
+      });
+
+      return successResponse(res, result.data, result.message);
+    } catch (error) {
+      logger.error('[AuthController] 启用两步验证失败', { error: error.message });
+      return errorResponse(res, error.message || '启用失败', 400);
+    }
+  }
+
+  /**
+   * 禁用两步验证
+   * POST /api/auth/two-factor/disable
+   */
+  async disableTwoFactor(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const { password, code, codeType } = req.body;
+
+      // 如果提供了密码，则验证密码
+      if (password) {
+        const user = await this.userService.userRepository.findById(userId);
+        const isPasswordValid = await require('../services/PasswordService').verifyPassword(password, user.passwordHash);
+        if (!isPasswordValid) {
+          return errorResponse(res, '密码不正确', 401);
+        }
+      }
+
+      let result;
+      // 检查是否是 TOTP 禁用
+      const status = await this.userService.getTwoFactorStatus(userId);
+      if (status.data.enabled && codeType === 'totp') {
+        result = await this.userService.disableTotpAuth(userId, { code });
+      } else {
+        result = await this.userService.disableTwoFactor(userId);
+      }
+
+      // 记录安全审计事件
+      logSecurityEvent({
+        type: SECURITY_EVENTS.MFA_DISABLED,
+        userId: userId,
+        sourceIp: req.ip,
+        userAgent: req.get('User-Agent'),
+        resource: '/api/auth/two-factor/disable',
+        action: 'disable_mfa',
+        outcome: 'success',
+        severity: 'high',
+        data: { codeType }
+      });
+
+      return successResponse(res, result.data, result.message);
+    } catch (error) {
+      logger.error('[AuthController] 禁用两步验证失败', { error: error.message });
+      return errorResponse(res, error.message || '禁用失败', 400);
+    }
+  }
+
+  /**
+   * 获取两步验证状态
+   * GET /api/auth/two-factor/status
+   */
+  async getTwoFactorStatus(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const result = await this.userService.getTwoFactorStatus(userId);
+      return successResponse(res, result.data, result.message);
+    } catch (error) {
+      logger.error('[AuthController] 获取两步验证状态失败', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * 生成两步验证码
+   * POST /api/auth/two-factor/generate
+   */
+  async generateTwoFactorCode(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const { codeType } = req.body;
+
+      if (!codeType) {
+        return errorResponse(res, '验证类型不能为空', 400);
+      }
+
+      const result = await this.userService.generateTwoFactorCode(userId, codeType);
+      return successResponse(res, result.data, result.message);
+    } catch (error) {
+      logger.error('[AuthController] 生成两步验证码失败', { error: error.message });
+      return errorResponse(res, error.message || '生成验证码失败', 400);
+    }
+  }
+
+  /**
+   * 生成 TOTP 密钥
+   * POST /api/auth/two-factor/totp-secret
+   */
+  async generateTotpSecret(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const result = await this.userService.generateTotpSecret(userId);
+      return successResponse(res, result.data, result.message);
+    } catch (error) {
+      logger.error('[AuthController] 生成 TOTP 密钥失败', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * 重新生成两步验证备用码
+   * POST /api/auth/two-factor/regenerate-backup-codes
+   */
+  async regenerateBackupCodes(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const { code } = req.body;
+
+      if (!code) {
+        return errorResponse(res, '验证码不能为空', 400);
+      }
+
+      const result = await this.userService.regenerateBackupCodes(userId, { code });
+      return successResponse(res, result.data, result.message);
+    } catch (error) {
+      logger.error('[AuthController] 重新生成备用码失败', { error: error.message });
+      return errorResponse(res, error.message || '重新生成备用码失败', 400);
+    }
+  }
+
+  /**
    * 用户注册
    * POST /api/auth/register
    */
@@ -290,7 +505,9 @@ class AuthController extends BaseController {
         password,
         nickname,
         phone,
-        avatar_url
+        avatar_url,
+        ip: req.ip,
+        userAgent: req.get('User-Agent')
       });
       
       const user = result.data;

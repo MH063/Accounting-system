@@ -7,7 +7,6 @@ import ResetPassword from '@/views/ResetPassword.vue'
 import NotFound from '@/views/NotFound.vue'
 import SecuritySettings from '@/views/SecuritySettings.vue'
 import SecurityQuestionVerification from '@/views/SecurityQuestionVerification.vue'
-import SecurityQuestionDemo from '@/views/SecurityQuestionDemo.vue'
 import NotificationList from '@/views/NotificationList.vue'
 // 导入身份验证守卫
 import { createAuthGuard } from '@/utils/authGuard'
@@ -374,15 +373,6 @@ const routes: Array<RouteRecordRaw> = [
     meta: { 
       requireAuth: true,
       title: '安全问题验证'
-    }
-  },
-  {
-    path: '/security-question-demo',
-    name: 'SecurityQuestionDemo',
-    component: SecurityQuestionDemo,
-    meta: { 
-      requireAuth: true,
-      title: '安全问题演示'
     }
   },
   {

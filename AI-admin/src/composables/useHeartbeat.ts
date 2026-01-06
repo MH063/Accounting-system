@@ -35,7 +35,17 @@ export function useHeartbeat() {
         return
       }
 
-      await adminAuthApi.heartbeat()
+      // 获取简单的行为指标
+      const metrics = {
+        lastActive: Date.now(),
+        screenSize: `${window.innerWidth}x${window.innerHeight}`,
+        path: window.location.hash
+      }
+
+      await adminAuthApi.heartbeat({
+        interactionCount: 0, // 管理员端目前简单处理，后续可增加实际交互统计
+        metrics
+      })
       console.log('💓 管理员心跳上报成功')
     } catch (error) {
       const axiosError = error as any

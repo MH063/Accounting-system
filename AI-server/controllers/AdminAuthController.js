@@ -28,18 +28,35 @@ class AdminAuthController extends BaseController {
 
   /**
    * 管理员心跳
-   * GET /api/admin/heartbeat
-   * @access Public (无需认证)
+   * POST /api/admin/heartbeat
    */
   async heartbeat(req, res, next) {
     try {
       const userId = req.user?.id;
       const username = req.user?.username;
+      
+      // 从请求头中提取令牌
+      const authHeader = req.headers.authorization || req.headers.Authorization;
+      const sessionToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
 
-      if (userId && username) {
+      // 从请求体中提取交互和指标数据
+      const { interactionCount, deviceFingerprint, metrics, behaviorData } = req.body;
+
+      if (userId && sessionToken) {
+        // 更新会话心跳
+        const success = await this.userService.updateHeartbeat(userId, sessionToken, {
+          clientType: 'admin',
+          interactionCount,
+          deviceFingerprint,
+          metrics,
+          behaviorData
+        });
+
         logger.debug('[AdminAuthController] 管理员心跳', {
           userId,
           username,
+          sessionUpdated: success,
+          interactionCount,
           timestamp: new Date().toISOString()
         });
 
@@ -53,10 +70,6 @@ class AdminAuthController extends BaseController {
           }
         }, '心跳正常');
       }
-
-      logger.debug('[AdminAuthController] 服务心跳', {
-        timestamp: new Date().toISOString()
-      });
 
       return successResponse(res, {
         timestamp: new Date().toISOString(),
@@ -104,6 +117,11 @@ class AdminAuthController extends BaseController {
       logger.debug('输入验证通过');
 
       logger.debug('调用AdminAuthService进行登录验证');
+      if (!this.adminAuthService) {
+        logger.error('[AdminAuthController] adminAuthService 未初始化');
+        return errorResponse(res, '登录服务未就绪', 500);
+      }
+
       const loginResult = await this.adminAuthService.login(
         loginIdentifier,
         password,
@@ -111,7 +129,16 @@ class AdminAuthController extends BaseController {
         req.get('User-Agent')
       );
       
-      logger.debug('AdminAuthService返回结果', { success: loginResult.success, message: loginResult.message });
+      if (!loginResult) {
+        logger.error('[AdminAuthController] AdminAuthService.login 返回了 undefined');
+        return errorResponse(res, '登录服务响应异常', 500);
+      }
+      
+      logger.debug('AdminAuthService返回结果', { 
+        success: loginResult.success, 
+        message: loginResult.message,
+        hasData: !!loginResult.data 
+      });
 
       if (!loginResult.success) {
         logger.warn('登录失败', { message: loginResult.message });
@@ -142,7 +169,21 @@ class AdminAuthController extends BaseController {
         return errorResponse(res, loginResult.message, statusCode);
       }
 
+      // 检查是否需要双因素认证
+      if (loginResult.data && loginResult.data.requireTwoFactor) {
+        logger.info('[AdminAuthController] 管理员登录需要两步验证', { 
+          userId: loginResult.data.userId,
+          username: loginResult.data.username 
+        });
+        return successResponse(res, loginResult.data, loginResult.message);
+      }
+
       // AdminAuthService返回的结构与UserService不同，需要适配
+      if (!loginResult.data) {
+        logger.error('[AdminAuthController] 登录成功但未返回数据', { loginResult });
+        return errorResponse(res, '登录响应数据异常', 500);
+      }
+      
       const { user, accessToken, refreshToken, expiresIn, tokenType } = loginResult.data;
 
       // 创建用户会话(确保刷新令牌持久化到数据库，支持后续刷新)
@@ -162,9 +203,9 @@ class AdminAuthController extends BaseController {
       }
 
       logger.debug('登录成功，准备返回响应');
-      logger.auth('管理员登录成功', { username, userId: user.id, role: user.role });
+      logger.auth('管理员登录成功', { username: user.username, userId: user.id, role: user.role });
       logger.audit(req, '管理员登录成功', { 
-        username,
+        username: user.username,
         userId: user.id,
         role: user.role,
         timestamp: new Date().toISOString()
@@ -180,7 +221,7 @@ class AdminAuthController extends BaseController {
         action: 'admin_login',
         outcome: 'success',
         severity: 'low',
-        data: { username, role: user.role, loginType: 'admin' }
+        data: { username: user.username, role: user.role, loginType: 'admin' }
       });
 
       // 返回成功响应（包含双令牌和管理员信息）
@@ -227,6 +268,11 @@ class AdminAuthController extends BaseController {
         req.ip,
         req.get('User-Agent')
       );
+
+      if (!result) {
+        logger.error('[AdminAuthController] verifyTwoFactor 返回了 undefined');
+        return errorResponse(res, '验证服务异常', 500);
+      }
 
       if (result.success) {
         // 记录成功的安全事件
@@ -336,6 +382,11 @@ class AdminAuthController extends BaseController {
         ipAddress: req.ip,
         userAgent: req.get('User-Agent')
       });
+
+      if (!result) {
+        logger.error('[AdminAuthController] refreshSecureToken 返回了 undefined');
+        return errorResponse(res, '令牌刷新服务异常', 500);
+      }
 
       if (!result.success) {
         return errorResponse(res, result.message || '令牌刷新失败', 401);

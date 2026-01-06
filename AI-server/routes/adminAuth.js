@@ -41,11 +41,11 @@ const adminLoginLimiter = rateLimit({
 });
 
 /**
- * @route   GET /api/admin/heartbeat
+ * @route   POST /api/admin/heartbeat
  * @desc    管理员心跳上报
- * @access  Public (无需认证)
+ * @access  Private (需要管理员认证)
  */
-router.get('/heartbeat', (req, res, next) => {
+router.post('/heartbeat', adminAuthMiddleware, (req, res, next) => {
   adminAuthController.heartbeat(req, res, next);
 });
 

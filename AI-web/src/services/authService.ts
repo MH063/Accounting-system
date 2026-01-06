@@ -841,16 +841,16 @@ export const checkTotpStatus = async (): Promise<ApiResponse<TotpStatusResponse>
 
 /**
  * 重新生成备份代码
- * @param password 用户密码
+ * @param code 6位TOTP验证码
  * @returns 生成结果的API响应
  */
-export const regenerateBackupCodes = async (password: string): Promise<ApiResponse<BackupCodesRegenerateResponse>> => {
+export const regenerateBackupCodes = async (code: string): Promise<ApiResponse<BackupCodesRegenerateResponse>> => {
   try {
     console.log('重新生成备份代码')
     
     const response = await request<ApiResponse<BackupCodesRegenerateResponse>>('/auth/totp/backup-codes/regenerate', {
       method: 'POST',
-      body: JSON.stringify({ password })
+      body: JSON.stringify({ code })
     })
     
     console.log('重新生成备份代码API返回响应:', response)
@@ -1173,5 +1173,11 @@ export default {
   enableTwoFactor,
   disableTwoFactor,
   generateTwoFactorCode,
-  getClientIpAddress
+  getClientIpAddress,
+  generateTotpSecret,
+  verifyTotpCode,
+  enableTotpAuth,
+  disableTotpAuth,
+  checkTotpStatus,
+  regenerateBackupCodes
 }

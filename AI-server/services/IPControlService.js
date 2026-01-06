@@ -56,7 +56,7 @@ class IPControlService {
   async getActiveRules() {
     try {
       const query = `
-        SELECT ip_range, rule_type, description 
+        SELECT ip_range, control_type, description 
         FROM security_ip_controls 
         WHERE is_active = true 
         AND (expires_at IS NULL OR expires_at > NOW())
@@ -80,17 +80,19 @@ class IPControlService {
       if (ip.startsWith('::ffff:')) {
         ip = ip.substring(7);
       }
-      if (range.startsWith('::ffff:')) {
-        range = range.substring(7);
+      // range 可能是 CIDR 对象或字符串，这里处理字符串情况
+      let rangeStr = typeof range === 'string' ? range : range.toString();
+      if (rangeStr.startsWith('::ffff:')) {
+        rangeStr = rangeStr.substring(7);
       }
 
       // 简单的字符串匹配
-      if (ip === range) return true;
+      if (ip === rangeStr) return true;
 
       // CIDR 匹配
-      if (range.includes('/')) {
+      if (rangeStr.includes('/')) {
         const addr = ipaddr.parse(ip);
-        const cidr = ipaddr.parseCIDR(range);
+        const cidr = ipaddr.parseCIDR(rangeStr);
         return addr.match(cidr);
       }
 
@@ -105,14 +107,14 @@ class IPControlService {
    * 添加 IP 规则
    */
   async addRule(ruleData) {
-    const { ipRange, ruleType, description, expiresAt, createdBy } = ruleData;
+    const { ipRange, controlType, description, expiresAt, createdBy, groupName = 'default' } = ruleData;
     const query = `
       INSERT INTO security_ip_controls 
-      (ip_range, rule_type, description, expires_at, created_by)
-      VALUES ($1, $2, $3, $4, $5)
+      (ip_range, control_type, description, expires_at, created_by, group_name)
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *
     `;
-    const result = await pool.query(query, [ipRange, ruleType, description, expiresAt, createdBy]);
+    const result = await pool.query(query, [ipRange, controlType, description, expiresAt, createdBy, groupName]);
     return result.rows[0];
   }
 }

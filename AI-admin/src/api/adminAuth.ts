@@ -25,8 +25,8 @@ export const adminAuthApi = {
     api.get('/admin/verify'),
   
   // 管理员心跳上报
-  heartbeat: () =>
-    api.get('/admin/heartbeat')
+  heartbeat: (data?: any) =>
+    api.post('/admin/heartbeat', data)
 }
 
 export default adminAuthApi

@@ -34,10 +34,15 @@ class BaseController {
 
       const result = await this.service.getAll(options);
       
+      if (!result) {
+        logger.error(`[${this.entityName}] Service.getAll 返回了 undefined`);
+        return errorResponse(res, '获取数据失败', 500);
+      }
+
       const key = this.entityName.toLowerCase() + 's';
       return successResponse(res, {
-        [key]: result.data,
-        pagination: result.pagination
+        [key]: result.data || [],
+        pagination: result.pagination || {}
       }, '数据获取成功');
     } catch (error) {
       logger.error(`[${this.entityName}] 获取所有记录失败`, { error: error.message });
@@ -65,8 +70,11 @@ class BaseController {
       }
 
       const key = this.entityName.toLowerCase();
+      // 如果 result 是一个对象且有 data 属性（某些 Service 包装了结果），则取 data
+      const responseData = result.data !== undefined ? result.data : result;
+      
       return successResponse(res, {
-        [key]: result
+        [key]: responseData
       }, '数据获取成功');
     } catch (error) {
       logger.error(`[${this.entityName}] 根据ID获取记录失败`, { error: error.message });

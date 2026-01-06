@@ -189,6 +189,28 @@ router.post('/two-factor/generate',
 );
 
 /**
+ * 生成 TOTP 密钥路由
+ * POST /api/auth/two-factor/totp-secret
+ */
+router.post('/two-factor/totp-secret', 
+  authenticateToken, 
+  responseWrapper(asyncHandler(async (req, res, next) => {
+    return await authController.generateTotpSecret(req, res, next);
+  }))
+);
+
+/**
+ * 重新生成备用码路由
+ * POST /api/auth/two-factor/regenerate-backup-codes
+ */
+router.post('/two-factor/regenerate-backup-codes',
+  authenticateToken,
+  responseWrapper(asyncHandler(async (req, res, next) => {
+    return await authController.regenerateBackupCodes(req, res, next);
+  }))
+);
+
+/**
  * 检查用户名是否可用
  * GET /api/auth/check-username/:username
  */
@@ -410,10 +432,10 @@ router.post('/validate-token',
 
 /**
  * 重新生成备份验证码路由
- * POST /api/auth/two-factor/backup-codes/regenerate
+ * POST /api/auth/totp/backup-codes/regenerate
  * 需要有效的JWT令牌才能访问
  */
-router.post('/two-factor/backup-codes/regenerate', 
+router.post('/totp/backup-codes/regenerate', 
   authenticateToken, 
   responseWrapper(asyncHandler(async (req, res, next) => {
     return await authController.regenerateBackupCodes(req, res, next);

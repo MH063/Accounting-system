@@ -192,6 +192,44 @@ class TwoFactorRepository extends BaseRepository {
   }
 
   /**
+   * 验证并使用备用码
+   * @param {number} userId - 用户ID
+   * @param {string} code - 备用码
+   * @returns {Promise<boolean>} 验证结果
+   */
+  async verifyAndUseBackupCode(userId, code) {
+    try {
+      const auth = await this.getTwoFactorAuthByUserId(userId);
+      if (!auth || !auth.backupCodes || !Array.isArray(auth.backupCodes)) {
+        return false;
+      }
+
+      const codeIndex = auth.backupCodes.indexOf(code);
+      if (codeIndex === -1) {
+        return false;
+      }
+
+      // 移除已使用的备用码
+      const newBackupCodes = [...auth.backupCodes];
+      newBackupCodes.splice(codeIndex, 1);
+
+      await this.updateTwoFactorAuth(auth.id, {
+        backupCodes: newBackupCodes,
+        lastUsedAt: new Date()
+      });
+
+      logger.info('[TwoFactorRepository] 备用码验证成功并已移除', { userId });
+      return true;
+    } catch (error) {
+      logger.error('[TwoFactorRepository] 验证备用码失败', { 
+        error: error.message,
+        userId
+      });
+      return false;
+    }
+  }
+
+  /**
    * 增加验证失败次数
    * @param {number} userId - 用户ID
    * @returns {Promise<Object>} 更新后的用户信息
