@@ -3,6 +3,7 @@ const logger = require('../config/logger');
 const alertService = require('./alertService');
 const os = require('os');
 const versionManager = require('../config/versionManager');
+const systemConfigService = require('./systemConfigService');
 const { monitor: performanceMonitor } = require('../middleware/performanceMonitor');
 
 class SystemStatusService {
@@ -1847,6 +1848,95 @@ class SystemStatusService {
         lastUpdate: this.getCurrentTime().toLocaleString('zh-CN', { hour12: false }),
       };
     }
+  }
+
+  /**
+   * 获取真实的系统基本信息
+   */
+  async getRealSystemInfo() {
+    try {
+      const configs = await systemConfigService.getAllConfigs({ activeOnly: true });
+      const serverVersion = versionManager.getServerVersion();
+
+      const name = configs['system.name']?.value || serverVersion.name;
+      const version = serverVersion.version;
+      const environment = configs['system.environment']?.value || 'development';
+      
+      // 使用 process.uptime() 获取真实的运行时间
+      const uptimeSeconds = process.uptime();
+      const uptime = this.formatUptime(uptimeSeconds);
+      
+      // 获取真实的启动时间（当前时间减去运行秒数）
+      const startTime = new Date(Date.now() - uptimeSeconds * 1000).toISOString();
+
+      const environmentMap = {
+        development: '开发环境',
+        testing: '测试环境',
+        production: '生产环境'
+      };
+
+      return {
+        name,
+        version,
+        environment: environmentMap[environment] || environment,
+        startTime,
+        uptime,
+        os: {
+          platform: os.platform(),
+          release: os.release(),
+          arch: os.arch(),
+          cpus: os.cpus().length,
+          totalMemory: (os.totalmem() / (1024 * 1024 * 1024)).toFixed(2) + ' GB',
+          freeMemory: (os.freemem() / (1024 * 1024 * 1024)).toFixed(2) + ' GB'
+        }
+      };
+    } catch (error) {
+      logger.error('[SystemStatusService] 获取真实系统信息失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 获取真实的服务状态
+   */
+  async getRealServiceStatus() {
+    const services = [
+      { name: '用户服务', table: 'users' },
+      { name: '费用服务', table: 'expenses' },
+      { name: '支付服务', table: 'payment_codes' },
+      { name: '通知服务', table: 'verification_codes' },
+      { name: '数据库服务', table: null }
+    ];
+
+    const results = [];
+    for (const service of services) {
+      const start = Date.now();
+      let status = '正常';
+      let responseTime = '0ms';
+
+      try {
+        if (service.table) {
+          // 检查特定表是否存在且可访问
+          await pool.query(`SELECT 1 FROM ${service.table} LIMIT 1`);
+        } else {
+          // 基础数据库连接检查
+          await pool.query('SELECT 1');
+        }
+        responseTime = `${Date.now() - start}ms`;
+      } catch (error) {
+        logger.error(`[SystemStatusService] 服务检查失败: ${service.name}`, error.message);
+        status = '异常';
+        responseTime = 'timeout';
+      }
+
+      results.push({
+        name: service.name,
+        status,
+        responseTime
+      });
+    }
+
+    return results;
   }
 
   /**

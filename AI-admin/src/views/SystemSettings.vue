@@ -359,7 +359,37 @@
         
         <!-- 系统信息 -->
         <el-tab-pane label="系统信息" name="systemInfo">
-          <el-row :gutter="isMobile ? 10 : 20">
+          <!-- 刷新控制栏 -->
+          <div class="refresh-controls" style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 15px;">
+              <el-switch
+                v-model="autoRefreshEnabled"
+                active-text="自动刷新"
+                @change="toggleAutoRefresh"
+              />
+              <el-select v-model="refreshInterval" size="small" style="width: 100px" :disabled="!autoRefreshEnabled">
+                <el-option
+                  v-for="item in refreshOptions"
+                  :key="item.value"
+                  :label="item.label"
+                  :value="item.value"
+                />
+              </el-select>
+              <el-button 
+                type="primary" 
+                size="small" 
+                :loading="isRefreshing" 
+                @click="loadSystemInfo(false)"
+              >
+                手动刷新
+              </el-button>
+            </div>
+            <div class="last-update" style="font-size: 13px; color: #909399;">
+              最后更新时间: {{ lastUpdateTime || '未更新' }}
+            </div>
+          </div>
+
+          <el-row :gutter="isMobile ? 10 : 20" v-loading="isRefreshing && !autoRefreshEnabled">
             <el-col :xs="24" :sm="12" style="margin-bottom: 20px;">
               <el-card shadow="hover">
                 <template #header>
@@ -369,8 +399,8 @@
                   <el-descriptions-item label="系统名称">{{ systemInfo.name }}</el-descriptions-item>
                   <el-descriptions-item label="系统版本">{{ systemInfo.version }}</el-descriptions-item>
                   <el-descriptions-item label="运行环境">{{ systemInfo.environment }}</el-descriptions-item>
-                  <el-descriptions-item label="启动时间">{{ systemInfo.startTime }}</el-descriptions-item>
-                  <el-descriptions-item label="运行时长">{{ systemInfo.uptime }}</el-descriptions-item>
+                  <el-descriptions-item label="后端服务启动时间">{{ systemInfo.startTime }}</el-descriptions-item>
+                  <el-descriptions-item label="后端服务运行时长">{{ systemInfo.uptime }}</el-descriptions-item>
                 </el-descriptions>
               </el-card>
             </el-col>
@@ -385,16 +415,29 @@
                     <el-table-column prop="name" label="服务名称" />
                     <el-table-column prop="status" label="状态" :width="isMobile ? 70 : 100">
                       <template #default="scope">
-                        <el-tag :type="scope.row.status === '正常' ? 'success' : 'danger'" size="small">
+                        <el-tag 
+                          :type="scope.row.status === '正常' ? 'success' : 'danger'" 
+                          size="small"
+                          effect="dark"
+                          class="status-tag"
+                        >
                           {{ scope.row.status }}
                         </el-tag>
                       </template>
                     </el-table-column>
-                    <el-table-column prop="responseTime" label="响应时间" :width="isMobile ? 80 : 120" />
+                    <el-table-column prop="responseTime" label="响应时间" :width="isMobile ? 80 : 120">
+                      <template #default="scope">
+                        <span :style="{ color: scope.row.responseTime === 'timeout' ? '#F56C6C' : 'inherit' }">
+                          {{ scope.row.responseTime }}
+                        </span>
+                      </template>
+                    </el-table-column>
                   </el-table>
                 </div>
                 
-                <el-button type="primary" @click="refreshServiceStatus" style="margin-top: 20px;" :size="isMobile ? 'small' : 'default'" :style="{ width: isMobile ? '100%' : 'auto' }">刷新状态</el-button>
+                <div class="service-tip" style="margin-top: 15px; font-size: 12px; color: #909399;">
+                  * 状态异常的服务将以红色警示，响应超时将显示为 timeout。
+                </div>
               </el-card>
             </el-col>
           </el-row>
@@ -550,6 +593,7 @@
         
         <el-form-item label="模板内容">
           <el-input 
+            ref="templateContentRef"
             v-model="templateForm.content" 
             type="textarea" 
             :rows="6" 
@@ -559,7 +603,12 @@
         
         <el-form-item label="可用变量">
           <div class="variables-list">
-            <el-tag v-for="variable in templateVariables" :key="variable" style="margin: 5px;">
+            <el-tag 
+              v-for="variable in templateVariables" 
+              :key="variable" 
+              style="margin: 5px; cursor: pointer;"
+              @click="insertVariable(variable)"
+            >
               {{ variable }}
             </el-tag>
           </div>
@@ -577,12 +626,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { userApi } from '@/api/user'
 import { settingsApi } from '@/api/settings'
 import { updateGlobalSystemConfig, getSystemConfig } from '@/utils/systemConfig'
+import { insertTextAtPosition } from '@/utils/templateUtils'
 
 const isMobile = computed(() => {
   if (typeof window !== 'undefined') {
@@ -594,14 +644,82 @@ const isMobile = computed(() => {
 const handleResize = () => {
 }
 
-onMounted(() => {
-  window.addEventListener('resize', handleResize)
-  loadAllSettings()
-})
-
 const activeTab = ref('basic')
 const notificationActiveTab = ref('rules')
 const loading = ref(false)
+
+// 自动刷新相关配置
+const autoRefreshEnabled = ref(true)
+const refreshInterval = ref(10) // 默认10秒
+const lastUpdateTime = ref('')
+const isRefreshing = ref(false)
+let refreshTimer: any = null
+
+// 刷新频率选项
+const refreshOptions = [
+  { label: '5秒', value: 5 },
+  { label: '10秒', value: 10 },
+  { label: '30秒', value: 30 },
+  { label: '60秒', value: 60 }
+]
+
+// 切换自动刷新
+function toggleAutoRefresh() {
+  if (autoRefreshEnabled.value) {
+    startRefreshTimer()
+    console.log('⏰ [系统监控] 自动刷新已开启')
+  } else {
+    stopRefreshTimer()
+    console.log('⏸️ [系统监控] 自动刷新已暂停')
+  }
+}
+
+// 开始定时器
+function startRefreshTimer() {
+  stopRefreshTimer()
+  if (autoRefreshEnabled.value) {
+    refreshTimer = setInterval(() => {
+      if (activeTab.value === 'systemInfo') {
+        loadSystemInfo(true)
+      }
+    }, refreshInterval.value * 1000)
+  }
+}
+
+// 停止定时器
+function stopRefreshTimer() {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
+}
+
+// 监听刷新间隔变化
+watch(refreshInterval, () => {
+  if (autoRefreshEnabled.value) {
+    startRefreshTimer()
+  }
+})
+
+// 监听标签切换，仅在系统信息页面时刷新
+watch(activeTab, (newTab) => {
+  if (newTab === 'systemInfo' && autoRefreshEnabled.value) {
+    startRefreshTimer()
+  } else {
+    stopRefreshTimer()
+  }
+})
+
+onMounted(() => {
+  window.addEventListener('resize', handleResize)
+  loadAllSettings()
+  startRefreshTimer()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize)
+  stopRefreshTimer()
+})
 
 const globalConfig = getSystemConfig()
 const basicForm = ref({
@@ -712,6 +830,7 @@ const templateDialogVisible = ref(false)
 const templateDialogTitle = ref('')
 const isEditingTemplate = ref(false)
 const currentTemplateId = ref(0)
+const templateContentRef = ref<any>(null)
 
 const templateForm = ref({
   name: '',
@@ -720,6 +839,36 @@ const templateForm = ref({
 })
 
 const templateVariables = ref(['{userName}', '{amount}', '{feeType}', '{dueDate}', '{payTime}', '{days}'])
+
+/**
+ * 在通知模板内容中插入选定的变量
+ * @param variable 要插入的变量名，如 {userName}
+ */
+function insertVariable(variable: string) {
+  const input = templateContentRef.value?.$el.querySelector('textarea')
+  if (!input) {
+    // 如果没有找到 textarea，则直接追加到末尾
+    templateForm.value.content += variable
+    return
+  }
+
+  const start = input.selectionStart || 0
+  const end = input.selectionEnd || 0
+  const content = templateForm.value.content
+
+  // 使用工具函数插入变量
+  templateForm.value.content = insertTextAtPosition(content, variable, start, end)
+  
+  // 在 DOM 更新后重新聚焦并设置光标位置
+  setTimeout(() => {
+    input.focus()
+    const newPos = start + variable.length
+    input.setSelectionRange(newPos, newPos)
+    
+    // 关键位置打印日志方便调试
+    console.log(`✅ 变量已插入: ${variable}, 新光标位置: ${newPos}`)
+  }, 0)
+}
 
 const paymentMethods = ref([
   { value: 'alipay', label: '支付宝' },
@@ -900,8 +1049,9 @@ async function loadLogSettings() {
   }
 }
 
-async function loadSystemInfo() {
+async function loadSystemInfo(isAuto = false) {
   try {
+    if (!isAuto) isRefreshing.value = true
     const [infoResponse, statusResponse] = await Promise.all([
       settingsApi.getSystemInfo(),
       settingsApi.getServiceStatus()
@@ -926,9 +1076,12 @@ async function loadSystemInfo() {
       serviceStatus.value = statusData.services
     }
 
-    console.log('✅ 系统信息加载完成')
+    lastUpdateTime.value = new Date().toLocaleTimeString()
+    console.log(`✅ [${isAuto ? '自动' : '手动'}] 系统信息加载完成: ${lastUpdateTime.value}`)
   } catch (error) {
     console.error('❌ 加载系统信息失败:', error)
+  } finally {
+    if (!isAuto) isRefreshing.value = false
   }
 }
 
@@ -1176,7 +1329,6 @@ async function deleteTemplate(id: number) {
 
 onMounted(async () => {
   console.log('⚙️ 系统设置页面加载完成')
-  await loadAllSettings()
 })
 </script>
 

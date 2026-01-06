@@ -4,6 +4,7 @@ const { body, param, query, validationResult } = require('express-validator');
 const nodemailer = require('nodemailer');
 const systemConfigService = require('../services/systemConfigService');
 const configAuditService = require('../services/configAuditService');
+const systemStatusService = require('../services/systemStatusService');
 const { authenticateToken, authorizeAdmin } = require('../middleware/auth');
 const { responseWrapper } = require('../middleware/response');
 const versionManager = require('../config/versionManager');
@@ -1003,44 +1004,10 @@ router.put('/settings/logs/config', responseWrapper(async (req, res) => {
 
 router.get('/settings/system/info', responseWrapper(async (req, res) => {
     try {
-        const configs = await systemConfigService.getAllConfigs({ activeOnly: true });
-        const serverVersion = versionManager.getServerVersion();
-
-        const name = configs['system.name']?.value || serverVersion.name;
-        const version = serverVersion.version;
-        const environment = configs['system.environment']?.value || 'development';
-        const startTime = configs['system.deploy_time']?.value || new Date().toISOString();
-
-        const environmentMap = {
-            development: '开发环境',
-            testing: '测试环境',
-            production: '生产环境'
-        };
-
-        let uptime = '未知';
-        try {
-            const start = new Date(startTime);
-            if (!isNaN(start.getTime())) {
-                const now = new Date();
-                const diffMs = now.getTime() - start.getTime();
-                const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-                const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-                uptime = `${diffDays}天${diffHours}小时${diffMinutes}分钟`;
-            }
-        } catch (e) {
-            uptime = '未知';
-        }
-
+        const info = await systemStatusService.getRealSystemInfo();
         res.json({
             success: true,
-            data: {
-                name,
-                version,
-                environment: environmentMap[environment] || environment,
-                startTime,
-                uptime
-            }
+            data: info
         });
     } catch (error) {
         console.error('[Settings] Get system info error:', error);
@@ -1054,13 +1021,7 @@ router.get('/settings/system/info', responseWrapper(async (req, res) => {
 
 router.get('/settings/system/services', responseWrapper(async (req, res) => {
     try {
-        const services = [
-            { name: '用户服务', status: '正常', responseTime: '45ms' },
-            { name: '费用服务', status: '正常', responseTime: '62ms' },
-            { name: '支付服务', status: '正常', responseTime: '78ms' },
-            { name: '通知服务', status: '正常', responseTime: '32ms' },
-            { name: '数据库服务', status: '正常', responseTime: '15ms' }
-        ];
+        const services = await systemStatusService.getRealServiceStatus();
 
         res.json({
             success: true,
