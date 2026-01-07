@@ -310,6 +310,9 @@ app.use('/api/contacts', require('./routes/contacts'));
 // 分类相关路由
 app.use('/api/categories', require('./routes/categories'));
 
+// 费用类型管理路由
+app.use('/api/fee-types', require('./routes/feeTypes'));
+
 // 趋势分析路由
 app.use('/api/trend', require('./routes/trend'));
 

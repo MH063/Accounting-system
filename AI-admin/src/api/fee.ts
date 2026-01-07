@@ -1,5 +1,33 @@
 import api from './index'
 
+// 费用类型数据接口
+export interface FeeType {
+  id: number
+  name: string
+  code: string
+  description: string
+  defaultAmount: number
+  billingCycle: 'one-time' | 'monthly' | 'semester' | 'yearly'
+  allocationRule: 'average' | 'dormitory' | 'none'
+  usageCount: number
+  sortOrder: number
+  status: 'enabled' | 'disabled'
+  createTime: string
+  updateTime: string
+}
+
+// 费用类型查询参数
+export interface FeeTypeQueryParams {
+  page?: number
+  pageSize?: number
+  search?: string
+  status?: string
+  billingCycle?: string
+  allocationRule?: string
+  sortBy?: string
+  sortOrder?: 'ASC' | 'DESC'
+}
+
 // 费用相关API
 export const feeApi = {
   // 获取费用记录列表
@@ -95,7 +123,73 @@ export const feeApi = {
     api.post('/expenses/draft', data),
     
   clearAllExpenses: () => 
-    api.delete('/expenses/clear-all')
+    api.delete('/expenses/clear-all'),
+
+  // ==================== 费用类型管理API ====================
+
+  // 获取费用类型列表
+  getFeeTypeList: (params?: FeeTypeQueryParams) => 
+    api.get<{
+      list: FeeType[]
+      pagination: {
+        total: number
+        page: number
+        pageSize: number
+        totalPages: number
+      }
+    }>('/fee-types', { params }),
+
+  // 获取费用类型详情
+  getFeeTypeDetail: (id: number) => 
+    api.get<{
+      feeType: FeeType
+    }>(`/fee-types/${id}`),
+
+  // 新增费用类型
+  createFeeType: (data: Partial<FeeType>) => 
+    api.post<{
+      feeType: FeeType
+    }>('/fee-types', data),
+
+  // 编辑费用类型
+  updateFeeType: (id: number, data: Partial<FeeType>) => 
+    api.put<{
+      feeType: FeeType
+    }>(`/fee-types/${id}`, data),
+
+  // 删除费用类型
+  deleteFeeType: (id: number) => 
+    api.delete(`/fee-types/${id}`),
+
+  // 更新费用类型状态
+  updateFeeTypeStatus: (id: number, status: 'enabled' | 'disabled') => 
+    api.put<{
+      feeType: FeeType
+    }>(`/fee-types/${id}/status`, { status }),
+
+  // 导入费用类型
+  importFeeTypes: (file: File, options?: { overwrite?: boolean }) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (options?.overwrite) {
+      formData.append('overwrite', 'true')
+    }
+    return api.post<{
+      total: number
+      success: number
+      failed: number
+      errors: Array<{ row: number; message: string }>
+    }>('/fee-types/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
+
+  // 导出费用类型
+  exportFeeTypes: (params?: { status?: string; search?: string }) => 
+    api.get('/fee-types/export', { 
+      params,
+      responseType: 'blob'
+    })
 }
 
 /**

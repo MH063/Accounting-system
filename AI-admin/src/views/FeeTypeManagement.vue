@@ -127,7 +127,11 @@
         </el-form-item>
         
         <el-form-item label="编码" prop="code">
-          <el-input v-model="formData.code" placeholder="请输入费用类型编码" />
+          <el-input v-model="formData.code" placeholder="编码将根据名称自动生成" :disabled="isEdit" readonly>
+            <template #prefix>
+              <el-icon><Lock /></el-icon>
+            </template>
+          </el-input>
         </el-form-item>
         
         <el-form-item label="默认金额" prop="defaultAmount">
@@ -265,10 +269,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, reactive, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { UploadFilled, ArrowDown } from '@element-plus/icons-vue'
+import { UploadFilled, ArrowDown, Lock } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
+import { feeApi, type FeeType, type FeeTypeQueryParams } from '@/api/fee'
 
 // 导入统一验证规则库
 import { commonRules, businessRules } from '@/utils/validationRules'
@@ -286,65 +291,11 @@ const usageChartRef = ref()
 let usageChart: any = null
 
 // 响应式数据
-const tableData = ref([
-  {
-    id: 1,
-    name: '住宿费',
-    code: 'ACCOMMODATION',
-    description: '学生住宿费用',
-    defaultAmount: 1200.00,
-    billingCycle: 'semester',
-    allocationRule: 'dormitory',
-    usageCount: 1256,
-    sortOrder: 1,
-    status: 'enabled',
-    createTime: '2023-01-01 10:00:00'
-  },
-  {
-    id: 2,
-    name: '水电费',
-    code: 'UTILITIES',
-    description: '宿舍水电费用',
-    defaultAmount: 100.00,
-    billingCycle: 'monthly',
-    allocationRule: 'average',
-    usageCount: 2450,
-    sortOrder: 2,
-    status: 'enabled',
-    createTime: '2023-01-02 10:00:00'
-  },
-  {
-    id: 3,
-    name: '网费',
-    code: 'INTERNET',
-    description: '校园网络使用费用',
-    defaultAmount: 50.00,
-    billingCycle: 'monthly',
-    allocationRule: 'none',
-    usageCount: 1876,
-    sortOrder: 3,
-    status: 'enabled',
-    createTime: '2023-01-03 10:00:00'
-  },
-  {
-    id: 4,
-    name: '教材费',
-    code: 'TEXTBOOK',
-    description: '教材购买费用',
-    defaultAmount: 800.00,
-    billingCycle: 'semester',
-    allocationRule: 'dormitory',
-    usageCount: 980,
-    sortOrder: 4,
-    status: 'disabled',
-    createTime: '2023-01-04 10:00:00'
-  }
-])
-
+const tableData = ref<FeeType[]>([])
 const loading = ref(false)
 const currentPage = ref(1)
-const pageSize = ref(10) // 按照分页设置规范，默认值为10
-const total = ref(100)
+const pageSize = ref(10)
+const total = ref(0)
 
 const searchForm = ref({
   name: '',
@@ -357,13 +308,14 @@ const importDialogVisible = ref(false)
 const dialogTitle = ref('')
 const isEdit = ref(false)
 
-const fileList = ref([])
+const fileList = ref<any[]>([])
+const selectedFile = ref<File | null>(null)
 const sortParams = ref({
   prop: '',
   order: ''
 })
 
-const formData = ref({
+const formData = ref<Partial<FeeType>>({
   id: 0,
   name: '',
   code: '',
@@ -375,7 +327,7 @@ const formData = ref({
   status: 'enabled'
 })
 
-const detailData = ref({
+const detailData = ref<Partial<FeeType>>({
   id: 0,
   name: '',
   code: '',
@@ -399,6 +351,68 @@ const formRules = {
 }
 
 const formRef = ref()
+
+const generateCodeFromName = (name: string): string => {
+  if (!name || !name.trim()) return ''
+  
+  const trimmedName = name.trim()
+  
+  const pinyinMap: Record<string, string> = {
+    '一': 'yi', '二': 'er', '三': 'san', '四': 'si', '五': 'wu', '六': 'liu', '七': 'qi', '八': 'ba', '九': 'jiu', '十': 'shi',
+    '电': 'dian', '水': 'shui', '煤': 'mei', '气': 'qi', '费': 'fei', '租': 'zu', '金': 'jin', '物': 'wu',
+    '业': 'ye', '管': 'guan', '理': 'li', '费': 'fei', '暖': 'nuan', '通': 'tong', '网': 'wang',
+    '寝': 'qin', '室': 'shi', '公': 'gong', '共': 'gong', '卫': 'wei', '生': 'sheng',
+    '维': 'wei', '护': 'hu', '维': 'wei', '修': 'xiu', '清': 'qing', '洁': 'jie',
+    '洗': 'xi', '衣': 'yi', '热': 're', '水': 'shui', '冷': 'leng', '气': 'qi',
+    '空': 'kong', '调': 'tiao', '电': 'dian', '话': 'hua', '设': 'she', '备': 'bei'
+  }
+  
+  let code = ''
+  for (const char of trimmedName) {
+    if (pinyinMap[char]) {
+      code += pinyinMap[char]
+    } else if (/[a-zA-Z]/.test(char)) {
+      code += char.toLowerCase()
+    } else if (/[0-9]/.test(char)) {
+      code += char
+    } else if (/[\u4e00-\u9fa5]/.test(char)) {
+      code += 'x'
+    } else {
+      code += '_'
+    }
+  }
+  
+  const timestamp = Date.now().toString(36).slice(-4).toUpperCase()
+  return `FEE_${code.toUpperCase()}_${timestamp}`
+}
+
+watch(() => formData.value.name, (newName, oldName) => {
+  if (!isEdit.value && newName && newName !== oldName) {
+    formData.value.code = generateCodeFromName(newName)
+    console.log('📝 自动生成编码:', formData.value.code)
+  }
+}, { immediate: false })
+
+// 加载费用类型列表
+const loadFeeTypes = async () => {
+  loading.value = true
+  try {
+    const params: FeeTypeQueryParams = {
+      page: currentPage.value,
+      pageSize: pageSize.value,
+      search: searchForm.value.name || undefined,
+      status: searchForm.value.status || undefined
+    }
+    const response = await feeApi.getFeeTypeList(params)
+    tableData.value = response.list
+    total.value = response.pagination.total
+  } catch (error: any) {
+    console.error('加载费用类型列表失败:', error)
+    ElMessage.error(error.message || '加载费用类型列表失败')
+  } finally {
+    loading.value = false
+  }
+}
 
 // 获取计费周期文本
 const getBillingCycleText = (cycle: string) => {
@@ -433,7 +447,8 @@ const getAllocationRuleText = (rule: string) => {
 // 搜索
 const handleSearch = () => {
   console.log('🔍 搜索费用类型:', searchForm.value)
-  ElMessage.success('查询功能待实现')
+  currentPage.value = 1
+  loadFeeTypes()
 }
 
 // 重置
@@ -442,22 +457,37 @@ const handleReset = () => {
     name: '',
     status: ''
   }
+  currentPage.value = 1
+  loadFeeTypes()
   ElMessage.success('重置搜索条件')
 }
 
 // 查看详情
-const handleView = (row: any) => {
-  detailData.value = { ...row }
-  detailDialogVisible.value = true
-  // 初始化使用统计图表
-  nextTick(() => {
-    initUsageChart()
-  })
+const handleView = async (row: FeeType) => {
+  loading.value = true
+  try {
+    const response = await feeApi.getFeeTypeDetail(row.id)
+    detailData.value = response.feeType
+    detailDialogVisible.value = true
+    nextTick(() => {
+      initUsageChart()
+    })
+  } catch (error: any) {
+    console.error('获取费用类型详情失败:', error)
+    ElMessage.error(error.message || '获取费用类型详情失败')
+  } finally {
+    loading.value = false
+  }
 }
 
 // 初始化使用统计图表
 const initUsageChart = () => {
   if (usageChartRef.value) {
+    // 检查是否已存在实例，如果存在则销毁
+    if (usageChart) {
+      usageChart.dispose()
+      usageChart = null
+    }
     usageChart = echarts.init(usageChartRef.value)
     renderUsageChart()
   }
@@ -520,8 +550,6 @@ const renderUsageChart = () => {
 const handleAdd = () => {
   dialogTitle.value = '新增费用类型'
   isEdit.value = false
-  // 设置默认显示顺序为当前最大值+1
-  const maxSortOrder = Math.max(...tableData.value.map(item => item.sortOrder), 0)
   formData.value = {
     id: 0,
     name: '',
@@ -530,14 +558,14 @@ const handleAdd = () => {
     defaultAmount: 0,
     billingCycle: 'one-time',
     allocationRule: 'average',
-    sortOrder: maxSortOrder + 1,
+    sortOrder: tableData.value.length > 0 ? Math.max(...tableData.value.map(item => item.sortOrder || 0)) + 1 : 1,
     status: 'enabled'
   }
   dialogVisible.value = true
 }
 
 // 编辑
-const handleEdit = (row: any) => {
+const handleEdit = (row: FeeType) => {
   dialogTitle.value = '编辑费用类型'
   isEdit.value = true
   formData.value = { ...row }
@@ -545,7 +573,7 @@ const handleEdit = (row: any) => {
 }
 
 // 删除
-const handleDelete = async (row: any) => {
+const handleDelete = async (row: FeeType) => {
   try {
     await ElMessageBox.confirm(
       `确定要删除费用类型 "${row.name}" 吗？`,
@@ -557,20 +585,31 @@ const handleDelete = async (row: any) => {
       }
     )
     
-    console.log('🗑️ 删除费用类型:', row.id)
+    loading.value = true
+    await feeApi.deleteFeeType(row.id)
     ElMessage.success('费用类型删除成功')
+    loadFeeTypes()
   } catch (error: any) {
     if (error !== 'cancel') {
       console.error('❌ 删除费用类型失败:', error)
-      ElMessage.error('删除费用类型失败')
+      ElMessage.error(error.message || '删除费用类型失败')
     }
+  } finally {
+    loading.value = false
   }
 }
 
 // 状态变更
-const handleStatusChange = (row: any) => {
-  console.log('🔄 费用类型状态变更:', row)
-  ElMessage.success(`费用类型"${row.name}"状态已更新`)
+const handleStatusChange = async (row: FeeType) => {
+  try {
+    await feeApi.updateFeeTypeStatus(row.id, row.status)
+    ElMessage.success(`费用类型"${row.name}"状态已更新`)
+    loadFeeTypes()
+  } catch (error: any) {
+    console.error('更新状态失败:', error)
+    row.status = row.status === 'enabled' ? 'disabled' : 'enabled'
+    ElMessage.error(error.message || '更新状态失败')
+  }
 }
 
 // 显示顺序变更
@@ -588,22 +627,45 @@ const handleSortChange = (sortInfo: any) => {
 }
 
 // 统计分析
-const handleAnalyze = (row: any) => {
+const handleAnalyze = (row: FeeType) => {
   handleView(row)
 }
 
 // 提交表单
-const submitForm = () => {
-  formRef.value.validate((valid: boolean) => {
+const submitForm = async () => {
+  formRef.value.validate(async (valid: boolean) => {
     if (valid) {
-      if (isEdit.value) {
-        console.log('✏️ 编辑费用类型:', formData.value)
-        ElMessage.success('费用类型编辑成功')
-      } else {
-        console.log('➕ 新增费用类型:', formData.value)
-        ElMessage.success('费用类型新增成功')
+      loading.value = true
+      try {
+        // 转换数据格式：将驼峰命名转换为下划线命名（后端期望的格式）
+        const transformData = {
+          name: String(formData.value.name || '').trim(),
+          code: String(formData.value.code || '').trim(),
+          description: String(formData.value.description || '').trim(),
+          default_amount: Number(formData.value.defaultAmount) || 0,
+          billing_cycle: formData.value.billingCycle || 'one-time',
+          allocation_rule: formData.value.allocationRule || 'none',
+          sort_order: Number(formData.value.sortOrder) || 0,
+          status: formData.value.status || 'enabled'
+        }
+        
+        console.log('📤 提交数据:', JSON.stringify(transformData))
+        
+        if (isEdit.value) {
+          await feeApi.updateFeeType(formData.value.id!, transformData)
+          ElMessage.success('费用类型编辑成功')
+        } else {
+          await feeApi.createFeeType(transformData)
+          ElMessage.success('费用类型新增成功')
+        }
+        dialogVisible.value = false
+        loadFeeTypes()
+      } catch (error: any) {
+        console.error('保存费用类型失败:', error)
+        ElMessage.error(error.message || '保存费用类型失败')
+      } finally {
+        loading.value = false
       }
-      dialogVisible.value = false
     } else {
       ElMessage.warning('请填写完整信息')
     }
@@ -614,64 +676,102 @@ const submitForm = () => {
 const handleSizeChange = (val: number) => {
   pageSize.value = val
   currentPage.value = 1
-  console.log(`📈 每页显示 ${val} 条`)
+  loadFeeTypes()
 }
 
 const handleCurrentChange = (val: number) => {
   currentPage.value = val
-  console.log(`📄 当前页: ${val}`)
+  loadFeeTypes()
 }
 
 // 导入
 const handleImport = () => {
   fileList.value = []
+  selectedFile.value = null
   importDialogVisible.value = true
 }
 
 // 导出
-const handleExport = () => {
-  ElMessageBox.confirm(
-    '确定要导出所有费用类型数据吗？',
-    '导出确认',
-    {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    }
-  ).then(() => {
-    console.log('📤 导出费用类型数据')
+const handleExport = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '确定要导出所有费用类型数据吗？',
+      '导出确认',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    
+    loading.value = true
+    const response = await feeApi.exportFeeTypes({
+      status: searchForm.value.status || undefined,
+      search: searchForm.value.name || undefined
+    })
+    
+    const blob = response.data
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `fee-types-${new Date().toISOString().slice(0, 10)}.xlsx`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    
     ElMessage.success('费用类型数据导出成功')
-  }).catch(() => {
-    // 取消导出
-  })
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('导出失败:', error)
+      ElMessage.error(error.message || '导出费用类型数据失败')
+    }
+  } finally {
+    loading.value = false
+  }
 }
 
 // 文件变化处理
-const handleFileChange = (file: any, fileList: any) => {
-  console.log('📁 文件变化:', file, fileList)
+const handleFileChange = (file: any) => {
+  console.log('📁 文件变化:', file)
+  selectedFile.value = file.raw
 }
 
 // 提交导入
-const submitImport = () => {
-  if (fileList.value.length === 0) {
+const submitImport = async () => {
+  if (!selectedFile.value) {
     ElMessage.warning('请先选择要导入的文件')
     return
   }
   
-  console.log('📥 导入费用类型数据')
-  ElMessage.success('费用类型数据导入成功')
-  importDialogVisible.value = false
+  loading.value = true
+  try {
+    await feeApi.importFeeTypes(selectedFile.value)
+    ElMessage.success('费用类型数据导入成功')
+    importDialogVisible.value = false
+    loadFeeTypes()
+  } catch (error: any) {
+    console.error('导入失败:', error)
+    ElMessage.error(error.message || '导入费用类型数据失败')
+  } finally {
+    loading.value = false
+  }
 }
 
 // 组件挂载
 onMounted(() => {
   checkMobile()
   window.addEventListener('resize', handleResize)
+  loadFeeTypes()
   console.log('💰 费用类型管理页面加载完成')
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
+  if (usageChart) {
+    usageChart.dispose()
+    usageChart = null
+  }
 })
 
 // 统一处理窗口大小变化

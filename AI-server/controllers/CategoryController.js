@@ -218,12 +218,177 @@ class CategoryController extends BaseController {
     try {
       logger.info('[CategoryController] 获取分类使用统计');
 
-      // 调用服务层获取分类使用统计
       const statistics = await this.categoryService.getCategoryUsageStatistics();
       
       return successResponse(res, statistics, '分类使用统计获取成功');
     } catch (error) {
       logger.error('[CategoryController] 获取分类使用统计失败', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * 获取费用类型列表
+   * GET /api/fee-types
+   */
+  async getFeeTypes(req, res, next) {
+    try {
+      logger.info('[CategoryController] 获取费用类型列表', { 
+        query: req.query 
+      });
+
+      const options = {
+        page: parseInt(req.query.page) || 1,
+        limit: parseInt(req.query.pageSize) || 10,
+        sortBy: req.query.sortBy || 'created_at',
+        sortOrder: req.query.sortOrder || 'DESC',
+        search: req.query.search,
+        status: req.query.status,
+        billingCycle: req.query.billingCycle,
+        allocationRule: req.query.allocationRule
+      };
+
+      const result = await this.categoryService.getFeeTypes(options);
+      
+      return successResponse(res, {
+        list: result.data.map(item => item.toApiResponse ? item.toApiResponse() : item),
+        pagination: result.pagination
+      }, '费用类型列表获取成功');
+    } catch (error) {
+      logger.error('[CategoryController] 获取费用类型列表失败', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * 获取费用类型详情
+   * GET /api/fee-types/:id
+   */
+  async getFeeTypeDetail(req, res, next) {
+    try {
+      const { id } = req.params;
+      
+      logger.info('[CategoryController] 获取费用类型详情', { id });
+
+      const feeType = await this.categoryService.getFeeTypeDetail(id);
+      
+      if (!feeType) {
+        return errorResponse(res, '费用类型不存在', 404);
+      }
+
+      return successResponse(res, { feeType }, '费用类型详情获取成功');
+    } catch (error) {
+      logger.error('[CategoryController] 获取费用类型详情失败', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * 创建费用类型
+   * POST /api/fee-types
+   */
+  async createFeeType(req, res, next) {
+    try {
+      logger.info('[CategoryController] 创建费用类型', { 
+        data: JSON.stringify(req.body)
+      });
+
+      // 详细打印每个字段
+      logger.info('[CategoryController] 请求体字段', {
+        name: req.body?.name,
+        code: req.body?.code,
+        category_name: req.body?.category_name,
+        category_code: req.body?.category_code,
+        description: req.body?.description,
+        default_amount: req.body?.default_amount,
+        billing_cycle: req.body?.billing_cycle,
+        allocation_rule: req.body?.allocation_rule,
+        sort_order: req.body?.sort_order,
+        status: req.body?.status
+      });
+
+      const result = await this.categoryService.createFeeType(req.body);
+      
+      return successResponse(res, { feeType: result }, '费用类型创建成功', 201);
+    } catch (error) {
+      logger.error('[CategoryController] 创建费用类型失败', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * 更新费用类型
+   * PUT /api/fee-types/:id
+   */
+  async updateFeeType(req, res, next) {
+    try {
+      const { id } = req.params;
+      
+      logger.info('[CategoryController] 更新费用类型', { 
+        id,
+        data: this.filterSensitiveData(req.body) 
+      });
+
+      const result = await this.categoryService.updateFeeType(id, req.body);
+      
+      if (!result) {
+        return errorResponse(res, '费用类型不存在', 404);
+      }
+
+      return successResponse(res, { feeType: result }, '费用类型更新成功');
+    } catch (error) {
+      logger.error('[CategoryController] 更新费用类型失败', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * 删除费用类型
+   * DELETE /api/fee-types/:id
+   */
+  async deleteFeeType(req, res, next) {
+    try {
+      const { id } = req.params;
+      
+      logger.info('[CategoryController] 删除费用类型', { id });
+
+      const result = await this.categoryService.deleteFeeType(id);
+      
+      if (!result) {
+        return errorResponse(res, '费用类型不存在', 404);
+      }
+
+      return successResponse(res, null, '费用类型删除成功');
+    } catch (error) {
+      logger.error('[CategoryController] 删除费用类型失败', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * 更新费用类型状态
+   * PUT /api/fee-types/:id/status
+   */
+  async updateFeeTypeStatus(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+      
+      logger.info('[CategoryController] 更新费用类型状态', { id, status });
+
+      if (!status || !['enabled', 'disabled'].includes(status)) {
+        return errorResponse(res, '状态值不合法，只能是 enabled 或 disabled', 400);
+      }
+
+      const result = await this.categoryService.updateFeeTypeStatus(id, status);
+      
+      if (!result) {
+        return errorResponse(res, '费用类型不存在', 404);
+      }
+
+      return successResponse(res, { feeType: result }, '费用类型状态更新成功');
+    } catch (error) {
+      logger.error('[CategoryController] 更新费用类型状态失败', { error: error.message });
       next(error);
     }
   }

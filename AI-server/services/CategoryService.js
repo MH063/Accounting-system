@@ -284,7 +284,6 @@ class CategoryService extends BaseService {
     try {
       logger.info('[CategoryService] 获取分类使用统计');
 
-      // 调用仓库层获取分类使用统计
       const stats = await this.categoryRepository.getUsageStatistics();
 
       logger.info('[CategoryService] 获取分类使用统计成功', { 
@@ -295,6 +294,287 @@ class CategoryService extends BaseService {
     } catch (error) {
       logger.error('[CategoryService] 获取分类使用统计失败', { 
         error: error.message 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 获取费用类型列表（用于管理页面）
+   * @param {Object} options - 查询选项
+   * @returns {Promise<Object>} 费用类型列表和分页信息
+   */
+  async getFeeTypes(options = {}) {
+    try {
+      logger.info('[CategoryService] 获取费用类型列表', { options });
+
+      const result = await this.categoryRepository.findFeeTypes(options);
+
+      logger.info('[CategoryService] 获取费用类型列表成功', { 
+        count: result.data.length,
+        total: result.pagination.total 
+      });
+
+      return result;
+    } catch (error) {
+      logger.error('[CategoryService] 获取费用类型列表失败', { 
+        error: error.message,
+        options 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 获取费用类型详情
+   * @param {number|string} id - 费用类型ID
+   * @returns {Promise<Object|null>} 费用类型详情
+   */
+  async getFeeTypeDetail(id) {
+    try {
+      logger.info('[CategoryService] 获取费用类型详情', { id });
+
+      const category = await this.getById(id);
+
+      if (!category) {
+        logger.warn('[CategoryService] 费用类型不存在', { id });
+        return null;
+      }
+
+      const usageCount = await this.categoryRepository.getUsageCount(id);
+      const detail = category.toApiResponse();
+      detail.usageCount = usageCount;
+
+      logger.info('[CategoryService] 获取费用类型详情成功', { id });
+
+      return detail;
+    } catch (error) {
+      logger.error('[CategoryService] 获取费用类型详情失败', { 
+        error: error.message,
+        id 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 创建费用类型
+   * @param {Object} feeTypeData - 费用类型数据
+   * @returns {Promise<Object>} 创建结果
+   */
+  async createFeeType(feeTypeData) {
+    try {
+      logger.info('[CategoryService] 创建费用类型', { 
+        data: this.sanitizeLogData(feeTypeData) 
+      });
+      
+      // 详细打印接收到的字段
+      logger.info('[CategoryService] 字段映射详情', {
+        name: feeTypeData?.name,
+        code: feeTypeData?.code,
+        category_name: feeTypeData?.category_name,
+        category_code: feeTypeData?.category_code,
+        description: feeTypeData?.description,
+        default_amount: feeTypeData?.default_amount,
+        billing_cycle: feeTypeData?.billing_cycle,
+        allocation_rule: feeTypeData?.allocation_rule
+      });
+
+      const category = CategoryModel.create(feeTypeData);
+      
+      logger.info('[CategoryService] CategoryModel创建结果', {
+        categoryName: category.categoryName,
+        categoryCode: category.categoryCode,
+        defaultAmount: category.defaultAmount,
+        billingCycle: category.billingCycle
+      });
+
+      const validation = category.validate();
+      if (!validation.isValid) {
+        logger.error('[CategoryService] 费用类型数据验证失败', { 
+          errors: validation.errors 
+        });
+        throw new Error(`费用类型数据验证失败: ${validation.errors.join(', ')}`);
+      }
+
+      if (category.categoryCode) {
+        const existingCategory = await this.categoryRepository.findByCode(category.categoryCode);
+        if (existingCategory) {
+          logger.error('[CategoryService] 费用类型代码已存在', { 
+            code: category.categoryCode 
+          });
+          throw new Error('费用类型代码已存在');
+        }
+      }
+
+      const existingCategoryByName = await this.categoryRepository.findByName(category.categoryName);
+      if (existingCategoryByName) {
+        logger.error('[CategoryService] 费用类型名称已存在', { 
+          name: category.categoryName 
+        });
+        throw new Error('费用类型名称已存在');
+      }
+
+      const dbData = category.toDatabaseFormat();
+      const createdCategory = await this.categoryRepository.create(dbData);
+
+      logger.info('[CategoryService] 创建费用类型成功', { 
+        id: createdCategory.id,
+        name: createdCategory.categoryName 
+      });
+
+      return createdCategory.toApiResponse();
+    } catch (error) {
+      logger.error('[CategoryService] 创建费用类型失败', { 
+        error: error.message,
+        data: this.sanitizeLogData(feeTypeData) 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 更新费用类型
+   * @param {number|string} id - 费用类型ID
+   * @param {Object} feeTypeData - 更新数据
+   * @returns {Promise<Object|null>} 更新结果
+   */
+  async updateFeeType(id, feeTypeData) {
+    try {
+      logger.info('[CategoryService] 更新费用类型', { 
+        id,
+        data: this.sanitizeLogData(feeTypeData) 
+      });
+
+      const existingCategory = await this.getById(id);
+      if (!existingCategory) {
+        logger.warn('[CategoryService] 费用类型不存在', { id });
+        return null;
+      }
+
+      existingCategory.update(feeTypeData);
+
+      const validation = existingCategory.validate();
+      if (!validation.isValid) {
+        logger.error('[CategoryService] 费用类型数据验证失败', { 
+          errors: validation.errors 
+        });
+        throw new Error(`费用类型数据验证失败: ${validation.errors.join(', ')}`);
+      }
+
+      if (existingCategory.categoryCode) {
+        const existingCategoryByCode = await this.categoryRepository.findByCode(existingCategory.categoryCode);
+        if (existingCategoryByCode && existingCategoryByCode.id !== id) {
+          logger.error('[CategoryService] 费用类型代码已存在', { 
+            code: existingCategory.categoryCode 
+          });
+          throw new Error('费用类型代码已存在');
+        }
+      }
+
+      if (existingCategory.categoryName) {
+        const existingCategoryByName = await this.categoryRepository.findByName(existingCategory.categoryName);
+        if (existingCategoryByName && existingCategoryByName.id !== id) {
+          logger.error('[CategoryService] 费用类型名称已存在', { 
+            name: existingCategory.categoryName 
+          });
+          throw new Error('费用类型名称已存在');
+        }
+      }
+
+      const dbData = existingCategory.toDatabaseFormat();
+      const updatedCategory = await this.categoryRepository.update(id, dbData);
+
+      logger.info('[CategoryService] 更新费用类型成功', { 
+        id,
+        name: updatedCategory.categoryName 
+      });
+
+      return updatedCategory.toApiResponse();
+    } catch (error) {
+      logger.error('[CategoryService] 更新费用类型失败', { 
+        error: error.message,
+        id,
+        data: this.sanitizeLogData(feeTypeData) 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 删除费用类型
+   * @param {number|string} id - 费用类型ID
+   * @returns {Promise<boolean>} 删除结果
+   */
+  async deleteFeeType(id) {
+    try {
+      logger.info('[CategoryService] 删除费用类型', { id });
+
+      const usageCount = await this.categoryRepository.getUsageCount(id);
+      
+      if (usageCount > 0) {
+        logger.error('[CategoryService] 费用类型已被使用，无法删除', { 
+          id,
+          usageCount 
+        });
+        throw new Error(`该费用类型已被 ${usageCount} 条费用记录引用，无法删除`);
+      }
+
+      const success = await this.delete(id);
+
+      if (success) {
+        logger.info('[CategoryService] 删除费用类型成功', { id });
+      } else {
+        logger.warn('[CategoryService] 删除费用类型失败: 费用类型不存在', { id });
+      }
+
+      return success;
+    } catch (error) {
+      logger.error('[CategoryService] 删除费用类型失败', { 
+        error: error.message,
+        id 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 更新费用类型状态
+   * @param {number|string} id - 费用类型ID
+   * @param {string} status - 状态 (enabled/disabled)
+   * @returns {Promise<Object|null>} 更新结果
+   */
+  async updateFeeTypeStatus(id, status) {
+    try {
+      logger.info('[CategoryService] 更新费用类型状态', { id, status });
+
+      if (!['enabled', 'disabled'].includes(status)) {
+        throw new Error('状态值不合法，只能是 enabled 或 disabled');
+      }
+
+      const existingCategory = await this.getById(id);
+      if (!existingCategory) {
+        logger.warn('[CategoryService] 费用类型不存在', { id });
+        return null;
+      }
+
+      const isActive = status === 'enabled';
+      const updatedCategory = await this.categoryRepository.update(id, {
+        is_active: isActive,
+        updated_at: new Date()
+      });
+
+      logger.info('[CategoryService] 更新费用类型状态成功', { 
+        id,
+        status 
+      });
+
+      return updatedCategory.toApiResponse();
+    } catch (error) {
+      logger.error('[CategoryService] 更新费用类型状态失败', { 
+        error: error.message,
+        id,
+        status 
       });
       throw error;
     }

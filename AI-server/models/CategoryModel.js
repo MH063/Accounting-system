@@ -5,16 +5,32 @@
 
 class CategoryModel {
   constructor(data = {}) {
+    console.log('[CategoryModel.constructor] data参数:', JSON.stringify(data));
+    console.log('[CategoryModel.constructor] data?.name:', data?.name);
+    console.log('[CategoryModel.constructor] data?.code:', data?.code);
+    console.log('[CategoryModel.constructor] data?.category_name:', data?.category_name);
+    console.log('[CategoryModel.constructor] data?.category_code:', data?.category_code);
+    console.log('[CategoryModel.constructor] data?.categoryName:', data?.categoryName);
+    console.log('[CategoryModel.constructor] data?.categoryCode:', data?.categoryCode);
+    
     this.id = data.id || null;
-    this.categoryCode = data.category_code || data.code || '';
-    this.categoryName = data.category_name || data.name || '';
+    this.categoryCode = data.categoryCode || data.category_code || data.code || '';
+    this.categoryName = data.categoryName || data.category_name || data.name || '';
+    
+    console.log('[CategoryModel.constructor] this.categoryCode:', this.categoryCode);
+    console.log('[CategoryModel.constructor] this.categoryName:', this.categoryName);
+    
     this.description = data.description || '';
-    this.colorCode = data.color_code || data.color || '';
-    this.iconName = data.icon_name || data.icon || '';
-    this.isActive = data.is_active !== undefined ? data.is_active : true;
-    this.sortOrder = data.sort_order || data.sort || 0;
-    this.createdAt = data.created_at || new Date();
-    this.updatedAt = data.updated_at || new Date();
+    this.colorCode = data.colorCode || data.color_code || data.color || '';
+    this.iconName = data.iconName || data.icon_name || data.icon || '';
+    this.defaultAmount = data.defaultAmount !== undefined ? data.defaultAmount : (data.default_amount !== undefined ? data.default_amount : 0);
+    this.billingCycle = data.billingCycle || data.billing_cycle || 'one-time';
+    this.allocationRule = data.allocationRule || data.allocation_rule || 'none';
+    this.usageCount = data.usageCount || data.usage_count || 0;
+    this.isActive = data.isActive !== undefined ? data.isActive : (data.is_active !== undefined ? data.is_active : true);
+    this.sortOrder = data.sortOrder || data.sort_order || data.sort || 0;
+    this.createdAt = data.createdAt || data.created_at || data.createTime || new Date();
+    this.updatedAt = data.updatedAt || data.updated_at || data.updateTime || new Date();
   }
 
   /**
@@ -32,8 +48,27 @@ class CategoryModel {
     }
 
     // 验证分类代码
-    if (this.categoryCode && this.categoryCode.length > 50) {
+    if (!this.categoryCode || this.categoryCode.trim().length === 0) {
+      errors.push('分类代码不能为空');
+    } else if (this.categoryCode.length > 50) {
       errors.push('分类代码长度不能超过50个字符');
+    }
+
+    // 验证默认金额
+    if (this.defaultAmount !== undefined && (typeof this.defaultAmount !== 'number' || this.defaultAmount < 0)) {
+      errors.push('默认金额必须是大于等于0的数字');
+    }
+
+    // 验证计费周期
+    const validBillingCycles = ['one-time', 'monthly', 'semester', 'yearly'];
+    if (this.billingCycle && !validBillingCycles.includes(this.billingCycle)) {
+      errors.push(`计费周期不合法，可选值: ${validBillingCycles.join(', ')}`);
+    }
+
+    // 验证分摊规则
+    const validAllocationRules = ['average', 'dormitory', 'none'];
+    if (this.allocationRule && !validAllocationRules.includes(this.allocationRule)) {
+      errors.push(`分摊规则不合法，可选值: ${validAllocationRules.join(', ')}`);
     }
 
     // 验证颜色代码格式（如果提供）
@@ -70,6 +105,9 @@ class CategoryModel {
       description: this.description,
       color_code: this.colorCode,
       icon_name: this.iconName,
+      default_amount: this.defaultAmount,
+      billing_cycle: this.billingCycle,
+      allocation_rule: this.allocationRule,
       is_active: this.isActive,
       sort_order: this.sortOrder,
       created_at: this.createdAt,
@@ -92,6 +130,10 @@ class CategoryModel {
       description: dbRecord.description,
       color_code: dbRecord.color_code,
       icon_name: dbRecord.icon_name,
+      default_amount: dbRecord.default_amount,
+      billing_cycle: dbRecord.billing_cycle,
+      allocation_rule: dbRecord.allocation_rule,
+      usage_count: dbRecord.usage_count || 0,
       is_active: dbRecord.is_active,
       sort_order: dbRecord.sort_order,
       created_at: dbRecord.created_at,
@@ -106,15 +148,17 @@ class CategoryModel {
   toApiResponse() {
     return {
       id: this.id,
-      code: this.categoryCode,
       name: this.categoryName,
+      code: this.categoryCode,
       description: this.description,
-      color: this.colorCode,
-      icon: this.iconName,
-      isActive: this.isActive,
-      sort: this.sortOrder,
-      created_at: this.createdAt,
-      updated_at: this.updatedAt
+      defaultAmount: this.defaultAmount,
+      billingCycle: this.billingCycle,
+      allocationRule: this.allocationRule,
+      usageCount: this.usageCount,
+      sortOrder: this.sortOrder,
+      status: this.isActive ? 'enabled' : 'disabled',
+      createTime: this.createdAt,
+      updateTime: this.updatedAt
     };
   }
 
@@ -123,7 +167,7 @@ class CategoryModel {
    * @param {Object} updates - 更新的数据
    */
   update(updates) {
-    const allowedFields = ['categoryCode', 'categoryName', 'description', 'colorCode', 'iconName', 'isActive', 'sortOrder'];
+    const allowedFields = ['categoryCode', 'categoryName', 'description', 'colorCode', 'iconName', 'defaultAmount', 'billingCycle', 'allocationRule', 'isActive', 'sortOrder'];
     
     Object.keys(updates).forEach(key => {
       if (allowedFields.includes(key)) {
@@ -140,16 +184,30 @@ class CategoryModel {
    * @returns {CategoryModel} 分类模型实例
    */
   static create(categoryData) {
+    console.log('[CategoryModel.create] 原始数据:', JSON.stringify(categoryData));
+    
     const category = new CategoryModel({
-      categoryCode: categoryData.code || categoryData.categoryCode || '',
-      categoryName: categoryData.name || categoryData.categoryName || '',
-      description: categoryData.description || '',
-      colorCode: categoryData.color || categoryData.colorCode || '',
-      iconName: categoryData.icon || categoryData.iconName || '',
-      isActive: categoryData.isActive !== undefined ? categoryData.isActive : true,
-      sortOrder: categoryData.sort || categoryData.sortOrder || 0,
+      categoryCode: categoryData?.code || categoryData?.categoryCode || '',
+      categoryName: categoryData?.name || categoryData?.categoryName || '',
+      description: categoryData?.description || '',
+      colorCode: categoryData?.color || categoryData?.colorCode || '',
+      iconName: categoryData?.icon || categoryData?.iconName || '',
+      defaultAmount: categoryData?.defaultAmount || categoryData?.default_amount || 0,
+      billingCycle: categoryData?.billingCycle || categoryData?.billing_cycle || 'one-time',
+      allocationRule: categoryData?.allocationRule || categoryData?.allocation_rule || 'none',
+      isActive: categoryData?.isActive !== undefined ? categoryData?.isActive : true,
+      sortOrder: categoryData?.sort || categoryData?.sortOrder || 0,
       created_at: new Date(),
       updated_at: new Date()
+    });
+
+    console.log('[CategoryModel.create] 解析结果:', {
+      categoryCode: category.categoryCode,
+      categoryName: category.categoryName,
+      description: category.description,
+      defaultAmount: category.defaultAmount,
+      billingCycle: category.billingCycle,
+      allocationRule: category.allocationRule
     });
 
     return category;
